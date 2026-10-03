@@ -1,0 +1,28 @@
+# Build output
+build/
+*/build/
+.gradle/
+target/
+
+# Tooling / scratch
+tmp/
+*.log
+
+# .NET launcher
+launcher/bin/
+launcher/obj/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Keep the shipped mapping data (source asset, not build output)
+!client/src/main/resources/mappings-*.json

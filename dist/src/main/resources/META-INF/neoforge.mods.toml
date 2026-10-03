@@ -1,0 +1,11 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="noturne"
+version="${version}"
+displayName="Noturne"
+description='''
+Cross-version utility client.
+'''

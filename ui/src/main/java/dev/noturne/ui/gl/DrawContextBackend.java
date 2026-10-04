@@ -27,6 +27,10 @@ public final class DrawContextBackend implements UiBackend {
     /** 缩放尺寸的两个无参 int getter。 */
     private final Method sizeA;
     private final Method sizeB;
+    /** 文字绘制入口；解析失败为 {@code null}。 */
+    private Method drawText;
+    /** 游戏字体对象（class_327）；为 {@code null} 时文字退化为占位矩形。 */
+    private Object font;
 
     /** 当前缩放后的绘制区域宽度。 */
     private int width;
@@ -79,12 +83,15 @@ public final class DrawContextBackend implements UiBackend {
         if (fill == null || first == null || second == null) {
             return null;
         }
-        // 探测文字绘制入口：带 String 参数的方法即候选（签名在版本间会变，按特征扫）。
+        // 文字绘制入口：签名是 drawText(TextRenderer, String, int, int, int[, boolean])，
+        // 第一个参数是字体对象 —— 按「第二参为 String、第一参非 int」筛出来。
+        Method drawText = null;
         for (Method method : drawContext.getClass().getMethods()) {
-            for (Class<?> type : method.getParameterTypes()) {
-                if (type == String.class) {
-                    System.out.println("[noturne] text-candidate: " + method);
-                    break;
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length >= 5 && parameters[1] == String.class
+                    && parameters[0] != int.class && method.getReturnType() == void.class) {
+                if (drawText == null) {
+                    drawText = method;
                 }
             }
         }
@@ -97,8 +104,52 @@ public final class DrawContextBackend implements UiBackend {
             return null;
         }
         DrawContextBackend backend = new DrawContextBackend(fill, first, second);
+        backend.drawText = drawText;
+        backend.font = resolveFont(drawContext.getClass().getClassLoader());
         backend.update(drawContext);
+        System.out.println("[noturne] draw context bound; fill=" + fill.getName()
+                + "; drawText=" + (drawText == null ? "none" : drawText.getName())
+                + "; font=" + (backend.font == null ? "none" : "ok"));
         return backend;
+    }
+
+    /**
+     * 解析游戏字体对象：{@code Minecraft.getInstance().font}。
+     *
+     * <p>两者都是混淆名，因此先找 {@code class_310} 上「无参、返回自身、且为静态」的方法
+     * （即 getInstance），再在实例字段里找类型为 {@code class_327} 的那个。
+     *
+     * @param loader 游戏类加载器
+     * @return 字体对象；解析失败返回 {@code null}（文字退化为占位矩形）
+     */
+    private static Object resolveFont(ClassLoader loader) {
+        try {
+            Class<?> minecraftClass = Class.forName("net.minecraft.class_310", false, loader);
+            Class<?> fontClass = Class.forName("net.minecraft.class_327", false, loader);
+            for (Method method : minecraftClass.getMethods()) {
+                if (method.getParameterCount() != 0 || method.getReturnType() != minecraftClass
+                        || !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+                    continue;
+                }
+                Object instance = method.invoke(null);
+                if (instance == null) {
+                    continue;
+                }
+                for (java.lang.reflect.Field field : minecraftClass.getDeclaredFields()) {
+                    if (field.getType() != fontClass) {
+                        continue;
+                    }
+                    field.setAccessible(true);
+                    Object font = field.get(instance);
+                    if (font != null) {
+                        return font;
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            System.out.println("[noturne] font resolve failed: " + t);
+        }
+        return null;
     }
 
     /** @return 参数类型是否全为 {@code int} */
@@ -182,10 +233,21 @@ public final class DrawContextBackend implements UiBackend {
 
     @Override
     public void text(String value, float x, float y, float size, Color color) {
-        // 文字需要 MC 的字体 API（尚未接入）：用一条细矩形占位，至少让布局可见。
-        if (value == null || value.isEmpty()) {
+        if (value == null || value.isEmpty() || drawContext == null) {
             return;
         }
+        if (drawText != null && font != null) {
+            // 签名是 (font, text, x, y, color[, shadow])：坐标取整、颜色用 ARGB。
+            if (drawText.getParameterCount() >= 6) {
+                Reflect.call(drawText, drawContext, font, value,
+                        Math.round(x), Math.round(y), color.packed(), false);
+            } else {
+                Reflect.call(drawText, drawContext, font, value,
+                        Math.round(x), Math.round(y), color.packed());
+            }
+            return;
+        }
+        // 字体没解析出来时退化为一条细矩形，至少让布局可见。
         rect(x, y + size * 0.75f, Math.min(value.length() * size * 0.5f, size * 8f), 1f, color);
     }
 

@@ -2,13 +2,15 @@
 
 ## 1. 总体目标
 
-一个 **JVM 注入式 Minecraft 客户端**，单 jar 同时扮演三种角色：
+一个 **JVM 注入式 Minecraft 客户端**，单 jar 同时扮演两种角色：
 
-1. **注入器**（双击 / CLI）：扫描运行中的 Minecraft，把自身作为 agent 注入。
-2. **被注入的 agent**（`-javaagent` / attach / mod 加载）：在目标 JVM 内安装客户端。
-3. **模组**（Fabric / Forge / NeoForge）：作为普通 mod 被加载，走同一套客户端初始化。
+1. **注入器**（双击 / CLI / WinUI 套壳）：扫描运行中的 Minecraft，把自身作为 agent 注入。
+2. **被注入的 agent**（`-javaagent` / attach）：在目标 JVM 内安装客户端与 GUI 叠加层。
 
 覆盖 **Minecraft 1.8.9 – 26.3**，平台 **Windows / macOS / Linux**。
+
+> 项目**没有**模组形态。Fabric / Forge / NeoForge 的入口类与元数据已删除——
+> 模组路径拿不到 `Instrumentation` 就没有帧钩子，而帧回调是整个客户端的驱动源。
 
 ## 2. 硬性约束
 
@@ -16,105 +18,152 @@
 |---|---|
 | 目标 JVM 内运行的所有类 **必须编译为 Java 8 字节码（52.0）** | 客户端要注入 1.8.9（JVM 8）。更高版本字节码会被 `UnsupportedClassVersionError` 拒绝 |
 | 不引入 Mixin | 运行时改类统一走 JVMTI + ASM，避免对加载器和版本产生额外耦合 |
-| 只依赖 Java 8 API（目标 JVM 内代码） | 同上；现代 API（`ProcessHandle`、`List.of`…）禁止出现在 `agent/ client/ ui/` |
+| 只依赖 Java 8 API（目标 JVM 内代码） | 现代 API（`ProcessHandle`、`List.of`…）禁止出现在 `agent/ client/ ui/` |
 | 反射优先 | 1.8.9 与 26.x 的类名/签名差异巨大，跨版本适配层必须能在运行时解析 |
+| ASM 变换不得用 `COMPUTE_FRAMES` | 自定义 ClassLoader 下 `getCommonSuperClass` 会崩。改用 `ClassWriter(reader, COMPUTE_MAXS)` + `reader.accept(visitor, 0)` 保留原 StackMapTable |
+| 异常绝不传播回被补丁的游戏方法 | 帧回调是插桩进去的，一个未捕获异常会让游戏崩在任意位置 |
 
-> `core` 是唯一例外：注入器本身运行在用户 JVM（可能是 21），但仍按 release=8 编译以便复用。
-
-## 3. 模块划分
+## 3. 模块划分与依赖
 
 ```
 noturne-client/
-├── core/     注入器与加载器（进程发现 / attach / 载荷 / 多入口分发）
-├── agent/    被注入进目标 JVM 的入口（premain / agentmain / Instrumentation）
-├── client/   客户端核心（事件总线、模块与值框架、映射与跨版本适配、游戏 wrapper）
-└── ui/       自绘 ClickGUI 与 HUD（Epsilon 风格）
+├── core/      注入侧：进程发现、attach、载荷容器、CLI 入口
+├── injector/  注入器 GUI（Swing + FlatLaf + MigLayout）
+├── agent/     被注入侧：premain/agentmain 接线、帧钩子、叠加层装配
+├── client/    客户端核心：模块与值框架、事件总线、映射层、反射桥
+├── ui/        自绘 ClickGUI 与 HUD
+└── dist/      纯聚合模块（无源码），合并上述五者成单 jar
 ```
 
-依赖方向：`ui → client → agent → core`（注入器不依赖客户端，保证能独立启动）。
+依赖图是**森林**，不是链：
 
-### 3.1 core
+```
+injector ──→ core                (注入侧：GUI 依赖注入逻辑)
+agent ──→ client, ui             (被注入侧：agent 同时是 ui 的宿主)
+ui ──────→ client
+core, client                     (叶子)
+dist ────→ 全部
+```
+
+`core` 与 `client` 都是叶子，没有循环依赖。注入器不依赖客户端，因此能独立启动。
+
+### 3.1 core（注入侧）
 
 | 组件 | 职责 |
 |---|---|
-| `Noturne` | `main`：解析参数（`--pid`）、扫描、选择、调用 attach |
-| `attach.ProcessScanner` | 跨平台枚举 JVM 进程并识别 Minecraft（tasklist/PowerShell、`ps`） |
-| `attach.Attacher` | attach 策略：① 反射 `com.sun.tools.attach.VirtualMachine`；②（后续）自带 `sun.tools.attach.*` 字节码 + 直接调用 attach 原生库，免 `tools.jar` |
+| `Noturne` | `main`：工具 jar 自举 → 解析 `--pid`/`--list-json` → 扫描 → `Attacher.attach` |
+| `attach.ProcessScanner` | 跨平台枚举 JVM 进程并识别 Minecraft（Windows `tasklist /V` + PowerShell CIM；Unix `ps -e -o pid=,comm=,args=`） |
+| `attach.Attacher` | attach 策略链。当前**只有 `JdkAttachStrategy` 一条**；自实现 attach 与原生 attach 是注释里的后续阶段 |
+| `attach.JdkAttachStrategy` | 反射 `com.sun.tools.attach.VirtualMachine`；容忍 JDK 9+ 客户端对 JDK 8 目标的响应格式误报 |
+| `attach.ToolsJarBootstrap` | JDK 8 下用带 `tools.jar` 的 classpath 重启自身 |
+| `attach.AgentOptions` | 组装 `guiKey=<AWT VK>,mcVersion=<版本族>`；版本从目标命令行归一化 |
+| `pack.PayloadPack` / `load.MemoryClassLoader` | AES-256-GCM + deflate 的载荷容器与内存类加载器。**已实现且有测试，但生产零调用** |
 
-### 3.2 agent
+### 3.2 agent（被注入侧）
 
-被目标 JVM 加载后：
+1. `premain` / `agentmain` → 同一个 `start()`，`AtomicBoolean` CAS 保证幂等。
+2. 解析 agent 参数 `guiKey=`（畸形输入一律回退 `VK_RIGHT_SHIFT`）。
+3. 在**守护线程** `noturne-init` 上依次 `boot → installFrameHook → installOverlay`
+   （在 `premain` 里同步初始化会拖死待插桩 JVM 的类加载）。
+4. `FrameHookTransformer`（ASM9）在三个帧交换点织入 `NoturneRuntime.onFrame()`：
+   `org/lwjgl/opengl/Display.update()V` / `org/lwjgl/glfw/GLFW.glfwSwapBuffers(J)V` /
+   `org/lwjgl/sdl/SDLVideo.SDL_GL_SwapWindow(J)Z`。
+   未命中或解析失败一律返回 `null`，JVM 沿用原字节码——**绝不让插桩导致类加载失败**。
+5. `EmbeddedAsmLoader` 用 child-first 子加载器从内嵌的 `dev/noturne/agent/asm.jar`
+   供出 ASM（同时覆盖转换器自身的类，否则它 import 的 ASM 解析不到内嵌副本）。
+6. `OverlayBootstrap` 是**延迟安装器**（自身实现 `FrameListener`）：每帧重解析游戏类加载器
+   里的 `GL11`，等第一帧真到来再装叠加层，成功后自摘。上限 600 次。
 
-1. `premain(String args, Instrumentation inst)`（`-javaagent` / attach）或
-   `agentmain(String args, Instrumentation inst)`（运行时 attach）。
-2. 解析 agent 参数（握手 token、配置来源）。
-3. 记下 `Instrumentation`，交给 `client` 完成初始化（**必须另起线程**，不在 `premain` 里阻塞类加载）。
+### 3.3 client（客户端核心）
 
-### 3.3 client
-
-- **事件总线**：类型化事件（Tick、Packet、Render、Key），支持优先级。
-- **模块框架**：`Module` 基类 + `ModuleId` 枚举 + 值体系（Boolean / Number / Mode / Color / Bind）。
+- **模块框架**：`Module` 基类 + `ModuleRegistry`（按名唯一、分类查询、驱动闸门）
+  + 值体系（`BooleanValue` / `NumberValue` / `ColorValue` / `ModeValue`）。
+  分类只有 4 个：`MOVEMENT` / `RENDER` / `PLAYER` / `MISC`。
+- **事件总线**：`EventBus`，同步、按订阅顺序、逐订阅者异常隔离。
+  **当前零个事件类型，无优先级，生产未接线。**
 - **跨版本适配**：
   - `Mapping` 抽象：把"规范名"翻译成运行时真实名。
-  - 模式 A（1.8.9–1.21.x，混淆）：查映射表（MCP / Mojmap / SRG）。
-  - 模式 B（26.1+，无混淆）：标识映射 + 反射解析签名（参考 DarkClient 已验证的路径）。
-- **游戏 wrapper**：`Minecraft`、`LocalPlayer`、`World`… 只暴露客户端需要的成员。
+  - `IdentityMapping`（26.1+，无混淆，原样返回）。
+  - `ObfuscatedMapping`（查 `/mappings-1.8.9.json`，重载消歧依赖 `methodDescriptor` 单键）。
+- **反射桥**：`GameBridge` 提供类解析（含限流重试）、映射字段读写、映射方法调用
+  （描述符消歧 / 恒等映射下按实参推导重载）与成功缓存。**没有有类型的 wrapper 对象**——
+  `player()` 返回裸 `Object`。
+- **运行时**：`NoturneRuntime.onFrame()` 是帧广播器，四层防御：
+  ThreadLocal 重入 → `tryLock` 非阻塞 → 逐监听器 `catch(Throwable)` → 最外层兜底。
+  按 50ms 折算成 20Hz 驱动 `ModuleRegistry.tick()`。
+- **HUD 接缝**：`HudSink`（`add`/`remove`/`has`）。
+  **生产未接线**——`setHudSink()` 无调用方，`ui` 侧也没有它的实现。
 
-### 3.4 ui
+### 3.4 ui（自绘 ClickGUI / HUD）
 
-自绘 ClickGUI / HUD：
-- 渲染层抽象（OpenGL 1.x/2.x 兼容 1.8.9，核心 profile 兼容 26.x）。
-- 组件树（Panel / Button / Slider / Dropdown / ColorPicker）、主题、字体、动画。
+- 渲染抽象 `Renderer`（rect / roundedRect / outline / text / pushClip / popClip）
+  + `UiBackend`（+ beginFrame/endFrame/backendName/width/height/ready）。
+- 两个后端：`GlRenderer`（固定管线，`glOrtho` + `glScissor` 裁剪栈）、`ModernRenderer`
+  （核心 profile，GLSL 150 + 单 VBO/VAO，颜色走 uniform）。
+- 输入 `ReflectiveInput`：反射绑定 lwjgl2 / glfw 两代输入；GLFW 滚轮走动态代理回调
+  并**转发被顶掉的旧回调**；两端都不可用时退化为 `NoInput`。
+- 组件树、主题、字体、动画、分类栏拖动、滚轮、右键设置面板、指针捕获交接。
+- HUD（`HudManager` / `TextElement`）：**生产零引用**，且无拖动、无持久化。
 
 ## 4. 注入链
 
 ```mermaid
 sequenceDiagram
     participant U as 用户
-    participant L as core (loader)
+    participant G as injector (GUI)
+    participant C as core
     participant A as agent (目标 JVM 内)
-    participant C as client
+    participant R as client/ui
 
-    U->>L: 双击 jar / --pid
-    L->>L: ProcessScanner 找 Minecraft
-    L->>A: Attacher.attach(pid, self.jar)
-    Note over A: premain/agentmain 被调用
-    A->>A: 解析 agent 参数
-    A->>C: 新线程初始化客户端
-    C->>C: 事件总线 + 模块注册 + 映射解析
-    C->>U: ClickGUI (Right Shift)
+    U->>G: 双击 jar
+    G->>C: ProcessScanner 找 Minecraft
+    C->>C: 从命令行解析 mcVersion
+    C->>A: Attacher.attach(pid, self.jar, "guiKey=54,mcVersion=1.8.9")
+    Note over A: agentmain 被调用 → 守护线程 noturne-init
+    A->>R: NoturneClient.boot(Instrumentation)
+    A->>A: 注册 FrameHookTransformer，retransform 三个帧交换点
+    A->>R: OverlayBootstrap.install(loader, inst, guiKey)
+    loop 每帧（Display.update 等）
+        A->>R: NoturneRuntime.onFrame()
+        R->>R: 20Hz 驱动 ModuleRegistry.tick() + GuiOverlay 绘制
+    end
+    U->>R: 右 Shift 唤出 GUI
 ```
 
 ## 5. 载荷与资源
 
-阶段 2 定义自有的载荷封装格式（不复制第三方实现）：
+`PayloadPack` 定义了自有封装格式（不复制第三方实现）：
 
-- 资源密文 → 解密 → 解压 → 类表（`名称 → 字节码`）→ 自定义 `ClassLoader` 内存加载，**不落盘**。
-- payload 与 native 辅助库分开存放；`k`/`l` 式命名规避字符串扫描。
-- 支持"本地内嵌"与"远程更新"双来源，本地优先、按版本号取新。
+```
+MAGIC 'NTPK'(4) | VERSION(1) | nonce(12) | AES-256-GCM 密文 + 16B 标签
+明文 = deflate( int count + (writeUTF 名称, int 长度, 字节)* )
+```
+
+`MemoryClassLoader` 内存优先（表内即 `defineClass`，允许遮蔽），表外委派父加载器且不持锁；
+`getResource`/`getResourceAsStream` 用自定义 `memory:` `URLStreamHandler` 提供内存资源。
+解析有硬上限（条目数 ≤ 2²⁰、单条 ≤ 64MiB、明文 ≤ 512MiB、拒绝重名），inflate 带无进展自旋保护。
+
+**现状：整条链在生产代码里零调用**，无密钥生成、无 payload 资源打包。是"已实现且有测试但未接线"的孤岛。
 
 ## 6. 入口矩阵
 
-| 环境 | 元数据 / 入口 | 行为 |
+| 环境 | 入口 | 行为 |
 |---|---|---|
-| `-javaagent` / attach | `MANIFEST.MF: Premain-Class`, `Agent-Class` | 直接进入 agent 路径 |
-| 双击 / `java -jar` | `Main-Class: dev.noturne.core.Noturne` | 扫描并注入 |
-| Fabric | `fabric.mod.json` → `entrypoints.main` | 走客户端初始化 |
-| Forge | `META-INF/mods.toml` | 同上 |
-| NeoForge | `META-INF/neoforge.mods.toml` | 同上 |
-
-所有入口最终汇聚到 `client` 的同一初始化函数。
+| `-javaagent` / attach | `MANIFEST.MF: Premain-Class`, `Agent-Class` = `dev.noturne.agent.NoturneAgent` | 直接进入 agent 路径 |
+| 双击 / `java -jar` | `Main-Class: dev.noturne.injector.InjectorApp` | 双击出 GUI；参数含 `--list-json` 或 `--pid=<n>` 时**在启动 GUI 之前**转发给 `dev.noturne.core.Noturne` 走命令行 |
+| WinUI/WPF 套壳 | `launcher/`（独立 C# 进程） | 靠 `--list-json` / `--pid=` 子进程协议驱动 jar，**不链接 jar 内任何类型** |
 
 ## 7. 跨版本策略
 
-统一代码 + 运行时适配层，分三段：
+统一代码 + 运行时适配层。**版本由注入器传入（`mcVersion=` attach 选项），运行时零探测**：
 
 | 区间 | 特征 | 适配方式 |
 |---|---|---|
-| 1.8.9 | Java 8，MCP 名 | 映射表 + JVMTI/ASM 改类 |
-| 1.21.x | Java 21，Mojmap 混淆 | 映射表 |
-| 26.1+ | Java 21+，无混淆 | 反射解析签名（零映射文件） |
+| 1.8.9 | Java 8，MCP 名 | 映射表 + ASM 帧钩子 + GL 固定管线 |
+| 1.12 – 1.21 | 混淆 | 映射表（**未产出**） |
+| 26.1 – 26.2 | Java 21，无混淆 | 反射解析 + 核心 profile 渲染 |
+| 26.3 | Java 21，无混淆，SDL3 | 渲染与帧钩子已适配，**输入栈未实现** |
 
 ## 8. 阶段计划
 
-见 `docs/PLAN.md`。
+见 `docs/PLAN.md`。版本能力矩阵见 `docs/VERSION-MATRIX.md`。

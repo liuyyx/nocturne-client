@@ -43,9 +43,19 @@ public final class Animation {
         this.running = false;
     }
 
-    /** Starts (restarts) a transition from the current value to {@code target}. */
+    /**
+     * Starts (or restarts) a transition from the current value to {@code target}.
+     *
+     * <p>Declaratively re-asserting an unchanged target is a normal call pattern (a component
+     * says "I want to go to 1" every frame).  Time-base continuity is this class's own
+     * invariant, so the de-duplication lives here rather than in every caller: if the target
+     * did not change, an in-flight transition keeps its original {@code startMs} and simply
+     * keeps advancing.  Without that, a per-frame {@code animateTo} would reset the start on
+     * every frame, pinning {@code elapsed} to 0 and freezing the value at {@code from}.
+     */
     public void animateTo(float target, long nowMs) {
-        if (target == this.to && !running) {
+        if (target == this.to) {
+            // 目标未变：进行中则保持既有时间基准（由 update 继续推进），已到达则无事可做。
             return;
         }
         this.from = this.value;
@@ -62,11 +72,21 @@ public final class Animation {
     public float update(long nowMs) {
         if (running) {
             long elapsed = nowMs - startMs;
+            // 时钟回退（或混用不同时间基准）会让 elapsed 为负，缓动函数随即产生极端值
+            // （例如 EASE_OUT_CUBIC 在 t 为负时给出 -8e29）。这里把下界夹到 0。
+            if (elapsed < 0L) {
+                elapsed = 0L;
+            }
             if (elapsed >= durationMs) {
                 value = to;
                 running = false;
             } else {
                 float t = durationMs <= 0L ? 1f : (float) elapsed / (float) durationMs;
+                if (t < 0f) {
+                    t = 0f;
+                } else if (t > 1f) {
+                    t = 1f;
+                }
                 value = from + (to - from) * apply(t);
             }
         }

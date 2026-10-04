@@ -19,6 +19,9 @@ import java.util.zip.ZipFile;
  */
 public final class PayloadLoader {
 
+    /** 单个 payload（压缩态）允许的最大字节数（256 MiB），防止畸形/无限流导致 OOM。 */
+    private static final long MAX_PAYLOAD_BYTES = 256L * 1024 * 1024;
+
     /** 工具类，禁止实例化。 */
     private PayloadLoader() {
     }
@@ -29,9 +32,11 @@ public final class PayloadLoader {
      * @param in   输入流，会被完全读取但不会被关闭（所有权仍属调用方）
      * @param key  AES-256 密钥，长度必须为 32 字节
      * @return 类全名到字节码的映射
-     * @throws IOException 读取失败或 payload 格式/校验不合法
+     * @throws IOException 读取失败、密钥长度非法或 payload 格式/校验不合法
      */
     public static Map<String, byte[]> read(InputStream in, byte[] key) throws IOException {
+        // 先校验密钥长度：否则错误密钥会被包装成误导性的 "open failed"，而流仍被整段读入内存。
+        requireKey(key);
         return PayloadPack.unpack(readFully(in), key);
     }
 
@@ -111,7 +116,28 @@ public final class PayloadLoader {
     }
 
     /**
+     * 创建加载器并解析 payload 的入口类，同时保留加载器引用。
+     *
+     * <p>调用方拿到返回的 {@link LoadedEntry} 后即可通过它的加载器取同一 payload 的其他类，
+     * 从而保证同一 payload 的类只被定义一次（否则每次调用都得到互不可转换的重复类，静态状态也各存一份）。
+     *
+     * @param classes   类全名到字节码的映射
+     * @param parent    父加载器
+     * @param mainClass 入口类的全名
+     * @return 入口类与其所属加载器
+     * @throws ClassNotFoundException 入口类不在映射中且父加载器也无法提供
+     */
+    public static LoadedEntry loadEntry(Map<String, byte[]> classes, ClassLoader parent, String mainClass)
+            throws ClassNotFoundException {
+        MemoryClassLoader loader = new MemoryClassLoader(parent, classes);
+        return new LoadedEntry(loader.loadClass(mainClass), loader);
+    }
+
+    /**
      * 创建加载器并解析 payload 的入口类（只解析，不初始化）。
+     *
+     * <p>该重载会丢弃加载器引用，仅在只需入口类本身时使用；需要同一 payload 的其他类或共享静态
+     * 状态时请改用 {@link #loadEntry}。
      *
      * @param classes   类全名到字节码的映射
      * @param parent    父加载器
@@ -121,7 +147,15 @@ public final class PayloadLoader {
      */
     public static Class<?> entryClass(Map<String, byte[]> classes, ClassLoader parent, String mainClass)
             throws ClassNotFoundException {
-        return new MemoryClassLoader(parent, classes).loadClass(mainClass);
+        return loadEntry(classes, parent, mainClass).entryClass();
+    }
+
+    /** 校验密钥长度必须为 AES-256 的 32 字节。 */
+    private static void requireKey(byte[] key) throws IOException {
+        if (key == null || key.length != PayloadPack.KEY_LENGTH) {
+            throw new IOException("payload key must be " + PayloadPack.KEY_LENGTH + " bytes, got "
+                    + (key == null ? "null" : Integer.toString(key.length)));
+        }
     }
 
     /**
@@ -129,15 +163,45 @@ public final class PayloadLoader {
      *
      * @param in 输入流，不会被关闭
      * @return 流内容的完整副本
-     * @throws IOException 读取失败
+     * @throws IOException 读取失败或输入超过 {@link #MAX_PAYLOAD_BYTES}
      */
     private static byte[] readFully(InputStream in) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream(64 * 1024);
         byte[] buffer = new byte[8192];
+        long total = 0;
         int read;
         while ((read = in.read(buffer)) != -1) {
+            total += read;
+            if (total > MAX_PAYLOAD_BYTES) {
+                throw new IOException("payload too large: exceeded " + MAX_PAYLOAD_BYTES + " bytes");
+            }
             out.write(buffer, 0, read);
         }
         return out.toByteArray();
+    }
+
+    /** 入口类与定义它的加载器，两者一起返回以保证同一 payload 的类身份唯一。 */
+    public static final class LoadedEntry {
+
+        /** 已定义的入口类。 */
+        private final Class<?> entryClass;
+
+        /** 定义入口类的加载器；同一 payload 的其他类都应从它取得。 */
+        private final MemoryClassLoader loader;
+
+        LoadedEntry(Class<?> entryClass, MemoryClassLoader loader) {
+            this.entryClass = entryClass;
+            this.loader = loader;
+        }
+
+        /** @return 已定义的入口类 */
+        public Class<?> entryClass() {
+            return entryClass;
+        }
+
+        /** @return 定义入口类的内存加载器 */
+        public MemoryClassLoader loader() {
+            return loader;
+        }
     }
 }

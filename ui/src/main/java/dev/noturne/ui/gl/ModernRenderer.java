@@ -34,8 +34,14 @@ public final class ModernRenderer implements UiBackend {
                     + "    fragColor = uColor;\n"
                     + "}\n";
 
+    /** 顶点属性 {@code aPos} 在着色器中的固定位置；链接前用 glBindAttribLocation 绑定。 */
+    private static final int ATTRIB_POSITION = 0;
+
     /** 每个 90° 圆角细分的段数；与固定管线后端保持一致，保证两条路径观感相同。 */
     private static final int CORNER_SEGMENTS = 6;
+
+    /** 裁剪栈的最大嵌套层数；超出后更深的裁剪被忽略，但深度仍记账以保证 push/pop 配对。 */
+    private static final int MAX_CLIP_DEPTH = 8;
 
     /** 核心 profile 绑定；不得为 {@code null}。 */
     private final ModernGlApi gl;
@@ -54,12 +60,35 @@ public final class ModernRenderer implements UiBackend {
     private int colorLocation;
     /** 着色器与缓冲是否已创建成功；未就绪时所有绘制调用都会被跳过。 */
     private boolean ready;
+    /** 初始化是否已明确失败；失败后不再每帧重试，避免累积 GL 对象。 */
+    private boolean initFailed;
+
     /** 当前正交投影矩阵（16 个元素，列主序）。 */
     private float[] projection = new float[16];
-    /** 缓存的窗口宽度，用于检测视口变化。 */
+    /** 缓存的视口原点 x（像素）。 */
+    private int screenX;
+    /** 缓存的视口原点 y（像素）。 */
+    private int screenY;
+    /** 缓存的视口宽度，用于检测视口变化。 */
     private int screenWidth;
-    /** 缓存的窗口高度，用于检测视口变化。 */
+    /** 缓存的视口高度，用于检测视口变化。 */
     private int screenHeight;
+
+    /** 嵌套裁剪的矩形栈，元素为 {@code {x, y, width, height}}（GL 坐标系，原点左下）。 */
+    private final int[][] clipStack = new int[MAX_CLIP_DEPTH][];
+    /** 当前裁剪嵌套深度（含因栈满被忽略的层）；为 0 表示未启用裁剪。 */
+    private int clipDepth;
+    /** 裁剪栈溢出是否已提示过。 */
+    private boolean clipOverflowWarned;
+
+    /** 是否已保存 {@link #beginFrame()} 之前的开关状态；保存后由 {@link #endFrame()} 还原。 */
+    private boolean stateSaved;
+    /** beginFrame 之前的混合开关状态。 */
+    private boolean blendWasEnabled;
+    /** beginFrame 之前的深度测试状态。 */
+    private boolean depthWasEnabled;
+    /** beginFrame 之前的背面剔除状态。 */
+    private boolean cullWasEnabled;
 
     /** 供每次绘制复用的暂存顶点缓冲，使整个渲染过程不产生逐帧分配。 */
     private float[] scratch = new float[256];
@@ -83,40 +112,98 @@ public final class ModernRenderer implements UiBackend {
     /**
      * 编译着色器并创建缓冲对象。必须已有当前 GL 上下文时调用，且只需调用一次。
      *
+     * <p>任一步失败都会删除已创建的 GL 对象并把 {@link #initFailed} 置位，
+     * 之后不再重试——否则 beginFrame 每帧新建 1~2 个着色器且永不删除，长期挂机会累积数千个 GL 对象。
+     *
      * @return 是否初始化成功
      */
     public boolean initialise() {
         if (ready) {
             return true;
         }
+        if (initFailed) {
+            return false;
+        }
+
         int vertex = gl.createShader(ModernGlApi.GL_VERTEX_SHADER);
         gl.shaderSource(vertex, VERTEX_SHADER);
         gl.compileShader(vertex);
-        if (!gl.compileOk(vertex)) {
+        if (vertex == 0 || !gl.compileOk(vertex)) {
             System.err.println("[noturne] vertex shader failed: " + gl.shaderLog(vertex));
+            gl.deleteShader(vertex);
+            initFailed = true;
             return false;
         }
+
         int fragment = gl.createShader(ModernGlApi.GL_FRAGMENT_SHADER);
         gl.shaderSource(fragment, FRAGMENT_SHADER);
         gl.compileShader(fragment);
-        if (!gl.compileOk(fragment)) {
+        if (fragment == 0 || !gl.compileOk(fragment)) {
             System.err.println("[noturne] fragment shader failed: " + gl.shaderLog(fragment));
+            gl.deleteShader(fragment);
+            gl.deleteShader(vertex);
+            initFailed = true;
             return false;
         }
 
-        program = gl.createProgram();
+        int created = gl.createProgram();
+        if (created == 0) {
+            System.err.println("[noturne] glCreateProgram failed");
+            gl.deleteShader(vertex);
+            gl.deleteShader(fragment);
+            initFailed = true;
+            return false;
+        }
+        program = created;
         gl.attachShader(program, vertex);
         gl.attachShader(program, fragment);
+        // 顶点属性位置必须在链接前绑定：驱动默认可以把它分配到 0 以外的位置，
+        // 而下面的 glVertexAttribPointer 固定按索引 0 描述布局。
+        gl.bindAttribLocation(program, ATTRIB_POSITION, "aPos");
         gl.linkProgram(program);
+        // 链接完成后着色器对象即可删除，程序会保留各自的副本。
+        gl.deleteShader(vertex);
+        gl.deleteShader(fragment);
+
+        if (!gl.linkOk(program)) {
+            System.err.println("[noturne] program link failed: " + gl.programLog(program));
+            gl.deleteProgram(program);
+            program = 0;
+            initFailed = true;
+            return false;
+        }
+
         projectionLocation = gl.uniformLocation(program, "uProjection");
         colorLocation = gl.uniformLocation(program, "uColor");
+        if (projectionLocation < 0 || colorLocation < 0) {
+            System.err.println("[noturne] shader uniforms missing: uProjection=" + projectionLocation
+                    + " uColor=" + colorLocation);
+            gl.deleteProgram(program);
+            program = 0;
+            initFailed = true;
+            return false;
+        }
 
         vertexArray = gl.genVertexArray();
         vertexBuffer = gl.genBuffer();
+        if (vertexArray == 0 || vertexBuffer == 0) {
+            // genBuffer 曾因调用签名笔误恒返回 0，随后 glBindBuffer(0)/glBufferData 变成
+            // 对空目标的操作，每帧 drawArrays 结果未定义却仍报 ready。这里直接判定未就绪。
+            System.err.println("[noturne] buffer object creation failed: vao=" + vertexArray
+                    + " vbo=" + vertexBuffer);
+            gl.deleteProgram(program);
+            program = 0;
+            gl.deleteBuffer(vertexBuffer);
+            vertexBuffer = 0;
+            gl.deleteVertexArray(vertexArray);
+            vertexArray = 0;
+            initFailed = true;
+            return false;
+        }
         gl.bindVertexArray(vertexArray);
         gl.bindArrayBuffer(vertexBuffer);
-        gl.enableVertexAttrib(0);
-        gl.vertexAttribPointer(0, 2, 8, 0);
+        gl.enableVertexAttrib(ATTRIB_POSITION);
+        gl.vertexAttribPointer(ATTRIB_POSITION, 2, 8, 0);
 
         ready = true;
         return true;
@@ -129,9 +216,40 @@ public final class ModernRenderer implements UiBackend {
      * @param height 视口高度（像素）
      */
     public void setViewport(int width, int height) {
+        setViewport(0, 0, width, height);
+    }
+
+    /**
+     * 设置视口尺寸与原点；非全屏视口下必须传入原点，否则整个 GUI 会整体偏移。
+     *
+     * @param x      视口原点 x（像素）
+     * @param y      视口原点 y（像素）
+     * @param width  视口宽度（像素）
+     * @param height 视口高度（像素）
+     */
+    public void setViewport(int x, int y, int width, int height) {
+        this.screenX = x;
+        this.screenY = y;
         this.screenWidth = width;
         this.screenHeight = height;
-        this.projection = orthographic(width, height);
+        this.projection = orthographic(x, y, width, height);
+    }
+
+    /** 释放本后端创建的 GL 对象；后端被替换或卸载时调用。 */
+    public void dispose() {
+        if (program != 0) {
+            gl.deleteProgram(program);
+            program = 0;
+        }
+        if (vertexBuffer != 0) {
+            gl.deleteBuffer(vertexBuffer);
+            vertexBuffer = 0;
+        }
+        if (vertexArray != 0) {
+            gl.deleteVertexArray(vertexArray);
+            vertexArray = 0;
+        }
+        ready = false;
     }
 
     @Override
@@ -149,34 +267,80 @@ public final class ModernRenderer implements UiBackend {
         return screenHeight;
     }
 
+    /** @return 后端是否已成功初始化并处于可绘制状态 */
+    @Override
+    public boolean ready() {
+        return ready || (!initFailed && initialise());
+    }
+
     /** 应用每帧的 GL 状态；在绘制 GUI 之前调用。 */
     @Override
     public void beginFrame() {
+        if (stateSaved) {
+            // 上一帧的 endFrame 未执行：先还原，避免开关状态与投影逐帧累积。
+            endFrame();
+        }
         if (!ready && !initialise()) {
             return;
         }
         syncViewport();
+        saveState();
         gl.useProgram(program);
         gl.bindVertexArray(vertexArray);
         gl.enableBlend();
-        gl.disableTexture();
+        gl.disableDepthTest();
+        // 投影含 -2/h 的 Y 翻转，所有三角形按绕序都是「背面」；不关剔除整个 GUI 会被剔光。
+        gl.disableCullFace();
     }
 
-    /** 跟踪窗口尺寸，使窗口缩放或切换全屏后投影矩阵依然正确。 */
+    /**
+     * 跟踪窗口尺寸与原点，使窗口缩放、切换全屏或使用非全屏视口后投影矩阵依然正确。
+     */
     private void syncViewport() {
         int[] viewport = gl.getInteger(ModernGlApi.GL_VIEWPORT, 4);
         if (viewport == null) {
             return;
         }
         if (viewport[2] > 0 && viewport[3] > 0
-                && (viewport[2] != screenWidth || viewport[3] != screenHeight)) {
-            setViewport(viewport[2], viewport[3]);
+                && (viewport[0] != screenX || viewport[1] != screenY
+                || viewport[2] != screenWidth || viewport[3] != screenHeight)) {
+            setViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
         }
+    }
+
+    /** 记录被本后端改写的开关状态，供 {@link #endFrame()} 精确还原。 */
+    private void saveState() {
+        if (stateSaved || !gl.hasIsEnabled()) {
+            return;
+        }
+        blendWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_BLEND);
+        depthWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_DEPTH_TEST);
+        cullWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_CULL_FACE);
+        stateSaved = true;
     }
 
     @Override
     public void endFrame() {
-        gl.disableBlend();
+        if (stateSaved) {
+            // 不做「无条件关混合」之类的粗暴清理：那会把同帧后续的游戏 HUD / 粒子绘制一并污染。
+            restore(ModernGlApi.GL_BLEND, blendWasEnabled);
+            restore(ModernGlApi.GL_DEPTH_TEST, depthWasEnabled);
+            restore(ModernGlApi.GL_CULL_FACE, cullWasEnabled);
+            stateSaved = false;
+        }
+        if (clipDepth > 0) {
+            gl.disableScissorTest();
+            clipDepth = 0;
+        }
+    }
+
+    /** 把某项能力还原为 {@code enabled} 指定的状态。 */
+    private void restore(int cap, boolean enabled) {
+        if (enabled) {
+            gl.enableCap(cap);
+        } else {
+            gl.disableCap(cap);
+        }
     }
 
     // -------------------------------------------------------------- Renderer 接口实现
@@ -242,10 +406,18 @@ public final class ModernRenderer implements UiBackend {
         if (value == null || value.isEmpty()) {
             return;
         }
-        // 游戏自带的字体渲染器会自行发出 GL 调用，所以先释放本渲染器的批次状态。
-        endFrame();
+        // 交给游戏字体前必须让出本后端占用的 program 与 VAO：字体渲染器走自己的管线，
+        // 留着我们的绑定会与它的状态互相覆盖。注意不要在这里改混合开关——
+        // 字体绘制结束后不会替我们恢复，状态会与本后端的假设不符。
+        if (ready) {
+            gl.useProgram(0);
+            gl.bindVertexArray(0);
+        }
         text.draw(value, x, y, size, color);
-        beginFrame();
+        if (ready) {
+            gl.useProgram(program);
+            gl.bindVertexArray(vertexArray);
+        }
     }
 
     @Override
@@ -260,15 +432,79 @@ public final class ModernRenderer implements UiBackend {
 
     @Override
     public void pushClip(float x, float y, float width, float height) {
-        // 裁剪测试需要当前 FBO 的高度才能正确换算，暂时留给调用方处理。
+        if (!gl.hasScissor()) {
+            return;
+        }
+        if (clipDepth >= MAX_CLIP_DEPTH) {
+            // 记账以保证与 popClip 配对；更深层不再改变 GL 状态。
+            if (!clipOverflowWarned) {
+                clipOverflowWarned = true;
+                System.err.println("[noturne] core clip stack overflow (depth " + clipDepth
+                        + " >= " + MAX_CLIP_DEPTH + "); deeper clips ignored");
+            }
+            clipDepth++;
+            return;
+        }
+        int[] box = toScissorBox(x, y, width, height);
+        if (clipDepth > 0) {
+            box = intersection(clipStack[clipDepth - 1], box);
+        }
+        clipStack[clipDepth++] = box;
+        gl.scissor(box[0], box[1], box[2], box[3]);
+        gl.enableScissorTest();
     }
 
     @Override
     public void popClip() {
-        // 见 pushClip：本后端尚未启用裁剪测试。
+        if (clipDepth == 0) {
+            return;
+        }
+        clipDepth--;
+        if (clipDepth == 0) {
+            gl.disableScissorTest();
+            return;
+        }
+        if (clipDepth < MAX_CLIP_DEPTH) {
+            int[] box = clipStack[clipDepth - 1];
+            gl.scissor(box[0], box[1], box[2], box[3]);
+        }
     }
 
     // -------------------------------------------------------------- 内部实现
+
+    /**
+     * 把屏幕坐标下的裁剪矩形换算成 {@code glScissor} 参数（窗口像素、原点左下）。
+     *
+     * <p>屏幕坐标是相对视口左上角的，需要叠加视口原点 {@link #screenX}/{@link #screenY}，
+     * 再翻转 y 轴。与视口求交，越界部分不会把内容移进画面。
+     */
+    private int[] toScissorBox(float x, float y, float width, float height) {
+        int x0 = Math.round(x);
+        int y0 = Math.round(y);
+        int x1 = x0 + Math.max(0, Math.round(width));
+        int y1 = y0 + Math.max(0, Math.round(height));
+        int vw = screenWidth > 0 ? screenWidth : Math.max(1, x1);
+        int vh = screenHeight > 0 ? screenHeight : Math.max(1, y1);
+        x0 = clamp(x0, 0, vw);
+        x1 = clamp(x1, 0, vw);
+        y0 = clamp(y0, 0, vh);
+        y1 = clamp(y1, 0, vh);
+        return new int[]{screenX + x0, screenY + vh - y1, x1 - x0, y1 - y0};
+    }
+
+    /** 把 {@code value} 夹取到 {@code [lo, hi]}。 */
+    private static int clamp(int value, int lo, int hi) {
+        return value < lo ? lo : (value > hi ? hi : value);
+    }
+
+    /** 计算两个裁剪矩形的交集；不相交时宽高为 0。 */
+    private static int[] intersection(int[] a, int[] b) {
+        int x1 = Math.max(a[0], b[0]);
+        int y1 = Math.max(a[1], b[1]);
+        int x2 = Math.min(a[0] + a[2], b[0] + b[2]);
+        int y2 = Math.min(a[1] + a[3], b[1] + b[3]);
+        return new int[]{x1, y1, Math.max(0, x2 - x1), Math.max(0, y2 - y1)};
+    }
 
     /**
      * 绘制一个圆角扇形（核心 profile 无 {@code GL_TRIANGLE_FAN}，故展开成三角形列表）。
@@ -310,8 +546,8 @@ public final class ModernRenderer implements UiBackend {
     /**
      * 上传暂存顶点并绘制。
      *
-     * <p>这里必须复制成恰好长度的数组——{@code uploadArrayBuffer} 会按数组长度分配直接缓冲区，
-     * 直接传暂存数组会把上次残留的顶点一并上传。
+     * <p>只上传恰好用到的前 {@code length} 个元素（{@code uploadArrayBuffer} 的定长重载），
+     * 因此无需像旧实现那样每次绘制都 {@code new float[length]} 复制一份，避免逐帧短命数组。
      */
     private void draw(float[] data, int length, Color color) {
         int vertices = length / 2;
@@ -319,23 +555,34 @@ public final class ModernRenderer implements UiBackend {
             return;
         }
         gl.bindArrayBuffer(vertexBuffer);
-        float[] exact = new float[length];
-        System.arraycopy(data, 0, exact, 0, length);
-        gl.uploadArrayBuffer(exact);
+        gl.uploadArrayBuffer(data, length);
         gl.uniformMatrix4fv(projectionLocation, projection);
         gl.uniform4f(colorLocation, color.rf(), color.gf(), color.bf(), color.af());
         gl.drawTriangles(0, vertices);
     }
 
-    /** 列主序正交投影矩阵，把 (0,0) 映射到左上角，使 UI 可以直接使用屏幕像素坐标。 */
+    /**
+     * 列主序正交投影矩阵，把视口左上角 (x,y) 映射到 NDC 的 (-1,1)，
+     * 使 UI 可以直接使用相对视口的屏幕像素坐标。
+     */
     static float[] orthographic(int width, int height) {
+        return orthographic(0, 0, width, height);
+    }
+
+    /**
+     * 带视口原点的列主序正交投影矩阵。
+     *
+     * @param x,y      视口在窗口中的原点（像素）
+     * @param width,h  视口宽高（像素）
+     */
+    static float[] orthographic(int x, int y, int width, int height) {
         float w = width <= 0 ? 1f : width;
         float h = height <= 0 ? 1f : height;
         return new float[]{
                 2f / w, 0f, 0f, 0f,
                 0f, -2f / h, 0f, 0f,
                 0f, 0f, -1f, 0f,
-                -1f, 1f, 0f, 1f,
+                -2f * x / w - 1f, 2f * y / h + 1f, 0f, 1f,
         };
     }
 }

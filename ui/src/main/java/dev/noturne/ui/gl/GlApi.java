@@ -3,6 +3,9 @@ package dev.noturne.ui.gl;
 import dev.noturne.client.game.Reflect;
 
 import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.IntBuffer;
 
 /**
  * 对 LWJGL 固定管线 {@code GL11} 的反射绑定。
@@ -83,8 +86,25 @@ public final class GlApi {
     private final Method loadIdentity;
     /** 已解析的 {@code glOrtho}，建立正交投影。 */
     private final Method ortho;
-    /** 已解析的 {@code glGetIntegerv}，查询 GL 状态（此处只用于取视口尺寸）。 */
+    /** 已解析的 {@code glGetIntegerv}，查询 GL 状态（LWJGL3 形态：{@code (int, int[])}）。 */
     private final Method getIntegerv;
+    /**
+     * 已解析的 {@code glGetInteger(int, IntBuffer)}，查询 GL 状态（LWJGL2 形态）。
+     *
+     * <p>LWJGL2 的 GL11 <b>没有</b> {@code glGetIntegerv(int, int[])}：只接受 {@code IntBuffer}。
+     * 若只绑定数组形态，1.8.9 上视口永远读不出来（全 0），{@link GlRenderer#beginFrame()} 会据此
+     * 建立 {@code glOrtho(0,0,0,0)}——该调用在 GL 里是非法的（GL_INVALID_VALUE，矩阵不变），
+     * GUI 会永久停在裁剪空间之外而完全不可见。
+     */
+    private final Method getIntegervBuffer;
+    /**
+     * {@link #getIntegervBuffer} 用的直接缓冲：GL 要求直接缓冲 + 本地字节序，复用避免每帧分配。
+     *
+     * <p>容量必须是 <b>16 个 int</b> 而不是恰好 4 个：LWJGL2 的 {@code glGetInteger(int, IntBuffer)}
+     * 会用 {@code BufferChecks.checkBuffer(params, 16)} 校验余量，容量不足直接抛
+     * {@code IllegalArgumentException}（被 {@link Reflect#call} 吞掉后表现为「视口永远是 0x0」）。
+     */
+    private final IntBuffer viewportBuffer;
     /** 已解析的 {@code glScissor}，设置裁剪矩形。 */
     private final Method scissor;
 
@@ -97,7 +117,7 @@ public final class GlApi {
                   Method disable, Method blendFunc, Method pushMatrix, Method popMatrix,
                   Method translatef, Method scalef, Method lineWidth, Method texCoord2f,
                   Method bindTexture, Method matrixMode, Method loadIdentity, Method ortho,
-                  Method getIntegerv, Method scissor) {
+                  Method getIntegerv, Method getIntegervBuffer, Method scissor) {
         this.color4f = color4f;
         this.begin = begin;
         this.end = end;
@@ -116,6 +136,10 @@ public final class GlApi {
         this.loadIdentity = loadIdentity;
         this.ortho = ortho;
         this.getIntegerv = getIntegerv;
+        this.getIntegervBuffer = getIntegervBuffer;
+        this.viewportBuffer = ByteBuffer.allocateDirect(16 * Integer.BYTES)
+                .order(ByteOrder.nativeOrder())
+                .asIntBuffer();
         this.scissor = scissor;
     }
 
@@ -162,6 +186,10 @@ public final class GlApi {
                 Reflect.method(gl, "glOrtho", double.class, double.class, double.class,
                         double.class, double.class, double.class),
                 Reflect.method(gl, "glGetIntegerv", int.class, int[].class),
+                // LWJGL2 只有 glGetInteger(int, IntBuffer)；LWJGL3 两个形态都有。先试 LWJGL2 的名字，
+                // 再退到 LWJGL3 的 glGetIntegerv(int, IntBuffer) 重载。
+                orElse(Reflect.method(gl, "glGetInteger", int.class, IntBuffer.class),
+                        Reflect.method(gl, "glGetIntegerv", int.class, IntBuffer.class)),
                 Reflect.method(gl, "glScissor", int.class, int.class, int.class, int.class));
     }
 
@@ -269,12 +297,26 @@ public final class GlApi {
      * @return {@code {x, y, width, height}}；句柄缺失时返回 {@code null}，查询失败时各项为 0
      */
     public int[] viewport() {
-        if (getIntegerv == null) {
-            return null;
-        }
         int[] out = new int[4];
-        Reflect.call(getIntegerv, null, GL_VIEWPORT, out);
-        return out;
+        if (getIntegerv != null) {
+            // LWJGL3 形态：直接写进 int[]。
+            Reflect.call(getIntegerv, null, GL_VIEWPORT, out);
+            if (out[2] > 0 && out[3] > 0) {
+                return out;
+            }
+        }
+        if (getIntegervBuffer != null) {
+            // LWJGL2 形态：写进直接缓冲后再取回四个分量（GL 调用不会移动缓冲区位置）。
+            viewportBuffer.clear();
+            Reflect.call(getIntegervBuffer, null, GL_VIEWPORT, viewportBuffer);
+            out[0] = viewportBuffer.get(0);
+            out[1] = viewportBuffer.get(1);
+            out[2] = viewportBuffer.get(2);
+            out[3] = viewportBuffer.get(3);
+            return out;
+        }
+        // 两种形态都没有：按契约返回 null（表示「无法查询」），而不是伪装成 0x0 的视口。
+        return getIntegerv == null ? null : out;
     }
 
     /**
@@ -297,30 +339,45 @@ public final class GlApi {
         return matrixMode != null && loadIdentity != null && ortho != null;
     }
 
-    /** 是否支持 {@code glScissor} 裁剪（需要同时具备 {@code glScissor} 与 {@code glGetIntegerv}）。 */
+    /** 是否支持 {@code glScissor} 裁剪（需要 {@code glScissor} 加上任一种视口查询形态）。 */
     public boolean hasScissor() {
-        return scissor != null && getIntegerv != null;
+        return scissor != null && (getIntegerv != null || getIntegervBuffer != null);
+    }
+
+    /** 选第一个非空的方法句柄，供同义重载（LWJGL2 / LWJGL3 命名差异）之间回退。 */
+    private static Method orElse(Method preferred, Method fallback) {
+        return preferred != null ? preferred : fallback;
     }
 
     /**
      * 便捷方法：用立即模式绘制一个填充矩形。
      *
-     * <p>顶点顺序刻意从左下角开始，因为 Minecraft 的坐标系 y 轴朝上，
-     * 而调用方传入的是屏幕坐标。
+     * <p>顶点顺序为「左上 → 右上 → 右下 → 左下」，与 {@link GlRenderer#beginFrame()}
+     * 建立的 y 轴向下投影一致；旧实现按 y 轴朝上排列，与投影互为反面。
+     *
+     * <p>绘制前显式关闭 {@code GL_TEXTURE_2D}：游戏字体渲染器会在两次绘制之间把它打开，
+     * 若不在每个图元批次前复位，后续所有无纹理坐标的图元都会去采样字体图集。
      */
     public void fillRect(float x, float y, float width, float height, float r, float g, float b, float a) {
+        disable(GL_TEXTURE_2D);
         color(r, g, b, a);
         begin(GL_QUADS);
-        vertex(x, y + height);
-        vertex(x + width, y + height);
-        vertex(x + width, y);
         vertex(x, y);
+        vertex(x + width, y);
+        vertex(x + width, y + height);
+        vertex(x, y + height);
         end();
     }
 
-    /** 便捷方法：用 {@code GL_LINE_LOOP} 绘制一个线宽可设的描边矩形。 */
+    /**
+     * 便捷方法：用 {@code GL_LINE_LOOP} 绘制一个线宽可设的描边矩形。
+     *
+     * <p>与 {@link #fillRect} 一样，先关闭纹理，避免描边顶点采样字体图集。
+     * 线宽的还原由调用方负责（见 {@link GlRenderer#outline}）。
+     */
     public void strokeRect(float x, float y, float width, float height, float lineWidth,
                            float r, float g, float b, float a) {
+        disable(GL_TEXTURE_2D);
         color(r, g, b, a);
         this.lineWidth(lineWidth);
         begin(GL_LINE_LOOP);

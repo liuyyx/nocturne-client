@@ -144,4 +144,42 @@ class ColorPickerTest {
         picker.render(renderer);
         assertTrue(renderer.calls.isEmpty(), "不可见时不得产生任何绘制调用");
     }
+
+    /**
+     * L-38 回归：命中判定必须与绘制出的带位一致——两条带各让出间隙的一半，
+     * 分界线取间隙中线（高度 15 时为 y=7.5）。
+     *
+     * <p>色相带覆盖 y∈[0,6]、间隙 y∈[6,9]、明度带 y∈[9,15]；落在间隙上半的点击算色相带，
+     * 下半算明度带。若把分界线改回其它位置（例如直接取 y+barHeight），本用例必失败。
+     */
+    @Test
+    void bandHitTestMatchesTheRenderedBandsAcrossTheGap() {
+        ColorPicker picker = new ColorPicker(0xFFFF0000, null);
+        picker.setBounds(0f, 0f, 100f, 15f);
+
+        // 色相带内（y=3）：只改色相，明度保持 1.0
+        picker.mouseClicked(25, 3, 0);
+        assertEquals(expected(0.25f, 1f, 1f), picker.argb());
+        picker.mouseReleased(25, 3, 0);
+
+        // 间隙内、分界线上方（y=7 < 7.5）：仍判给色相带
+        picker.mouseClicked(40, 7, 0);
+        assertEquals(expected(0.4f, 1f, 1f), picker.argb());
+        picker.mouseReleased(40, 7, 0);
+
+        // 间隙内、分界线下方（y=8 >= 7.5）：判给明度带，只改明度
+        picker.mouseClicked(60, 8, 0);
+        assertEquals(expected(0.4f, 1f, 0.6f), picker.argb());
+        picker.mouseReleased(60, 8, 0);
+
+        // 明度带内（y=12）：只改明度
+        picker.mouseClicked(50, 12, 0);
+        assertEquals(expected(0.4f, 1f, 0.5f), picker.argb());
+        picker.mouseReleased(50, 12, 0);
+    }
+
+    /** 由 HSB 计算期望打包颜色（不透明） */
+    private static int expected(float hue, float saturation, float brightness) {
+        return 0xFF000000 | (java.awt.Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF);
+    }
 }

@@ -17,6 +17,20 @@ public final class CurrentProcess {
     }
 
     /**
+     * 判断给定 pid 是否就是当前 JVM。
+     *
+     * <p>当自身 pid 无法确定（{@link #pid()} 返回 {@link #UNKNOWN}）时返回 {@code false}——
+     * 哨兵值 {@code -1} 绝不能被当成真实 pid 参与比较。
+     *
+     * @param candidate 待比较的进程 id
+     * @return 候选 pid 与当前进程一致时为 {@code true}
+     */
+    public static boolean isSelf(int candidate) {
+        int self = pid();
+        return self > 0 && candidate == self;
+    }
+
+    /**
      * 返回当前 JVM 的进程 id。
      *
      * @return pid；无法确定时返回 {@link #UNKNOWN}（即 {@code -1}）

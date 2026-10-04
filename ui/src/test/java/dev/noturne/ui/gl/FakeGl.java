@@ -1,8 +1,20 @@
 package dev.noturne.ui.gl;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 /**
- * {@code org.lwjgl.opengl.GL11} 的替身类：只记录立即模式调用次数与最后一次参数，不做任何真实绘制，
+ * {@code org.lwjgl.opengl.GL11} 的替身类：既记录调用次数与最后一次参数，也记录
+ * <b>有序</b>的调用事件、每类开关的最终状态与矩阵操作落在哪个矩阵模式，不做任何真实绘制，
  * 使 {@link GlApi} 与 {@link GlRenderer} 可在无 GL 上下文的单元测试中运行。
+ *
+ * <p>只计数不足以发现问题：把 {@code glOrtho} 挪到 {@code GL_MODELVIEW} 之后、或让
+ * {@code popClip} 忘记关闭 {@code GL_SCISSOR_TEST}，旧替身都察觉不到。因此这里把
+ * {@code glEnable}/{@code glDisable}/{@code glMatrixMode} 的调用顺序与当前模式一并留下。
  */
 public final class FakeGl {
 
@@ -39,6 +51,36 @@ public final class FakeGl {
     /** 模拟的视口（x, y, width, height），默认 1920×1080；测试可改写以模拟其他分辨率 */
     public static int[] viewport = {0, 0, 1920, 1080};
 
+    /** {@code glEnable} 总数 */
+    public static int enableCalls;
+    /** {@code glDisable} 总数 */
+    public static int disableCalls;
+    /** {@code glPushMatrix} 总数 */
+    public static int pushMatrixCalls;
+    /** {@code glPopMatrix} 总数 */
+    public static int popMatrixCalls;
+    /** {@code glTranslatef} 总数 */
+    public static int translateCalls;
+    /** {@code glScalef} 总数 */
+    public static int scaleCalls;
+
+    /**
+     * 有序调用事件流，元素形如 {@code "enable:3089"}、{@code "matrixMode:5889"}、
+     * {@code "ortho@5889"}（{@code @} 后缀表示该调用发生时所在的矩阵模式）。
+     */
+    public static final List<String> events = new ArrayList<String>();
+    /** {@code glMatrixMode} 的有序序列；用来断言投影/模型视图切换的次序 */
+    public static final List<Integer> matrixModeSequence = new ArrayList<Integer>();
+
+    /** 每个能力被开启的次数 */
+    private static final Map<Integer, Integer> capEnableCounts = new HashMap<Integer, Integer>();
+    /** 每个能力被关闭的次数 */
+    private static final Map<Integer, Integer> capDisableCounts = new HashMap<Integer, Integer>();
+    /** 当前处于开启状态的能力集合（模拟真实 GL 状态） */
+    private static final Set<Integer> enabledCaps = new HashSet<Integer>();
+    /** 当前矩阵模式（由 {@code glMatrixMode} 维护），-1 表示尚未设置 */
+    private static int currentMatrixMode = -1;
+
     /** 工具类，禁止实例化 */
     private FakeGl() {
     }
@@ -61,7 +103,86 @@ public final class FakeGl {
         scissorCalls = 0;
         lastScissor = null;
         viewport = new int[]{0, 0, 1920, 1080};
+
+        enableCalls = 0;
+        disableCalls = 0;
+        pushMatrixCalls = 0;
+        popMatrixCalls = 0;
+        translateCalls = 0;
+        scaleCalls = 0;
+        events.clear();
+        matrixModeSequence.clear();
+        capEnableCounts.clear();
+        capDisableCounts.clear();
+        enabledCaps.clear();
+        currentMatrixMode = -1;
     }
+
+    /** 清空仅与裁剪相关的观察，便于 beginFrame 之后单独断言 pushClip 的行为 */
+    public static void resetScissorObservations() {
+        scissorCalls = 0;
+        lastScissor = null;
+    }
+
+    // ---- 断言辅助 ----
+
+    /** @return 指定能力当前是否处于开启状态（按 enable/disable 调用序累计） */
+    public static boolean isCapEnabled(int cap) {
+        return enabledCaps.contains(cap);
+    }
+
+    /** @return 指定能力被 {@code glEnable} 的次数 */
+    public static int enableCount(int cap) {
+        Integer n = capEnableCounts.get(cap);
+        return n == null ? 0 : n;
+    }
+
+    /** @return 指定能力被 {@code glDisable} 的次数 */
+    public static int disableCount(int cap) {
+        Integer n = capDisableCounts.get(cap);
+        return n == null ? 0 : n;
+    }
+
+    /** @return 事件流中从 {@code from} 起首次出现 {@code event} 的下标；未出现返回 -1 */
+    public static int indexOf(String event, int from) {
+        for (int i = Math.max(0, from); i < events.size(); i++) {
+            if (events.get(i).equals(event)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** @return 事件流中是否包含完全等于 {@code event} 的事件 */
+    public static boolean hasEvent(String event) {
+        return indexOf(event, 0) >= 0;
+    }
+
+    /** @return 以 {@code prefix} 开头的事件下标列表（按出现顺序） */
+    public static List<Integer> indicesMatchingPrefix(String prefix) {
+        List<Integer> out = new ArrayList<Integer>();
+        for (int i = 0; i < events.size(); i++) {
+            if (events.get(i).startsWith(prefix)) {
+                out.add(i);
+            }
+        }
+        return out;
+    }
+
+    /** @return 事件 {@code "@<mode>"} 后缀里记录的矩阵模式；无后缀时返回 Integer.MIN_VALUE */
+    public static int modeOfEvent(String event) {
+        int at = event.indexOf('@');
+        if (at < 0) {
+            return Integer.MIN_VALUE;
+        }
+        try {
+            return Integer.parseInt(event.substring(at + 1));
+        } catch (NumberFormatException e) {
+            return Integer.MIN_VALUE;
+        }
+    }
+
+    // ---- 立即模式与状态记录 ----
 
     /** 记录一次颜色设置 */
     public static void glColor4f(float r, float g, float b, float a) {
@@ -98,21 +219,23 @@ public final class FakeGl {
         lastLineWidth = width;
     }
 
-    // ---- 矩阵、视口与裁剪：GlRenderer 用它们接管坐标系 ----
-
-    /** 记录一次矩阵栈切换 */
+    /** 记录一次矩阵栈切换，并记住当前模式供后续矩阵操作归属。 */
     public static void glMatrixMode(int mode) {
         matrixModeCalls++;
         lastMatrixMode = mode;
+        currentMatrixMode = mode;
+        matrixModeSequence.add(mode);
+        events.add("matrixMode:" + mode);
     }
 
-    /** 记录一次矩阵重置 */
+    /** 记录一次矩阵重置，并标注其发生所在模式。 */
     public static void glLoadIdentity() {
         loadIdentityCalls++;
+        events.add("loadIdentity@" + currentMatrixMode);
     }
 
     /**
-     * 记录一次正交投影设置。
+     * 记录一次正交投影设置，并标注其发生所在模式。
      *
      * @param left,right,bottom,top,near,far 视景体边界，按 OpenGL 的调用顺序保存
      */
@@ -120,6 +243,7 @@ public final class FakeGl {
                                double near, double far) {
         orthoCalls++;
         lastOrtho = new double[]{left, right, bottom, top, near, far};
+        events.add("ortho@" + currentMatrixMode);
     }
 
     /**
@@ -138,35 +262,52 @@ public final class FakeGl {
     public static void glScissor(int x, int y, int width, int height) {
         scissorCalls++;
         lastScissor = new int[]{x, y, width, height};
+        events.add("scissor:" + x + "," + y + "," + width + "," + height);
     }
 
-    // 以下方法只需"存在"即可：GlApi 通过反射按签名查找它们，空实现满足绑定校验
-    /** 启用某个 GL 能力；无操作 */
+    /** 开启某个 GL 能力，并更新状态记录。 */
     public static void glEnable(int cap) {
+        enableCalls++;
+        capEnableCounts.put(cap, enableCount(cap) + 1);
+        enabledCaps.add(cap);
+        events.add("enable:" + cap);
     }
 
-    /** 禁用某个 GL 能力；无操作 */
+    /** 关闭某个 GL 能力，并更新状态记录；不得再是空实现，否则 popClip 的裁剪泄漏不可见。 */
     public static void glDisable(int cap) {
+        disableCalls++;
+        capDisableCounts.put(cap, disableCount(cap) + 1);
+        enabledCaps.remove(cap);
+        events.add("disable:" + cap);
     }
 
-    /** 设置混合函数；无操作 */
+    /** 设置混合函数；记录事件以便断言调用顺序。 */
     public static void glBlendFunc(int src, int dst) {
+        events.add("blendFunc:" + src + "," + dst);
     }
 
-    /** 压入矩阵栈；无操作 */
+    /** 压入矩阵栈；记录当时所处模式。 */
     public static void glPushMatrix() {
+        pushMatrixCalls++;
+        events.add("pushMatrix@" + currentMatrixMode);
     }
 
-    /** 弹出矩阵栈；无操作 */
+    /** 弹出矩阵栈；记录当时所处模式。 */
     public static void glPopMatrix() {
+        popMatrixCalls++;
+        events.add("popMatrix@" + currentMatrixMode);
     }
 
-    /** 平移；无操作，调用方已自行完成坐标变换 */
+    /** 平移；记录当时所处模式。 */
     public static void glTranslatef(float x, float y, float z) {
+        translateCalls++;
+        events.add("translate@" + currentMatrixMode);
     }
 
-    /** 缩放；无操作 */
+    /** 缩放；记录当时所处模式。 */
     public static void glScalef(float x, float y, float z) {
+        scaleCalls++;
+        events.add("scale@" + currentMatrixMode);
     }
 
     /** 设置纹理坐标；无操作 */

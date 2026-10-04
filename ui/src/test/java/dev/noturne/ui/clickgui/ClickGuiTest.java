@@ -3,7 +3,12 @@ package dev.noturne.ui.clickgui;
 import dev.noturne.client.module.Category;
 import dev.noturne.client.module.Module;
 import dev.noturne.client.module.ModuleRegistry;
+import dev.noturne.client.value.NumberValue;
+import dev.noturne.ui.FakeBackend;
+import dev.noturne.ui.FakeInput;
 import dev.noturne.ui.RecordingRenderer;
+import dev.noturne.ui.component.Slider;
+import dev.noturne.ui.gl.GuiOverlay;
 import dev.noturne.ui.theme.Theme;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 验证 {@link ClickGui} 契约：关闭时不绘制也不吞输入、点击模块行切换模块状态、
- * 折叠分类面板隐藏行并收缩高度、以及 ESC 键关闭界面。
+ * 折叠分类面板隐藏行并收缩高度、拖拽标题栏整列跟随、设置面板落点在视口内、
+ * 滚轮夹取，以及 Esc 经由 {@link GuiOverlay} 的生产派发路径可达。
  */
 class ClickGuiTest {
 
@@ -24,12 +30,12 @@ class ClickGuiTest {
         /** 模块所属分类，决定它出现在哪个分类面板中 */
         private final Category category;
 
-    /**
-     * 构造替身模块。
-     *
-     * @param name 模块显示名
-     * @param category 所属分类
-     */
+        /**
+         * 构造替身模块。
+         *
+         * @param name 模块显示名
+         * @param category 所属分类
+         */
         TestModule(String name, Category category) {
             this.name = name;
             this.category = category;
@@ -45,6 +51,22 @@ class ClickGuiTest {
         @Override
         public Category category() {
             return category;
+        }
+    }
+
+    /** 带一个数值设置项的模块，用于唤出设置面板并取得 {@link Slider} */
+    static final class Configurable extends Module {
+        /** 滑块驱动的数值设置 */
+        final NumberValue speed = add(new NumberValue("Speed", 5.0, 0.0, 10.0, 1.0));
+
+        @Override
+        public String name() {
+            return "Configurable";
+        }
+
+        @Override
+        public Category category() {
+            return Category.MOVEMENT;
         }
     }
 
@@ -167,6 +189,28 @@ class ClickGuiTest {
         assertFalse(gui.configPanel().isVisible());
     }
 
+    /**
+     * L-06 回归：唤出的设置面板必须落在视口内（不被钳出屏幕外而点不到）。
+     *
+     * <p>旧用例只断言可见性与绑定模块，面板越界问题不会被发现。
+     */
+    @Test
+    void configPanelLandsInsideTheViewport() {
+        ClickGui gui = guiWith(new TestModule("Fly", Category.MOVEMENT));
+        gui.setOpen(true);
+        gui.setViewport(800, 600);
+        CategoryPanel panel = panelOf(gui, Category.MOVEMENT);
+        ModuleRow row = panel.rows().get(0);
+
+        assertTrue(gui.mouseClicked(row.x() + 2, row.y() + 2, 1));
+        ModuleConfigPanel config = gui.configPanel();
+        assertTrue(config.isVisible());
+        assertTrue(config.x() >= Theme.PANEL_MARGIN, "panel left edge must stay on screen");
+        assertTrue(config.y() >= Theme.PANEL_MARGIN, "panel top edge must stay on screen");
+        assertTrue(config.right() <= 800 - Theme.PANEL_MARGIN + 0.01f, "panel right edge must stay on screen");
+        assertTrue(config.bottom() <= 600 - Theme.PANEL_MARGIN + 0.01f, "panel bottom edge must stay on screen");
+    }
+
     /** 滚轮滚动整列：向上滚把内容下移，但不会让内容顶越过上边距 */
     @Test
     void scrollMovesPanelsAndClampsAtTopMargin() {
@@ -186,6 +230,67 @@ class ClickGuiTest {
         assertEquals(Theme.PANEL_MARGIN, panel.y(), 0.01f, "clamped to the top margin");
     }
 
+    /**
+     * L-07 回归：设置视口后，滚动的底部夹取路径才不是死代码。
+     *
+     * <p>内容高于视口时向上滚（正增量 → 内容上移），底部最终停在视口下边距处；
+     * 反向下滚应回到顶部边距。
+     */
+    @Test
+    void scrollClampsContentInsideTheViewport() {
+        TestModule[] many = new TestModule[20];
+        for (int i = 0; i < many.length; i++) {
+            many[i] = new TestModule("Mod" + i, Category.MOVEMENT);
+        }
+        ClickGui gui = guiWith(many);
+        gui.setOpen(true);
+        gui.setViewport(800, 200);   // 视口很矮，内容必然超出
+        CategoryPanel panel = panelOf(gui, Category.MOVEMENT);
+        assertTrue(panel.height() > 200, "fixture must overflow the viewport");
+
+        for (int i = 0; i < 50; i++) {
+            gui.mouseScrolled(panel.x() + 2, panel.y() + 2, 1d);
+        }
+        assertEquals(200 - Theme.PANEL_MARGIN, panel.bottom(), 0.01f,
+                "bottom clamp must keep the content flush with the viewport bottom");
+
+        for (int i = 0; i < 50; i++) {
+            gui.mouseScrolled(panel.x() + 2, panel.y() + 2, -1d);
+        }
+        assertEquals(Theme.PANEL_MARGIN, panel.y(), 0.01f, "scrolling back down must stop at the top margin");
+    }
+
+    /**
+     * H-19 回归：关闭 GUI 必须复位编辑器交互态并收起设置面板。
+     *
+     * <p>丢失的释放事件会让 {@code Slider.dragging} 残留，重开后首次移动鼠标就改写数值。
+     */
+    @Test
+    void closingGuiResetsEditorInteractionState() {
+        ModuleRegistry registry = new ModuleRegistry();
+        registry.register(new Configurable());
+        ClickGui gui = new ClickGui(registry);
+        gui.setOpen(true);
+        gui.setViewport(800, 600);
+
+        CategoryPanel panel = panelOf(gui, Category.MOVEMENT);
+        ModuleRow row = panel.rows().get(0);
+        assertTrue(gui.mouseClicked(row.x() + 2, row.y() + 2, 1));
+
+        ModuleConfigPanel config = gui.configPanel();
+        assertTrue(config.isVisible());
+        Slider slider = (Slider) config.editors().get(0);
+        slider.mouseClicked(slider.x() + 5, slider.y() + 5, 0);
+        assertTrue(slider.isDragging(), "slider must be dragging after the press");
+
+        gui.setOpen(false);
+        assertFalse(slider.isDragging(), "closing the GUI must cancel the drag gesture");
+        assertFalse(config.isVisible(), "closing the GUI must hide the settings panel");
+
+        gui.setOpen(true);
+        assertFalse(config.isVisible(), "reopening must not resurrect the stale settings panel");
+    }
+
     /** 定位指定分类的面板 */
     private static CategoryPanel panelOf(ClickGui gui, Category category) {
         for (CategoryPanel panel : gui.panels()) {
@@ -196,12 +301,105 @@ class ClickGuiTest {
         throw new AssertionError("no panel for " + category);
     }
 
-    /** 按下 ESC（键码 256）返回 true 表示已处理，并使 GUI 关闭 */
+    /**
+     * L-23 回归：Esc 关闭必须经由 {@link GuiOverlay} 的生产派发路径可达。
+     *
+     * <p>直接调 {@code gui.keyPressed} 会掩盖「生产路径从不派发键盘事件」——L-51 曾让 Esc 分支
+     * 完全不可达。这里只通过 {@code overlay.onFrame()} 驱动，输入由替身提供。
+     */
     @Test
-    void escapeClosesGui() {
-        ClickGui gui = guiWith(new TestModule("Fly", Category.MOVEMENT));
-        gui.setOpen(true);
-        assertTrue(gui.keyPressed(256, 0));
-        assertFalse(gui.isOpen());
+    void escapeClosesGuiThroughTheProductionDispatchPath() {
+        ModuleRegistry registry = new ModuleRegistry();
+        registry.register(new TestModule("Fly", Category.MOVEMENT));
+        FakeInput input = new FakeInput();
+        FakeBackend backend = new FakeBackend(800, 600);
+        GuiOverlay overlay = new GuiOverlay(registry, backend, input, GuiOverlay.KEY_RIGHT_SHIFT);
+        // 模拟「游戏中」：进入 GUI 前指针是被游戏捕获的（转视角状态）
+        input.pointerGrabbed = true;
+
+        // 第 1 帧：开关按键按下沿 → 打开 GUI（并把指针交还给 GUI）
+        input.keys.add(GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.onFrame();
+        assertTrue(overlay.gui().isOpen(), "toggle key press must open the GUI");
+        assertFalse(input.pointerGrabbed, "opening the GUI must release the pointer");
+
+        // 第 2 帧：松开开关按键，GUI 保持打开
+        input.keys.clear();
+        overlay.onFrame();
+        assertTrue(overlay.gui().isOpen());
+
+        // 第 3 帧：按下 Esc（AWT VK 27）→ 必须经由叠加层的键盘派发关闭
+        input.keys.add(27);
+        overlay.onFrame();
+        assertFalse(overlay.gui().isOpen(), "Esc must close the GUI through production dispatch");
+    }
+
+    /**
+     * 指针捕获交接回归：GUI 打开时释放、关闭时**恢复打开前的状态**，而不是无条件捕获。
+     *
+     * <p>曾经的实现是「每帧强制 {@code setPointerGrabbed(!open)}」——在主菜单（游戏本来就不捕获
+     * 指针）里注入后，光标会被叠加层锁死，玩家连菜单都点不了。这条用例同时钉住两个方向：
+     * 游戏内打开再关闭必须恢复捕获；主菜单打开再关闭必须保持可见光标。
+     */
+    @Test
+    void pointerGrabIsHandedOverAndRestoredInsteadOfForced() {
+        ModuleRegistry registry = new ModuleRegistry();
+        registry.register(new TestModule("Fly", Category.MOVEMENT));
+        FakeInput input = new FakeInput();
+        FakeBackend backend = new FakeBackend(800, 600);
+        GuiOverlay overlay = new GuiOverlay(registry, backend, input, GuiOverlay.KEY_RIGHT_SHIFT);
+
+        // 场景一：游戏中（打开前被捕获）→ 打开释放、关闭恢复捕获
+        input.pointerGrabbed = true;
+        openViaToggle(overlay, input);
+        assertFalse(input.pointerGrabbed, "in-game: opening must release the pointer");
+        closeViaEscape(overlay, input);
+        assertTrue(input.pointerGrabbed, "in-game: closing must restore the game's capture");
+
+        // 场景二：主菜单（打开前未被捕获）→ 关闭后光标必须仍然可见
+        input.pointerGrabbed = false;
+        openViaToggle(overlay, input);
+        assertFalse(input.pointerGrabbed);
+        closeViaEscape(overlay, input);
+        assertFalse(input.pointerGrabbed, "main menu: closing must NOT grab the cursor");
+    }
+
+    /** 用开关按键打开 GUI（按下沿 + 松开两帧）。 */
+    private static void openViaToggle(GuiOverlay overlay, FakeInput input) {
+        input.keys.add(GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.onFrame();
+        input.keys.clear();
+        overlay.onFrame();
+        assertTrue(overlay.gui().isOpen());
+    }
+
+    /** 用 Esc 关闭 GUI。 */
+    private static void closeViaEscape(GuiOverlay overlay, FakeInput input) {
+        input.keys.add(27);
+        overlay.onFrame();
+        input.keys.clear();
+        overlay.onFrame();
+        assertFalse(overlay.gui().isOpen());
+    }
+
+    /**
+     * 关闭状态下叠加层不得消费 Esc，也不得碰指针状态。
+     *
+     * <p>后半句是主菜单可用性的关键：GUI 从没打开过时调用 {@code setPointerGrabbed} 会把
+     * 光标从玩家手里抢走。
+     */
+    @Test
+    void escapeIsIgnoredAndPointerUntouchedWhileTheGuiIsClosed() {
+        ModuleRegistry registry = new ModuleRegistry();
+        registry.register(new TestModule("Fly", Category.MOVEMENT));
+        FakeInput input = new FakeInput();
+        FakeBackend backend = new FakeBackend(800, 600);
+        GuiOverlay overlay = new GuiOverlay(registry, backend, input, GuiOverlay.KEY_RIGHT_SHIFT);
+
+        input.keys.add(27);
+        overlay.onFrame();
+        assertFalse(overlay.gui().isOpen());
+        assertEquals(0, input.pointerGrabCalls, "closed GUI must not touch the pointer grab state");
+        assertFalse(input.pointerGrabbed, "cursor must stay visible when the GUI was never opened");
     }
 }

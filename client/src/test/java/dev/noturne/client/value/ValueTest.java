@@ -52,6 +52,24 @@ class ValueTest {
     }
 
     /**
+     * M-56 回归：步长对齐必须消除二进制误差，否则 0.3 会对齐成 0.30000000000000004，
+     * 而 {@code isDefault()} 用 {@code Double.equals} 比较，该设置永远无法判定为默认。
+     */
+    @Test
+    void stepAlignmentIsExactNotBinaryApproximate() {
+        NumberValue value = new NumberValue("Fine", 0.3, 0.0, 1.0, 0.1);
+
+        assertTrue(value.isDefault(), "coerced default must equal the declared default bit-for-bit");
+        assertEquals(0.3, value.get().doubleValue(), 0.0, "0.3 must stay 0.3 exactly");
+
+        value.set(0.7);
+        assertEquals(0.7, value.get().doubleValue(), 0.0, "0.7 must stay 0.7 exactly");
+        value.reset();
+        assertEquals(0.3, value.get().doubleValue(), 0.0);
+        assertTrue(value.isDefault());
+    }
+
+    /**
      * 验证模式值：{@code next} 在选项间循环并在末尾回绕，
      * 遇到未知选项时回退到第一个，而不是抛异常或留下非法状态。
      */

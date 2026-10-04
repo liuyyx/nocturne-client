@@ -1,88 +1,68 @@
 # noturne-client
 
-一个 **JVM 注入式 Minecraft 客户端**：单 jar，既是注入器，也是被注入的 agent，同时可作为
-Fabric / Forge / NeoForge 模组加载。目标覆盖 **Minecraft 1.8.9 – 26.3**，支持
-**Windows / macOS / Linux**。
+一个 **JVM 注入式 Minecraft 客户端**：单 jar 既是注入器 GUI，也是被注入进游戏的 agent。
+覆盖 **1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.x / 26.2 / 26.3**（Windows / macOS / Linux）。
 
-> 设计参考：DoomsDay 的 JVM 注入机制（免 `tools.jar` 的自实现 attach）、Epsilon 的 UI、
-> Vape 的功能架构。实现完全自研，不复制任何第三方代码。
+## 三条硬规则
 
-## 目标特性
-
-| 维度 | 目标 |
-|---|---|
-| 注入方式 | 自实现 attach：自带 `sun.tools.attach.*` 字节码 + `openProcess`/`enqueue`/`closeProcess`，免 `tools.jar`，兼容裁剪 JRE |
-| 入口形态 | 单 jar 多入口：`Premain-Class`（-javaagent/attach）、`Main-Class`（双击自注入）、`fabric.mod.json`、`mods.toml`、`neoforge.mods.toml` |
-| 平台 | Windows / macOS / Linux（含 ARM64） |
-| 版本 | 1.8.9 – 26.3，统一代码 + 运行时适配层 |
-| UI | 自绘 ClickGUI / HUD（Epsilon 风格） |
-| 附加 | 可选 WinUI 套壳启动器 |
-
-## 技术约束
-
-- **字节码基线 = Java 8（class 52.0）**：agent 会进入 1.8.9 的 JVM，任何在目标 JVM 内运行的类
-  都必须能被 Java 8 加载（现代 JVM 可向后兼容运行）。
-- 构建工具链用 JDK 21，通过 `options.release = 8` 产出 Java 8 字节码。
-- 不依赖 Mixin：运行时改类走 JVMTI / ASM。
+1. **只有注入一条路径**。不做模组形态（不产出 `fabric.mod.json` / `mods.toml`），不做 `-javaagent` 之外的入口花样。
+2. **客户端代码不按版本分支**。模块一律按 **Mojmap 规范名**写（`net.minecraft.client.Minecraft`），
+   版本差异全部下沉到 **每版本一份映射表 JSON**（自动生成，见 `tools/mapping/`）。
+3. **运行时零探测**。目标版本由注入器判定并随 agent 参数传入（`mcVersion=1.8.9`），
+   agent 只做一件事：读 `/mappings-<版本>.json`。
 
 ## 模块
 
 | 模块 | 职责 |
 |---|---|
-| `core/` | 注入器与加载器：进程发现、自实现 attach、载荷解密与装载、单 jar 多入口分发 |
-| `agent/` | 被注入进目标 JVM 的 agent：`premain`/`agentmain` 接线、`Instrumentation` 管理 |
-| `client/` | 客户端核心：事件总线、模块与值框架、映射 / 跨版本适配、游戏 wrapper |
-| `ui/` | 自绘 ClickGUI 与 HUD（Epsilon 风格） |
+| `core/` | 进程发现、attach（JDK attach API + JDK 8 的 tools.jar 自举）、agent 选项组装（`AgentOptions`） |
+| `agent/` | 目标 JVM 内的入口（`agentmain`/`premain`）、ASM 子加载器、两种注入点（帧交换钩子 / 绘制上下文钩子）、按版本选表 |
+| `client/` | 事件总线、模块与值框架、映射层（`Mapping` / `ObfuscatedMapping` / `IdentityMapping`）、游戏桥（`GameBridge`） |
+| `ui/` | ClickGUI 与 HUD（组件树 / 主题 / 动画）、**按代际**的游戏绘制后端、输入 |
+| `injector/` | Swing 注入器 GUI（扫描进程 → 选版本 → 注入） |
+| `tools/mapping/` | 映射表生成器（见 `docs/research/mapping-sources.md` 调研报告） |
 
-## 使用
+## 两个注入点（都在 `agent/transform/`）
 
-### 注入式
+| 转换器 | 插入什么 | 用在哪种入口 |
+|---|---|---|
+| `FrameHookTransformer` | 方法开头一条**无参**静态调用 | 缓冲区交换点：`Display.update()` / `glfwSwapBuffers(J)` / `SDL_GL_SwapWindow(J)` |
+| `CallbackHookTransformer` | 方法开头**把首个引用形参**交给钩子 | 绘制上下文是**回调形参**的那代 API（`DrawContext` / `GuiGraphics` / `GuiGraphicsExtractor`） |
 
-1. 双击项目根目录的 `noturne.bat`（它自己挑 JDK 的 `javaw`，不依赖 `.jar` 文件关联）；
-2. 点「扫描游戏」，选中目标进程；
-3. 点「注入」；
-4. 在游戏里按 **右 Shift** 唤出 GUI。按键可在设置里改，**改完要重新注入**才生效。
+两者都只动指定类、指定方法、方法第一条指令；不命中或异常一律返回 `null`（沿用原字节码），
+内部错误打印一次。保留原始 `StackMapTable`（丢帧会让含分支的方法 `VerifyError`）。
 
-### 模组式
+## 版本差异怎么处理
 
-把 `dist/build/libs/noturne-<version>.jar` 放进实例的 `mods/` 目录，用启动器正常启动即可。
-同一份 jar 同时是 Fabric / Forge / NeoForge 模组，也是 Java agent（三套元数据都在里面）。
+| 关注点 | 做法 |
+|---|---|
+| 类/字段/方法名 | 映射表（每版本一份 JSON，打进 jar 资源） |
+| 目标版本 | 注入器传入 `mcVersion`，运行时**不探测** |
+| 界面绘制与字体 | **用游戏自己的 API**，按代际写 3 个后端（成员名查表） |
+| 输入 | 用游戏自己的键鼠状态（成员名查表） |
+| 帧信号 | LWJGL 的交换函数（3 个签名，属于 LWJGL 而非 MC，MC 改版不影响） |
 
-> 模组路径下没有 `Instrumentation`，装不了帧钩子，叠加层改挂加载器的逐帧渲染事件
-> （Fabric 用 `HudRenderCallback`），所以**模组式下 GUI 同样能显示**；
-> 但依赖 `Instrumentation` 的能力（字节码插桩）在模组路径下不可用。
->
-> 绘制后端按运行环境自动选择：**MC 1.21.9+ 走 `DrawContext`**（让游戏自己提交绘制 ——
-> 它的新渲染管线会覆盖直接发出的 GL 调用，画面上什么都不会留下），更老的版本回退到 GL 后端。
-> 模组路径的开关按键固定为右 Shift；注入器里录制的按键只作用于注入路径。
-
-## 构建
+## 构建与运行
 
 ```bash
-# Gradle wrapper 在本机不可用（下载被拦截），使用已安装的 Gradle：
+# 构建（Gradle wrapper 在本机不可用，用已安装的 Gradle）
 JAVA_HOME="C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot" \
   sh "$HOME/.gradle/wrapper/dists/gradle-9.2.1-bin/*/gradle-9.2.1/bin/gradle" \
   build --console=plain --no-daemon
 
-# 单独编译
-gradle :core:build --console=plain
+# 注入（双击 noturne.bat 走 GUI；命令行两参数走 CLI）
+java -jar dist/build/libs/noturne-<version>.jar --list-json      # 列出可注入的进程
+java -jar dist/build/libs/noturne-<version>.jar --pid=<pid>     # 注入指定进程
 ```
 
-## 状态
+游戏里按**右 Shift** 唤出界面（`guiKey` 由注入器传入，AWT VK 码）。
 
-见 `docs/PLAN.md`。当前进度：
+## 状态（诚实版）
 
-- **Phase 1 骨架与构建** ✅ —— 多模块构建通过，进程枚举可用。
-- **Phase 2 注入核心** 部分 —— 单 jar 多入口（`Main-Class` / `Premain-Class` / `Agent-Class` +
-  三套模组元数据）已交付并验证；attach 走 JDK attach API，**自实现 attach 尚未开始**。
-- **Phase 3 agent 运行时** ✅ —— `premain`/`agentmain` 接线、帧钩子（ASM 字节码插桩）、客户端引导。
-- **Phase 4 UI** 部分 —— ClickGUI（分类栏 / 模块行 / 设置面板 / 拖动 / 滚动 / 裁剪）、HUD、
-  组件树与主题已实现；游戏内实机验证待做。
-- **Phase 5–7** 未开始。
-
-### 已验证
-
-- 注入：`Attacher.attach` → `agentmain` → `client installed (modules=4)`，agent 参数（含 GUI 开关键码）送达。
-- 模组：`fabric.mod.json` / `META-INF/mods.toml` / `META-INF/neoforge.mods.toml` 与三个入口类
-  （`NoturneFabric` / `NoturneForge` / `NoturneNeoForge`）均已打进单 jar。
-- 测试：全模块 97+ 用例通过。
+| 项 | 状态 |
+|---|---|
+| 注入链路（attach → agentmain → 帧钩子生效 → 叠加层装载） | **在真实 Java 8 + LWJGL2 + OpenGL 栈上已验证**（`tmp/lab189/targetH.log`：帧钩子 live、叠加层 attach、`backend=gl-fixed`）。⚠️ 该验证跑在 LWJGL2 实验靶（`Fake189v5`，320×240 空白窗口、120 帧）上，**JVM 内没有 Minecraft**——Minecraft 相关的一切（FontRenderer、Gui.drawRect、Options、player/world）均未验证 |
+| 映射表生成器（9 个版本） | 进行中（`tools/mapping/`） |
+| 版本号传递、两种注入点 | 已完成并有测试 |
+| 界面/输入改为「用游戏自己的 API」 | 待做（当前仍是自绘 GL 路径） |
+| 模组形态 | 已移除（不再支持放进 `mods/`） |

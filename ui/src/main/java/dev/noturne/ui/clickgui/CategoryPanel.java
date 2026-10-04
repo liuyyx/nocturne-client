@@ -27,6 +27,8 @@ public final class CategoryPanel extends Panel {
 
     /** 判定为拖动而非点击的位移阈值（像素）：容忍手抖，又不至于让拖动显得迟钝。 */
     private static final double DRAG_THRESHOLD = 3d;
+    /** 拖动后必须留在视口内的最小可见尺寸（像素），保证被拖走的整列仍能被抓回来。 */
+    private static final float MIN_VISIBLE = 24f;
 
     /** 本栏对应的模块分类。 */
     private final Category category;
@@ -41,9 +43,13 @@ public final class CategoryPanel extends Panel {
     /** 按下时的指针坐标，作为拖动位移的基准。 */
     private double pressX;
     private double pressY;
-    /** 按下时面板左上角坐标；拖动时按「基准 + 位移」计算新位置，避免逐帧累加产生漂移。 */
-    private float originX;
-    private float originY;
+    /** 上一次拖拽事件（或按下）的指针坐标；拖动按增量计算，避免按住期间滚动把整列拽回旧基准。 */
+    private double lastDragX;
+    private double lastDragY;
+    /** 绘制区域宽度（像素）；0 表示未知，此时拖动不做横向夹取。 */
+    private int viewportWidth;
+    /** 绘制区域高度（像素）；0 表示未知，此时拖动不做纵向夹取。 */
+    private int viewportHeight;
 
     public CategoryPanel(Category category, List<Module> modules, float x, float y) {
         this.category = category;
@@ -100,32 +106,39 @@ public final class CategoryPanel extends Panel {
                 + Theme.PANEL_BOTTOM_PADDING;
     }
 
-    /** 推进本栏各行的高亮动画；每帧调用一次。 */
-    public void update(long nowMs) {
-        for (ModuleRow row : rows) {
-            row.update(nowMs);
-        }
+    /** 同步绘制区域尺寸，供拖动时夹取；{@code 0} 表示未知、不限制对应轴。 */
+    public void setViewport(int width, int height) {
+        this.viewportWidth = width;
+        this.viewportHeight = height;
     }
 
-    /**
-     * 绘制整栏：圆角面板底色、标题栏（标题 + 折叠指示三角），最后是各行。
-     *
-     * <p>绘制序列对应 Epsilon AbstractDropdownPanel.drawBackground + ModuleButton.draw：
-     * 圆角面板、{@code x + 10} 处的标题、右侧的折叠三角、直角模块行。
-     */
+    @Override
+    public void cancelInteractions() {
+        super.cancelInteractions();
+        pressed = false;
+        dragging = false;
+    }
+
+    /** 绘制整栏：圆角面板底色、标题栏（标题 + 折叠指示三角），最后是各行。 */
     @Override
     public void render(Renderer renderer) {
         if (!visible) {
             return;
         }
-        renderer.roundedRect(x, y, width, height, Theme.PANEL_RADIUS, Theme.SURFACE_CONTAINER);
+        // 裁剪到面板范围：长模块名/标题不应溢出到面板之外
+        renderer.pushClip(x, y, width, height);
+        try {
+            renderer.roundedRect(x, y, width, height, Theme.PANEL_RADIUS, Theme.SURFACE_CONTAINER);
 
-        float titleY = y + (Theme.PANEL_HEADER_HEIGHT - renderer.textHeight(Theme.HEADER_TEXT_SIZE)) / 2f;
-        renderer.text(category.name(), x + Theme.PANEL_TITLE_INSET, titleY, Theme.HEADER_TEXT_SIZE,
-                Theme.TEXT_PRIMARY);
-        drawTriangle(renderer, x + width - 10f, y + Theme.PANEL_HEADER_HEIGHT * 0.5f, expanded);
+            float titleY = y + (Theme.PANEL_HEADER_HEIGHT - renderer.textHeight(Theme.HEADER_TEXT_SIZE)) / 2f;
+            renderer.text(category.name(), x + Theme.PANEL_TITLE_INSET, titleY, Theme.HEADER_TEXT_SIZE,
+                    Theme.TEXT_PRIMARY);
+            drawTriangle(renderer, x + width - 10f, y + Theme.PANEL_HEADER_HEIGHT * 0.5f, expanded);
 
-        super.render(renderer);
+            super.render(renderer);
+        } finally {
+            renderer.popClip();
+        }
     }
 
     /**
@@ -160,8 +173,8 @@ public final class CategoryPanel extends Panel {
             dragging = false;
             pressX = mx;
             pressY = my;
-            originX = x;
-            originY = y;
+            lastDragX = mx;
+            lastDragY = my;
             return true;
         }
         return super.mouseClicked(mx, my, button);
@@ -176,11 +189,41 @@ public final class CategoryPanel extends Panel {
         if (!dragging
                 && (Math.abs(mx - pressX) > DRAG_THRESHOLD || Math.abs(my - pressY) > DRAG_THRESHOLD)) {
             dragging = true;
+            // 首次进入拖动：补上自按下点以来的全部位移（含按住期间滚动造成的面板位移），
+            // 用当前位置而非快照原点作基准，避免整列瞬间跳回旧坐标。
+            dragTo(x + (float) (mx - pressX), y + (float) (my - pressY));
+        } else if (dragging) {
+            // 增量移动：即使按住期间发生滚动（列已被平移），也只叠加本次指针位移。
+            dragTo(x + (float) (mx - lastDragX), y + (float) (my - lastDragY));
         }
-        if (dragging) {
-            moveTo(originX + (float) (mx - pressX), originY + (float) (my - pressY));
-        }
+        lastDragX = mx;
+        lastDragY = my;
         return true;
+    }
+
+    /**
+     * 把整列拖到新位置，并夹取到视口内。
+     *
+     * <p>至少保留 {@link #MIN_VISIBLE} 的宽度/高度在视口内，否则整列被拖出屏幕后既看不见也抓不回来。
+     */
+    private void dragTo(float newX, float newY) {
+        float nx = newX;
+        float ny = newY;
+        if (viewportWidth > 0) {
+            nx = clamp(nx, MIN_VISIBLE - width, viewportWidth - MIN_VISIBLE);
+        }
+        if (viewportHeight > 0) {
+            ny = clamp(ny, MIN_VISIBLE - height, viewportHeight - MIN_VISIBLE);
+        }
+        moveTo(nx, ny);
+    }
+
+    /** 夹取到 {@code [lo, hi]}；区间反转（视口比控件还窄）时取中点，避免死夹。 */
+    private static float clamp(float v, float lo, float hi) {
+        if (lo > hi) {
+            return (lo + hi) / 2f;
+        }
+        return v < lo ? lo : (v > hi ? hi : v);
     }
 
     /** 未拖动过的标题栏点击 = 折叠/展开。 */

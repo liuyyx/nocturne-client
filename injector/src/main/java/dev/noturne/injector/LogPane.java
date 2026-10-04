@@ -4,19 +4,19 @@ import javax.swing.BorderFactory;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
-import java.awt.Font;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.text.SimpleDateFormat;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
-import java.util.Date;
 import java.util.Deque;
 
 /**
@@ -33,8 +33,10 @@ public final class LogPane extends JPanel {
     private final JTextArea area = new JTextArea();
     /** 行缓冲，限制长度并作为 {@link #area} 内容的唯一来源。 */
     private final Deque<String> lines = new ArrayDeque<String>();
-    /** 时间戳格式；只在 EDT 上使用，故无需考虑线程安全。 */
-    private final SimpleDateFormat clock = new SimpleDateFormat("HH:mm:ss");
+    /** 承载 {@link #area} 的滚动面板；用于在追加时保持用户的滚动位置。 */
+    private final JScrollPane scroll;
+    /** 时间戳格式；{@link DateTimeFormatter} 线程安全，可在任意线程格式化。 */
+    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     /**
      * 构造日志面板并装配滚动区、圆角卡片与右键菜单。
@@ -50,12 +52,12 @@ public final class LogPane extends JPanel {
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
         area.setOpaque(true);
-        // 等宽族，字号继承自 L&F 基础字体（绝不用绝对磅值）。
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, AppTheme.baseFont().getSize()));
+        // 等宽族，字号继承自 L&F 基础字体（绝不用绝对磅值），并随运行时缩放更新。
+        AppTheme.bindMonospacedFont(area, 1.0f);
         area.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
 
         // 禁止横向滚动：卡片宽度有限，横向滚动条会挤掉边框。
-        JScrollPane scroll = new JScrollPane(area);
+        scroll = new JScrollPane(area);
         scroll.setOpaque(false);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getViewport().setOpaque(false);
@@ -81,9 +83,16 @@ public final class LogPane extends JPanel {
     private void attachContextMenu() {
         JPopupMenu menu = new JPopupMenu();
         JMenuItem copy = new JMenuItem("复制全部");
-        // 复制整个文档而不是选区：右键未必带选区。
-        copy.addActionListener(e -> Toolkit.getDefaultToolkit().getSystemClipboard()
-                .setContents(new StringSelection(area.getText()), null));
+        // 复制整个文档而不是选区：右键未必带选区。剪贴板可能被其它进程占用，失败时给出提示而不是抛异常。
+        copy.addActionListener(e -> {
+            try {
+                Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new StringSelection(area.getText()), null);
+            } catch (RuntimeException busy) {
+                // 剪贴板争用/无头环境：记一行日志，不让异常打破 EDT 事件循环。
+                append("复制失败：系统剪贴板暂不可用");
+            }
+        });
         JMenuItem clear = new JMenuItem("清空");
         clear.addActionListener(e -> clear());
         menu.add(copy);
@@ -127,13 +136,19 @@ public final class LogPane extends JPanel {
     /**
      * 追加一行带时间戳的日志，受 {@link #MAX_LINES} 限制。
      *
-     * <p>可在任意线程调用：非 EDT 时会投递到 {@code invokeLater}，因此调用点无需关心线程。
+     * <p>可在任意线程调用：时间戳在调用线程即时生成（而不是等 EDT 排到队时），正文重设则投递到
+     * {@code invokeLater}。若用户此前已上滚查看历史，追加不会把他拽回底部。
      *
      * @param message 不含时间戳的正文
      */
     private void append(String message) {
+        // 时间戳取调用时刻：如果等到 EDT 执行时才取，繁忙时日志时间会整体后移。
+        final String line = "[" + LocalTime.now().format(CLOCK) + "]  " + message;
         Runnable task = () -> {
-            String line = "[" + clock.format(new Date()) + "]  " + message;
+            boolean wasAtBottom = isScrolledToBottom();
+            int previousScroll = scroll.getVerticalScrollBar().getValue();
+            int previousCaret = area.getCaretPosition();
+
             lines.addLast(line);
             while (lines.size() > MAX_LINES) {
                 // 超出上限就丢最老的一行，保持恒定内存占用。
@@ -143,14 +158,29 @@ public final class LogPane extends JPanel {
             for (String entry : lines) {
                 text.append(entry).append('\n');
             }
-            area.setText(text.toString());
             // 整篇重设文本而非增量追加：JTextArea 的增量插入会破坏撤销栈，且这里只需几百行。
-            area.setCaretPosition(area.getDocument().getLength());
+            area.setText(text.toString());
+            int length = area.getDocument().getLength();
+            if (wasAtBottom) {
+                // 用户本就在看最新一行：保持自动滚动到底。
+                area.setCaretPosition(length);
+            } else {
+                // 用户正在上滚查看历史：恢复其滚动位置与光标，不要把他拽回底部。
+                area.setCaretPosition(Math.min(previousCaret, length));
+                JScrollBar bar = scroll.getVerticalScrollBar();
+                bar.setValue(Math.min(previousScroll, bar.getMaximum()));
+            }
         };
         if (SwingUtilities.isEventDispatchThread()) {
             task.run();
         } else {
             SwingUtilities.invokeLater(task);
         }
+    }
+
+    /** 判断滚动条当前是否停在最底部（留 1px 容差）。 */
+    private boolean isScrolledToBottom() {
+        JScrollBar bar = scroll.getVerticalScrollBar();
+        return bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() - 1;
     }
 }

@@ -11,6 +11,17 @@ public final class WatermarkModule extends HudModule {
     /** 要显示的固定文本，在构造后不再变化。 */
     private final String text;
 
+    /**
+     * 每帧被 HUD 拉取的文本供给器；文本是构造期常量，故整个生命周期复用同一实例，
+     * 与 {@link HudModule#hudText()}「调用频次很低、可缓存」的契约一致。
+     */
+    private final Supplier<String> line = new Supplier<String>() {
+        @Override
+        public String get() {
+            return text;
+        }
+    };
+
     /** 使用默认文本“noturne”。 */
     public WatermarkModule() {
         this("noturne");
@@ -50,12 +61,6 @@ public final class WatermarkModule extends HudModule {
      */
     @Override
     protected Supplier<String> hudText() {
-        return new Supplier<String>() {
-            @Override
-            // 文本是构造期常量，每次拉取直接返回即可，无需再缓存。
-            public String get() {
-                return text;
-            }
-        };
+        return line;
     }
 }

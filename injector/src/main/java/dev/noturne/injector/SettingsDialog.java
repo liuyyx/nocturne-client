@@ -15,7 +15,6 @@ import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
@@ -32,8 +31,12 @@ public final class SettingsDialog extends JDialog {
 
     /** 快捷键录制输入框；不可编辑，只用于显示与接收按键事件。 */
     private final JTextField bindField = new JTextField();
+    /** 改键后的提示行：提醒用户新快捷键要等重新注入才生效。 */
+    private final JLabel bindHint = new JLabel(" ");
     /** 是否处于录制状态；为 {@code false} 时按键事件被忽略。 */
     private boolean recording;
+    /** 是否已经处理过关闭；保证 {@link #dispose()} 的保存与回调只执行一次。 */
+    private boolean disposed;
 
     /**
      * 构建设置对话框。
@@ -48,6 +51,10 @@ public final class SettingsDialog extends JDialog {
         super(owner, "设置", Dialog.ModalityType.APPLICATION_MODAL);
         this.config = config;
         this.onApply = onApply;
+
+        // 右上角 X 走的是窗口关闭事件：默认 HIDE_ON_CLOSE 会绕过 dispose() 导致设置不落盘、
+        // 对话框也永不回收。改为 DISPOSE_ON_CLOSE，让 X 与「完成」走同一条保存路径。
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         // 依次堆叠：4 个分区 + 完成按钮，每个分区由标题与控件两行组成。
         setLayout(new MigLayout("insets 22, fillx, wrap 1", "[grow,fill]", "[]12[]12[]12[]"));
@@ -90,7 +97,7 @@ public final class SettingsDialog extends JDialog {
      */
     private JLabel sectionLabel(String text) {
         JLabel label = new JLabel(text);
-        label.setFont(AppTheme.scaled(Font.PLAIN, 0.95f));
+        AppTheme.bindFont(label, Font.PLAIN, 0.95f);
         label.setForeground(AppTheme.TEXT_MUTED);
         return label;
     }
@@ -101,15 +108,19 @@ public final class SettingsDialog extends JDialog {
      * @return 只含一个不可编辑输入框的透明面板
      */
     private JPanel buildBindRow() {
-        JPanel row = new JPanel(new MigLayout("insets 0", "[grow,fill]", "[]"));
+        JPanel row = new JPanel(new MigLayout("insets 0, fillx, wrap 1", "[grow,fill]", "[]2[]"));
         row.setOpaque(false);
 
         // 不可编辑但可聚焦：既防止用户直接输入文本，又能稳定接收到按键事件。
         bindField.setEditable(false);
         bindField.setFocusable(true);
         bindField.setText(config.guiBind);
-        bindField.setFont(AppTheme.scaled(Font.BOLD, 1.0f));
+        AppTheme.bindFont(bindField, Font.BOLD, 1.0f);
         bindField.setToolTipText("点击后按下要绑定的按键");
+
+        // 改键提示：快捷键由注入器在 attach 时写死，改完必须重新注入才会传到游戏。
+        bindHint.setForeground(AppTheme.ACCENT);
+        AppTheme.bindFont(bindHint, Font.PLAIN, 0.8f);
 
         bindField.addFocusListener(new FocusAdapter() {
             @Override
@@ -141,7 +152,12 @@ public final class SettingsDialog extends JDialog {
                     return;
                 }
                 // 记录一次即退出录制：快捷键是单键/单组合，不支持后续修饰。
-                config.guiBind = describe(e);
+                String recorded = describe(e);
+                if (!recorded.equals(config.guiBind)) {
+                    config.guiBind = recorded;
+                    // 快捷键在 attach 时写死传给游戏，改完必须重新注入才生效。
+                    bindHint.setText("快捷键已修改，需重新注入后生效");
+                }
                 recording = false;
                 bindField.setText(config.guiBind);
             }
@@ -159,6 +175,7 @@ public final class SettingsDialog extends JDialog {
         });
 
         row.add(bindField, "growx");
+        row.add(bindHint, "growx");
         return row;
     }
 
@@ -194,7 +211,8 @@ public final class SettingsDialog extends JDialog {
     private static String baseKeyName(KeyEvent event) {
         int code = event.getKeyCode();
         boolean right = event.getKeyLocation() == KeyEvent.KEY_LOCATION_RIGHT;
-        // 左右 Shift/Control/Alt 在游戏里有独立绑定，必须区分。
+        boolean numpad = event.getKeyLocation() == KeyEvent.KEY_LOCATION_NUMPAD;
+        // 左右 Shift/Control/Alt/Windows 在游戏里有独立绑定，AWT 无法从 keyCode 区分，靠 location 判断。
         switch (code) {
             case KeyEvent.VK_SHIFT:
                 return right ? "RSHIFT" : "LSHIFT";
@@ -202,10 +220,14 @@ public final class SettingsDialog extends JDialog {
                 return right ? "RCTRL" : "LCTRL";
             case KeyEvent.VK_ALT:
                 return right ? "RALT" : "LALT";
+            case KeyEvent.VK_WINDOWS:
+                return right ? "RWIN" : "LWIN";
+            case KeyEvent.VK_ENTER:
+                // 小键盘回车与主回车共用 VK_ENTER，靠 location 区分名字。
+                return numpad ? "NUMPADENTER" : "ENTER";
             default:
-                // 去掉空格（"PAGE UP" → "PAGEUP"）并统一大写；用 ROOT 避免土耳其语 I 问题。
-                String text = KeyEvent.getKeyText(code).toUpperCase(Locale.ROOT).replace(" ", "");
-                return text.isEmpty() ? "KEY" + code : text;
+                // 其余键统一走 KeyCodes 的规范表：录出来的名字必定能原样解析回 VK。
+                return KeyCodes.nameForVk(code);
         }
     }
 
@@ -224,6 +246,7 @@ public final class SettingsDialog extends JDialog {
 
         JLabel value = new JLabel(initial + "%");
         value.setForeground(AppTheme.TEXT);
+        AppTheme.bindFont(value, Font.PLAIN, 1.0f);
 
         JSlider slider = new JSlider(min, max, initial);
         slider.setOpaque(false);
@@ -242,10 +265,15 @@ public final class SettingsDialog extends JDialog {
     /**
      * {@inheritDoc}
      *
-     * <p>覆写以保证无论用户点「完成」、按 Esc 还是直接关窗，偏好都会保存且回调只触发一次。
+     * <p>覆写以保证无论用户点「完成」还是直接点右上角 X（{@code DISPOSE_ON_CLOSE}），偏好都会保存
+     * 且回调只触发一次。重复调用是安全的：{@link #disposed} 保证保存与回调不会跑第二遍。
      */
     @Override
     public void dispose() {
+        if (disposed) {
+            return;
+        }
+        disposed = true;
         config.save();
         onApply.accept(config);
         super.dispose();

@@ -31,8 +31,13 @@ public final class GlRenderer implements UiBackend {
     private boolean statePushed;
     /** 嵌套裁剪的矩形栈，元素为 {@code {x, y, width, height}}（GL 坐标系，原点左下）。 */
     private final int[][] clipStack = new int[MAX_CLIP_DEPTH][];
-    /** 当前裁剪嵌套深度；为 0 表示未启用裁剪。 */
+    /** 当前裁剪嵌套深度（含因栈满被忽略的层）；为 0 表示未启用裁剪。 */
     private int clipDepth;
+    /** 裁剪栈溢出是否已提示过；保证只打印一次，避免每帧刷屏。 */
+    private boolean clipOverflowWarned;
+    /** 视口读取失败的诊断是否已打印过；保证只打印一次。 */
+    private final java.util.concurrent.atomic.AtomicBoolean viewportLogged =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /**
      * 构造渲染器。
@@ -66,6 +71,17 @@ public final class GlRenderer implements UiBackend {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>固定管线后端只有在能接管矩阵栈时才画得出东西：拿不到 {@code glMatrixMode}/{@code glOrtho}
+     * 就只能在游戏投影下绘制，画面通常完全不可见。
+     */
+    @Override
+    public boolean ready() {
+        return gl.hasMatrixControl();
+    }
+
+    /**
      * 接管 GL 状态，为 UI 建立「像素坐标、原点左上、y 轴向下」的坐标系。
      *
      * <p>这一步是固定管线路径能看见东西的前提：帧交换点处的投影矩阵仍属于游戏（通常是透视投影 +
@@ -76,6 +92,11 @@ public final class GlRenderer implements UiBackend {
      */
     @Override
     public void beginFrame() {
+        if (statePushed) {
+            // 上一帧的 endFrame 没有执行（例如组件树抛异常被上层吞掉）：
+            // 先把残留状态还原，避免矩阵栈每帧净泄漏两层、约 16 帧后永久损坏游戏投影。
+            endFrame();
+        }
         if (!gl.hasMatrixControl()) {
             // 没有矩阵控制能力时无法接管坐标系，只能维持原状；日志里会显示 backend 可用但画面异常。
             return;
@@ -85,12 +106,20 @@ public final class GlRenderer implements UiBackend {
             viewportWidth = viewport[2];
             viewportHeight = viewport[3];
         }
+        // 视口未知或退化时不能调用 glOrtho：左右相等 / 上下相等在 GL 里是非法的（GL_INVALID_VALUE），
+        // 该调用会被丢弃、矩阵保持原样，GUI 于是永久画在裁剪空间之外——必须留痕而不是静默。
+        boolean haveViewport = viewportWidth > 0 && viewportHeight > 0;
+        if (!haveViewport) {
+            reportMissingViewport(viewport);
+        }
 
         gl.matrixMode(GlApi.GL_PROJECTION);
         gl.pushMatrix();
         gl.loadIdentity();
-        // 下边界传 viewportHeight、上边界传 0：把 y 轴翻转成向下增长，与屏幕坐标一致。
-        gl.ortho(0d, viewportWidth, viewportHeight, 0d, -1d, 1d);
+        if (haveViewport) {
+            // 下边界传 viewportHeight、上边界传 0：把 y 轴翻转成向下增长，与屏幕坐标一致。
+            gl.ortho(0d, viewportWidth, viewportHeight, 0d, -1d, 1d);
+        }
 
         gl.matrixMode(GlApi.GL_MODELVIEW);
         gl.pushMatrix();
@@ -112,19 +141,20 @@ public final class GlRenderer implements UiBackend {
      */
     @Override
     public void endFrame() {
-        if (!statePushed) {
-            return;
+        if (statePushed) {
+            gl.matrixMode(GlApi.GL_PROJECTION);
+            gl.popMatrix();
+            gl.matrixMode(GlApi.GL_MODELVIEW);
+            gl.popMatrix();
+            statePushed = false;
         }
-        gl.matrixMode(GlApi.GL_PROJECTION);
-        gl.popMatrix();
-        gl.matrixMode(GlApi.GL_MODELVIEW);
-        gl.popMatrix();
+        // 裁剪清理不得被 statePushed 门控：beginFrame 可能因缺少矩阵句柄提前返回，
+        // 而 pushClip 早已打开 GL_SCISSOR_TEST，此时若不解除，裁剪区域会逐帧收缩直至宽高为 0。
         if (clipDepth > 0) {
             // 组件树提前结束绘制（例如抛异常被上层吞掉）时，裁剪状态不能泄漏到下一帧。
             gl.disable(GlApi.GL_SCISSOR_TEST);
             clipDepth = 0;
         }
-        statePushed = false;
     }
 
     @Override
@@ -168,6 +198,8 @@ public final class GlRenderer implements UiBackend {
             return;
         }
         gl.strokeRect(x, y, width, height, lineWidth, color.rf(), color.gf(), color.bf(), color.af());
+        // glLineWidth 是全局状态：不还原会把线宽泄漏给游戏后续的线段绘制（默认值为 1）。
+        gl.lineWidth(1f);
     }
 
     @Override
@@ -190,7 +222,18 @@ public final class GlRenderer implements UiBackend {
 
     @Override
     public void pushClip(float x, float y, float width, float height) {
-        if (!gl.hasScissor() || clipDepth == MAX_CLIP_DEPTH) {
+        if (!gl.hasScissor()) {
+            return;
+        }
+        if (clipDepth >= MAX_CLIP_DEPTH) {
+            // 栈满时仍要记账：否则 popClip 会把深度弹到与实际不一致的位置，
+            // 导致此后每层裁剪都提前一层失效（越界绘制）。更深层不再改变 GL 状态。
+            if (!clipOverflowWarned) {
+                clipOverflowWarned = true;
+                System.err.println("[noturne] clip stack overflow (depth " + clipDepth
+                        + " >= " + MAX_CLIP_DEPTH + "); deeper clips ignored");
+            }
+            clipDepth++;
             return;
         }
         int[] box = toScissorBox(x, y, width, height);
@@ -213,22 +256,60 @@ public final class GlRenderer implements UiBackend {
             gl.disable(GlApi.GL_SCISSOR_TEST);
             return;
         }
-        int[] box = clipStack[clipDepth - 1];
-        gl.scissor(box[0], box[1], box[2], box[3]);
+        if (clipDepth < MAX_CLIP_DEPTH) {
+            int[] box = clipStack[clipDepth - 1];
+            gl.scissor(box[0], box[1], box[2], box[3]);
+        }
+        // clipDepth >= MAX_CLIP_DEPTH 时活动裁剪仍是已下发的栈顶矩形，无需重下发。
     }
 
     /**
      * 把 GUI 坐标下的矩形换算成 {@code glScissor} 参数。
      *
      * <p>两处差异必须处理：GL 的裁剪原点在窗口左下角（y 轴向上），而 GUI 原点在左上角；
-     * 且 {@code glScissor} 只接受整数。越界的裁剪框交给 GL 自行处理，这里只保证宽高非负。
+     * 且 {@code glScissor} 只接受整数。越界的裁剪框必须与视口求交——旧实现只把下边界夹到 0，
+     * 会把视口上方/下方本应裁掉的区域整体移进画面。
      */
     private int[] toScissorBox(float x, float y, float width, float height) {
-        int sx = Math.round(x);
-        int sw = Math.max(0, Math.round(width));
-        int sh = Math.max(0, Math.round(height));
-        int sy = Math.max(0, viewportHeight - Math.round(y + height));
+        int x0 = Math.round(x);
+        int y0 = Math.round(y);
+        int x1 = x0 + Math.max(0, Math.round(width));
+        int y1 = y0 + Math.max(0, Math.round(height));
+        if (viewportWidth > 0 && viewportHeight > 0) {
+            x0 = clamp(x0, 0, viewportWidth);
+            x1 = clamp(x1, 0, viewportWidth);
+            y0 = clamp(y0, 0, viewportHeight);
+            y1 = clamp(y1, 0, viewportHeight);
+            return new int[]{x0, viewportHeight - y1, x1 - x0, y1 - y0};
+        }
+        // 视口未知时不与视口求交，仅保证宽高非负。
+        int sx = Math.max(0, x0);
+        int sw = Math.max(0, x1 - x0);
+        int sh = Math.max(0, y1 - y0);
+        int sy = Math.max(0, viewportHeight - y1);
         return new int[]{sx, sy, sw, sh};
+    }
+
+    /** 把 {@code value} 夹取到 {@code [lo, hi]}。 */
+    private static int clamp(int value, int lo, int hi) {
+        return value < lo ? lo : (value > hi ? hi : value);
+    }
+
+    /**
+     * 视口读不出来时的诊断：只打印一次，说明「GUI 不会显示」的原因，避免每帧刷屏。
+     *
+     * <p>这是 1.8.9（LWJGL2）上唯一能解释「注入成功但界面全无」的线索：{@code GL11} 只提供
+     * {@code glGetInteger(int, IntBuffer)}，早期实现按 LWJGL3 的 {@code (int, int[])} 查找，
+     * 于是视口恒为 0x0。
+     */
+    private void reportMissingViewport(int[] viewport) {
+        if (!viewportLogged.compareAndSet(false, true)) {
+            return;
+        }
+        System.out.println("[noturne] fixed-pipeline renderer cannot read GL_VIEWPORT ("
+                + (viewport == null ? "no query method bound" : "reported 0x0")
+                + "); the overlay will not be visible. On LWJGL2 the query must use "
+                + "glGetInteger(int, IntBuffer).");
     }
 
     /** 计算两个裁剪矩形的交集；不相交时宽高为 0。 */
@@ -251,6 +332,8 @@ public final class GlRenderer implements UiBackend {
      */
     private void quarter(float cx, float cy, float radius, float startDeg, float endDeg,
                          float r, float g, float b, float a) {
+        // 文字绘制会把 GL_TEXTURE_2D 打开，扇形批次同样不能带着它绘制。
+        gl.disable(GlApi.GL_TEXTURE_2D);
         gl.color(r, g, b, a);
         gl.begin(GlApi.GL_TRIANGLE_FAN);
         gl.vertex(cx, cy);

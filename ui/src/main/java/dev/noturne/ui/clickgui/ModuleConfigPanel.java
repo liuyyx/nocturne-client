@@ -29,6 +29,10 @@ public final class ModuleConfigPanel extends Panel {
 
     /** 面板宽度（像素）；与分类面板同宽，对齐 Epsilon 的 PANEL_WIDTH。 */
     private static final float WIDTH = Theme.PANEL_WIDTH;
+    /** 内容与视口边缘保持的最小间距（像素）。 */
+    private static final float MARGIN = Theme.PANEL_MARGIN;
+    /** 面板内部滚动的每格像素数。 */
+    private static final float SCROLL_STEP = 24f;
 
     /** 当前正在编辑的模块；为 {@code null} 表示面板尚未绑定模块。 */
     private Module module;
@@ -36,6 +40,16 @@ public final class ModuleConfigPanel extends Panel {
     private final List<Component> editors = new ArrayList<Component>();
     /** 与 {@link #editors} 对齐的行标签；只有本身不带名称的控件（开关）才有标签，其余为 null。 */
     private final List<String> labels = new ArrayList<String>();
+    /** 与 {@link #editors} 对齐的行基线 y（相对面板内容顶部，含标题栏高度）。 */
+    private final List<Float> editorBaseY = new ArrayList<Float>();
+    /** 绘制区域宽度（像素）；0 表示未知，此时不做横向夹取。 */
+    private int viewportWidth;
+    /** 绘制区域高度（像素）；0 表示未知，此时不做纵向夹取。 */
+    private int viewportHeight;
+    /** 内容总高度（含标题栏，不含底部留白）。 */
+    private float contentHeight;
+    /** 内部滚动偏移（像素）；0 表示停在顶部。 */
+    private float scrollOffset;
 
     /** 构造面板；初始不可见，需由 {@link #show} 绑定模块后才显示。 */
     public ModuleConfigPanel() {
@@ -63,6 +77,8 @@ public final class ModuleConfigPanel extends Panel {
         children.clear();
         editors.clear();
         labels.clear();
+        editorBaseY.clear();
+        scrollOffset = 0f;
 
         // 行内缩 SETTING_PADDING_X、行高 SETTING_HEIGHT、行间留 SETTING_GAP
         float cursor = Theme.PANEL_HEADER_HEIGHT;
@@ -78,6 +94,7 @@ public final class ModuleConfigPanel extends Panel {
                 // 开关与滑块自身不画设置名（滑块右侧画的是当前值），在行首补标签
                 labels.add(value instanceof BooleanValue || value instanceof NumberValue
                         ? value.name() : null);
+                editorBaseY.add(cursor);
                 add(editor);
                 cursor += Theme.SETTING_HEIGHT + Theme.SETTING_GAP;
             }
@@ -85,20 +102,91 @@ public final class ModuleConfigPanel extends Panel {
         if (editors.isEmpty()) {
             cursor += Theme.SETTING_HEIGHT + Theme.SETTING_GAP;
         }
-        setBounds(x, y, WIDTH, cursor - Theme.SETTING_GAP + Theme.PANEL_BOTTOM_PADDING);
+        contentHeight = cursor - Theme.SETTING_GAP;
+
+        float height = contentHeight + Theme.PANEL_BOTTOM_PADDING;
+        if (viewportHeight > 0) {
+            // 面板高度不超过视口可用高度，超出部分改由内部滚动访问
+            float maxHeight = viewportHeight - MARGIN * 2f;
+            if (maxHeight > 0f && height > maxHeight) {
+                height = maxHeight;
+            }
+        }
+        float px = x;
+        if (viewportWidth > 0) {
+            // 夹取到视口内，避免唤出在屏幕外导致设置项点不到
+            px = clamp(px, MARGIN, Math.max(MARGIN, viewportWidth - WIDTH - MARGIN));
+        }
+        float py = y;
+        if (viewportHeight > 0) {
+            py = clamp(py, MARGIN, Math.max(MARGIN, viewportHeight - height - MARGIN));
+        }
+        setBounds(px, py, WIDTH, height);
+        applyScroll();
         setVisible(true);
     }
 
-    /** 收起面板；不清空已生成的控件，下次唤出时会被 {@link #show} 整体重建。 */
+    /** 收起面板；同时复位编辑器的交互中间态，避免跨会话残留。 */
     public void hide() {
         setVisible(false);
+        for (Component editor : editors) {
+            editor.cancelInteractions();
+        }
     }
 
-    /** 更新各编辑控件的悬停状态；每帧调用一次。 */
+    /** 同步绘制区域尺寸，供唤出定位与内部滚动使用；{@code 0} 表示未知、不限制对应轴。 */
+    public void setViewport(int width, int height) {
+        this.viewportWidth = width;
+        this.viewportHeight = height;
+    }
+
+    /**
+     * 更新各编辑控件的悬停状态并转发时钟；每帧调用一次。
+     *
+     * <p>{@code nowMs} 必须继续下传：开关等控件依赖它推进切换动画，丢弃时钟会让
+     * 「点击了但界面没反应」（状态已改、动画冻死）。
+     */
     public void update(long nowMs, double mouseX, double mouseY) {
         for (Component editor : editors) {
             editor.updateHover(mouseX, mouseY);
         }
+        super.update(nowMs);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double amount) {
+        float max = maxScroll();
+        if (max <= 0f) {
+            return false;
+        }
+        // 向上滚动（正增量）应把内容下移，即减小偏移
+        scrollOffset = clamp(scrollOffset - (float) amount * SCROLL_STEP, 0f, max);
+        applyScroll();
+        return true;
+    }
+
+    /** @return 内部可滚动的最大偏移；内容未超出可视区域时为 0 */
+    private float maxScroll() {
+        float visible = height - Theme.PANEL_HEADER_HEIGHT - Theme.PANEL_BOTTOM_PADDING;
+        float content = contentHeight - Theme.PANEL_HEADER_HEIGHT;
+        return Math.max(0f, content - visible);
+    }
+
+    /** 按当前滚动偏移重新布置编辑器（绝对坐标布局，需显式平移）。 */
+    private void applyScroll() {
+        for (int i = 0; i < editors.size(); i++) {
+            Component editor = editors.get(i);
+            editor.setBounds(x + Theme.SETTING_PADDING_X, y + editorBaseY.get(i) - scrollOffset,
+                    WIDTH - Theme.SETTING_PADDING_X * 2f, editor.height());
+        }
+    }
+
+    /** 夹取到 {@code [lo, hi]}；区间反转时取中点，避免死夹。 */
+    private static float clamp(float v, float lo, float hi) {
+        if (lo > hi) {
+            return (lo + hi) / 2f;
+        }
+        return v < lo ? lo : (v > hi ? hi : v);
     }
 
     /**
@@ -110,7 +198,7 @@ public final class ModuleConfigPanel extends Panel {
     private static Component create(Value<?> value, float x, float y, float width) {
         if (value instanceof BooleanValue) {
             final BooleanValue bool = (BooleanValue) value;
-            ToggleSwitch toggle = new ToggleSwitch(bool.get(), v -> bool.set(v));
+            ToggleSwitch toggle = new ToggleSwitch(bool.get(), v -> bool.set(v), bool::get);
             // 开关靠行尾对齐，在 SETTING_HEIGHT 行内垂直居中
             toggle.setBounds(x + width - Theme.SWITCH_WIDTH,
                     y + (Theme.SETTING_HEIGHT - Theme.SWITCH_HEIGHT) / 2f,
@@ -119,8 +207,10 @@ public final class ModuleConfigPanel extends Panel {
         }
         if (value instanceof NumberValue) {
             final NumberValue number = (NumberValue) value;
+            // 回读器：coerce（钳制/步长对齐）只有写入后才知道结果，控件必须以 value.get() 为准
             Slider slider = new Slider((float) number.min(), (float) number.max(),
-                    number.get().floatValue(), f -> number.set(f.doubleValue()));
+                    number.get().floatValue(), f -> number.set(f.doubleValue()),
+                    () -> number.get().floatValue());
             slider.setBounds(x, y, width, Theme.SETTING_HEIGHT);
             return slider;
         }
@@ -131,43 +221,50 @@ public final class ModuleConfigPanel extends Panel {
         }
         if (value instanceof ColorValue) {
             final ColorValue color = (ColorValue) value;
-            ColorPicker picker = new ColorPicker(color.get(), v -> color.set(v));
+            ColorPicker picker = new ColorPicker(color.get(), v -> color.set(v), color::argb);
             picker.setBounds(x, y, width, Theme.SETTING_HEIGHT);
             return picker;
         }
         return null;
     }
 
-    /** 绘制面板底色、标题（模块名）、开关行标签与各编辑控件；无设置项时画一行提示。 */
+    /** 绘制面板底色、标题（模块名）、开关行标签与各编辑控件；无可用设置项时画一行提示。 */
     @Override
     public void render(Renderer renderer) {
         if (!visible) {
             return;
         }
-        renderer.roundedRect(x, y, width, height, Theme.PANEL_RADIUS, Theme.SURFACE_CONTAINER);
-        String title = module == null ? "settings" : module.name();
-        float titleY = y + (Theme.PANEL_HEADER_HEIGHT - renderer.textHeight(Theme.HEADER_TEXT_SIZE)) / 2f;
-        renderer.text(title, x + Theme.PANEL_TITLE_INSET, titleY, Theme.HEADER_TEXT_SIZE,
-                Theme.TEXT_PRIMARY);
+        // 裁剪到面板范围：长设置名/标签不应绘制到面板之外；内部滚动的内容也在此被裁掉
+        renderer.pushClip(x, y, width, height);
+        try {
+            renderer.roundedRect(x, y, width, height, Theme.PANEL_RADIUS, Theme.SURFACE_CONTAINER);
+            String title = module == null ? "settings" : module.name();
+            float titleY = y + (Theme.PANEL_HEADER_HEIGHT - renderer.textHeight(Theme.HEADER_TEXT_SIZE)) / 2f;
+            renderer.text(title, x + Theme.PANEL_TITLE_INSET, titleY, Theme.HEADER_TEXT_SIZE,
+                    Theme.TEXT_PRIMARY);
 
-        // 开关控件本身不画名称，在行首补画设置项标签，与控件垂直居中对齐
-        for (int i = 0; i < editors.size(); i++) {
-            String label = labels.get(i);
-            if (label == null) {
-                continue;
+            // 开关控件本身不画名称，在行首补画设置项标签，与控件垂直居中对齐
+            for (int i = 0; i < editors.size(); i++) {
+                String label = labels.get(i);
+                if (label == null) {
+                    continue;
+                }
+                Component editor = editors.get(i);
+                float labelY = editor.y()
+                        + (editor.height() - renderer.textHeight(Theme.SETTING_TEXT_SIZE)) / 2f;
+                renderer.text(label, x + Theme.SETTING_PADDING_X + Theme.ROW_CONTENT_INSET, labelY,
+                        Theme.SETTING_TEXT_SIZE, Theme.TEXT_PRIMARY);
             }
-            Component editor = editors.get(i);
-            float labelY = editor.y()
-                    + (editor.height() - renderer.textHeight(Theme.SETTING_TEXT_SIZE)) / 2f;
-            renderer.text(label, x + Theme.SETTING_PADDING_X + Theme.ROW_CONTENT_INSET, labelY,
-                    Theme.SETTING_TEXT_SIZE, Theme.TEXT_PRIMARY);
-        }
 
-        if (module != null && module.values().isEmpty()) {
-            renderer.text("no settings", x + Theme.SETTING_PADDING_X + Theme.ROW_CONTENT_INSET,
-                    y + Theme.PANEL_HEADER_HEIGHT,
-                    Theme.SETTING_TEXT_SIZE, Theme.TEXT_MUTED);
+            // 以「是否有可编辑控件」而非「值列表是否为空」判断：存在未支持类型时同样是空面板
+            if (module != null && editors.isEmpty()) {
+                renderer.text("no settings", x + Theme.SETTING_PADDING_X + Theme.ROW_CONTENT_INSET,
+                        y + Theme.PANEL_HEADER_HEIGHT,
+                        Theme.SETTING_TEXT_SIZE, Theme.TEXT_MUTED);
+            }
+            super.render(renderer);
+        } finally {
+            renderer.popClip();
         }
-        super.render(renderer);
     }
 }

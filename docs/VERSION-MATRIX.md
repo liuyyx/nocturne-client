@@ -1,69 +1,58 @@
-# 多版本支持矩阵
+# 版本矩阵
 
-> 目标：**一个 jar** 覆盖 Minecraft **1.8.9 – 26.3**。本文件是"哪个版本走哪条适配路径"的权威清单，
-> 也是实现进度的看板。`状态` 列以代码与测试为准。
+目标版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
-## 1. 版本 → 适配方式
+## 1. 每版本的差异点（全部是「数据」，不是代码分支）
 
-| Minecraft | JVM 要求 | 混淆 | 适配方式 | 注入方式 | 状态 |
+| 版本 | 混淆 | 映射表来源 | 绘制代际 | 帧钩子目标 | 表状态 |
 |---|---|---|---|---|---|
-| 1.8.9 | Java 8 | MCP 名 | 映射表（MCP） + ASM/JVMTI 改类 | agent / Forge / 双击 | **已实现**（映射 46 类，帧钩子 + GL + 字体 + 4 模块；待真机验证） |
-| 1.12.2 | Java 8 | MCP/SRG | 映射表（MCP/SRG） | agent / Forge / 双击 | 计划中 |
-| 1.16.5 | Java 8/11 | Mojmap | 映射表（Mojmap） | agent / Forge / Fabric | 计划中 |
-| 1.20.1 | Java 17 | Mojmap | 映射表（Mojmap） | agent / Forge / Fabric | 计划中 |
-| 1.21.x | Java 21 | Mojmap | 映射表（Mojmap） | agent / Forge / Fabric | 计划中 |
-| **26.1+** | Java 21+ | 无混淆 | **反射解析（IdentityMapping）** | agent / Fabric / NeoForge | **已实现（映射层）** |
-| 26.2 | Java 21 | 无混淆 | 反射解析 | agent / Fabric / NeoForge | 已实现（映射层） |
-| 26.3 | Java 21 | 无混淆 | 反射解析 | agent / Fabric / NeoForge | 已实现（映射层） |
+| 1.8.9 | 混淆 | 本机 SRG + MCP CSV + 人工别名（四步） | A | `Display.update()V` | ✅ 已产出（48 类 / 47 具名 / 88 方法 / 68 字段） |
+| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（48 / 47 / 88 / 68） |
+| 1.16.5 | 混淆 | 官方 ProGuard `client.txt`（一步） | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 45 / 85 / 68） |
+| 1.20.1 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 47 / 85 / 68） |
+| 1.21.4 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 47 / 85 / 68） |
+| 1.21.10 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ❌ 未产出（`client-1.21.10.jar.part`，下载未完成） |
+| 1.21.11 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ❌ 未产出 |
+| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ❌ 未产出 |
+| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ❌ 未产出 |
 
-**分界线**：26.1 起 Minecraft 不再混淆 → 类名/方法名就是运行时名，只需要**反射**发现签名；
-1.8.9–1.21.x 需要**映射表**把 Mojmap 规范名翻译成运行时的混淆名。
+> 表的规模固定为 48 个类（客户端实际解析的规范面），因此各版本行数一致；差异在 `name` 为 `null`
+> 的条目数（表示该版本运行时**没有**对应类，标注为 absent）。
 
-## 2. 加载器 → 入口
+> 26.x 的映射表不是「不必要」：未混淆只意味着**名字相同**，成员**存不存在**仍逐版本不同
+> （例如 26.2 的 HUD 入口与 26.1 不兼容）。表里的 `"absent": true` 就是给这种情况用的。
 
-| 加载器 | 入口 | 依赖 | 状态 |
+## 2. 运行时选表
+
+- 注入器判定版本族（命令行里的 `--version <id>` 或 `versions/<实例名>/`），随 agent 参数传 `mcVersion=`。
+- agent 读 `/mappings-<版本族>.json`；没有表或版本未知 → 恒等映射 + **日志**（不静默）。
+- 版本族归一化：`1.8.9优化` → `1.8.9`；`26.3-Fabric 0.19.5` → `26.3`。
+
+## 3. 绘制/输入能力矩阵
+
+| 能力 | 代际 A（1.8.9/1.12.2） | 代际 B（1.16.5–1.21.x） | 代际 C（26.1–26.3） |
 |---|---|---|---|
-| `-javaagent` / attach | `net.java.f` 风格：`dev.noturne.agent.NoturneAgent.premain` | 无 | 已实现 |
-| 双击 / `java -jar` | `dev.noturne.injector.InjectorApp` → attach | 无 | 已实现 |
-| Fabric | `fabric.mod.json` → `dev.noturne.agent.mod.NoturneFabric` | 编译期 stub | 已实现 |
-| Forge（1.13+） | `mods.toml` → `@Mod("noturne")` → `NoturneForge` | 编译期 stub | 已实现 |
-| NeoForge | `neoforge.mods.toml` → `@Mod("noturne")` → `NoturneNeoForge` | 编译期 stub | 已实现 |
-| Forge 1.8.9（FML） | `cpw.mods.fml.common.Mod` + `BaseMod` | 需老 API stub | 计划中 |
+| 矩形 | `Gui.drawRect` | `DrawContext/GuiGraphics.fill` | `GuiGraphicsExtractor.fill` |
+| 文字 | `FontRenderer.drawString`（自绘） | `drawString(Font,…)` | `extractor.text(Font,…)`（字体不自绘） |
+| 字体度量 | `getStringWidth` / 行高 9 | `Font.width` | `Font.width` / `lineHeight` |
+| 裁剪 | 直接 GL `glScissor` | `enableScissor/disableScissor` | `enableScissor/disableScissor` |
+| 按键 | `KeyBinding` + LWJGL2 `Keyboard` | `KeyMapping` / `InputConstants.Type.KEYSYM.getOrCreate(vk)` | `InputConstants.isKeyDown` |
+| 鼠标 | LWJGL2 `Mouse` | `MouseHandler.xpos()/ypos()` | 同左 |
 
-## 3. 平台 → attach 与渲染
+## 4. 验收状态
 
-| 平台 | attach | 原生辅助 | 状态 |
-|---|---|---|---|
-| Windows 10/11 x64 | `jdk.attach`（JDK 9+）/ `tools.jar` 自动重启动（JDK 8） | 计划：DLL | 已实现（JDK 路径） |
-| macOS（Intel / Apple Silicon） | `jdk.attach` | 计划：dylib | 已实现（JDK 路径） |
-| Linux x64 / arm64 | `jdk.attach` | 计划：.so | 已实现（JDK 路径） |
-| 裁剪 JRE（无 `jdk.attach`） | 原生 attach（unix socket / 命名管道） | 需要 | **未实现（Phase 7）** |
-| Android（PojavLauncher） | 待定 | 需要 | 未支持 |
+| 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
+|---|---|---|---|---|
+| 1.8.9 | ✅ 链路已验证（真实 Java 8 + LWJGL2 + OpenGL 栈，`tmp/lab189/targetH.log`；靶内**无 Minecraft**） | ✅ | ✅ 已有表 | ⏳ 待验 |
+| 1.12.2 | ⏳ | 未验 | ✅ 已产出 | ⏳ |
+| 1.16.5 / 1.20.1 / 1.21.4 | ⏳ | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ⏳ |
+| 1.21.10 / 1.21.11 | ⏳ | 字节码级已验证（GLFW 目标） | ❌ 未产出 | ⏳ |
+| 26.2 | ⏳ | 未验 | ❌ 未产出 | ⏳ |
+| 26.3 | ⏳ | 字节码级已验证（SDL 目标） | ❌ 未产出 | ⏳ |
 
-## 4. 运行期矩阵（客户端侧）
+✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
 
-| 能力 | 1.8.9 | 1.12.2 | 1.16.5 | 1.20.1 | 1.21.x | 26.1+ | 状态 |
-|---|---|---|---|---|---|---|---|
-| 注入 + 客户端引导 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 已实现（版本无关） |
-| 模块框架 / 值体系 / 配置 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 已实现 |
-| ClickGUI 组件树 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 已实现（逻辑层） |
-| HUD 渲染接入游戏 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 未实现 |
-| 映射层（Mojmap→运行时） | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ✅ 反射 | 部分实现 |
-| 游戏对象 wrapper | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 未实现 |
-| 游戏内模块（Combat/Movement/…） | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 未实现 |
-
-## 5. 关键约束
-
-- **字节码基线 Java 8**：agent 会进入 1.8.9 的 JVM，因此目标 JVM 内运行的所有类都编译为 `release = 8`。
-- **不依赖 Mixin**：运行时改类统一走 JVMTI + ASM，避免与加载器版本耦合。
-- **注入器在 JDK 8 上**：attach API 位于 `lib/tools.jar`（不在默认 classpath）→ 启动时自动带
-  `tools.jar` 重启自身（`ToolsJarBootstrap`）；JDK 9+ 无需处理。
-- **渲染后端差异**：1.8.9 是 OpenGL 2.1 固定管线，26.x 是核心 profile + shader —— 渲染抽象必须分两套。
-
-## 6. 决策记录
-
-| 决策 | 理由 |
-|---|---|
-| 映射抽象先做 identity | 26.1+ 无需映射，先把接口立起来，再填 1.8.9/1.21.x 的表 |
-| 加载器入口用编译期 stub | 零加载器依赖，不受 Fabric/Forge/NeoForge 版本变动影响 |
-| JDK 8 用重启而非子类加载器 | 子类加载器会让 `AttachProvider` 的 `ServiceLoader` 解析失败（实测） |
+> **「注入」列指什么**：目前唯一跑通的是 LWJGL2 实验靶（`tmp/lab189/Fake189v5`：真实 Java 8 +
+> 真实 LWJGL2 + 真实 OpenGL 4.6，320×240 空白窗口，120 帧 `Display.update()`），**靶内没有 Minecraft**。
+> 它证明的是 attach → `agentmain` → 帧钩子 → 叠加层这条链路在 Java 8 栈上成立；**不证明**任何
+> Minecraft 相关行为（FontRenderer / `Gui.drawRect` / Options / player / world / 界面可见性）。

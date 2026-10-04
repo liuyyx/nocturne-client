@@ -4,8 +4,13 @@ import dev.noturne.client.event.EventBus;
 import dev.noturne.client.module.Category;
 import dev.noturne.client.module.Module;
 import dev.noturne.client.module.ModuleRegistry;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,6 +24,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 以及 {@link NoturneClient#boot} 的单例与幂等语义。
  */
 class ClientCoreTest {
+
+    /** 每个用例前后重置进程级单例，避免 {@code boot} 的全局状态在用例间互相污染 */
+    @BeforeEach
+    void isolate() {
+        TestSupport.resetClient();
+    }
+
+    /** 用例结束后同样清空单例，避免影响其他测试类 */
+    @AfterEach
+    void cleanUp() {
+        TestSupport.resetClient();
+    }
 
     // ---------------------------------------------------------------- 事件总线
 
@@ -147,15 +164,34 @@ class ClientCoreTest {
     // ----------------------------------------------------------------- 启动引导
 
     /**
-     * 验证 {@link NoturneClient#boot} 的幂等性：连续两次调用返回同一实例、isRunning 为真，
-     * 且模块不会被重复注册（两次调用后的模块数一致）。
+     * 验证 {@link NoturneClient#boot} 的幂等性：连续两次调用返回同一实例、共用同一注册表，
+     * 且内置模块只注册一次（数量与名字集合都不变）。
+     *
+     * <p>旧断言比较「两次取同一 LinkedHashMap 的 size」是恒真重言式；这里改为比对内置模块集合，
+     * boot 若重复注册（会抛重复名）或新建实例都会失败。
      */
     @Test
     void bootIsIdempotent() {
         NoturneClient first = NoturneClient.boot(null);
+        Set<String> firstNames = new HashSet<String>();
+        for (Module module : first.modules().all()) {
+            firstNames.add(module.name());
+        }
+        Set<String> expected = new HashSet<String>(
+                Arrays.asList("Watermark", "FullBright", "Sprint", "AutoRespawn"));
+        assertEquals(expected, firstNames, "boot must register exactly the built-in modules once");
+
         NoturneClient second = NoturneClient.boot(null);
-        assertSame(first, second);
+        assertSame(first, second, "boot must return the same instance");
+        assertSame(first.modules(), second.modules(), "boot must reuse the same registry");
         assertTrue(NoturneClient.isRunning());
-        assertEquals(first.modules().size(), second.modules().size());
+        assertSame(first, NoturneClient.get());
+
+        Set<String> secondNames = new HashSet<String>();
+        for (Module module : second.modules().all()) {
+            secondNames.add(module.name());
+        }
+        assertEquals(firstNames, secondNames, "second boot must not register duplicates");
+        assertEquals(firstNames.size(), second.modules().size(), "no duplicate names may slip in");
     }
 }

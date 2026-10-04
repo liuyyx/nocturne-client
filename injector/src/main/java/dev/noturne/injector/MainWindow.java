@@ -28,10 +28,11 @@ import java.awt.Font;
 import java.awt.Rectangle;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
-import java.net.URLDecoder;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 /**
  * 主窗口：左侧边栏、进程列表、操作按钮与底部状态栏。
@@ -39,9 +40,9 @@ import java.util.Map;
  * <p>所有布局都用 MigLayout；所有尺寸都由 {@link WindowGeometry} 以「逻辑像素」推导。扫描与
  * 注入都跑在 {@link SwingWorker} 上，因此整个过程界面保持可响应。
  *
- * <p>状态机很简单：{@code scanButton} 只在扫描进行中禁用，{@code injectButton} 需要「已扫描出
- * 至少一行」且「有选中行」才可用；列表区域在 {@link CardLayout} 上于骨架屏（{@link #CARD_SKELETON}）
- * 与表格（{@link #CARD_TABLE}）之间切换。
+ * <p>状态机：{@code scanButton} 在扫描或注入进行中禁用；{@code injectButton} 需要「有扫描结果」且
+ * 「有选中行」且「既不在扫描也不在注入中」才可用，由 {@link #updateButtons()} 统一推导。列表区域在
+ * {@link CardLayout} 上于骨架屏（{@link #CARD_SKELETON}）与表格（{@link #CARD_TABLE}）之间切换。
  */
 public final class MainWindow extends JFrame {
 
@@ -90,6 +91,13 @@ public final class MainWindow extends JFrame {
     /** 状态栏右侧的状态指示点。 */
     private final StatusDot statusDot = new StatusDot();
 
+    /** 是否正在扫描；扫描期间注入按钮必须禁用，避免对陈旧行/并发 attach 操作。 */
+    private boolean scanning;
+    /** 是否正在注入；注入期间禁用重扫，避免重复/并发 attach。 */
+    private boolean injecting;
+    /** 注入成功后的自动最小化定时器；用户一旦有新操作就取消，避免最小化正在用的窗口。 */
+    private Timer autoMinimizeTimer;
+
     /**
      * 构建主窗口。
      *
@@ -113,9 +121,17 @@ public final class MainWindow extends JFrame {
         add(buildContent(), "grow");
         add(buildStatusBar(), "newline, span 2, growx");
 
-        // 没有选中行时不允许注入。
-        injectButton.setEnabled(false);
         log.info("Noturne " + VERSION + " 就绪");
+
+        // 用户一旦重新激活窗口（开始操作），就取消待执行的自动最小化。
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowActivated(java.awt.event.WindowEvent e) {
+                cancelAutoMinimize();
+            }
+        });
+        // 初始状态：无选中行、无结果，注入按钮禁用。
+        updateButtons();
 
         // 这里只打日志，方便把「逻辑分辨率 vs 窗口尺寸 vs 配置缩放」写进控制台便于排查。
         System.out.println("[noturne] logical screen=" + WindowGeometry.activeScreenSize()
@@ -133,11 +149,11 @@ public final class MainWindow extends JFrame {
         sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(0x1E, 0x2B, 0x45)));
 
         JLabel title = new JLabel("Noturne \u00b7 诺克特恩");
-        title.setFont(AppTheme.scaled(Font.BOLD, 1.25f));
+        AppTheme.bindFont(title, Font.BOLD, 1.25f);
         title.setForeground(AppTheme.TEXT);
 
         JLabel subtitle = new JLabel("<html>开源的多版本<br>注入式客户端</html>");
-        subtitle.setFont(AppTheme.scaled(Font.PLAIN, 0.85f));
+        AppTheme.bindFont(subtitle, Font.PLAIN, 0.85f);
         subtitle.setForeground(AppTheme.TEXT_MUTED);
 
         JButton settings = new JButton("设置");
@@ -190,12 +206,12 @@ public final class MainWindow extends JFrame {
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         table.setBorder(BorderFactory.createEmptyBorder());
-        table.setFont(AppTheme.scaled(Font.PLAIN, 1.0f));
+        AppTheme.bindFont(table, Font.PLAIN, 1.0f);
         table.setSelectionBackground(AppTheme.PANEL_HOVER);
         table.setSelectionForeground(AppTheme.TEXT);
         table.setDefaultRenderer(Object.class, new RowRenderer());
         table.getTableHeader().setReorderingAllowed(false);
-        table.getTableHeader().setFont(AppTheme.scaled(Font.PLAIN, 0.9f));
+        AppTheme.bindFont(table.getTableHeader(), Font.PLAIN, 0.9f);
         table.getTableHeader().setBackground(AppTheme.PANEL);
         table.getTableHeader().setForeground(AppTheme.TEXT_MUTED);
         table.getColumnModel().getColumn(0).setPreferredWidth(320);
@@ -204,7 +220,7 @@ public final class MainWindow extends JFrame {
         table.getSelectionModel().addListSelectionListener(e -> {
             // 只在拖动结束时响应：拖动过程中会连续触发，频繁刷新按钮状态没有意义。
             if (!e.getValueIsAdjusting()) {
-                injectButton.setEnabled(table.getSelectedRow() >= 0 && injectButton.isEnabled());
+                updateInjectButton();
             }
         });
 
@@ -263,8 +279,8 @@ public final class MainWindow extends JFrame {
         JPanel bottom = new JPanel(new MigLayout("insets 12 0 0 0, fillx", "[grow,fill][]10[]", "[]10[]"));
         bottom.setOpaque(false);
 
-        errorLabel.setFont(AppTheme.scaled(Font.PLAIN, 0.85f));
         errorLabel.setForeground(AppTheme.DANGER);
+        AppTheme.bindFont(errorLabel, Font.PLAIN, 0.85f);
         errorLabel.setText(" ");
 
         scanButton.addActionListener(e -> startScan());
@@ -287,7 +303,7 @@ public final class MainWindow extends JFrame {
         bar.setBackground(AppTheme.PANEL);
 
         JLabel version = new JLabel(VERSION);
-        version.setFont(AppTheme.scaled(Font.PLAIN, 0.85f));
+        AppTheme.bindFont(version, Font.PLAIN, 0.85f);
         version.setForeground(AppTheme.TEXT_MUTED);
 
         bar.add(version, "growx");
@@ -304,11 +320,39 @@ public final class MainWindow extends JFrame {
      * 关闭对话框；缩放在回调里即时生效，落盘由对话框的 {@code dispose()} 完成。
      */
     private void openSettings() {
+        // 用户开始操作了，取消待执行的自动最小化。
+        cancelAutoMinimize();
         SettingsDialog dialog = new SettingsDialog(this, config, updated -> {
             AppTheme.setZoom(updated.uiScale / 100f);
-            log.info("设置已保存（界面缩放 " + updated.uiScale + "%）");
+            // 快捷键在 attach 时写死传给游戏，改完必须重新注入才生效——这里也留一行保存日志。
+            log.info("设置已保存（界面缩放 " + updated.uiScale + "%）；快捷键改动需重新注入后生效");
         });
         dialog.setVisible(true);
+    }
+
+    /**
+     * 依据「是否扫描/注入中、是否有结果、是否有选中行」推导两个按钮的可用状态。
+     *
+     * <p>把推导集中在一处，避免像旧实现那样把 {@code isEnabled()} 当成与条件——那样一旦置为
+     * 禁用就再也无法恢复（例如注入成功后按钮永久锁死）。
+     */
+    private void updateButtons() {
+        scanButton.setEnabled(!scanning && !injecting);
+        updateInjectButton();
+    }
+
+    /** 单独刷新注入按钮：需要「有扫描结果 + 有选中行 + 不在扫描/注入中」。 */
+    private void updateInjectButton() {
+        injectButton.setEnabled(!scanning && !injecting
+                && model.getRowCount() > 0 && table.getSelectedRow() >= 0);
+    }
+
+    /** 取消并清空注入成功后的自动最小化定时器。 */
+    private void cancelAutoMinimize() {
+        if (autoMinimizeTimer != null) {
+            autoMinimizeTimer.stop();
+            autoMinimizeTimer = null;
+        }
     }
 
     /**
@@ -318,8 +362,12 @@ public final class MainWindow extends JFrame {
      * UI 更新只在 {@code done()} 里做——{@code done()} 同样运行在 EDT 上。
      */
     private void startScan() {
+        cancelAutoMinimize();
         errorLabel.setText(" ");
-        scanButton.setEnabled(false);
+        scanning = true;
+        // 立刻清空上一轮结果：扫描失败时不能留下过期行供误注入。
+        model.clear();
+        updateButtons();
         statusDot.setState(AppTheme.TEXT_MUTED);
         // 先切到骨架屏，让用户立刻看到「在忙」而不是一个空列表。
         listCards.show(listArea, CARD_SKELETON);
@@ -346,13 +394,11 @@ public final class MainWindow extends JFrame {
             /** 回到 EDT：无论是正常完成还是抛异常，都必须恢复按钮与卡片的可用状态。 */
             @Override
             protected void done() {
+                scanning = false;
                 try {
                     List<ProcessTableModel.Row> rows = get();
                     model.setRows(rows);
                     listCards.show(listArea, CARD_TABLE);
-                    scanButton.setEnabled(true);
-                    injectButton.setEnabled(!rows.isEmpty());
-                    // 有结果才允许注入；这里先打开，等选中行出现后由监听器再把关。
                     if (rows.isEmpty()) {
                         statusDot.setState(AppTheme.DANGER);
                         log.info("未找到 Minecraft 进程");
@@ -364,11 +410,13 @@ public final class MainWindow extends JFrame {
                         loadVersions();
                     }
                 } catch (Exception e) {
+                    // 失败时列表保持清空状态，不能展示上一轮的过期行。
+                    model.clear();
                     listCards.show(listArea, CARD_TABLE);
-                    scanButton.setEnabled(true);
                     statusDot.setState(AppTheme.DANGER);
                     log.error("扫描失败：" + firstLine(e));
                 }
+                updateButtons();
             }
         }.execute();
     }
@@ -376,7 +424,10 @@ public final class MainWindow extends JFrame {
     /**
      * 异步补齐版本号。
      *
-     * <p>版本信息来自 WMI，速度很慢，所以等列表已经可见之后才去取。
+     * <p>版本信息来自 WMI，速度很慢，所以等列表已经可见之后才去取。这里刻意<em>不</em>因为版本未就绪
+     * 而禁用注入：按契约 K1，传给 agent 的键码只与录制的 AWT VK 有关、与目标版本无关，版本缺失不再
+     * 影响正确性；而非 Windows 上 {@code javaProcessCommandLines()} 直接返回空 map，禁用会让注入永远
+     * 不可用。{@code Row.version} 声明为 volatile 只为跨线程可见性的防御。
      */
     private void loadVersions() {
         new SwingWorker<Map<Integer, String>, Void>() {
@@ -407,28 +458,37 @@ public final class MainWindow extends JFrame {
      * 后台任务前解析成局部变量——表格选中行随时可能被用户改掉。
      */
     private void startInject() {
-        ProcessTableModel.Row row = model.rowAt(table.getSelectedRow());
+        int viewRow = table.getSelectedRow();
+        // 表格将来若启用排序，视图行与模型行会错位，必须显式转换。
+        ProcessTableModel.Row row = model.rowAt(
+                viewRow >= 0 ? table.convertRowIndexToModel(viewRow) : viewRow);
         if (row == null) {
             errorLabel.setText("请先选择一个进程");
             return;
         }
 
-        injectButton.setEnabled(false);
+        cancelAutoMinimize();
+        injecting = true;
+        updateButtons();
         injectButton.setText("注入中…");
         errorLabel.setText(" ");
         // 记下实际换算出的键码：绑定不生效时，这行日志能立刻区分「传错了」还是「传对了但游戏侧没响应」。
-        log.info("注入 → pid " + row.pid + "，GUI 键 " + config.guiBind
-                + "（键码 " + KeyCodes.codeFor(config.guiBind, row.version) + "）");
+        log.info("注入 → pid " + row.pid + "，版本 " + row.version + "，GUI 键 " + config.guiBind
+                + "（VK " + KeyCodes.codeFor(config.guiBind) + "）");
 
         new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
-                // 自身 jar 路径作为 agent jar；URLDecoder 处理路径中的 %20 等转义字符。
-                File self = new File(URLDecoder.decode(
-                        MainWindow.class.getProtectionDomain().getCodeSource().getLocation().getPath(),
-                        "UTF-8"));
-                // 把录制的快捷键换算成目标版本对应的键码后传给 agent：LWJGL2 与 GLFW 对同一个键
-                // 使用完全不同的编号（右 Shift 是 54 与 344），agent 侧无从判断，必须在这里按版本挑好。
+                // 自身 jar 路径作为 agent jar。用 URL.toURI 而非 URLDecoder：后者会把路径里字面量的
+                // '+' 解成空格，得到错误的 agent jar 路径。
+                File self;
+                try {
+                    self = new File(MainWindow.class.getProtectionDomain()
+                            .getCodeSource().getLocation().toURI());
+                } catch (URISyntaxException malformed) {
+                    throw new IllegalStateException("无法解析 agent jar 路径", malformed);
+                }
+                // guiKey 传 AWT VK 码；mcVersion 传目标版本族（运行时据此选映射表，零探测）。
                 String options = KeyCodes.attachOptions(config.guiBind, row.version);
                 Attacher.attach(row.pid, self, options);
                 return null;
@@ -437,22 +497,24 @@ public final class MainWindow extends JFrame {
             /** 回到 EDT：恢复按钮文案，并按结果更新状态点、日志与错误行。 */
             @Override
             protected void done() {
+                injecting = false;
                 injectButton.setText("注入");
+                updateButtons();
                 try {
                     get();
                     statusDot.setState(AppTheme.SUCCESS);
                     log.info("注入成功 → pid " + row.pid);
                     errorLabel.setText(" ");
-                    // 延迟最小化：注入后 agent 可能还要几秒才真正生效。
-                    Timer minimize = new Timer(AUTO_MINIMIZE_DELAY_MS, e -> setState(JFrame.ICONIFIED));
-                    minimize.setRepeats(false);
-                    minimize.start();
+                    // 延迟最小化：注入后 agent 可能还要几秒才真正生效。把定时器存下来以便取消。
+                    cancelAutoMinimize();
+                    autoMinimizeTimer = new Timer(AUTO_MINIMIZE_DELAY_MS, e -> setState(JFrame.ICONIFIED));
+                    autoMinimizeTimer.setRepeats(false);
+                    autoMinimizeTimer.start();
                 } catch (Exception e) {
                     String reason = describeFailure(e);
                     statusDot.setState(AppTheme.DANGER);
                     log.error("注入失败：" + reason);
                     errorLabel.setText(reason);
-                    injectButton.setEnabled(true);
                 }
             }
         }.execute();
@@ -461,16 +523,19 @@ public final class MainWindow extends JFrame {
     /**
      * 把 attach 失败映射为一句用户可读的说明。
      *
-     * <p>先剥掉反射包装与 {@link AttachException} 的内层异常，再对消息做关键字匹配；匹配不到
-     * 就回落到截断后的原始消息。
+     * <p>先剥掉 {@code SwingWorker.get()} 的 {@link ExecutionException}、反射包装
+     * {@link InvocationTargetException} 与 {@link AttachException} 的内层异常，再对消息做关键字匹配；
+     * 匹配不到就回落到截断后的原始消息。
      *
      * @param throwable {@code done()} 里 {@code get()} 抛出的异常
      * @return 中文原因说明，永不为 {@code null}
      */
     static String describeFailure(Throwable throwable) {
         Throwable cause = throwable;
-        // 反射调用会把真实异常包一层 InvocationTargetException，先一路剥到根因。
-        while (cause instanceof InvocationTargetException && cause.getCause() != null) {
+        // SwingWorker.get() 抛的是 ExecutionException，真实原因在 cause 里；不剥掉的话所有友好
+        // 映射都不可达，用户只会看到笼统的「游戏拒绝 attach」。
+        while ((cause instanceof ExecutionException || cause instanceof InvocationTargetException)
+                && cause.getCause() != null) {
             // AttachException 的 cause 才是底层原因（如 ClassNotFoundException）。
             cause = cause.getCause();
         }
@@ -491,15 +556,17 @@ public final class MainWindow extends JFrame {
             // 路径本身要留着：它是判断「注入器与目标 JVM 是否看到同一个文件系统」的唯一线索。
             return "找不到 agent jar（该路径对目标 JVM 不可见）：" + firstLine(message);
         }
-        if (lower.contains("agent") || lower.contains("attach")) {
-            // 笼统的「拒绝」曾让排查绕远路：附上原始消息，至少能看出是哪个机制在拒绝。
-            return "游戏拒绝 attach（" + firstLine(message) + "）";
+        if (lower.contains("unsupported") || lower.contains("class version")) {
+            return "版本不支持";
         }
+        // 「already」必须排在笼统的 agent/attach 分支之前：否则 "agent already loaded" 这类消息
+        // 会先命中下面那条，永远走不到这里。
         if (lower.contains("already")) {
             return "该进程已经注入过";
         }
-        if (lower.contains("unsupported") || lower.contains("class version")) {
-            return "版本不支持";
+        if (lower.contains("agent") || lower.contains("attach")) {
+            // 笼统的「拒绝」曾让排查绕远路：附上原始消息，至少能看出是哪个机制在拒绝。
+            return "游戏拒绝 attach（" + firstLine(message) + "）";
         }
         return firstLine(message);
     }

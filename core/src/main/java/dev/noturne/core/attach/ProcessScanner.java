@@ -7,10 +7,14 @@ import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 枚举本机上正在运行的 JVM 进程，并从中筛出疑似 Minecraft 客户端。
@@ -20,6 +24,18 @@ import java.util.Locale;
  * 是受支持的目标），因此不能引用任何 Java 9+ 的类型。
  */
 public final class ProcessScanner {
+
+    /** tasklist / ps 这类本机工具的正常耗时上限（毫秒）。 */
+    private static final long FAST_TIMEOUT_MS = 15000L;
+
+    /** WMI 命令行查询实测需 10 秒至 2 分钟，给一个较宽松但仍有界的上限（毫秒）。 */
+    private static final long WMI_TIMEOUT_MS = 180000L;
+
+    /** 提取 chcp 输出中代码页数字的匹配器。 */
+    private static final Pattern CODE_PAGE = Pattern.compile("(\\d+)");
+
+    /** 缓存探测到的控制台字符集，避免每次扫描都启动一次辅助进程。 */
+    private static volatile Charset cachedConsoleCharset;
 
     /** 扫描结果条目：一个 JVM 进程的可展示信息。不可变。 */
     public static final class ProcessInfo {
@@ -99,6 +115,10 @@ public final class ProcessScanner {
                 return onWindows();
             }
             return onUnix();
+        } catch (InterruptedException e) {
+            // 恢复中断标志，避免调用方（SwingWorker）取消后后台线程仍在跑
+            Thread.currentThread().interrupt();
+            return Collections.emptyList();
         } catch (Exception e) {
             return Collections.emptyList();
         }
@@ -127,7 +147,9 @@ public final class ProcessScanner {
      * <p>这里刻意不取命令行（那需要 WMI，耗时以秒计），因此返回条目的 {@code commandLine} 为空串，
      * 完整命令行由 {@link #javaProcessCommandLines()} 在后台线程补齐。
      *
-     * @throws IOException          tasklist 启动或读取失败
+     * <p>两个映像名分别查询：其中一个失败不影响另一个已取得的结果。
+     *
+     * @throws IOException         两个查询都失败时抛出最后一次失败原因
      * @throws InterruptedException 等待子进程时被中断
      */
     private static List<ProcessInfo> onWindows() throws IOException, InterruptedException {
@@ -135,8 +157,18 @@ public final class ProcessScanner {
         // 10 秒至 2 分钟，无法满足 UI 每次刷新都调用的场景。
         List<ProcessInfo> out = new ArrayList<ProcessInfo>();
         String[] images = {"java.exe", "javaw.exe"};
+        IOException failure = null;
         for (String image : images) {
-            List<String> lines = run("tasklist", "/FI", "IMAGENAME eq " + image, "/FO", "CSV", "/NH", "/V");
+            List<String> lines;
+            try {
+                lines = run(FAST_TIMEOUT_MS, "tasklist", "/FI", "IMAGENAME eq " + image, "/FO", "CSV", "/NH", "/V");
+            } catch (IOException e) {
+                // 单个映像名查询失败不应丢弃另一个已经拿到（或稍后拿到）的结果。
+                if (failure == null) {
+                    failure = e;
+                }
+                continue;
+            }
             for (String line : lines) {
                 List<String> cols = parseCsvLine(line);
                 // Image Name, PID, Session Name, Session#, Mem Usage, Status, User, CPU Time, Window Title
@@ -151,10 +183,25 @@ public final class ProcessScanner {
                         Integer.parseInt(pid),
                         image,
                         "",
-                        cols.get(8).trim()));
+                        normalizeTitle(cols.get(8))));
             }
         }
+        if (out.isEmpty() && failure != null) {
+            throw failure;
+        }
         return out;
+    }
+
+    /** {@code tasklist /V} 对没有窗口的进程输出字面量 {@code N/A}；它不该被当成真实标题展示。 */
+    static String normalizeTitle(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String trimmed = raw.trim();
+        if (trimmed.equalsIgnoreCase("N/A")) {
+            return "";
+        }
+        return trimmed;
     }
 
     // --------------------------------------------------------------- Unix (ps)
@@ -162,13 +209,15 @@ public final class ProcessScanner {
     /**
      * Unix 实现：用 {@code ps -e -o pid=,comm=,args=} 一次性取回 pid、程序名与完整参数。
      *
-     * <p>只保留程序名以 {@code java} 开头的行（即 JVM 进程）。
+     * <p>只保留程序名（basename）以 {@code java} 开头的行（即 JVM 进程）。macOS/BSD 的
+     * {@code comm} 是可执行文件<em>完整路径</em>（如 {@code /Library/Java/.../bin/java}），
+     * Linux 则只是被截断到 15 字符的 basename，因此必须先取 basename 再判断。
      *
      * @throws IOException          ps 启动或读取失败
      * @throws InterruptedException 等待子进程时被中断
      */
     private static List<ProcessInfo> onUnix() throws IOException, InterruptedException {
-        List<String> lines = run("ps", "-e", "-o", "pid=,comm=,args=");
+        List<String> lines = run(FAST_TIMEOUT_MS, "ps", "-e", "-o", "pid=,comm=,args=");
         List<ProcessInfo> out = new ArrayList<ProcessInfo>();
         for (String line : lines) {
             String trimmed = line.trim();
@@ -187,12 +236,19 @@ public final class ProcessScanner {
             int sp2 = rest.indexOf(' ');
             String image = sp2 < 0 ? rest : rest.substring(0, sp2);
             String args = sp2 < 0 ? "" : rest.substring(sp2 + 1).trim();
-            if (!image.startsWith("java")) {
+            String base = basename(image);
+            if (!base.startsWith("java")) {
                 continue;
             }
             out.add(new ProcessInfo(Integer.parseInt(pidPart), image, args, ""));
         }
         return out;
+    }
+
+    /** 取路径的最后一段（同时处理 {@code /} 与 {@code \}）。 */
+    private static String basename(String path) {
+        int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        return slash < 0 ? path : path.substring(slash + 1);
     }
 
     // ------------------------------------------------------------------ helpers
@@ -216,7 +272,7 @@ public final class ProcessScanner {
         // 用 UTF-16LE + Base64 传脚本：避免命令行转义与本地代码页导致的乱码。
         java.util.Map<Integer, String> out = new java.util.HashMap<Integer, String>();
         try {
-            for (String line : run("powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded)) {
+            for (String line : run(WMI_TIMEOUT_MS, "powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded)) {
                 int separator = line.indexOf('|');
                 if (separator <= 0) {
                     continue;
@@ -228,6 +284,9 @@ public final class ProcessScanner {
                     // 不是进程行（PowerShell 的其他输出），忽略
                 }
             }
+        } catch (InterruptedException e) {
+            // 恢复中断标志；SwingWorker 取消后不该继续跑
+            Thread.currentThread().interrupt();
         } catch (Exception ignored) {
             // 视作「拿不到命令行」，交由调用方降级
         }
@@ -237,8 +296,11 @@ public final class ProcessScanner {
     /**
      * 子进程输出的解码字符集。
      *
-     * <p>Windows 的 tasklist / PowerShell 按控制台代码页输出（简体中文系统即 GBK），用 UTF-8 硬解会把
-     * 中文进程名与窗口标题变成乱码；Unix 工具则普遍输出 UTF-8。
+     * <p>Windows 的 tasklist / PowerShell 按<em>控制台（OEM）代码页</em>输出（简体中文系统即 GBK），
+     * 用 UTF-8 硬解会把中文进程名与窗口标题变成乱码；Unix 工具则普遍输出 UTF-8。
+     *
+     * <p>不能依赖 {@code sun.jnu.encoding}：JEP 400 之后它不再是可靠的平台编码来源。这里优先直接
+     * 探测控制台代码页（{@code chcp}），失败再退回 {@code native.encoding} / {@code sun.jnu.encoding}。
      *
      * @return 当前平台下应使用的字符集
      */
@@ -247,16 +309,86 @@ public final class ProcessScanner {
         if (!os.contains("win")) {
             return StandardCharsets.UTF_8;
         }
-        // sun.jnu.encoding 即 Windows 的 ANSI 代码页，正是控制台工具的默认输出编码。
-        String encoding = System.getProperty("sun.jnu.encoding");
-        if (encoding != null) {
-            try {
-                return Charset.forName(encoding);
-            } catch (Throwable ignored) {
-                // 属性值不被识别时退回平台默认，不因一个属性让整个扫描失败。
+        Charset cached = cachedConsoleCharset;
+        if (cached != null) {
+            return cached;
+        }
+        Charset resolved = resolveWindowsConsoleCharset();
+        cachedConsoleCharset = resolved;
+        return resolved;
+    }
+
+    /** 探测 Windows 控制台字符集：优先 OEM 代码页，再退回平台属性。 */
+    private static Charset resolveWindowsConsoleCharset() {
+        Integer codePage = queryConsoleCodePage();
+        if (codePage != null) {
+            Charset byCodePage = charsetForCodePage(codePage.intValue());
+            if (byCodePage != null) {
+                return byCodePage;
             }
         }
+        // JEP 400（JDK 17+）暴露的平台原生编码
+        Charset nativeEncoding = charsetOrNull(System.getProperty("native.encoding"));
+        if (nativeEncoding != null) {
+            return nativeEncoding;
+        }
+        Charset jnu = charsetOrNull(System.getProperty("sun.jnu.encoding"));
+        if (jnu != null) {
+            return jnu;
+        }
         return Charset.defaultCharset();
+    }
+
+    /** 执行 {@code chcp} 并解析当前控制台代码页；失败返回 {@code null}。 */
+    private static Integer queryConsoleCodePage() {
+        Process process = null;
+        try {
+            process = new ProcessBuilder("cmd", "/c", "chcp").redirectErrorStream(true).start();
+            // chcp 的输出只含 ASCII 文案与数字，用 US-ASCII 读取即可，不会与 consoleCharset 递归。
+            InputStream in = process.getInputStream();
+            byte[] buffer = new byte[256];
+            int total = 0;
+            int read;
+            while (total < buffer.length && (read = in.read(buffer, total, buffer.length - total)) != -1) {
+                total += read;
+            }
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                return null;
+            }
+            String text = new String(buffer, 0, total, StandardCharsets.US_ASCII);
+            Matcher matcher = CODE_PAGE.matcher(text);
+            Integer last = null;
+            while (matcher.find()) {
+                last = Integer.valueOf(matcher.group(1));
+            }
+            return last;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+    }
+
+    /** 把 Windows 代码页映射到 Java 字符集；未知或不受支持时返回 {@code null}。 */
+    private static Charset charsetForCodePage(int codePage) {
+        if (codePage == 65001) {
+            return StandardCharsets.UTF_8;
+        }
+        return charsetOrNull("Cp" + codePage);
+    }
+
+    /** 按名字解析字符集；为 {@code null}/空或不受支持时返回 {@code null}。 */
+    private static Charset charsetOrNull(String name) {
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        try {
+            return Charset.forName(name);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     /**
@@ -265,28 +397,66 @@ public final class ProcessScanner {
      * <p>把 stderr 合并进 stdout，因为部分系统工具（tasklist）把「无匹配任务」之类的提示写到 stderr，
      * 丢弃它会让上层误以为命令失败。
      *
-     * @param command 命令与参数
+     * <p>读取放在独立的守护线程里，主线程只等待至多 {@code timeoutMillis}：命令卡死时子进程会被
+     * 强制销毁并抛出 {@link IOException}，而不是让 SwingWorker 永不结束、留下孤儿进程。
+     *
+     * @param timeoutMillis 等待子进程退出的上限（毫秒）
+     * @param command       命令与参数
      * @return 输出的各行（不含行尾）
-     * @throws IOException          无法启动命令
+     * @throws IOException          无法启动命令、读取失败或命令超时
      * @throws InterruptedException 等待命令结束时被中断
      */
-    private static List<String> run(String... command) throws IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-        List<String> lines = new ArrayList<String>();
-        InputStream in = process.getInputStream();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(in, consoleCharset()));
-        try {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                lines.add(line);
+    private static List<String> run(long timeoutMillis, String... command) throws IOException, InterruptedException {
+        final ProcessBuilder builder = new ProcessBuilder(command);
+        builder.redirectErrorStream(true);
+        final Process process = builder.start();
+        final Charset charset = consoleCharset();
+        final List<String> lines = new ArrayList<String>();
+        Thread reader = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                BufferedReader reader = null;
+                try {
+                    reader = new BufferedReader(new InputStreamReader(process.getInputStream(), charset));
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        synchronized (lines) {
+                            lines.add(line);
+                        }
+                    }
+                } catch (IOException ignored) {
+                    // 进程被强制销毁时读端报错属预期，交由主线程的超时逻辑处理
+                } finally {
+                    if (reader != null) {
+                        try {
+                            reader.close();
+                        } catch (IOException ignored) {
+                            // 关闭失败无需上报
+                        }
+                    }
+                }
             }
-        } finally {
-            reader.close();
+        }, "noturne-process-reader");
+        reader.setDaemon(true);
+        reader.start();
+
+        boolean finished;
+        try {
+            finished = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            process.destroyForcibly();
+            throw e;
         }
-        process.waitFor();
-        return lines;
+        if (!finished) {
+            process.destroyForcibly();
+            reader.interrupt();
+            throw new IOException("command timed out after " + timeoutMillis + "ms: " + Arrays.toString(command));
+        }
+        // 进程已退出，给读线程一点时间消费完管道缓冲（有界，避免异常场景卡死）
+        reader.join(2000L);
+        synchronized (lines) {
+            return new ArrayList<String>(lines);
+        }
     }
 
     /** 最小化的 RFC-4180 CSV 字段切分器：处理引号包裹、{@code ""} 双写转义与 CRLF 行尾。 */
@@ -333,10 +503,21 @@ public final class ProcessScanner {
         return true;
     }
 
-    /** 把字符串截断到 {@code max} 个字符，超长时以 {@code ...} 结尾，避免命令行撑爆 UI 行。 */
+    /**
+     * 把字符串截断到 {@code max} 个字符，超长时以 {@code ...} 结尾，避免命令行撑爆 UI 行。
+     *
+     * @param s   原始字符串，可为 {@code null}
+     * @param max 最多保留的字符数；{@code <= 3} 时直接截断，不再追加省略号（否则会 {@code substring(0, 负数)} 越界）
+     */
     private static String abbreviate(String s, int max) {
+        if (s == null || max <= 0) {
+            return "";
+        }
         if (s.length() <= max) {
             return s;
+        }
+        if (max <= 3) {
+            return s.substring(0, max);
         }
         return s.substring(0, max - 3) + "...";
     }

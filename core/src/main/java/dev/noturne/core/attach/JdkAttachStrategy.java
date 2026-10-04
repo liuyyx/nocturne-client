@@ -1,17 +1,17 @@
 package dev.noturne.core.attach;
 
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.URL;
-import java.net.URLClassLoader;
 
 /**
  * 通过平台自带的 {@code com.sun.tools.attach.VirtualMachine} API 注入 agent。
  *
  * <p>JDK 9+ 上该类位于 {@code jdk.attach} 模块，默认即可达；JDK 8 上它位于
- * {@code lib/tools.jar}，而 tools.jar <em>不在</em>默认 classpath 上 —— 因此直接查找失败时，
- * 把该 jar 装进一个子 ClassLoader 再重试一次。这样既能让注入器在纯 JDK 8 下工作，
- * 又能在只装了 JRE（根本没有 tools.jar）时给出精确的错误信息。
+ * {@code lib/tools.jar}，而 tools.jar <em>不在</em>默认 classpath 上。子 ClassLoader 方案在
+ * JDK 8 上<em>不可能</em>成功（{@code AttachProvider} 的 ServiceLoader 查找发生在系统类加载器里），
+ * 因此 JDK 8 必须由 {@link ToolsJarBootstrap} 在入口处带 tools.jar 重启本 JVM；本类在缺失时
+ * 直接抛出可诊断的 {@link ClassNotFoundException}，绝不静默失败。
  */
 public final class JdkAttachStrategy implements AttachStrategy {
 
@@ -44,7 +44,21 @@ public final class JdkAttachStrategy implements AttachStrategy {
         Method loadAgent = vmClass.getMethod("loadAgent", String.class, String.class);
         Method detach = vmClass.getMethod("detach");
 
-        Object vm = attachMethod.invoke(null, Integer.toString(pid));
+        Object vm;
+        try {
+            vm = attachMethod.invoke(null, Integer.toString(pid));
+        } catch (InvocationTargetException e) {
+            // 「目标进程不存在」等真实原因被包在反射异常里；解包后上层的 ClassNotFoundException
+            // 提示与 describeFailure 映射才有机会命中。
+            Throwable root = e.getCause();
+            if (root instanceof Exception) {
+                throw (Exception) root;
+            }
+            if (root instanceof Error) {
+                throw (Error) root;
+            }
+            throw e;
+        }
         try {
             loadAgent.invoke(vm, agentJar.getAbsolutePath(), options == null ? "" : options);
         } catch (java.lang.reflect.InvocationTargetException e) {
@@ -56,6 +70,9 @@ public final class JdkAttachStrategy implements AttachStrategy {
             }
             if (cause instanceof Exception) {
                 throw (Exception) cause;
+            }
+            if (cause instanceof Error) {
+                throw (Error) cause;
             }
             throw e;
         } finally {
@@ -98,14 +115,14 @@ public final class JdkAttachStrategy implements AttachStrategy {
     }
 
     /**
-     * 解析 {@code com.sun.tools.attach.VirtualMachine}，失败时回退到 JDK 8 的 tools.jar。
+     * 解析 {@code com.sun.tools.attach.VirtualMachine}。
      *
      * @return attach API 的 Class 对象
-     * @throws ClassNotFoundException classpath 上没有该类且本机找不到 tools.jar（典型的「只有 JRE」场景）
+     * @throws ClassNotFoundException classpath 上没有该类（JDK 8 需要先用 tools.jar 重启本 JVM）
      */
     private static Class<?> virtualMachineClass() throws Exception {
         try {
-            // 首选：JDK 9+ 的 jdk.attach 模块，或已把 tools.jar 放进 classpath 的 JDK 8
+            // JDK 9+ 的 jdk.attach 模块，或已把 tools.jar 放进 classpath 的 JDK 8
             return Class.forName("com.sun.tools.attach.VirtualMachine");
         } catch (ClassNotFoundException notFound) {
             File toolsJar = locateToolsJar();
@@ -114,11 +131,15 @@ public final class JdkAttachStrategy implements AttachStrategy {
                         "com.sun.tools.attach.VirtualMachine is not available and no tools.jar was "
                                 + "found under " + System.getProperty("java.home"), notFound);
             }
-            // 回退：以当前加载器为父加载 tools.jar，使 attach API 至少可见
-            URLClassLoader loader = new URLClassLoader(
-                    new URL[]{toolsJar.toURI().toURL()},
-                    JdkAttachStrategy.class.getClassLoader());
-            return Class.forName("com.sun.tools.attach.VirtualMachine", true, loader);
+            // 注意：这里刻意不再用子 URLClassLoader。VirtualMachine 的静态初始化通过
+            // ServiceLoader 在系统类加载器中查找 AttachProvider，子加载器里找不到 tools.jar
+            // 的 provider，必然抛 ExceptionInInitializerError（同时那个 URLClassLoader 也永不关闭）。
+            // 唯一可靠的做法是带 tools.jar 重启本 JVM，由 ToolsJarBootstrap 在入口处完成。
+            throw new ClassNotFoundException(
+                    "com.sun.tools.attach.VirtualMachine is not on the classpath; tools.jar exists at "
+                            + toolsJar + " but a sub-classloader cannot provide the attach providers. "
+                            + "Restart this JVM with tools.jar on the classpath (see ToolsJarBootstrap).",
+                    notFound);
         }
     }
 

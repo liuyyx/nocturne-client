@@ -1,5 +1,7 @@
 package dev.noturne.client.value;
 
+import java.util.Locale;
+
 /**
  * 颜色设置，持有一个打包好的 ARGB 颜色（{@code 0xAARRGGBB}）。
  *
@@ -34,6 +36,7 @@ public final class ColorValue extends Value<Integer> {
     /** 忽略 alpha，输出 {@code #RRGGBB} 形式的大写六位十六进制，不足补零。 */
     @Override
     public String display() {
-        return String.format("#%06X", get() & 0xFFFFFF);
+        // 固定 Locale.ROOT：避免带本地数字的 Locale（如 ar-EG）把十六进制渲染成非 ASCII 数字
+        return String.format(Locale.ROOT, "#%06X", get() & 0xFFFFFF);
     }
 }

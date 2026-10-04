@@ -58,12 +58,17 @@ public final class Attacher {
         Throwable last = null;
         for (AttachStrategy strategy : STRATEGIES) {
             attempted.add(strategy.name());
-            // 单个策略失败（类缺失、权限不足等）不应中断后续策略
+            // 单个策略失败（类缺失、权限不足等）不应中断后续策略；
+            // 但 Error（OOM、LinkageError 等）与中断必须向上传播，不能被吞成「普通失败」。
             try {
                 strategy.attach(pid, agentJar, options);
                 return;
-            } catch (Throwable t) {
-                last = t;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                last = e;
+                break;
+            } catch (Exception e) {
+                last = e;
             }
         }
         throw new AttachException(pid, attempted, last);

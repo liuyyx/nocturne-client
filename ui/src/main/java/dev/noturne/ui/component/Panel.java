@@ -66,14 +66,32 @@ public class Panel extends Component {
     }
 
     @Override
+    public void update(long nowMs) {
+        // 时钟注入式转发：整棵子树共享同一时间基准，动画/过渡随帧推进
+        for (int i = 0; i < children.size(); i++) {
+            children.get(i).update(nowMs);
+        }
+    }
+
+    @Override
+    public void cancelInteractions() {
+        super.cancelInteractions();
+        // 不检查可见性：隐藏子树里残留的拖动态同样需要复位
+        for (int i = 0; i < children.size(); i++) {
+            children.get(i).cancelInteractions();
+        }
+    }
+
+    @Override
     public boolean mouseReleased(double mx, double my, int button) {
-        // 释放事件不按命中测试，而是广播给第一个愿意消费的子控件（如正在拖拽的滑块）
+        // 释放事件不按命中测试，而是广播给每个子控件：可能同时有多个手势在进行
+        // （如一个滑块拖拽 + 一个取色器拖拽），只喂给首个消费者会让其余控件的
+        // dragging 永远为 true。也不检查可见性——容器在拖拽途中被隐藏时，
+        // 隐藏的子树同样需要收到释放，否则拖动态残留到下次打开。
         boolean consumed = false;
         for (int i = children.size() - 1; i >= 0; i--) {
-            Component child = children.get(i);
-            if (child.isVisible() && child.mouseReleased(mx, my, button)) {
+            if (children.get(i).mouseReleased(mx, my, button)) {
                 consumed = true;
-                break;
             }
         }
         return consumed;

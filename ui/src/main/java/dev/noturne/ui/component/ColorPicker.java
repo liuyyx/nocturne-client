@@ -38,6 +38,8 @@ public class ColorPicker extends Component {
 
     /** 数值变化回调；可为 null（表示仅更新内部状态，不外发）。 */
     private final IntConsumer onChange;
+    /** 权威值回读器；可为 null。写入 {@code Value} 后回读，保证显示色与实际色一致。 */
+    private final java.util.function.IntSupplier valueReader;
     /** 当前打包颜色（{@code 0xAARRGGBB}），是唯一权威状态，HSV 分量均由它派生。 */
     private int argb;
     /** 当前色相 0–1。 */
@@ -58,7 +60,19 @@ public class ColorPicker extends Component {
      * @param onChange    颜色变化回调，允许为 null
      */
     public ColorPicker(int initialArgb, IntConsumer onChange) {
+        this(initialArgb, onChange, null);
+    }
+
+    /**
+     * @param initialArgb 初始颜色，打包为 {@code 0xAARRGGBB}
+     * @param onChange    颜色变化回调，允许为 null
+     * @param valueReader 权威值回读器（写入后读取 {@code Value.get()}），允许为 null；
+     *                    非 null 时控件显示以回读值为准
+     */
+    public ColorPicker(int initialArgb, IntConsumer onChange,
+                       java.util.function.IntSupplier valueReader) {
         this.onChange = onChange;
+        this.valueReader = valueReader;
         applyArgb(initialArgb);
     }
 
@@ -68,17 +82,29 @@ public class ColorPicker extends Component {
     }
 
     /**
-     * 设置新颜色并（值确有变化时）触发回调；与当前值相同则直接返回，
+     * 设置新颜色并（值确有变化时）触发回调，随后回读权威值；与当前值相同也会回读一次。
      * 与 {@link Slider#setValue(float)} 的「无变化不回调」约定一致。
      */
     public void setArgb(int newArgb) {
         if (newArgb == argb) {
+            readBack();
             return;
         }
         applyArgb(newArgb);
         if (onChange != null) {
             onChange.accept(argb);
         }
+        readBack();
+    }
+
+    /** 两条色带的几何：上下各占 {@code (height - BAR_GAP) / 2}，中间留 {@link #BAR_GAP} 的间隙。 */
+    private float barHeight() {
+        return (height - BAR_GAP) / 2f;
+    }
+
+    /** 中间间隙的中线纵坐标：按下点落在它之上算色相带，之下算明度带。 */
+    private float bandSplitY() {
+        return y + barHeight() + BAR_GAP / 2f;
     }
 
     @Override
@@ -86,7 +112,7 @@ public class ColorPicker extends Component {
         if (!visible) {
             return;
         }
-        float barHeight = (height - BAR_GAP) / 2f;
+        float barHeight = barHeight();
         float hueY = y;
         float brightnessY = y + barHeight + BAR_GAP;
 
@@ -104,15 +130,18 @@ public class ColorPicker extends Component {
         if (button != 0 || !contains(mx, my)) {
             return false;
         }
-        dragging = my < y + height / 2f ? DRAG_HUE : DRAG_BRIGHTNESS;
+        // 分界线取间隙中线，而不是几何中点：两条带各让出 BAR_GAP 的一半，否则落在间隙里的
+        // 点击会被算到明度带上（L-38——命中判定必须与 render 的带位一致）。
+        dragging = my < bandSplitY() ? DRAG_HUE : DRAG_BRIGHTNESS;
         applyFromMouse(mx);
         return true;
     }
 
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
-        // 拖动目标在按下时锁定：即使指针纵向越到另一条带上，也继续调节按下时的分量
-        if (dragging == DRAG_NONE) {
+        // 拖动目标在按下时锁定：即使指针纵向越到另一条带上，也继续调节按下时的分量。
+        // 只认左键：右键拖动不得打断正在进行的左键拖动。
+        if (dragging == DRAG_NONE || button != 0) {
             return false;
         }
         applyFromMouse(mx);
@@ -121,19 +150,34 @@ public class ColorPicker extends Component {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
-        // 未在拖动则交回事件；一旦开始拖动就独占该次释放
-        if (dragging == DRAG_NONE) {
+        // 未在拖动或非左键则交回事件；一旦开始拖动就独占该次释放
+        if (dragging == DRAG_NONE || button != 0) {
             return false;
         }
         dragging = DRAG_NONE;
         return true;
     }
 
+    @Override
+    public void cancelInteractions() {
+        super.cancelInteractions();
+        dragging = DRAG_NONE;
+    }
+
     /** 写入权威颜色并派生出 HSV 分量（alpha 原样保留在 {@link #argb} 中）。 */
     private void applyArgb(int newArgb) {
         argb = newArgb;
-        float[] hsv = java.awt.Color.RGBtoHSB((newArgb >>> 16) & 0xFF, (newArgb >>> 8) & 0xFF,
-                newArgb & 0xFF, null);
+        int r = (newArgb >>> 16) & 0xFF;
+        int g = (newArgb >>> 8) & 0xFF;
+        int b = newArgb & 0xFF;
+        float[] hsv = java.awt.Color.RGBtoHSB(r, g, b, null);
+        if (r == g && g == b) {
+            // 灰阶在 RGB→HSB 中丢失色相与饱和度（r==g==b 时 saturation=0）。
+            // 明度拖到 0 就会走到这里；若整体覆盖，取色器会永久退化为灰阶。
+            // 因此只更新明度，保留既有色相/饱和度。
+            brightness = hsv[2];
+            return;
+        }
         hue = hsv[0];
         saturation = hsv[1];
         brightness = hsv[2];
@@ -143,14 +187,45 @@ public class ColorPicker extends Component {
     private void applyFromMouse(double mx) {
         float fraction = clamp01((float) ((mx - x) / width));
         if (dragging == DRAG_HUE) {
-            // 色相 1.0 与 0.0 同为红色，直接线性映射即可
             hue = fraction;
-        } else {
+            if (saturation <= 0f) {
+                // 灰阶没有可表达的饱和度，拖到色相带即视为选色：否则无论怎么拖都仍是灰阶
+                saturation = 1f;
+            }
+        } else if (dragging == DRAG_BRIGHTNESS) {
             brightness = fraction;
+        } else {
+            return;
         }
-        // 由 HSV 与既有 alpha 合成新颜色；setArgb 内部保证值未变时不回调
+        // 由 HSV 与既有 alpha 合成新颜色，直接提交而不重新反解 HSV：
+        // 8 位 RGB 往返会把 hue=1.0 与 0.0 都还原成 0，导致指示标记瞬间弹回最左端。
         int rgb = java.awt.Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF;
-        setArgb((argb & 0xFF000000) | rgb);
+        commitInteraction((argb & 0xFF000000) | rgb);
+    }
+
+    /** 提交交互产生的颜色：值有变化才写回并回调，随后回读权威值。 */
+    private void commitInteraction(int newArgb) {
+        if (newArgb == argb) {
+            // 与 Slider 的「无变化不回调」约定一致
+            readBack();
+            return;
+        }
+        argb = newArgb;
+        if (onChange != null) {
+            onChange.accept(argb);
+        }
+        readBack();
+    }
+
+    /** 从权威值回读颜色；读取器缺失时保持现状。 */
+    private void readBack() {
+        if (valueReader == null) {
+            return;
+        }
+        int actual = valueReader.getAsInt();
+        if (actual != argb) {
+            applyArgb(actual);
+        }
     }
 
     /**

@@ -13,6 +13,9 @@ import java.nio.FloatBuffer;
  * 与 {@link GlApi} 一样，编译期不做任何链接——入口点都在游戏的类加载器上解析。
  * LWJGL3 同时提供 legacy（{@code GL15}）与 core（{@code GL15C}）两套类，
  * 所以每个函数都要按两种写法分别查找。
+ *
+ * <p>句柄全部在 {@link #bind} 中一次性解析后直接写入实例字段（而非超长构造参数），
+ * 未解析到的保持 {@code null}，对应的包装方法据此安全跳过调用。
  */
 public final class ModernGlApi {
 
@@ -31,6 +34,10 @@ public final class ModernGlApi {
     public static final int GL_SRC_ALPHA = 0x0302;
     /** 混合因子：1 - 源 alpha。 */
     public static final int GL_ONE_MINUS_SRC_ALPHA = 0x0303;
+    /** 背面剔除开关。 */
+    public static final int GL_CULL_FACE = 0x0B44;
+    /** 深度测试开关。 */
+    public static final int GL_DEPTH_TEST = 0x0B71;
     /** glCreateShader 的着色器类型：顶点着色器。 */
     public static final int GL_VERTEX_SHADER = 0x8B31;
     /** glCreateShader 的着色器类型：片元着色器。 */
@@ -41,118 +48,85 @@ public final class ModernGlApi {
     public static final int GL_LINK_STATUS = 0x8B82;
     /** 裁剪测试开关。 */
     public static final int GL_SCISSOR_TEST = 0x0C11;
-    /** 2D 纹理目标 / 纹理开关。 */
-    public static final int GL_TEXTURE_2D = 0x0DE1;
     /** glGetIntegerv 查询项：当前视口。 */
     public static final int GL_VIEWPORT = 0x0BA2;
 
     // 以下为已解析的 GL 入口点。标记「可选」的句柄在老版本 LWJGL 上可能缺失，
     // 此时对应包装方法会安全地跳过调用；未标记的则由 bind 保证非 null。
     /** {@code glGenBuffers}（必需）。 */
-    private final Method genBuffers;
+    private Method genBuffers;
     /** {@code glBindBuffer}（必需）。 */
-    private final Method bindBuffer;
+    private Method bindBuffer;
     /** {@code glBufferData}（必需）。 */
-    private final Method bufferData;
-    /** {@code glDeleteBuffers}（可选）。 */
-    private final Method deleteBuffers;
+    private Method bufferData;
+    /** {@code glDeleteBuffers(int[])}（可选）。 */
+    private Method deleteBuffers;
     /** {@code glCreateShader}（必需）。 */
-    private final Method createShader;
+    private Method createShader;
     /** {@code glShaderSource}（必需）。 */
-    private final Method shaderSource;
+    private Method shaderSource;
     /** {@code glCompileShader}（必需）。 */
-    private final Method compileShader;
+    private Method compileShader;
     /** {@code glGetShaderi}（可选，缺失时 {@link #compileOk} 只会返回 false）。 */
-    private final Method getShaderi;
+    private Method getShaderi;
     /** {@code glGetShaderInfoLog}（可选，缺失时日志为空）。 */
-    private final Method getShaderInfoLog;
+    private Method getShaderInfoLog;
     /** {@code glDeleteShader}（可选）。 */
-    private final Method deleteShader;
+    private Method deleteShader;
     /** {@code glCreateProgram}（必需）。 */
-    private final Method createProgram;
+    private Method createProgram;
     /** {@code glAttachShader}（可选）。 */
-    private final Method attachShader;
+    private Method attachShader;
+    /** {@code glBindAttribLocation}（可选，缺失时属性位置交给驱动分配）。 */
+    private Method bindAttribLocation;
     /** {@code glLinkProgram}（可选）。 */
-    private final Method linkProgram;
+    private Method linkProgram;
+    /** {@code glGetProgrami}（可选，缺失时 {@link #linkOk} 只会返回 false）。 */
+    private Method getProgrami;
+    /** {@code glGetProgramInfoLog}（可选，缺失时日志为空）。 */
+    private Method getProgramInfoLog;
     /** {@code glDeleteProgram}（可选）。 */
-    private final Method deleteProgram;
+    private Method deleteProgram;
     /** {@code glUseProgram}（必需）。 */
-    private final Method useProgram;
+    private Method useProgram;
     /** {@code glGetUniformLocation}（可选）。 */
-    private final Method getUniformLocation;
+    private Method getUniformLocation;
     /** {@code glUniformMatrix4fv}（可选）。 */
-    private final Method uniformMatrix4fv;
+    private Method uniformMatrix4fv;
     /** {@code glUniform4f}（可选）。 */
-    private final Method uniform4f;
+    private Method uniform4f;
     /** {@code glGenVertexArrays}（必需）。 */
-    private final Method genVertexArrays;
+    private Method genVertexArrays;
     /** {@code glBindVertexArray}（必需）。 */
-    private final Method bindVertexArray;
+    private Method bindVertexArray;
+    /** {@code glDeleteVertexArrays}（可选）。 */
+    private Method deleteVertexArrays;
     /** {@code glEnableVertexAttribArray}（必需）。 */
-    private final Method enableVertexAttribArray;
+    private Method enableVertexAttribArray;
     /** {@code glVertexAttribPointer}（必需）。 */
-    private final Method vertexAttribPointer;
+    private Method vertexAttribPointer;
     /** {@code glDrawArrays}（必需）。 */
-    private final Method drawArrays;
+    private Method drawArrays;
     /** {@code glEnable}（可选）。 */
-    private final Method enable;
+    private Method enable;
     /** {@code glDisable}（可选）。 */
-    private final Method disable;
+    private Method disable;
+    /** {@code glIsEnabled}（可选，缺失时无法保存/还原开关的先前状态）。 */
+    private Method isEnabled;
     /** {@code glBlendFunc}（可选）。 */
-    private final Method blendFunc;
-    /** {@code glViewport}（可选）。 */
-    private final Method viewport;
+    private Method blendFunc;
     /** {@code glScissor}（可选）。 */
-    private final Method scissor;
+    private Method scissor;
     /** {@code BufferUtils.createFloatBuffer}（可选，缺失时无法上传顶点）。 */
-    private final Method newFloatBuffer;
+    private Method newFloatBuffer;
     /** {@code glGetIntegerv}（可选，缺失时 {@link #getInteger} 返回 {@code null}）。 */
-    private final Method getIntegerv;
+    private Method getIntegerv;
 
-    /**
-     * 保存已解析的入口点；仅由 {@link #bind(ClassLoader)} 调用。
-     *
-     * @param genBuffers 等为 {@link #bind} 解析出的方法句柄，允许为 {@code null}
-     */
-    private ModernGlApi(Method genBuffers, Method bindBuffer, Method bufferData, Method deleteBuffers,
-                        Method createShader, Method shaderSource, Method compileShader, Method getShaderi,
-                        Method getShaderInfoLog, Method deleteShader, Method createProgram,
-                        Method attachShader, Method linkProgram, Method deleteProgram, Method useProgram,
-                        Method getUniformLocation, Method uniformMatrix4fv, Method uniform4f,
-                        Method genVertexArrays, Method bindVertexArray, Method enableVertexAttribArray,
-                        Method vertexAttribPointer, Method drawArrays, Method enable, Method disable,
-                        Method blendFunc, Method viewport, Method scissor, Method newFloatBuffer,
-                        Method getIntegerv) {
-        this.genBuffers = genBuffers;
-        this.bindBuffer = bindBuffer;
-        this.bufferData = bufferData;
-        this.deleteBuffers = deleteBuffers;
-        this.createShader = createShader;
-        this.shaderSource = shaderSource;
-        this.compileShader = compileShader;
-        this.getShaderi = getShaderi;
-        this.getShaderInfoLog = getShaderInfoLog;
-        this.deleteShader = deleteShader;
-        this.createProgram = createProgram;
-        this.attachShader = attachShader;
-        this.linkProgram = linkProgram;
-        this.deleteProgram = deleteProgram;
-        this.useProgram = useProgram;
-        this.getUniformLocation = getUniformLocation;
-        this.uniformMatrix4fv = uniformMatrix4fv;
-        this.uniform4f = uniform4f;
-        this.genVertexArrays = genVertexArrays;
-        this.bindVertexArray = bindVertexArray;
-        this.enableVertexAttribArray = enableVertexAttribArray;
-        this.vertexAttribPointer = vertexAttribPointer;
-        this.drawArrays = drawArrays;
-        this.enable = enable;
-        this.disable = disable;
-        this.blendFunc = blendFunc;
-        this.viewport = viewport;
-        this.scissor = scissor;
-        this.newFloatBuffer = newFloatBuffer;
-        this.getIntegerv = getIntegerv;
+    /** 复用的直接缓冲区，避免每次上传都 {@code memAlloc}；不足时按需扩容。 */
+    private FloatBuffer staging;
+
+    /** 句柄在 {@link #bind} 中逐项解析后写入；未解析到的保持 {@code null}。 */
+    private ModernGlApi() {
     }
 
     /**
@@ -202,29 +176,45 @@ public final class ModernGlApi {
             return null;
         }
 
-        return new ModernGlApi(
-                genBuffers, bindBuffer, bufferData,
-                find(loader, "glDeleteBuffers", int.class, int[].class),
-                createShader, shaderSource, compileShader,
-                find(loader, "glGetShaderi", int.class, int.class),
-                find(loader, "glGetShaderInfoLog", int.class),
-                find(loader, "glDeleteShader", int.class),
-                createProgram,
-                find(loader, "glAttachShader", int.class, int.class),
-                find(loader, "glLinkProgram", int.class),
-                find(loader, "glDeleteProgram", int.class),
-                useProgram,
-                find(loader, "glGetUniformLocation", int.class, CharSequence.class),
-                find(loader, "glUniformMatrix4fv", int.class, boolean.class, float[].class),
-                find(loader, "glUniform4f", int.class, float.class, float.class, float.class, float.class),
-                genVertexArrays, bindVertexArray, enableVertexAttribArray, vertexAttribPointer, drawArrays,
-                find(loader, "glEnable", int.class),
-                find(loader, "glDisable", int.class),
-                find(loader, "glBlendFunc", int.class, int.class),
-                find(loader, "glViewport", int.class, int.class, int.class, int.class),
-                find(loader, "glScissor", int.class, int.class, int.class, int.class),
-                findBufferUtils(loader),
-                find(loader, "glGetIntegerv", int.class, int[].class));
+        ModernGlApi api = new ModernGlApi();
+        api.genBuffers = genBuffers;
+        api.bindBuffer = bindBuffer;
+        api.bufferData = bufferData;
+        // LWJGL3 只有 glDeleteBuffers(int[]) 与 (int, IntBuffer)，没有 (int, int[])。
+        api.deleteBuffers = find(loader, "glDeleteBuffers", int[].class);
+        api.createShader = createShader;
+        api.shaderSource = shaderSource;
+        api.compileShader = compileShader;
+        api.getShaderi = find(loader, "glGetShaderi", int.class, int.class);
+        api.getShaderInfoLog = find(loader, "glGetShaderInfoLog", int.class);
+        api.deleteShader = find(loader, "glDeleteShader", int.class);
+        api.createProgram = createProgram;
+        api.attachShader = find(loader, "glAttachShader", int.class, int.class);
+        api.bindAttribLocation = find(loader, "glBindAttribLocation",
+                int.class, int.class, CharSequence.class);
+        api.linkProgram = find(loader, "glLinkProgram", int.class);
+        api.getProgrami = find(loader, "glGetProgrami", int.class, int.class);
+        api.getProgramInfoLog = find(loader, "glGetProgramInfoLog", int.class);
+        api.deleteProgram = find(loader, "glDeleteProgram", int.class);
+        api.useProgram = useProgram;
+        api.getUniformLocation = find(loader, "glGetUniformLocation", int.class, CharSequence.class);
+        api.uniformMatrix4fv = find(loader, "glUniformMatrix4fv", int.class, boolean.class, float[].class);
+        api.uniform4f = find(loader, "glUniform4f",
+                int.class, float.class, float.class, float.class, float.class);
+        api.genVertexArrays = genVertexArrays;
+        api.bindVertexArray = bindVertexArray;
+        api.deleteVertexArrays = find(loader, "glDeleteVertexArrays", int[].class);
+        api.enableVertexAttribArray = enableVertexAttribArray;
+        api.vertexAttribPointer = vertexAttribPointer;
+        api.drawArrays = drawArrays;
+        api.enable = find(loader, "glEnable", int.class);
+        api.disable = find(loader, "glDisable", int.class);
+        api.isEnabled = find(loader, "glIsEnabled", int.class);
+        api.blendFunc = find(loader, "glBlendFunc", int.class, int.class);
+        api.scissor = find(loader, "glScissor", int.class, int.class, int.class, int.class);
+        api.newFloatBuffer = findBufferUtils(loader);
+        api.getIntegerv = find(loader, "glGetIntegerv", int.class, int[].class);
+        return api;
     }
 
     /**
@@ -232,14 +222,20 @@ public final class ModernGlApi {
      *
      * @param name  参数名
      * @param count 输出数组长度（如视口为 4）
-     * @return 读到的值；{@code glGetIntegerv} 不可用时返回 {@code null}
+     * @return 读到的值；{@code glGetIntegerv} 不可用或调用失败时返回 {@code null}
      */
     public int[] getInteger(int name, int count) {
         if (getIntegerv == null) {
             return null;
         }
         int[] out = new int[count];
-        Reflect.call(getIntegerv, null, name, out);
+        try {
+            // 不走 Reflect.call：后者把失败一律变成 null，而 void 方法成功时也是 null，
+            // 结果就是「句柄存在但调用抛异常」被伪装成 {0,0,0,0}。
+            getIntegerv.invoke(null, name, out);
+        } catch (Throwable t) {
+            return null;
+        }
         return out;
     }
 
@@ -280,10 +276,12 @@ public final class ModernGlApi {
 
     // ------------------------------------------------------------- 原始包装方法
 
-    /** @return 新建的顶点缓冲对象 id */
+    /** @return 新建的顶点缓冲对象 id；失败时为 0 */
     public int genBuffer() {
         int[] ids = new int[1];
-        Reflect.call(genBuffers, null, 1, ids);
+        // glGenBuffers 的签名是 glGenBuffers(int[])，多传一个 count 会让调用抛
+        // IllegalArgumentException 并被 Reflect.call 吞掉，ids[0] 恒为 0。
+        Reflect.call(genBuffers, null, ids);
         return ids[0];
     }
 
@@ -293,24 +291,66 @@ public final class ModernGlApi {
     }
 
     /**
+     * 删除一个顶点缓冲对象；{@code glDeleteBuffers} 不可用时为空操作。
+     */
+    public void deleteBuffer(int id) {
+        if (deleteBuffers == null || id == 0) {
+            return;
+        }
+        Reflect.call(deleteBuffers, null, new int[]{id});
+    }
+
+    /**
+     * 删除一个顶点数组对象；{@code glDeleteVertexArrays} 不可用时为空操作。
+     */
+    public void deleteVertexArray(int id) {
+        if (deleteVertexArrays == null || id == 0) {
+            return;
+        }
+        Reflect.call(deleteVertexArrays, null, new int[]{id});
+    }
+
+    /**
      * 把 float 数组上传到当前绑定的数组缓冲。
+     *
+     * @param data 源数组
+     */
+    public void uploadArrayBuffer(float[] data) {
+        uploadArrayBuffer(data, data == null ? 0 : data.length);
+    }
+
+    /**
+     * 把 float 数组的前 {@code length} 个元素上传到当前绑定的数组缓冲。
+     *
+     * <p>复用内部的直接缓冲区，避免每次调用都新建一个 {@code FloatBuffer}（每帧几十上百次
+     * {@code memAlloc} 会造成原生内存压力与 GC 抖动）。
      *
      * <p>缺失 {@code createFloatBuffer} 或 {@code glBufferData} 时静默跳过，
      * 绘制层另有就绪判断兜底。
+     *
+     * @param data   源数组
+     * @param length 需要上传的元素个数
      */
-    public void uploadArrayBuffer(float[] data) {
-        if (bufferData == null || newFloatBuffer == null) {
+    public void uploadArrayBuffer(float[] data, int length) {
+        if (bufferData == null || newFloatBuffer == null || data == null) {
             return;
         }
-        Object buffer = Reflect.call(newFloatBuffer, null, data.length);
-        if (!(buffer instanceof FloatBuffer)) {
+        if (length <= 0 || length > data.length) {
             return;
         }
-        FloatBuffer floatBuffer = (FloatBuffer) buffer;
-        floatBuffer.clear();
-        floatBuffer.put(data);
-        floatBuffer.flip();
-        Reflect.call(bufferData, null, GL_ARRAY_BUFFER, floatBuffer, GL_DYNAMIC_DRAW);
+        FloatBuffer buffer = staging;
+        if (buffer == null || buffer.capacity() < length) {
+            Object created = Reflect.call(newFloatBuffer, null, length);
+            if (!(created instanceof FloatBuffer)) {
+                return;
+            }
+            buffer = (FloatBuffer) created;
+            staging = buffer;
+        }
+        buffer.clear();
+        buffer.put(data, 0, length);
+        buffer.flip();
+        Reflect.call(bufferData, null, GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
     }
 
     /**
@@ -340,10 +380,17 @@ public final class ModernGlApi {
         return status instanceof Number && ((Number) status).intValue() != 0;
     }
 
-    /** @return 编译/链接日志；无可用日志时返回空串 */
+    /** @return 着色器编译日志；无可用日志时返回空串 */
     public String shaderLog(int shader) {
         Object log = Reflect.call(getShaderInfoLog, null, shader);
         return log == null ? "" : log.toString();
+    }
+
+    /** 删除着色器对象。 */
+    public void deleteShader(int shader) {
+        if (shader != 0) {
+            Reflect.call(deleteShader, null, shader);
+        }
     }
 
     /** @return 新建的着色器程序 id；返回类型异常时为 0 */
@@ -357,9 +404,38 @@ public final class ModernGlApi {
         Reflect.call(attachShader, null, program, shader);
     }
 
-    /** 链接着色器程序。 */
+    /**
+     * 在链接前为程序绑定顶点属性位置。
+     *
+     * <p>不绑定的话，驱动可以把 {@code aPos} 分配到 0 以外的位置，而顶点布局却按索引 0 描述，
+     * 结果是属性未被描述、绘制出随机三角形。{@code glBindAttribLocation} 缺失时为空操作。
+     */
+    public void bindAttribLocation(int program, int index, String name) {
+        Reflect.call(bindAttribLocation, null, program, index, name);
+    }
+
+    /** 链接着色器程序；结果需用 {@link #linkOk} 检查。 */
     public void linkProgram(int program) {
         Reflect.call(linkProgram, null, program);
+    }
+
+    /** @return 链接是否成功；缺少 {@code glGetProgrami} 时返回 {@code false} */
+    public boolean linkOk(int program) {
+        Object status = Reflect.call(getProgrami, null, program, GL_LINK_STATUS);
+        return status instanceof Number && ((Number) status).intValue() != 0;
+    }
+
+    /** @return 程序链接日志；无可用日志时返回空串 */
+    public String programLog(int program) {
+        Object log = Reflect.call(getProgramInfoLog, null, program);
+        return log == null ? "" : log.toString();
+    }
+
+    /** 删除着色器程序。 */
+    public void deleteProgram(int program) {
+        if (program != 0) {
+            Reflect.call(deleteProgram, null, program);
+        }
     }
 
     /**
@@ -372,8 +448,16 @@ public final class ModernGlApi {
         return location instanceof Number ? ((Number) location).intValue() : -1;
     }
 
-    /** 设置 vec4 颜色 uniform，取值 0–1。 */
+    /**
+     * 设置 vec4 颜色 uniform，取值 0–1。
+     *
+     * <p>位置为 -1（uniform 不存在或程序链接失败）时跳过调用：对 -1 调用 {@code glUniform4f}
+     * 每帧都会产生一次 {@code GL_INVALID_VALUE}，而颜色/变换本就无法生效。
+     */
     public void uniform4f(int location, float r, float g, float b, float a) {
+        if (location < 0) {
+            return;
+        }
         Reflect.call(uniform4f, null, location, r, g, b, a);
     }
 
@@ -383,22 +467,25 @@ public final class ModernGlApi {
      * @param matrix 列主序的 16 个元素（GL 的默认布局）
      */
     public void uniformMatrix4fv(int location, float[] matrix) {
+        if (location < 0) {
+            return;
+        }
         Reflect.call(uniformMatrix4fv, null, location, false, matrix);
     }
 
-    /** 启用指定的着色器程序。 */
+    /** 启用指定的着色器程序；{@code program} 为 0 时解绑当前程序。 */
     public void useProgram(int program) {
         Reflect.call(useProgram, null, program);
     }
 
-    /** @return 新建的顶点数组对象 id */
+    /** @return 新建的顶点数组对象 id；失败时为 0 */
     public int genVertexArray() {
         int[] ids = new int[1];
         Reflect.call(genVertexArrays, null, ids);
         return ids[0];
     }
 
-    /** 绑定顶点数组对象。 */
+    /** 绑定顶点数组对象；{@code id} 为 0 时解绑。 */
     public void bindVertexArray(int id) {
         Reflect.call(bindVertexArray, null, id);
     }
@@ -420,19 +507,62 @@ public final class ModernGlApi {
         Reflect.call(vertexAttribPointer, null, index, size, GL_FLOAT, false, stride, (long) offset);
     }
 
+    // ------------------------------------------------------------- 状态开关
+
     /** 开启混合并使用常规的 src-alpha 混合因子。 */
     public void enableBlend() {
-        Reflect.call(enable, null, GL_BLEND);
+        enableCap(GL_BLEND);
         Reflect.call(blendFunc, null, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
-    /** 关闭混合。 */
-    public void disableBlend() {
-        Reflect.call(disable, null, GL_BLEND);
+    /** 关闭深度测试；UI 与游戏共用同一缓冲时避免被世界几何遮挡。 */
+    public void disableDepthTest() {
+        disableCap(GL_DEPTH_TEST);
     }
 
-    /** 关闭 2D 纹理——UI 绘制纯色时必须关掉，否则会采样到游戏纹理。 */
-    public void disableTexture() {
-        Reflect.call(disable, null, GL_TEXTURE_2D);
+    /** 关闭背面剔除；本后端的投影含 Y 翻转，所有三角形都是「背面」。 */
+    public void disableCullFace() {
+        disableCap(GL_CULL_FACE);
+    }
+
+    /** 开启裁剪测试。 */
+    public void enableScissorTest() {
+        enableCap(GL_SCISSOR_TEST);
+    }
+
+    /** 关闭裁剪测试。 */
+    public void disableScissorTest() {
+        disableCap(GL_SCISSOR_TEST);
+    }
+
+    /** 开启某项 GL 能力；{@code glEnable} 不可用时为空操作。 */
+    public void enableCap(int cap) {
+        Reflect.call(enable, null, cap);
+    }
+
+    /** 关闭某项 GL 能力；{@code glDisable} 不可用时为空操作。 */
+    public void disableCap(int cap) {
+        Reflect.call(disable, null, cap);
+    }
+
+    /** @return 某项 GL 能力当前是否开启；无法查询时返回 {@code false} */
+    public boolean capabilityEnabled(int cap) {
+        Object status = Reflect.call(isEnabled, null, cap);
+        return Boolean.TRUE.equals(status);
+    }
+
+    /** @return 是否具备查询 GL 开关状态的能力（保存/还原状态的前提） */
+    public boolean hasIsEnabled() {
+        return isEnabled != null;
+    }
+
+    /** 设置裁剪矩形（{@code glScissor}），参数为窗口像素、原点在左下角。 */
+    public void scissor(int x, int y, int width, int height) {
+        Reflect.call(scissor, null, x, y, width, height);
+    }
+
+    /** @return 是否具备 {@code glScissor} 与开关能力（本后端实现裁剪的前提） */
+    public boolean hasScissor() {
+        return scissor != null && enable != null && disable != null;
     }
 }

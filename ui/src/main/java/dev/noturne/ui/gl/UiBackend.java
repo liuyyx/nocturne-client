@@ -31,4 +31,16 @@ public interface UiBackend extends Renderer {
 
     /** 当前绘制区域的高度（像素）；未知时返回 0。 */
     int height();
+
+    /**
+     * 本后端当前是否真能绘制。
+     *
+     * <p>叠加层用它把「后端初始化失败」与「输入没反应」区分开，并在失败时给出提示：
+     * 只打印「GUI 已打开」会让两种故障看起来完全一样，无法定位。
+     *
+     * @return 可绘制返回 {@code true}
+     */
+    default boolean ready() {
+        return true;
+    }
 }

@@ -37,7 +37,9 @@ public enum Platform {
     static Platform detect(String osName, String vmName) {
         String os = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
         String vm = vmName == null ? "" : vmName.toLowerCase(Locale.ROOT);
-        if (vm.contains("dalvik") || vm.contains("art") || os.contains("android")) {
+        // 只做整词匹配，不能对 java.vm.name 用 vm.contains("art")：任意含 "art" 子串的 VM 名称
+        // 都会被误判成 Android（L-59）。ART 的 VM 名是 "art"，偶尔带版本后缀（"art 2.1.0"）。
+        if (vm.contains("dalvik") || vm.equals("art") || vm.startsWith("art ") || os.contains("android")) {
             return ANDROID;
         }
         // macOS first: "darwin" contains "win", so a naive windows check would swallow it.
@@ -92,7 +94,9 @@ public enum Platform {
             case ANDROID:
                 return "lib" + base + ".so";
             default:
-                return base;
+                // 无法判定的平台不能返回无扩展名的裸名：那会让“找不到库”的错误指向一个根本不像库
+                // 文件的名字。带上 .unknown 后缀，使加载失败的报错直接指向平台判定（L-60）。
+                return base + ".unknown";
         }
     }
 

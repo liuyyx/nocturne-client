@@ -3,146 +3,181 @@ package dev.noturne.injector;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * 把设置里录制的快捷键名（{@code RSHIFT}、{@code R}、{@code F5}）换算成游戏输入后端使用的键码。
+ * 快捷键名与 AWT 虚拟键码（{@code KeyEvent.VK_*}）的互查表。
  *
- * <p><b>为什么必须分两套表</b>：Minecraft ≤1.12 走 LWJGL2 的 {@code Keyboard}，1.13+ 走 GLFW 的
- * {@code glfwGetKey}，同一个键在两代里的编号毫无关系——右 Shift 是 54 与 344，字母 R 是 19 与 82。
- * agent 只能按数字轮询，无法自行换算，所以由注入器按目标进程的版本挑好再传过去。
+ * <p><b>为什么只发 VK 码</b>：按跨模块契约 K1，注入器写给 agent 的 {@code guiKey} 统一是 AWT VK 码，
+ * 由运行时 {@code KeyMap} 再翻译成目标版本的后端键码（LWJGL2 或 GLFW）。因此这里不再需要按版本挑
+ * 两套后端表——版本识别失败（命令行读不到、标题被截断）也不会再让 1.8.9 拿到 GLFW 键码。
  *
- * <p>版本无法判定时（命令行读不到、是启动器实例名）按 GLFW 处理：现代版本占绝大多数，
- * 且猜错的代价只是快捷键不生效，不会影响注入本身。
+ * <p>表同时承担两个方向的任务：{@link #codeFor(String)}（名字 → VK，供 attach）与
+ * {@link #nameForVk(int)}（VK → 名字，供 {@code SettingsDialog} 录制时渲染）。两者必须互相可解析，
+ * 否则录到的符号键/小键盘键会在 {@link #codeFor(String)} 兜底成右 Shift。
  */
 final class KeyCodes {
 
     /** agent 侧解析 GUI 开关按键所用的参数名前缀，两侧必须一致。 */
     static final String OPTION_GUI_KEY = "guiKey=";
 
-    /** 无法识别键名时的兜底：GLFW 的右 Shift。 */
-    static final int GLFW_FALLBACK = 344;
-    /** 无法识别键名时的兜底：LWJGL2 的右 Shift。 */
-    static final int LWJGL2_FALLBACK = 54;
+    /**
+     * 无法识别键名时的兜底：右 Shift。
+     *
+     * <p>取值 54 与 {@code KeyMap} 的约定一致（AWT 无法区分左右 Shift，右 Shift 用这个哨兵值表达）；
+     * 绝不能返回 0，0 在后端里代表「没有这个键」。
+     */
+    static final int FALLBACK = 54;
 
-    /** 从版本标签里取主次版本号，用于判断输入栈年代。 */
-    private static final Pattern VERSION = Pattern.compile("(\\d+)\\.(\\d+)");
-
-    /** GLFW（1.13+）键码表，键为去空格大写的键名。 */
-    private static final Map<String, Integer> GLFW = new HashMap<String, Integer>();
-    /** LWJGL2（≤1.12）键码表，键名约定与 {@link #GLFW} 相同。 */
-    private static final Map<String, Integer> LWJGL2 = new HashMap<String, Integer>();
+    /** 名字 → AWT VK 码。 */
+    private static final Map<String, Integer> NAME_TO_VK = new HashMap<String, Integer>();
+    /** AWT VK 码 → 规范名字。 */
+    private static final Map<Integer, String> VK_TO_NAME = new HashMap<Integer, String>();
 
     static {
-        // 字母：GLFW 直接用 ASCII 码，LWJGL2 是一组历史键码，必须逐个列出。
+        // 字母：AWT 与 ASCII 一致。
         String letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        int[] lwjglLetters = {
-                30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38, 50,
-                49, 24, 25, 16, 19, 31, 20, 22, 47, 17, 45, 21, 44};
         for (int i = 0; i < letters.length(); i++) {
-            put(String.valueOf(letters.charAt(i)), 65 + i, lwjglLetters[i]);
+            put(String.valueOf(letters.charAt(i)), 65 + i);
         }
-
-        // 数字键：LWJGL2 的 0 排在 9 之后，不能按下标直接推。
-        int[] lwjglDigits = {11, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        // 数字主键区。
         for (int i = 0; i < 10; i++) {
-            put(String.valueOf(i), 48 + i, lwjglDigits[i]);
+            put(String.valueOf(i), 48 + i);
+        }
+        // F1–F24：AWT 从 112 起连续。
+        for (int i = 0; i < 24; i++) {
+            put("F" + (i + 1), 112 + i);
         }
 
-        // F1–F12：GLFW 连续，LWJGL2 在 F10 与 F11 之间断开。
-        int[] lwjglFunction = {59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88};
-        for (int i = 0; i < lwjglFunction.length; i++) {
-            put("F" + (i + 1), 290 + i, lwjglFunction[i]);
-        }
-
-        // 修饰键：左右必须分开，游戏把它们当作不同的绑定。
-        put("LSHIFT", 340, 42);
-        put("RSHIFT", 344, 54);
-        put("LCTRL", 341, 29);
-        put("RCTRL", 345, 157);
-        put("LALT", 342, 56);
-        put("RALT", 346, 184);
-        put("LWIN", 343, 219);
-        put("RWIN", 347, 220);
+        // 修饰键。AWT 无法区分左右 Shift/Ctrl/Alt/Windows，右半边沿用与 RSHIFT=54 相同的约定：
+        // 用后端右变体的哨兵值，保证录制出的左右键能各自解析回一个唯一的数字。
+        put("LSHIFT", 16);
+        put("RSHIFT", FALLBACK);
+        put("LCTRL", 17);
+        put("RCTRL", 157);
+        put("LALT", 18);
+        put("RALT", 184);
+        put("LWIN", 524);
+        put("RWIN", 220);
+        // 已知冲突：AWT 的 VK_6 恰好也是 54，与 RSHIFT 撞号，因此「数字 6」作为绑定会被当成右
+        // Shift。这是 K1 锚定 RSHIFT=54 带来的限制，需改动 K1 才能消除；此处保持 RSHIFT 为 54。
 
         // 编辑与导航键。
-        put("SPACE", 32, 57);
-        put("ENTER", 257, 28);
-        put("TAB", 258, 15);
-        put("ESCAPE", 256, 1);
-        put("BACKSPACE", 259, 14);
-        put("DELETE", 261, 211);
-        put("INSERT", 260, 210);
-        put("UP", 265, 200);
-        put("DOWN", 264, 208);
-        put("LEFT", 263, 203);
-        put("RIGHT", 262, 205);
-        put("PAGEUP", 266, 201);
-        put("PAGEDOWN", 267, 209);
-        put("HOME", 268, 199);
-        put("END", 269, 207);
+        put("SPACE", 32);
+        put("ENTER", 10);
+        put("TAB", 9);
+        put("ESCAPE", 27);
+        put("BACKSPACE", 8);
+        put("DELETE", 127);
+        put("INSERT", 155);
+        put("UP", 38);
+        put("DOWN", 40);
+        put("LEFT", 37);
+        put("RIGHT", 39);
+        put("PAGEUP", 33);
+        put("PAGEDOWN", 34);
+        put("HOME", 36);
+        put("END", 35);
 
         // 锁定与系统键。
-        put("CAPSLOCK", 280, 58);
-        put("NUMLOCK", 282, 69);
-        put("SCROLLLOCK", 281, 70);
-        put("PRINTSCREEN", 283, 183);
-        put("PAUSE", 284, 197);
+        put("CAPSLOCK", 20);
+        put("NUMLOCK", 144);
+        put("SCROLLLOCK", 145);
+        put("PRINTSCREEN", 154);
+        put("PAUSE", 19);
 
-        // 符号键：名字取自 {@code KeyEvent.getKeyText}，已去空格并大写。
-        put("MINUS", 45, 12);
-        put("EQUALS", 61, 13);
-        put("OPENBRACKET", 91, 26);
-        put("CLOSEBRACKET", 93, 27);
-        put("BACKSLASH", 92, 43);
-        put("SEMICOLON", 59, 39);
-        put("QUOTE", 39, 40);
-        put("BACKQUOTE", 96, 41);
-        put("COMMA", 44, 51);
-        put("PERIOD", 46, 52);
-        put("SLASH", 47, 53);
+        // 符号键：名字即录制时 {@code baseKeyName} 生成的规范名（去空格大写）。
+        put("MINUS", 45);
+        put("EQUALS", 61);
+        put("OPENBRACKET", 91);
+        put("CLOSEBRACKET", 93);
+        put("BACKSLASH", 92);
+        put("SEMICOLON", 59);
+        put("QUOTE", 222);
+        put("BACKQUOTE", 192);
+        put("COMMA", 44);
+        put("PERIOD", 46);
+        put("SLASH", 47);
+
+        // 小键盘。注意 AWT 的 VK_NUMPAD0..9 是 96..105，与主键区数字完全不同。
+        for (int i = 0; i < 10; i++) {
+            put("NUMPAD" + i, 96 + i);
+        }
+        put("NUMPADMULTIPLY", 106);
+        put("NUMPADADD", 107);
+        put("NUMPADSEPARATOR", 108);
+        put("NUMPADSUBTRACT", 109);
+        put("NUMPADDECIMAL", 110);
+        put("NUMPADDIVIDE", 111);
+        // 小键盘回车与主回车共用 VK_ENTER(10)；录制侧按 location 区分名字，这里只登记正向别名，
+        // 反向映射保留主键区的 ENTER。
+        alias("NUMPADENTER", 10);
     }
 
     /** 工具类，禁止实例化。 */
     private KeyCodes() {
     }
 
-    /** 把同一个键名同时登记进两套表，避免两边键名写歪。 */
-    private static void put(String name, int glfwCode, int lwjgl2Code) {
-        GLFW.put(name, glfwCode);
-        LWJGL2.put(name, lwjgl2Code);
+    /** 双向登记一个键名：既进「名字 → VK」，也进「VK → 名字」。 */
+    private static void put(String name, int vk) {
+        NAME_TO_VK.put(name, vk);
+        VK_TO_NAME.put(vk, name);
+    }
+
+    /** 只登记「名字 → VK」的正向别名，不动反向映射（用于与已有 VK 冲突的名字）。 */
+    private static void alias(String name, int vk) {
+        NAME_TO_VK.put(name, vk);
     }
 
     /**
-     * 把录制到的绑定换算成目标版本可用的键码。
+     * 把录制到的绑定换算成 AWT VK 码。
      *
-     * @param bind    录制得到的绑定名，可含修饰键前缀（如 {@code CTRL+F5}）；允许为 {@code null}
-     * @param version 目标进程的版本标签（如 {@code 1.8.9}）；无法识别时按 GLFW 处理
-     * @return 对应输入后端的键码；键名无法识别时返回该后端的右 Shift
+     * @param bind 录制得到的绑定名，可含修饰键前缀（如 {@code CTRL+F5}）；允许为 {@code null}
+     * @return 对应 AWT VK 码；键名无法识别时返回 {@link #FALLBACK} 并打印日志
      */
-    static int codeFor(String bind, String version) {
-        boolean legacy = usesLwjgl2(version);
-        Integer code = (legacy ? LWJGL2 : GLFW).get(primaryKey(bind));
-        if (code != null) {
-            return code;
+    static int codeFor(String bind) {
+        String name = primaryKey(bind);
+        Integer vk = NAME_TO_VK.get(name);
+        if (vk != null) {
+            return vk;
         }
-        return legacy ? LWJGL2_FALLBACK : GLFW_FALLBACK;
+        // 录制侧对未知键会生成 "KEY<code>"，据此还原 VK，保证任意键都能往返。
+        if (name.startsWith("KEY")) {
+            try {
+                return Integer.parseInt(name.substring(3));
+            } catch (NumberFormatException malformed) {
+                // 落到下面的兜底日志。
+            }
+        }
+        System.err.println("[noturne] 无法识别的快捷键 '" + bind + "'，回退到右 Shift（VK " + FALLBACK + "）");
+        return FALLBACK;
     }
 
     /**
-     * 组装 attach 时传给 agent 的选项串。
+     * 返回某个 AWT VK 码对应的规范键名，供录制时渲染。
      *
-     * <p>格式必须与 agent 侧的解析保持一致：{@code guiKey=<十进制键码>}，多项时以逗号分隔
-     * （JDK attach 的 options 约定）。把它单独抽出来是为了让这个跨模块契约可被测试锁住——
-     * 格式一旦漂移，快捷键会静默失效且难以察觉。
-     *
-     * @param bind    录制得到的绑定名；允许为 {@code null}
-     * @param version 目标进程版本标签；无法识别时按 GLFW 处理
-     * @return 形如 {@code guiKey=344} 的选项串
+     * @param vk AWT 虚拟键码
+     * @return 规范名（如 {@code RSHIFT}、{@code MINUS}、{@code NUMPAD0}）；表外键返回 {@code KEY<code>}
      */
-    static String attachOptions(String bind, String version) {
-        return OPTION_GUI_KEY + codeFor(bind, version);
+    static String nameForVk(int vk) {
+        String name = VK_TO_NAME.get(vk);
+        return name != null ? name : "KEY" + vk;
+    }
+
+    /**
+     * 组装传给 agent 的选项串。
+     *
+     * <p>格式必须与 agent 侧的解析保持一致（见 {@link dev.noturne.core.attach.AgentOptions}）：
+     * {@code guiKey=<AWT VK>} 加上（版本可判定时的）{@code mcVersion=<版本族>}，多项以逗号分隔。
+     * 版本由注入器判定并传进去，运行时因此不需要任何版本探测。
+     *
+     * @param bind       录制得到的绑定名；允许为 {@code null}
+     * @param versionLabel 目标进程的版本标签（如 {@code 1.8.9优化}）；允许为 {@code null}
+     * @return 形如 {@code guiKey=54,mcVersion=1.8.9} 的选项串
+     */
+    static String attachOptions(String bind, String versionLabel) {
+        return dev.noturne.core.attach.AgentOptions.compose(
+                codeFor(bind),
+                dev.noturne.core.attach.AgentOptions.versionFamily(versionLabel));
     }
 
     /**
@@ -161,29 +196,5 @@ final class KeyCodes {
         String upper = bind.trim().toUpperCase(Locale.ROOT);
         int plus = upper.lastIndexOf('+');
         return (plus >= 0 ? upper.substring(plus + 1) : upper).trim();
-    }
-
-    /**
-     * 判断目标版本是否使用 LWJGL2 输入栈。
-     *
-     * @param version 版本标签；允许为 {@code null}
-     * @return 主版本为 1 且次版本 ≤12 时返回 true；无法判定时返回 false（按 GLFW 处理）
-     */
-    static boolean usesLwjgl2(String version) {
-        if (version == null) {
-            return false;
-        }
-        Matcher matcher = VERSION.matcher(version);
-        if (!matcher.find()) {
-            return false;
-        }
-        try {
-            int major = Integer.parseInt(matcher.group(1));
-            int minor = Integer.parseInt(matcher.group(2));
-            // 1.13 起 Minecraft 换用 LWJGL3/GLFW；26.x 之类的新式版本号同样属于 GLFW 一档。
-            return major == 1 && minor <= 12;
-        } catch (NumberFormatException malformed) {
-            return false;
-        }
     }
 }

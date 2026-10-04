@@ -91,6 +91,28 @@ public abstract class Component {
         return hovered;
     }
 
+    /**
+     * 推进基于时间的状态（动画、过渡）；每帧调用一次。
+     *
+     * <p>默认无操作。需要随帧推进的控件（动画类、容器）覆写本方法；容器覆写时应转发给子控件，
+     * 使整棵子树共享同一个由外部注入的时钟，而不是各自读取 {@code System.currentTimeMillis}。
+     *
+     * @param nowMs 当前时间（毫秒），与 {@link dev.noturne.ui.anim.Animation} 使用同一时间基准
+     */
+    public void update(long nowMs) {
+    }
+
+    /**
+     * 取消本控件上尚未结束的交互手势（按下 / 拖拽），并把悬停状态复位。
+     *
+     * <p>事件丢失（GUI 关闭、容器被隐藏、叠加层提前返回）时，控件的 {@code dragging}/{@code pressed}
+     * 等中间态不会被释放事件清除，会在下次打开时造成「未点击却改写数值、整列跳到错误坐标」。
+     * 容器覆写时应递归到全部子控件，且<b>不</b>检查可见性——隐藏的子树同样需要复位。
+     */
+    public void cancelInteractions() {
+        hovered = false;
+    }
+
     /** 将本控件绘制到屏幕；实现方必须先检查 {@link #visible}，不可见时直接返回。 */
     public abstract void render(Renderer renderer);
 
@@ -117,7 +139,10 @@ public abstract class Component {
         return false;
     }
 
-    /** 键盘按下；{@code keyCode} 为 GLFW 键码，{@code modifiers} 为修饰键位掩码。默认不消费。 */
+    /**
+     * 键盘按下；{@code keyCode} 为 <b>AWT VK 码</b>（跨 LWJGL2 / GLFW 的统一语义，由输入后端负责翻译），
+     * {@code modifiers} 为修饰键位掩码。默认不消费。
+     */
     public boolean keyPressed(int keyCode, int modifiers) {
         return false;
     }

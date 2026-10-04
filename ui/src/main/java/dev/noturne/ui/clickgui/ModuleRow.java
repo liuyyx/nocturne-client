@@ -32,6 +32,7 @@ public final class ModuleRow extends Component {
     }
 
     /** 推进高亮动画；每帧调用一次。 */
+    @Override
     public void update(long nowMs) {
         highlight.animateTo(hovered ? 1f : 0f, nowMs);
         highlight.update(nowMs);

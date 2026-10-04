@@ -2,20 +2,35 @@ package dev.noturne.client.game;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@link JniTypes} 的单元测试：验证 JVM 描述符（descriptor）的解析——参数列表与返回类型、
- * 基本类型与对象类型、数组维度、无参方法，以及非法/未知类描述符返回 {@code null} 的容错契约。
+ * 基本类型与对象类型、数组维度、无参方法，非法输入返回 {@code null} 的容错契约，
+ * 以及描述符对同名重载的真实消歧能力。
  */
 class JniTypesTest {
 
     /** 解析所用的类加载器；描述符中的对象类型需由它加载，加载不到即视为未知类型。 */
     private static final ClassLoader LOADER = JniTypesTest.class.getClassLoader();
+
+    /** 模拟 1.8.9 中 FontRenderer 的两个同名混淆重载（{@code a}） */
+    static final class FontLike {
+        @SuppressWarnings("unused")
+        int a(String value, int x, int y, int color) {
+            return 4;
+        }
+
+        @SuppressWarnings("unused")
+        int a(String value) {
+            return 1;
+        }
+    }
 
     /** 验证混合描述符能按声明顺序解析出对象与基本类型（String + 三个 int）。 */
     @Test
@@ -48,6 +63,7 @@ class JniTypesTest {
     void resolvesReturnTypes() {
         assertEquals(int.class, JniTypes.returnType("(Ljava/lang/String;III)I", LOADER));
         assertEquals(void.class, JniTypes.returnType("()V", LOADER));
+        assertEquals(String.class, JniTypes.returnType("(I)Ljava/lang/String;", LOADER));
     }
 
     /**
@@ -63,19 +79,41 @@ class JniTypesTest {
     }
 
     /**
-     * 验证描述符是区分重载的唯一依据：1.8.9 中 {@code drawString} 与 {@code getStringWidth}
-     * 都混淆为 {@code a}，只有描述符能分别定位到 4 参与 1 参的两个方法。
+     * L-09 / M-74 / M-80 回归：非法描述符必须整体拒绝。
+     *
+     * <p>参数列表里出现 {@code V}、数组元素为 {@code void}、缺少返回类型或右括号，
+     * 都必须返回 {@code null}——否则会把「合法但叫不动」的描述符交给反射。
+     */
+    @Test
+    void rejectsVoidParametersAndTruncatedDescriptors() {
+        assertNull(JniTypes.parameterTypes("(V)V", LOADER), "void parameter is illegal");
+        assertNull(JniTypes.parameterTypes("([V)V", LOADER), "void arrays are illegal");
+        assertNull(JniTypes.parameterTypes("(Ljava/lang/String;III)", LOADER), "missing return type");
+        assertNull(JniTypes.parameterTypes("(Ljava/lang/String;III", LOADER), "missing closing paren");
+        assertNull(JniTypes.parameterTypes("(Ljava/lang/String;)", LOADER), "empty return type");
+        assertNull(JniTypes.returnType("()", LOADER), "missing return type");
+        assertNull(JniTypes.returnType("(", LOADER), "unterminated descriptor");
+    }
+
+    /**
+     * L-09 回归：描述符必须是区分重载的可靠依据，且解析结果能真正定位到不同方法。
+     *
+     * <p>旧用例用「空列表长度 == 0」的恒真断言充数，从未把描述符用到真实方法查找上。
      */
     @Test
     void disambiguatesOverloadsSharingAName() throws Exception {
-        // 1.8.9 的 FontRenderer 把 drawString 与 getStringWidth 都混淆成 "a"，只能靠描述符区分。
         Class<?>[] drawString = JniTypes.parameterTypes("(Ljava/lang/String;III)I", LOADER);
         Class<?>[] width = JniTypes.parameterTypes("(Ljava/lang/String;)I", LOADER);
         assertEquals(4, drawString.length);
         assertEquals(1, width.length);
 
-        // 无意义的填充断言：仅用于让未使用的 import 保持被引用，不涉及被测行为。
-        List<String> unused = java.util.Collections.emptyList();
-        assertEquals(0, unused.size());
+        // 描述符解析出的形参表必须能在真实类上定位到两个不同的重载
+        Method draw = FontLike.class.getDeclaredMethod("a", drawString);
+        Method measure = FontLike.class.getDeclaredMethod("a", width);
+        FontLike target = new FontLike();
+        assertEquals(4, draw.invoke(target, "x", 1, 2, 3));
+        assertEquals(1, measure.invoke(target, "x"));
+
+        assertTrue(draw.getParameterCount() > measure.getParameterCount());
     }
 }

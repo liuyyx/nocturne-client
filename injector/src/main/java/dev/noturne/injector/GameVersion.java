@@ -13,9 +13,9 @@ public final class GameVersion {
     /** 无法识别时使用的占位符（em dash）。 */
     private static final String UNKNOWN = "\u2014";
 
-    /** 匹配 {@code --version 1.8.9} 形式的命令行参数。 */
+    /** 匹配 {@code --version 1.8.9}、{@code --version=1.8.9}、{@code --version="1.8.9"} 等形式。 */
     private static final Pattern VERSION_ARGUMENT =
-            Pattern.compile("--version\\s+(\\S+)");
+            Pattern.compile("--version\\s*[=:]?\\s*(\"[^\"]*\"|'[^']*'|\\S+)");
 
     /** 匹配 {@code .../versions/fpsmaster/...} 形式的版本目录名。 */
     private static final Pattern VERSION_DIRECTORY =
@@ -50,13 +50,24 @@ public final class GameVersion {
     }
 
     /**
-     * 规整解析出的标签：去空白，空串退回占位符，过长则截断。
+     * 规整解析出的标签：去空白与成对引号，空串退回占位符，过长则截断。
+     *
+     * <p>截断只对超长的实例名有意义；版本号本身（如 {@code 1.8.9}）远短于上限，不会被裁掉，
+     * 因而不会再出现「版本被截成无法识别」的情形。
      *
      * @param value 匹配到的原始子串
      */
     private static String shorten(String value) {
         String trimmed = value.trim();
         // 目录名可能带引号或尾部分隔符，先 trim 掉再判空。
+        if (trimmed.length() >= 2) {
+            char first = trimmed.charAt(0);
+            char last = trimmed.charAt(trimmed.length() - 1);
+            // --version="1.8.9" / '1.8.9' 这类参数要真正去掉首尾引号（旧实现只 trim，去不掉）。
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+                trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+            }
+        }
         if (trimmed.isEmpty()) {
             return UNKNOWN;
         }

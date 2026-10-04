@@ -21,11 +21,21 @@ public final class HudManager {
     private boolean visible = true;
 
     /**
-     * 注册一个 HUD 元素，追加到列表末尾。
+     * 注册一个 HUD 元素；同 id 已注册时替换之（与 HUD 汇「同 id 替换」的契约一致），
+     * 否则追加到列表末尾。
      *
-     * @param element 待注册元素；重复添加同一实例会被保存多份
+     * @param element 待注册元素；为 null 时无副作用
      */
     public void add(HudElement element) {
+        if (element == null) {
+            return;
+        }
+        for (int i = 0; i < elements.size(); i++) {
+            if (elements.get(i).id().equals(element.id())) {
+                elements.set(i, element);
+                return;
+            }
+        }
         elements.add(element);
     }
 
@@ -41,10 +51,13 @@ public final class HudManager {
     /**
      * 返回当前已注册元素的只读视图。
      *
-     * @return 不可修改的列表视图；调用方不能借此增删元素，顺序即注册顺序
+     * <p>返回的是快照副本：渲染期间 supplier 回调增删元素（或调用方持有该视图）不会看到
+     * 底层列表的并发改动，也不会因此抛 {@code ConcurrentModificationException}。
+     *
+     * @return 不可修改的列表副本，顺序即注册顺序
      */
     public List<HudElement> elements() {
-        return Collections.unmodifiableList(elements);
+        return Collections.unmodifiableList(new ArrayList<HudElement>(elements));
     }
 
     /**
@@ -87,7 +100,10 @@ public final class HudManager {
         if (!visible) {
             return;
         }
-        for (HudElement element : elements) {
+        // 迭代快照：元素的 supplier 回调可能在渲染途中 add/remove，
+        // 直接遍历底层列表会抛 ConcurrentModificationException 打断整帧 HUD
+        HudElement[] snapshot = elements.toArray(new HudElement[0]);
+        for (HudElement element : snapshot) {
             if (element.isEnabled()) {
                 element.render(renderer);
             }

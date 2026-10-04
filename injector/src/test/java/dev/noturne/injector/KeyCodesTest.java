@@ -3,47 +3,92 @@ package dev.noturne.injector;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 验证快捷键名到键码的换算：两代输入栈各用一套毫无关联的编号，组合键取主键，未知键名退回右 Shift。
+ * 验证快捷键名与 AWT VK 码的互查：名字能换算成 VK，VK 也能还原成同一个名字。
  *
- * <p>这些数字直接决定注入后快捷键是否生效，而它们既无法从代码结构推导、也无法靠肉眼看出来，
- * 因此逐个写死断言。
+ * <p>按契约 K1，注入器只发 AWT VK 码（运行时由 KeyMap 翻译成后端码），所以这里不再有版本维度。
+ * 这些数字直接决定注入后快捷键是否生效，且无法从代码结构推导，因此逐个写死断言。
  */
 class KeyCodesTest {
 
-    /** 同一个键名必须按目标版本换算出对应输入栈的编号，不能混用两套表。 */
+    /** 字母/数字/AWT 与 ASCII 一致。 */
     @Test
-    void resolvesRightShiftPerInputStack() {
-        assertEquals(54, KeyCodes.codeFor("RSHIFT", "1.8.9"));
-        assertEquals(344, KeyCodes.codeFor("RSHIFT", "1.21.4"));
+    void resolvesLettersAndDigits() {
+        assertEquals(82, KeyCodes.codeFor("R"));
+        assertEquals(65, KeyCodes.codeFor("A"));
+        assertEquals(48, KeyCodes.codeFor("0"));
+        assertEquals(57, KeyCodes.codeFor("9"));
     }
 
-    /** 字母键同样分两套：LWJGL2 的 R 是 19，GLFW 的 R 是 ASCII 的 82。 */
+    /** F 键用 AWT 的连续编号（F1=112）。 */
     @Test
-    void resolvesLetterPerInputStack() {
-        assertEquals(19, KeyCodes.codeFor("R", "1.12.2"));
-        assertEquals(82, KeyCodes.codeFor("R", "26.1.2"));
+    void resolvesFunctionKeys() {
+        assertEquals(112, KeyCodes.codeFor("F1"));
+        assertEquals(116, KeyCodes.codeFor("F5"));
+        assertEquals(123, KeyCodes.codeFor("F12"));
     }
 
-    /** 版本判定：1.13 起换输入栈；26.x 这类新式版本号按现代处理。 */
+    /** 修饰键：左半边用 AWT 原生值，右半边用与 RSHIFT=54 相同的后端右变体哨兵值。 */
     @Test
-    void detectsInputStackFromVersion() {
-        assertTrue(KeyCodes.usesLwjgl2("1.8.9"));
-        assertTrue(KeyCodes.usesLwjgl2("1.12.2"));
-        assertFalse(KeyCodes.usesLwjgl2("1.13"));
-        assertFalse(KeyCodes.usesLwjgl2("1.21.8"));
-        assertFalse(KeyCodes.usesLwjgl2("26.1.2"));
+    void resolvesModifiers() {
+        assertEquals(16, KeyCodes.codeFor("LSHIFT"));
+        assertEquals(54, KeyCodes.codeFor("RSHIFT"));
+        assertEquals(17, KeyCodes.codeFor("LCTRL"));
+        assertEquals(157, KeyCodes.codeFor("RCTRL"));
+        assertEquals(18, KeyCodes.codeFor("LALT"));
+        assertEquals(184, KeyCodes.codeFor("RALT"));
     }
 
-    /** 版本读不到时（命令行拿不到或是启动器实例名）按 GLFW 处理，而不是让快捷键失效。 */
+    /** 符号键：H-32 的回归——录制名与这里的键名必须一致，否则会静默退回右 Shift。 */
     @Test
-    void fallsBackToModernWhenVersionUnknown() {
-        assertFalse(KeyCodes.usesLwjgl2("\u2014"));
-        assertFalse(KeyCodes.usesLwjgl2(null));
-        assertEquals(344, KeyCodes.codeFor("RSHIFT", null));
+    void resolvesSymbolKeys() {
+        assertEquals(45, KeyCodes.codeFor("MINUS"));
+        assertEquals(61, KeyCodes.codeFor("EQUALS"));
+        assertEquals(91, KeyCodes.codeFor("OPENBRACKET"));
+        assertEquals(93, KeyCodes.codeFor("CLOSEBRACKET"));
+        assertEquals(92, KeyCodes.codeFor("BACKSLASH"));
+        assertEquals(59, KeyCodes.codeFor("SEMICOLON"));
+        assertEquals(222, KeyCodes.codeFor("QUOTE"));
+        assertEquals(192, KeyCodes.codeFor("BACKQUOTE"));
+        assertEquals(44, KeyCodes.codeFor("COMMA"));
+        assertEquals(46, KeyCodes.codeFor("PERIOD"));
+        assertEquals(47, KeyCodes.codeFor("SLASH"));
+    }
+
+    /** 小键盘：AWT 的 NUMPAD0..9 是 96..105，与主键区数字完全不同。 */
+    @Test
+    void resolvesNumpadKeys() {
+        assertEquals(96, KeyCodes.codeFor("NUMPAD0"));
+        assertEquals(105, KeyCodes.codeFor("NUMPAD9"));
+        assertEquals(106, KeyCodes.codeFor("NUMPADMULTIPLY"));
+        assertEquals(107, KeyCodes.codeFor("NUMPADADD"));
+        assertEquals(109, KeyCodes.codeFor("NUMPADSUBTRACT"));
+        assertEquals(110, KeyCodes.codeFor("NUMPADDECIMAL"));
+        assertEquals(111, KeyCodes.codeFor("NUMPADDIVIDE"));
+        // 小键盘回车与主回车共用 VK_ENTER。
+        assertEquals(10, KeyCodes.codeFor("NUMPADENTER"));
+    }
+
+    /** 反向查表：VK → 规范名，且正向能再解析回同一个 VK（往返一致）。 */
+    @Test
+    void vkNamesRoundTrip() {
+        String[] names = {
+                "MINUS", "EQUALS", "OPENBRACKET", "CLOSEBRACKET", "BACKSLASH", "SEMICOLON",
+                "QUOTE", "BACKQUOTE", "COMMA", "PERIOD", "SLASH",
+                "NUMPAD0", "NUMPAD5", "NUMPAD9", "NUMPADMULTIPLY", "NUMPADDIVIDE",
+                "F1", "F12", "R", "0", "RSHIFT", "PAGEUP"};
+        for (String name : names) {
+            int vk = KeyCodes.codeFor(name);
+            assertEquals(name, KeyCodes.nameForVk(vk), "往返失败：" + name);
+        }
+    }
+
+    /** 表外 VK 用 {@code KEY<code>} 表达，且能被 {@link KeyCodes#codeFor(String)} 原样解析回来。 */
+    @Test
+    void unknownVkUsesKeyPrefix() {
+        assertEquals("KEY9999", KeyCodes.nameForVk(9999));
+        assertEquals(9999, KeyCodes.codeFor("KEY9999"));
     }
 
     /** 组合键只绑定主键：agent 每帧只轮询一个键，无法表达「按住修饰键的同时按某键」。 */
@@ -52,49 +97,31 @@ class KeyCodesTest {
         assertEquals("F5", KeyCodes.primaryKey("CTRL+F5"));
         assertEquals("A", KeyCodes.primaryKey("SHIFT+A"));
         assertEquals("RSHIFT", KeyCodes.primaryKey("RSHIFT"));
-        assertEquals(294, KeyCodes.codeFor("CTRL+F5", "1.21.4"));
-        assertEquals(63, KeyCodes.codeFor("CTRL+F5", "1.8.9"));
+        assertEquals(116, KeyCodes.codeFor("CTRL+F5"));
     }
 
-    /** 无法识别的键名退回该后端的右 Shift；绝不能返回 0，0 在后端里代表「没有这个键」。 */
+    /** 无法识别的键名退回右 Shift(54)；绝不能返回 0，0 在后端里代表「没有这个键」。 */
     @Test
     void unknownNamesFallBackToRightShift() {
-        assertEquals(344, KeyCodes.codeFor("SOMETHINGWEIRD", "1.21.4"));
-        assertEquals(54, KeyCodes.codeFor("SOMETHINGWEIRD", "1.8.9"));
-        assertEquals(344, KeyCodes.codeFor(null, "1.21.4"));
-    }
-
-    /** 数字键在两代里的编号不成规律（LWJGL2 的 0 排在 9 之后），必须逐个核对。 */
-    @Test
-    void resolvesDigitsPerInputStack() {
-        assertEquals(11, KeyCodes.codeFor("0", "1.8.9"));
-        assertEquals(2, KeyCodes.codeFor("1", "1.8.9"));
-        assertEquals(10, KeyCodes.codeFor("9", "1.8.9"));
-        assertEquals(48, KeyCodes.codeFor("0", "1.21.4"));
-        assertEquals(57, KeyCodes.codeFor("9", "1.21.4"));
-    }
-
-    /** F 键在 LWJGL2 里的 F10 与 F11 之间断开，这个边界最容易写错。 */
-    @Test
-    void resolvesFunctionKeysAcrossTheGap() {
-        assertEquals(68, KeyCodes.codeFor("F10", "1.8.9"));
-        assertEquals(87, KeyCodes.codeFor("F11", "1.8.9"));
-        assertEquals(88, KeyCodes.codeFor("F12", "1.8.9"));
-        assertEquals(299, KeyCodes.codeFor("F10", "1.21.4"));
-        assertEquals(300, KeyCodes.codeFor("F11", "1.21.4"));
-        assertEquals(301, KeyCodes.codeFor("F12", "1.21.4"));
+        assertEquals(54, KeyCodes.codeFor("SOMETHINGWEIRD"));
+        assertEquals(54, KeyCodes.codeFor(null));
+        assertEquals(54, KeyCodes.codeFor(""));
     }
 
     /**
-     * 传给 agent 的选项串格式：前缀与十进制键码。
+     * 传给 agent 的选项串格式：{@code guiKey=<十进制 VK>}，版本可判定时追加 {@code mcVersion=<版本族>}。
      *
-     * <p>agent 按 {@code split(",")} 后匹配前缀取值，因此这里是两个模块间的硬契约；
-     * 前缀或进制一旦改动而没同步，快捷键会静默失效。
+     * <p>agent 按 {@code split(",")} 后匹配前缀取值，因此这里是两个模块间的硬契约。
      */
     @Test
     void buildsOptionsStringInAgreedFormat() {
-        assertEquals("guiKey=344", KeyCodes.attachOptions("RSHIFT", "1.21.4"));
-        assertEquals("guiKey=54", KeyCodes.attachOptions("RSHIFT", "1.8.9"));
-        assertEquals("guiKey=82", KeyCodes.attachOptions("R", "26.1.2"));
+        assertEquals("guiKey=54", KeyCodes.attachOptions("RSHIFT", null));
+        assertEquals("guiKey=82", KeyCodes.attachOptions("R", null));
+        assertEquals("guiKey=116", KeyCodes.attachOptions("CTRL+F5", null));
+        // 版本标签来自启动器（实例名），必须被压成版本号再传
+        assertEquals("guiKey=54,mcVersion=1.8.9", KeyCodes.attachOptions("RSHIFT", "1.8.9优化"));
+        assertEquals("guiKey=54,mcVersion=26.3", KeyCodes.attachOptions("RSHIFT", "26.3-Fabric 0.19.5"));
+        // 判定不出时不传这一项，agent 侧按未知处理（退化为恒等映射并打日志）
+        assertEquals("guiKey=54", KeyCodes.attachOptions("RSHIFT", "\u2014"));
     }
 }

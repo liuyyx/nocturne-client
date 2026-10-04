@@ -10,10 +10,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 验证 HUD 契约：元素按注册顺序绘制、隐藏时不绘制、文本每帧取最新值且空串跳过、按 id 可寻址。
+ * 验证 HUD 契约：元素按注册顺序绘制（不止计数，还要看顺序）、隐藏时不绘制、
+ * 文本每帧取最新值且空串跳过、同 id 注册替换、渲染中增删元素不抛并发异常。
  */
 class HudTest {
 
@@ -30,9 +32,13 @@ class HudTest {
 
         hud.render(renderer);
         assertEquals(1, renderer.count("text:fps: 120"));
+        // L-15 回归：必须断言绘制顺序，把 render 循环反转（后注册先画）必须失败
+        assertTrue(renderer.calls.indexOf("text:fps: 120")
+                        < renderer.calls.indexOf("text:xyz: 1 2 3"),
+                "elements must render in registration order");
 
         second.setEnabled(false);
-        renderer.calls.clear();
+        renderer.clear();
         hud.render(renderer);
         assertEquals(1, renderer.count("text:fps: 120"));
         assertEquals(0, renderer.count("text:xyz: 1 2 3"));
@@ -65,7 +71,7 @@ class HudTest {
         assertEquals("b", element.currentText());
 
         value.set("");
-        renderer.calls.clear();
+        renderer.clear();
         element.render(renderer);
         assertTrue(renderer.calls.isEmpty(), "empty text must not draw");
     }
@@ -77,8 +83,56 @@ class HudTest {
         TextElement element = new TextElement("fps", () -> "x", 12f, Color.WHITE);
         hud.add(element);
 
-        assertTrue(hud.byId("fps") == element);
+        assertSame(element, hud.byId("fps"));
         assertNull(hud.byId("missing"));
         assertFalse(hud.elements().isEmpty());
+    }
+
+    /**
+     * L-45 回归：同 id 重复 {@code add} 必须替换而不是叠加，否则同一读数会被画两行。
+     */
+    @Test
+    void addingTheSameIdTwiceReplacesInsteadOfStacking() {
+        RecordingRenderer renderer = new RecordingRenderer();
+        HudManager hud = new HudManager();
+        hud.add(new TextElement("fps", () -> "old", 14f, Color.WHITE, false));
+        TextElement replacement = new TextElement("fps", () -> "new", 14f, Color.WHITE, false);
+        hud.add(replacement);
+
+        assertEquals(1, hud.elements().size());
+        assertSame(replacement, hud.byId("fps"));
+
+        hud.render(renderer);
+        assertEquals(1, renderer.count("text:new"));
+        assertEquals(0, renderer.count("text:old"));
+    }
+
+    /**
+     * M-65 回归：渲染期间 supplier 回调增删元素不得抛 {@code ConcurrentModificationException}。
+     *
+     * <p>渲染使用元素快照；本次新增的元素（id=b）本帧不绘制，但下一帧应出现。
+     */
+    @Test
+    void elementsMayBeAddedDuringRender() {
+        RecordingRenderer renderer = new RecordingRenderer();
+        HudManager hud = new HudManager();
+        final boolean[] added = {false};
+        TextElement mutator = new TextElement("a", () -> {
+            if (!added[0]) {
+                added[0] = true;
+                hud.add(new TextElement("b", () -> "b-text", 14f, Color.WHITE, false));
+            }
+            return "a-text";
+        }, 14f, Color.WHITE, false);
+        hud.add(mutator);
+
+        hud.render(renderer);   // 不得抛异常
+        assertEquals(1, renderer.count("text:a-text"));
+        assertEquals(0, renderer.count("text:b-text"), "mid-frame additions join the next frame");
+
+        renderer.clear();
+        hud.render(renderer);
+        assertEquals(1, renderer.count("text:a-text"));
+        assertEquals(1, renderer.count("text:b-text"));
     }
 }

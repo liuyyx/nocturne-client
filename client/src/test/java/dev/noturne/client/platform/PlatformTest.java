@@ -49,6 +49,9 @@ class PlatformTest {
         assertEquals("libnoturne.so", Platform.LINUX.libraryFileName("noturne"));
         assertEquals("java.exe", Platform.WINDOWS.javaExecutableName());
         assertEquals("java", Platform.LINUX.javaExecutableName());
+        // L-60 回归：无法判定的平台不得返回无扩展名裸名，否则加载失败的错误指向不可读的名字
+        assertTrue(Platform.UNKNOWN.libraryFileName("noturne").endsWith(".unknown"),
+                "unknown platform must produce a diagnosable library name");
     }
 
     /** 验证 Unix 与桌面标志：Linux/macOS 为 Unix，Windows 为桌面但非 Unix，Android 非桌面。 */
@@ -62,12 +65,15 @@ class PlatformTest {
     }
 
     /**
-     * 冒烟验证当前运行机器能解析出确定平台（非 UNKNOWN）并给出非空架构串，
-     * 确保 Platform 的静态初始化在本环境可用。
+     * 冒烟验证当前机器解析出的平台与架构是可用的。
+     *
+     * <p>不断言「非 UNKNOWN」——那会让测试在三大平台之外必然失败（L-16）；这里只要求
+     * 结果是合法枚举值、架构串非空，与运行环境无关。
      */
     @Test
-    void currentPlatformIsResolvedOnThisMachine() {
-        assertNotEquals(Platform.UNKNOWN, Platform.current());
-        assertTrue(Platform.architecture().length() > 0);
+    void currentPlatformAndArchitectureReportUsableValues() {
+        Platform current = Platform.current();
+        assertTrue(current != null, "current() must never return null");
+        assertTrue(Platform.architecture().length() > 0, "architecture must be non-empty");
     }
 }

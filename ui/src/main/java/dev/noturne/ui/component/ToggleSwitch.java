@@ -14,24 +14,52 @@ import java.util.function.Consumer;
 public class ToggleSwitch extends Component {
 
     private final Consumer<Boolean> onChange;
+    /** 权威值回读器；可为 null。写入 {@code Value} 后回读，保证显示态与实际态一致。 */
+    private final java.util.function.Supplier<Boolean> valueReader;
     private final Animation slide = new Animation(Theme.EXPAND_MS, Animation.Easing.EASE_OUT_CUBIC, 0f);
     private boolean enabled;
+    /**
+     * 最近一次 {@link #update(long)} 注入的时钟。
+     *
+     * <p>切换动画的时间基准必须与驱动它的时钟同源：若这里改用 {@code System.currentTimeMillis}
+     * 而 {@code update} 收到的是别的时间轴（测试或自定义时钟），elapsed 会变成巨大的负数，
+     * 缓动函数随即产出 -8e29 级别的值并把负尺寸交给 GL。
+     */
+    private long lastNowMs;
 
     public ToggleSwitch(boolean enabled, Consumer<Boolean> onChange) {
-        this.enabled = enabled;
+        this(enabled, onChange, null);
+    }
+
+    /**
+     * @param enabled     初始状态
+     * @param onChange    状态变化回调，允许为 null
+     * @param valueReader 权威值回读器（写入后读取 {@code Value.get()}），允许为 null
+     */
+    public ToggleSwitch(boolean enabled, Consumer<Boolean> onChange,
+                        java.util.function.Supplier<Boolean> valueReader) {
+        this.valueReader = valueReader;
+        this.enabled = readBackEnabled(enabled);
         this.onChange = onChange;
-        slide.set(enabled ? 1f : 0f);
+        slide.set(this.enabled ? 1f : 0f);
     }
 
     public boolean isEnabled() {
         return enabled;
     }
 
+    /** 使用最近一次 {@link #update(long)} 的时钟切换状态。 */
     public void setEnabled(boolean value) {
-        setEnabled(value, System.currentTimeMillis());
+        setEnabled(value, lastNowMs);
     }
 
     public void setEnabled(boolean value, long nowMs) {
+        // 先与权威值对齐：外部可能已直接改过 Value，本地状态不能作为判重依据
+        boolean synced = readBackEnabled(this.enabled);
+        if (synced != this.enabled) {
+            this.enabled = synced;
+            slide.animateTo(synced ? 1f : 0f, nowMs);
+        }
         if (this.enabled == value) {
             return;
         }
@@ -40,9 +68,26 @@ public class ToggleSwitch extends Component {
         if (onChange != null) {
             onChange.accept(value);
         }
+        // 写入后回读：Value 侧若有归一化/拒绝，以权威值为准重定向动画
+        boolean authoritative = readBackEnabled(value);
+        if (authoritative != this.enabled) {
+            this.enabled = authoritative;
+            slide.animateTo(authoritative ? 1f : 0f, nowMs);
+        }
     }
 
+    /** @return 回读到的权威状态；读取器缺失或返回 null 时回退为 {@code fallback} */
+    private boolean readBackEnabled(boolean fallback) {
+        if (valueReader == null) {
+            return fallback;
+        }
+        Boolean actual = valueReader.get();
+        return actual == null ? fallback : actual.booleanValue();
+    }
+
+    @Override
     public void update(long nowMs) {
+        this.lastNowMs = nowMs;
         slide.update(nowMs);
     }
 
@@ -60,8 +105,11 @@ public class ToggleSwitch extends Component {
         // 滑块尺寸 8→12、左缘从「内缩 4」移动到「右端内缩 2」
         float knobSize = Theme.SWITCH_HANDLE_OFF
                 + (Theme.SWITCH_HANDLE_ON - Theme.SWITCH_HANDLE_OFF) * t;
-        float left = Theme.SWITCH_INSET_OFF
+        float rawLeft = Theme.SWITCH_INSET_OFF
                 + (width - Theme.SWITCH_INSET_ON - Theme.SWITCH_HANDLE_ON - Theme.SWITCH_INSET_OFF) * t;
+        // 控件窄于滑块时 rawLeft 会变成负值，把滑块画到控件左侧之外；夹取到 [0, width - knobSize]
+        float maxLeft = Math.max(0f, width - knobSize);
+        float left = Math.max(0f, Math.min(rawLeft, maxLeft));
 
         renderer.roundedRect(x, y, width, height, height / 2f, track);
         renderer.roundedRect(x + left, y + (height - knobSize) / 2f, knobSize, knobSize,
@@ -73,7 +121,7 @@ public class ToggleSwitch extends Component {
         if (button != 0 || !contains(mx, my)) {
             return false;
         }
-        setEnabled(!enabled, System.currentTimeMillis());
+        setEnabled(!enabled, lastNowMs);
         return true;
     }
 }

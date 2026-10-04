@@ -32,9 +32,10 @@
 
   <!-- 壳只驱动 jar，绝不链接 jar 内的任何类型。 -->
   <ItemGroup>
-    <!-- 若 launcher 目录下存在 noturne.jar，则随构建一并复制到输出目录，
-         使启动器开箱即用；条件保证未放置 jar 时构建不报错。 -->
-    <None Include="noturne-*.jar" CopyToOutputDirectory="PreserveNewest" Condition="Exists('noturne.jar')" />
+    <!-- 把 launcher 目录下的交付 jar（dist 产物名为 noturne-<version>.jar）复制到输出目录，
+         使启动器开箱即用。通配符匹配不到任何文件时 MSBuild 既不报错也不产生项，
+         因此无需（也不应使用）检查拼错的 noturne.jar 的 Condition。 -->
+    <None Include="noturne-*.jar" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

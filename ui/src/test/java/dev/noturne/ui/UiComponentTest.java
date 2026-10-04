@@ -1,5 +1,6 @@
 package dev.noturne.ui;
 
+import dev.noturne.client.value.NumberValue;
 import dev.noturne.ui.anim.Animation;
 import dev.noturne.ui.component.Button;
 import dev.noturne.ui.component.Component;
@@ -80,6 +81,30 @@ class UiComponentTest {
         assertFalse(slider.mouseDragged(50, 10, 0, 0, 0), "drag must end after release");
     }
 
+    /**
+     * M-57/M-61 回归：绑定 {@link NumberValue} 的 Slider 在写入（含钳制/步长对齐）后必须回读权威值，
+     * 位置与显示文本以 {@code value.get()} 为准——step=1.0 时拖到 6.67 应持有 7.0，而不是停留在 6.67。
+     */
+    @Test
+    void sliderReadsBackCoercedValueSoDisplayMatchesAuthority() {
+        NumberValue number = new NumberValue("Speed", 0.0, 0.0, 10.0, 1.0);
+        Slider slider = new Slider(0f, 10f, number.get().floatValue(),
+                f -> number.set(f.doubleValue()), () -> number.get().floatValue());
+        slider.setBounds(0f, 0f, 100f, 20f);
+
+        // 66.7% 位置 → 请求 6.67，NumberValue 按 step=1 对齐到 7.0
+        slider.mouseClicked(66.7, 10, 0);
+        assertEquals(7.0, number.get(), 1e-9, "NumberValue 按 step=1 对齐");
+        assertEquals(number.get().floatValue(), slider.value(), 1e-6f,
+                "滑块持有值必须回读为实际生效值（界面显示 == value.get()）");
+
+        // 越界拖动：请求 200 → 钳制到 max=10，回读后仍与权威值一致
+        slider.mouseDragged(200, 10, 0, 0, 0);
+        assertEquals(10.0, number.get(), 1e-9);
+        assertEquals(number.get().floatValue(), slider.value(), 1e-6f);
+        slider.mouseReleased(200, 10, 0);
+    }
+
     /** 未命中时不返回 true 也不执行动作；命中时返回 true 并触发动作 */
     @Test
     void buttonRunsActionOnlyWhenHit() {
@@ -94,23 +119,41 @@ class UiComponentTest {
         assertTrue(fired.get());
     }
 
-    /** 点击翻转开关并回调新状态；动画收敛后绘制开关本体与滑块两个圆角矩形 */
+    /**
+     * 点击翻转开关并回调新状态；动画必须由<b>生产路径</b>（容器的 {@code update}）驱动。
+     *
+     * <p>L-13 回归：旧用例手动调 {@code toggle.update}，掩盖了生产代码里 {@code ModuleConfigPanel}
+     * 不向子控件转发时钟的事实。这里把开关放进 {@link Panel}，只调 {@code panel.update}，
+     * 若容器不转发时钟则旋钮永停起点，断言失败（H-22）。
+     */
     @Test
     void toggleSwitchReportsChangesAndAnimates() {
         AtomicBoolean state = new AtomicBoolean(false);
         ToggleSwitch toggle = new ToggleSwitch(false, state::set);
-        toggle.setBounds(0, 0, 20, 10);
+        toggle.setBounds(0, 0, dev.noturne.ui.theme.Theme.SWITCH_WIDTH,
+                dev.noturne.ui.theme.Theme.SWITCH_HEIGHT);
+        Panel host = new Panel();
+        host.setBounds(0, 0, 200, 200);
+        host.add(toggle);
 
+        // 生产路径先注入时钟，再点击；开关用最近一次 update 的时钟作为动画基准
+        host.update(0L);
         toggle.mouseClicked(5, 5, 0);
         assertTrue(toggle.isEnabled());
         assertTrue(state.get());
 
-        // animation settles on the target value
-        toggle.update(0L);
-        toggle.update(10_000L);
-        RecordingRenderer renderer = new RecordingRenderer();
-        toggle.render(renderer);
-        assertEquals(2, renderer.count("roundedRect"));
+        RecordingRenderer before = new RecordingRenderer();
+        toggle.render(before);
+        RecordingRenderer after = new RecordingRenderer();
+        host.update(100_000L);
+        toggle.render(after);
+
+        assertEquals(2, before.count("roundedRect"), "track + knob");
+        // 第二个圆角矩形是旋钮；动画推进后它必须向右滑动且尺寸从 8 长到 12
+        RecordingRenderer.DrawCall knobBefore = before.ofKind("roundedRect").get(1);
+        RecordingRenderer.DrawCall knobAfter = after.ofKind("roundedRect").get(1);
+        assertTrue(knobAfter.x > knobBefore.x, "容器驱动 update 时旋钮必须向右滑动");
+        assertTrue(knobAfter.width > knobBefore.width, "旋钮必须长到开启态尺寸");
     }
 
     /** 线性缓动的 {@link Animation} 在半程取中点、终点取目标值，到达终点后停止运行 */
@@ -119,6 +162,30 @@ class UiComponentTest {
         Animation animation = new Animation(100L, Animation.Easing.LINEAR, 0f);
         animation.animateTo(1f, 0L);
         assertEquals(0.5f, animation.update(50L), 0.001f);
+        assertEquals(1f, animation.update(100L), 0.001f);
+        assertFalse(animation.isRunning());
+    }
+
+    /**
+     * C-06 回归：每帧无条件重述同一目标时，{@code animateTo} 不得重置时间基准。
+     *
+     * <p>修复前实现每帧把 {@code startMs} 刷成当前帧，{@code elapsed} 恒为 0，值永远停在起点；
+     * 本用例在第二帧用不同的 {@code nowMs} 重述同一目标，从而区分「每帧重置」与「连续同目标推进」。
+     */
+    @Test
+    void repeatedAnimateToSameTargetKeepsAdvancing() {
+        Animation animation = new Animation(100L, Animation.Easing.LINEAR, 0f);
+
+        // 第 1 帧：目标 0 → 1，登记起点
+        animation.animateTo(1f, 0L);
+        animation.update(0L);
+
+        // 第 2 帧：重述同一目标；若重置 startMs 则 elapsed=0，值仍为 0
+        animation.animateTo(1f, 50L);
+        assertEquals(0.5f, animation.update(50L), 0.001f, "同目标重复 animateTo 必须继续推进");
+
+        // 第 3 帧：继续重述同一目标，动画应照常到达终点
+        animation.animateTo(1f, 50L);
         assertEquals(1f, animation.update(100L), 0.001f);
         assertFalse(animation.isRunning());
     }

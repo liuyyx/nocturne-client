@@ -8,6 +8,7 @@ import org.objectweb.asm.Opcodes;
 
 import java.lang.instrument.ClassFileTransformer;
 import java.security.ProtectionDomain;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 在游戏某个方法的首条指令前插入一次静态调用，即「帧钩子」。
@@ -21,12 +22,24 @@ import java.security.ProtectionDomain;
  *
  * <p>使用 {@code COMPUTE_MAXS}（而非 {@code COMPUTE_FRAMES}）即可：在方法开头插入一条栈平衡的
  * {@code INVOKESTATIC ()V} 既不改变栈深度，也不会让已有的 StackMapTable 失效，因此无需重新
- * 计算帧信息。
+ * 计算帧信息。原有的 StackMapTable 会被原样保留（帧偏移由 ASM 自动修正），从而在 Java 6+ 的
+ * 严格校验下依然能通过——这一点对 LWJGL3（Java 8+ 字节码）的 {@code glfwSwapBuffers} 与
+ * {@code SDL_GL_SwapWindow} 目标尤为关键。
  */
 public final class FrameHookTransformer implements ClassFileTransformer {
 
     /** ASM API 版本；需与工程依赖的 ASM 版本一致，否则过新的 class 文件版本会解析失败。 */
     private static final int ASM_API = Opcodes.ASM9;
+
+    /**
+     * 内部错误日志限流开关。
+     *
+     * <p>「类名/方法未命中」是正常结果（静默返回 {@code null}），但「字节码解析失败」或
+     * 「ASM 版本不兼容」是把钩子整个装不上的真实故障，必须能从游戏日志里发现。热路径上不能
+     * 每帧刷屏，因此只打印第一条。该字段由加载本转换器的 {@code EmbeddedAsmLoader} 子加载器隔离，
+     * 每个子加载器各有一份。
+     */
+    private static final AtomicBoolean ERROR_LOGGED = new AtomicBoolean(false);
 
     /** 目标类的内部名（如 {@code org/lwjgl/opengl/Display}，斜杠形式）。 */
     private final String targetClassInternalName;
@@ -52,12 +65,20 @@ public final class FrameHookTransformer implements ClassFileTransformer {
      */
     public FrameHookTransformer(String targetClassInternalName, String targetMethod,
                                 String targetDescriptor, String hookOwner, String hookMethod) {
-        this.targetClassInternalName = targetClassInternalName;
+        // JVM 交给 transformer 的 className 一律是斜杠内部名（如 org/lwjgl/opengl/Display），
+        // 而调用点很容易顺手写成点号全限定名。这里统一归一化为斜杠形式，否则两者永不相等、
+        // 钩子静默装不上（ADHOC-ClassnameForm）。
+        this.targetClassInternalName = internalize(targetClassInternalName);
         this.targetMethod = targetMethod;
         this.targetDescriptor = targetDescriptor;
-        this.hookOwner = hookOwner;
+        this.hookOwner = internalize(hookOwner);
         this.hookMethod = hookMethod;
         this.hookDescriptor = "()V";
+    }
+
+    /** 把点号全限定名归一化为斜杠内部名；null 原样返回（后续匹配会因 null 而安全跳过）。 */
+    private static String internalize(String name) {
+        return name == null ? null : name.replace('.', '/');
     }
 
     /**
@@ -105,12 +126,25 @@ public final class FrameHookTransformer implements ClassFileTransformer {
                     };
                 }
             };
-            reader.accept(visitor, ClassReader.SKIP_FRAMES);
-            // SKIP_FRAMES：不读 StackMapTable——插入的调用不改变帧结构，跳过可减少开销。
+            // 必须**保留**原有 StackMapTable（不用 SKIP_FRAMES）：Java 6+ 的 class 文件对含分支的方法
+            // 强制要求栈映射帧，而帧偏移会随插入的指令自动重算（ASM 用标签追踪）。若把帧丢弃，
+            // 现代 JVM（GLFW/SDL 的 LWJGL3 类即为 Java 8+ 字节码）会在校验期抛 VerifyError，
+            // 表现为「注入成功但钩子不生效」。插入的是栈平衡的 void 调用，不改帧结构，故与
+            // COMPUTE_MAXS 兼容（COMPUTE_MAXS 不重算帧，二者互不冲突）。
+            reader.accept(visitor, 0);
             // 未命中目标方法时返回 null，JVM 将使用原始字节码，行为完全不变。
             return patched[0] ? writer.toByteArray() : null;
         } catch (Throwable t) {
-            // 绝不允许因为我们的插桩而让类加载失败：吞掉异常并放弃本次转换。
+            // 走到这里说明类名已命中、但字节码解析失败（ASM 版本不兼容 / class 文件损坏 /
+            // NoClassDefFoundError），这是真实故障而非「未命中」，必须留一条可检索日志——
+            // 否则现象是「注入成功但界面永不出现」，从日志里完全无从下手（C-02 / M-95）。
+            // 限流：热路径上只打印第一条，避免每帧刷屏。
+            if (ERROR_LOGGED.compareAndSet(false, true)) {
+                System.out.println("[noturne] frame hook transform failed for " + targetClassInternalName
+                        + "." + targetMethod + ": " + t);
+                t.printStackTrace();
+            }
+            // 绝不允许因为我们的插桩而让类加载失败：放弃本次转换，JVM 沿用原始字节码。
             return null;
         }
     }

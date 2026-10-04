@@ -324,21 +324,26 @@ public sealed class LauncherWindow : Window
     {
         SetStatus("Scanning\u2026", MutedBrush);
         _refreshButton.IsEnabled = false;
-        string? jar = FindJar();
-        string? java = FindJava();
 
-        if (jar == null || java == null)
-        {
-            SetStatus("noturne jar or java not found", ErrorBrush);
-            Log(jar == null ? "jar not found next to the launcher." : "java not found (set JAVA_HOME).");
-            _refreshButton.IsEnabled = true;
-            return;
-        }
-
-        // 子进程调用为阻塞 IO，放到线程池避免冻结 UI；所有控件写入都回到 Dispatcher。
+        // jar/java 探测要遍历文件系统、子进程调用是阻塞 IO：全部放到线程池，
+        // 避免在 UI 线程同步扫描导致 WPF 消息循环卡死（界面停在「Scanning…」）。
+        // 所有控件写入都回到 Dispatcher。
         System.Threading.Tasks.Task.Run(() =>
         {
-            string output = Run(java, $"-jar \"{jar}\" --list-json");
+            string? jar = FindJar();
+            string? java = FindJava();
+            if (jar == null || java == null)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    SetStatus("noturne jar or java not found", ErrorBrush);
+                    Log(jar == null ? "jar not found next to the launcher." : "java not found (set JAVA_HOME).");
+                    _refreshButton.IsEnabled = true;
+                });
+                return;
+            }
+
+            string output = Run(java, BuildInjectorArgs(jar, "--list-json"));
             List<ProcessEntry> entries = ParseEntries(output);
             Dispatcher.Invoke(() =>
             {
@@ -375,20 +380,27 @@ public sealed class LauncherWindow : Window
             return;
         }
         ProcessEntry entry = _entries[index];
-        string? jar = FindJar();
-        string? java = FindJava();
-        if (jar == null || java == null)
-        {
-            return;
-        }
-        // 环境缺失时静默返回：启动器不做模态弹窗，缺失原因已在扫描时记录过日志。
 
         _injectButton.IsEnabled = false;
         Log($"Injecting into pid {entry.Pid}\u2026");
         System.Threading.Tasks.Task.Run(() =>
         {
+            // jar/java 探测与子进程 IO 一样放到线程池，避免阻塞 UI 线程。
+            string? jar = FindJar();
+            string? java = FindJava();
+            if (jar == null || java == null)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    // 环境缺失时不做模态弹窗，只记录日志并恢复按钮（不再静默返回）。
+                    SetStatus("noturne jar or java not found", ErrorBrush);
+                    Log(jar == null ? "jar not found next to the launcher." : "java not found (set JAVA_HOME).");
+                    _injectButton.IsEnabled = true;
+                });
+                return;
+            }
             // --pid= 必须紧贴等号无空格；结果同样通过 Dispatcher 回调回到 UI 线程更新。
-            string output = Run(java, $"-jar \"{jar}\" --pid={entry.Pid}");
+            string output = Run(java, BuildInjectorArgs(jar, $"--pid={entry.Pid}"));
             Dispatcher.Invoke(() =>
             {
                 foreach (string line in output.Split('\n'))
@@ -422,41 +434,139 @@ public sealed class LauncherWindow : Window
     // ------------------------------------------------------------------ helpers
 
     /// <summary>
-    /// 从子进程 stdout 中截取首个 '[' 到末个 ']' 的 JSON 数组并反序列化为进程列表。
-    /// 采用「截取数组片段」而非整段解析，是为了容忍 jar 打印的日志噪声；
-    /// 解析失败时保留已成功解析的部分，不抛异常。
+    /// 从子进程 stdout 中提取配平的 JSON 数组并反序列化为进程列表。
+    /// 采用「提取数组片段」而非整段解析，是为了容忍 jar 打印的日志噪声；
+    /// 缺字段或解析失败时不抛异常，保留已成功解析的部分。
     /// </summary>
     /// <param name="json">子进程原始输出。</param>
     /// <returns>解析得到的条目列表；无法解析时为空列表。</returns>
     private static List<ProcessEntry> ParseEntries(string json)
     {
         var list = new List<ProcessEntry>();
-        int start = json.IndexOf('[');
-        int end = json.LastIndexOf(']');
-        if (start < 0 || end <= start)
+        // 逐个候选片段尝试解析：首个配平数组也可能只是日志噪声（如 "[WARN]"），
+        // 解析失败就继续找下一段，直到拿到真正的进程列表。
+        foreach (string payload in EnumerateJsonArrays(json))
         {
-            return list;
-        }
-        try
-        {
-            using JsonDocument document = JsonDocument.Parse(json.Substring(start, end - start + 1));
-            foreach (JsonElement element in document.RootElement.EnumerateArray())
+            List<ProcessEntry>? parsed = TryParseEntries(payload);
+            if (parsed == null)
             {
-                list.Add(new ProcessEntry(
-                    element.GetProperty("pid").GetInt32(),
-                    element.TryGetProperty("title", out JsonElement title) ? title.GetString() ?? "" : "",
-                    element.TryGetProperty("command", out JsonElement command) ? command.GetString() ?? "" : ""));
+                continue;
             }
-        }
-        catch (JsonException)
-        {
-            // 解析失败时静默降级：把已经成功解析出的条目交回调用方。
+            list.AddRange(parsed);
+            break;
         }
         return list;
     }
 
     /// <summary>
-    /// 以子进程方式运行 java，捕获 stdout 与 stderr 并拼接返回。
+    /// 尝试把单个 JSON 数组片段解析为进程列表。
+    /// </summary>
+    /// <param name="payload">疑似 JSON 数组的文本。</param>
+    /// <returns>解析结果；文本不是合法 JSON 数组时为 null。缺 pid（或字段类型不符）的条目被跳过。</returns>
+    private static List<ProcessEntry>? TryParseEntries(string payload)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(payload);
+            var list = new List<ProcessEntry>();
+            foreach (JsonElement element in document.RootElement.EnumerateArray())
+            {
+                // 缺 pid（或字段类型不符）时跳过该条，而不是让 KeyNotFoundException / FormatException 逃逸：
+                // 异常一旦冒出 Task.Run，Dispatcher 回调不再执行，刷新按钮会永久禁用。
+                if (element.ValueKind != JsonValueKind.Object
+                    || !element.TryGetProperty("pid", out JsonElement pid)
+                    || pid.ValueKind != JsonValueKind.Number
+                    || !pid.TryGetInt32(out int pidValue))
+                {
+                    continue;
+                }
+                list.Add(new ProcessEntry(
+                    pidValue,
+                    element.TryGetProperty("title", out JsonElement title) ? title.GetString() ?? "" : "",
+                    element.TryGetProperty("command", out JsonElement command) ? command.GetString() ?? "" : ""));
+            }
+            return list;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 按出现顺序枚举原始输出里所有「括号配平」的 JSON 数组片段。
+    /// 采用深度计数而非「首个 '[' 到末个 ']'」：后者会把 stderr 噪声里另一对方括号之间的
+    /// 内容整段截进来，得到非法 JSON → 被误判为「无进程」。字符串内部（含转义）的方括号不计数；
+    /// 调用方逐个尝试解析，从而跳过 "[WARN]" 之类的噪声片段。
+    /// </summary>
+    /// <param name="text">子进程原始输出。</param>
+    /// <returns>候选数组文本，按 '[' 出现顺序。</returns>
+    private static IEnumerable<string> EnumerateJsonArrays(string text)
+    {
+        for (int start = text.IndexOf('['); start >= 0; start = text.IndexOf('[', start + 1))
+        {
+            int depth = 0;
+            bool inString = false;
+            bool escaped = false;
+            for (int i = start; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (c == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (c == '"')
+                    {
+                        inString = false;
+                    }
+                    continue;
+                }
+                if (c == '"')
+                {
+                    inString = true;
+                }
+                else if (c == '[')
+                {
+                    depth++;
+                }
+                else if (c == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        yield return text.Substring(start, i - start + 1);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // 子 JVM 与父进程必须使用同一套编码，否则含中文的进程标题会乱码：
+    // 父进程按 UTF-8 解码（见 StandardOutputEncoding），这里强制子 JVM 也用 UTF-8 输出。
+    // 未知属性对不支持的 JVM 无副作用：JDK 8 认 sun.stdout/sun.stderr，JDK 18+ 认 stdout/stderr。
+    private const string EncodingArgs =
+        "-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 " +
+        "-Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8";
+
+    /// <summary>
+    /// 拼装驱动 jar 的完整 JVM 参数：先注入编码属性，再以 -jar 运行，
+    /// 最后附加注入器命令（<paramref name="command"/>，如 --list-json / --pid=N）。
+    /// </summary>
+    /// <param name="jar">jar 路径。</param>
+    /// <param name="command">交给 jar 的单个子命令。</param>
+    /// <returns>可直接传给 <see cref="ProcessStartInfo"/> 的参数串。</returns>
+    private static string BuildInjectorArgs(string jar, string command)
+        => $"{EncodingArgs} -jar \"{jar}\" {command}";
+
+    /// <summary>
+    /// 以子进程方式运行 java，并发泵取 stdout 与 stderr 并拼接返回。
     /// 20 秒超时后强制杀死进程树；所有异常都被折叠成 <c>error: ...</c> 文本，
     /// 以便调用方统一按字符串处理而无需 try/catch。
     /// </summary>
@@ -475,6 +585,7 @@ public sealed class LauncherWindow : Window
                 CreateNoWindow = true,
                 StandardOutputEncoding = Encoding.UTF8,
                 // 显式指定 UTF-8：jar 输出的进程标题含中文，缺省会按系统代码页解码成乱码。
+                // 子 JVM 侧由 BuildInjectorArgs 的编码属性对齐，两端一致才不乱码。
                 StandardErrorEncoding = Encoding.UTF8,
             };
             using Process? process = Process.Start(info);
@@ -482,9 +593,37 @@ public sealed class LauncherWindow : Window
             {
                 return "";
             }
-            string stdout = process.StandardOutput.ReadToEnd();
-            string stderr = process.StandardError.ReadToEnd();
-            // 20 秒足够完成 attach；超时多半是目标 JVM 卡死或权限不足，杀掉进程树避免留下孤儿。
+
+            // 两个重定向流必须并发泵取：若先 ReadToEnd(stdout) 再 ReadToEnd(stderr)，
+            // 子进程写满约 4KB 的 stderr 管道缓冲后阻塞，父进程却在等 stdout → 死锁。
+            // 事件回调在 .NET 内部线程触发，用锁串行化对 builder 的追加。
+            var stdout = new StringBuilder();
+            var stderr = new StringBuilder();
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    lock (stdout)
+                    {
+                        stdout.AppendLine(e.Data);
+                    }
+                }
+            };
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    lock (stderr)
+                    {
+                        stderr.AppendLine(e.Data);
+                    }
+                }
+            };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            // 超时检查必须在任何阻塞读之前：ReadToEnd 会一直等到子进程退出，
+            // 卡死的目标 JVM 会让超时与 Kill 永远执行不到。
             if (!process.WaitForExit(20000))
             {
                 try
@@ -495,13 +634,28 @@ public sealed class LauncherWindow : Window
                 {
                     // 进程已自行退出，无需处理。
                 }
-                return stdout + stderr + Environment.NewLine + "error: timed out";
+                return Collect(stdout) + Collect(stderr) + Environment.NewLine + "error: timed out";
             }
-            return stdout + stderr;
+            // WaitForExit(int) 不保证异步输出已泵空，再等一次让事件排空。
+            process.WaitForExit();
+            return Collect(stdout) + Collect(stderr);
         }
         catch (Exception ex)
         {
             return "error: " + ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// 在锁保护下取出异步读取累积的文本快照。
+    /// </summary>
+    /// <param name="builder">被 OutputDataReceived/ErrorDataReceived 追加的缓冲区。</param>
+    /// <returns>当前累积文本。</returns>
+    private static string Collect(StringBuilder builder)
+    {
+        lock (builder)
+        {
+            return builder.ToString();
         }
     }
 

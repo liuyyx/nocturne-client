@@ -34,6 +34,10 @@ public final class PayloadPack {
     private static final int TAG_BITS = 128;
     /** 单个条目允许的最大字节数（64 MiB），用于防御畸形长度字段。 */
     private static final int MAX_ENTRY = 64 * 1024 * 1024;
+    /** 解压后明文允许的最大字节数（512 MiB），用于防御解压炸弹。 */
+    private static final long MAX_PLAIN = 512L * 1024 * 1024;
+    /** 要求的 AES 密钥长度（字节）——必须是 32 字节的 AES-256。 */
+    public static final int KEY_LENGTH = 32;
 
     /** 工具类，禁止实例化。 */
     private PayloadPack() {
@@ -48,6 +52,7 @@ public final class PayloadPack {
      * @throws IOException 序列化失败（条目越界/为空）或加密失败
      */
     public static byte[] pack(Map<String, byte[]> entries, byte[] key) throws IOException {
+        requireKey(key);
         byte[] plain = serialize(entries);
         byte[] compressed = deflate(plain);
         // seal 的输出布局为 [ nonce(12) | 密文 + 认证标签 ]
@@ -68,6 +73,7 @@ public final class PayloadPack {
      * @throws IOException 长度不足、魔数/版本不符、密钥错误、密文被篡改或解压失败
      */
     public static Map<String, byte[]> unpack(byte[] packed, byte[] key) throws IOException {
+        requireKey(key);
         if (packed == null || packed.length < 4 + 1 + NONCE_LEN + TAG_BITS / 8) {
             throw new IOException("payload too short");
         }
@@ -87,6 +93,14 @@ public final class PayloadPack {
     }
 
     // ------------------------------------------------------------------ crypto
+
+    /** 校验密钥必须为 32 字节；否则 AES 会静默降级成 AES-128/192，违反容器契约。 */
+    private static void requireKey(byte[] key) throws IOException {
+        if (key == null || key.length != KEY_LENGTH) {
+            throw new IOException("AES-256 key must be " + KEY_LENGTH + " bytes, got "
+                    + (key == null ? "null" : Integer.toString(key.length)));
+        }
+    }
 
     /**
      * 加密一段数据（{@code AES/GCM/NoPadding}），输出前缀为随机 nonce。
@@ -161,15 +175,21 @@ public final class PayloadPack {
         Inflater inflater = new Inflater();
         try {
             inflater.setInput(data);
-            ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(64, data.length * 2));
+            ByteArrayOutputStream out = new ByteArrayOutputStream(Math.min(1 << 20, Math.max(64, data.length * 2)));
             byte[] buf = new byte[8192];
+            long total = 0;
             while (!inflater.finished()) {
                 int n = inflater.inflate(buf);
-                // 不产出数据且既不缺输入也不缺字典：说明流已损坏而非正常结束
                 if (n == 0) {
                     if (inflater.needsInput() || inflater.needsDictionary()) {
                         throw new IOException("truncated payload");
                     }
+                    // 既不产出数据、又不缺输入/字典：流已损坏，继续循环只会自旋不退。
+                    throw new IOException("corrupt payload: inflater made no progress");
+                }
+                total += n;
+                if (total > MAX_PLAIN) {
+                    throw new IOException("payload expands beyond " + MAX_PLAIN + " bytes");
                 }
                 out.write(buf, 0, n);
             }
@@ -186,18 +206,25 @@ public final class PayloadPack {
     /**
      * 序列化条目表为明文字节。
      *
-     * @throws IOException 条目值为 {@code null} 或超过 {@link #MAX_ENTRY}
+     * @throws IOException 条目表或其名称/值为 {@code null}，条目值超过 {@link #MAX_ENTRY}
      */
     private static byte[] serialize(Map<String, byte[]> entries) throws IOException {
+        if (entries == null) {
+            throw new IOException("entries must not be null");
+        }
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(buffer);
         out.writeInt(entries.size());
         for (Map.Entry<String, byte[]> e : entries.entrySet()) {
             byte[] value = e.getValue();
-            if (value == null || value.length > MAX_ENTRY) {
-                throw new IOException("entry out of range: " + e.getKey());
+            String name = e.getKey();
+            if (name == null) {
+                throw new IOException("entry name must not be null");
             }
-            out.writeUTF(e.getKey());
+            if (value == null || value.length > MAX_ENTRY) {
+                throw new IOException("entry out of range: " + name);
+            }
+            out.writeUTF(name);
             out.writeInt(value.length);
             out.write(value);
         }
@@ -208,7 +235,7 @@ public final class PayloadPack {
     /**
      * 反序列化明文字节为条目表。
      *
-     * @throws IOException 条目数或长度字段越界，或数据被截断
+     * @throws IOException 条目数或长度字段越界、出现重复条目名，或数据被截断
      */
     private static Map<String, byte[]> deserialize(byte[] plain) throws IOException {
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(plain));
@@ -217,7 +244,8 @@ public final class PayloadPack {
         if (count < 0 || count > 1 << 20) {
             throw new IOException("bad entry count: " + count);
         }
-        Map<String, byte[]> out = new LinkedHashMap<String, byte[]>(Math.max(16, count * 2));
+        // 预分配容量与 count 脱钩并封顶：否则 4 字节输入即可强制约 16 MiB 的初始分配。
+        Map<String, byte[]> out = new LinkedHashMap<String, byte[]>(Math.min(Math.max(16, count), 256));
         for (int i = 0; i < count; i++) {
             String name = in.readUTF();
             int length = in.readInt();
@@ -226,7 +254,10 @@ public final class PayloadPack {
             }
             byte[] value = new byte[length];
             in.readFully(value);
-            out.put(name, value);
+            if (out.put(name, value) != null) {
+                // 重复条目名会静默覆盖，使实际条目数与 count 不符；这里显式拒绝。
+                throw new IOException("duplicate entry: " + name);
+            }
         }
         return out;
     }

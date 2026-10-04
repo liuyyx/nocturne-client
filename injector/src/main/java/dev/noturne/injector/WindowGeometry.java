@@ -36,7 +36,8 @@ public final class WindowGeometry {
     /**
      * 计算初始窗口矩形：在鼠标所在的那块屏幕上居中。
      *
-     * <p>宽高按比例计算后再夹到 {@code [MIN, MAX]} 区间，因此小屏与 4K 屏上都不会越界。
+     * <p>宽高按比例计算后再夹到 {@code [MIN, MAX]} 区间，并进一步不超过屏幕的实际逻辑尺寸，
+     * 因此小屏与 4K 屏上都不会越界。
      *
      * @return 期望的窗口边界（逻辑像素坐标）
      */
@@ -45,6 +46,9 @@ public final class WindowGeometry {
         // 先按比例算再夹取：直接夹取屏幕尺寸会让小屏上的窗口小到无法使用。
         int width = clamp((int) Math.round(screen.width * WIDTH_RATIO), MIN_WIDTH, MAX_WIDTH);
         int height = clamp((int) Math.round(screen.height * HEIGHT_RATIO), MIN_HEIGHT, MAX_HEIGHT);
+        // 再与屏幕实际尺寸比较：MIN 常量在极小分辨率下可能已超过屏幕，否则窗口会越出屏幕。
+        width = Math.max(1, Math.min(width, screen.width));
+        height = Math.max(1, Math.min(height, screen.height));
         // 位置用屏幕原点 + 居中偏移；在副屏上 x/y 不为 0，不能只算居中量。
         return new Rectangle(
                 screen.x + (screen.width - width) / 2,

@@ -17,8 +17,13 @@ public final class ProcessTableModel extends AbstractTableModel {
         public final int pid;
         /** 进程显示名。 */
         public final String name;
-        /** 版本标签；初始为未知，WMI 返回后就地改写。 */
-        public String version;
+        /**
+         * 版本标签；初始为未知，WMI 返回后就地改写。
+         *
+         * <p>声明为 volatile：虽则当前读写都发生在 EDT，但版本由后台 SwingWorker 完成后回写，
+         * 保留 happens-before 语义，避免将来有后台线程读取时出现可见性问题。
+         */
+        public volatile String version;
 
         /**
          * @param pid     进程 ID
@@ -57,9 +62,12 @@ public final class ProcessTableModel extends AbstractTableModel {
     }
 
     /**
-     * 按视图行索引取行。
+     * 按模型行索引取行。
      *
-     * @param index 表格视图行索引
+     * <p>注意这是<em>模型</em>索引；若表格启用了排序/过滤，调用方必须先用
+     * {@code JTable.convertRowIndexToModel} 把视图索引转换过来，否则会取到错行。
+     *
+     * @param index 模型行索引
      * @return 对应行；索引越界时返回 {@code null}，由调用方决定如何提示
      */
     public Row rowAt(int index) {
@@ -128,6 +136,10 @@ public final class ProcessTableModel extends AbstractTableModel {
      */
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
+        // 表格与模型短暂不同步时（如并发刷新）不抛异常，返回空值让渲染器画空白。
+        if (rowIndex < 0 || rowIndex >= rows.size()) {
+            return null;
+        }
         Row row = rows.get(rowIndex);
         switch (columnIndex) {
             case 1:
@@ -135,8 +147,10 @@ public final class ProcessTableModel extends AbstractTableModel {
             case 2:
                 return row.version;
             case 0:
-            default:
                 return row.name;
+            default:
+                // 越界列返回 null，而不是悄悄把进程名当成该列的值。
+                return null;
         }
     }
 }

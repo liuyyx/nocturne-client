@@ -56,4 +56,28 @@ class ColorValueTest {
         assertTrue(value.isDefault());
         assertEquals("#112233", value.display());
     }
+
+    /**
+     * L-19 回归：{@code display()} 必须与默认 Locale 无关。
+     *
+     * <p>在 de_DE / ar-EG 等区域下，十六进制输出仍须是大写 ASCII，否则 CI 换 Locale 就会漂移。
+     */
+    @Test
+    void displayIsLocaleIndependent() {
+        java.util.Locale previous = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("de-DE"));
+            ColorValue value = new ColorValue("Accent", 0xFF7A5CFF);
+            assertEquals("#7A5CFF", value.display());
+
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("ar-EG"));
+            assertEquals("#7A5CFF", value.display());
+
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("fr-FR"));
+            value.set(0xFF00000A);
+            assertEquals("#00000A", value.display());
+        } finally {
+            java.util.Locale.setDefault(previous);
+        }
+    }
 }

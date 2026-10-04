@@ -33,7 +33,8 @@ public final class JniTypes {
         while (index < descriptor.length() && descriptor.charAt(index) != ')') {
             int[] cursor = new int[]{index};
             Class<?> type = parseType(descriptor, index, loader, cursor);
-            if (type == null) {
+            if (type == null || type == void.class) {
+                // 未知类型字符，或参数列表里出现非法的 V（void 只能作返回类型）。
                 return null;
             }
             parameters.add(type);
@@ -41,6 +42,11 @@ public final class JniTypes {
         }
         if (index >= descriptor.length()) {
             return null; // 参数列表缺少右括号，未正常结束
+        }
+        // 右括号之后必须紧跟一个可解析的返回类型：拒绝 (I) 这类缺少返回类型的截断描述符，
+        // 口径与 returnType 保持一致，否则调用方会拿到“合法但根本叫不动”的参数表。
+        if (parseType(descriptor, index + 1, loader, new int[]{index + 1}) == null) {
+            return null;
         }
         return parameters.toArray(new Class<?>[0]);
     }
@@ -109,7 +115,11 @@ public final class JniTypes {
             case '[': {
                 // 数组类型由元素类型构造零长数组取得其 Class，避免手写数组类名
                 Class<?> component = parseType(descriptor, index + 1, loader, cursor);
-                return component == null ? null : Array.newInstance(component, 0).getClass();
+                if (component == null || component == void.class) {
+                    // 元素类型未知，或非法的 void 数组（Array.newInstance 会抛未捕获异常）。
+                    return null;
+                }
+                return Array.newInstance(component, 0).getClass();
             }
             default:
                 return null;

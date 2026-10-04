@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.SourceSetContainer
+import java.util.zip.ZipFile
 
 // dist 模块构建脚本：把各模块与第三方依赖合并为单个多入口 noturne jar。
 // 该 jar 同时充当注入器 GUI、Java agent 与模组，无需按加载器拆分发包。
@@ -22,22 +23,12 @@ dependencies {
     implementation(project(":injector"))
 }
 
-/** 在加载器元数据模板中展开 ${version} 占位符，使 fabric.mod.json / mods.toml
- * 中的版本号随项目版本自动同步。 */
-tasks.processResources {
-    // 仅对这三种模组描述文件做替换，其他资源（如图标、mixins 配置）保持原样。
-    filesMatching(listOf("fabric.mod.json", "META-INF/mods.toml", "META-INF/neoforge.mods.toml")) {
-        expand("version" to project.version.toString())
-    }
-}
-
 /**
- * 最终交付物：一个同时具备三种身份的 jar：
+ * 最终交付物：一个同时具备两种身份的 jar：
  *   - 注入器 GUI（双击启动：清单中的 Main-Class）
  *   - agent      （Premain-Class / Agent-Class，被注入到运行中的 JVM）
- *   - 模组       （classpath 上的 fabric.mod.json / mods.toml / neoforge.mods.toml）
  *
- * <p>模组加载器的桩代码位于独立 source set，刻意不包含在内。
+ * <p>只有注入这一条路径：不再产出加载器元数据，也不再有模组形态。
  */
 val distJar = tasks.register<Jar>("distJar") {
     // 归入 build 分组，便于与普通 jar 区分。
@@ -74,8 +65,17 @@ val distJar = tasks.register<Jar>("distJar") {
     from(configurations.runtimeClasspath.get()
             .filter { it.name.endsWith(".jar") }
             .map { zipTree(it) }) {
-        // 排除必须挂在这一次 from 上：顶层 exclude 对 zipTree 展开出来的内容不生效。
+        // 这里排除的是「zipTree 展开出来的类文件」：CopySpec 的 exclude 会沿 spec 树继承，
+        // 因此对解包内容同样生效。ASM 的类不进 jar 根，改以原 jar 形式作为资源内嵌（见下方）。
         exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
+    }
+
+    // ASM 依赖 jar 的「原文件」作为资源内嵌，路径固定为 dev/noturne/agent/asm.jar。
+    // agent 运行时用子加载器（child-first 于 org.objectweb.asm.）从该资源在内存中加载类，
+    // 从而既能拿到 ASM，又不让展开的 org/objectweb/asm/** 出现在 jar 根被模组加载器抢先加载。
+    from(configurations.runtimeClasspath.get().filter { it.name.startsWith("asm") }) {
+        into("dev/noturne/agent")
+        rename { "asm.jar" }
     }
 
     // 逐个并入各业务模块的 main 输出，并显式 dependsOn 其 classes 任务以保证构建顺序。
@@ -89,12 +89,41 @@ val distJar = tasks.register<Jar>("distJar") {
     // 于是任何「以本 jar 为 classpath」的编译都会报「程序包 xxx 不存在」。
     exclude("module-info.class", "META-INF/versions/**")
 
-    // 字节码操作库（ASM / Mixin / MixinExtras）必须排除：加载器自己也带这些库，
+    // 字节码操作库在 jar 根必须排除展开的类：加载器自己也带这些库，
     // 而 Fabric 的 KnotClassLoader 会先在 mods jar 里找类——于是同一个 org.objectweb.asm.MethodVisitor
     // 被两个加载器各加载一次，MixinExtras 与 sponge-mixin 拿到的类型对不上，直接 VerifyError 崩溃。
-    // 排除后：模组路径用加载器自带的版本；agent 路径若目标 JVM 没有 ASM，
-    // 帧钩子会优雅降级（只记录日志），不影响其余功能。
+    // 排除后：模组路径用加载器自带的版本；agent 路径改从内嵌资源 dev/noturne/agent/asm.jar
+    // 以子加载器加载 ASM，帧钩子因此不再依赖目标 JVM 是否自带 ASM。
     exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
+
+    // 产物自检：必须内嵌 dev/noturne/agent/asm.jar，且 jar 根不得出现展开的 ASM 类。
+    // 这两个不变式一旦被破坏（例如依赖改名或 exclude 失效），帧钩子会静默失效，故在此硬失败。
+    doLast {
+        val jarFile = archiveFile.get().asFile
+        ZipFile(jarFile).use { zip ->
+            if (zip.getEntry("dev/noturne/agent/asm.jar") == null) {
+                throw GradleException(
+                    "dist jar ${jarFile.name} is missing the embedded ASM resource " +
+                        "'dev/noturne/agent/asm.jar'; the frame hook would silently fail."
+                )
+            }
+            var stray: String? = null
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+                val name = entries.nextElement().name
+                if (name.startsWith("org/objectweb/asm/")) {
+                    stray = name
+                    break
+                }
+            }
+            if (stray != null) {
+                throw GradleException(
+                    "dist jar ${jarFile.name} leaked an expanded ASM class '$stray'; " +
+                        "ASM must only be embedded as 'dev/noturne/agent/asm.jar'."
+                )
+            }
+        }
+    }
 }
 
 tasks.named("assemble") {

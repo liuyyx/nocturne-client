@@ -22,8 +22,10 @@ import dev.noturne.ui.clickgui.ClickGui;
  */
 public final class GuiOverlay implements FrameListener {
 
-    /** 右 Shift 的键码；LWJGL2 与 GLFW 在功能键区取值一致。 */
-    public static final int KEY_RIGHT_SHIFT = 344;
+    /** 右 Shift 的键码，统一采用 AWT VK 码；输入后端负责翻译到 LWJGL2 / GLFW。 */
+    public static final int KEY_RIGHT_SHIFT = 54;
+    /** Esc 的键码（AWT VK_ESCAPE）；用于派发键盘事件使 Esc 关闭可达。 */
+    private static final int KEY_ESCAPE = 27;
 
     /** 左键编号。 */
     private static final int BUTTON_LEFT = 0;
@@ -41,6 +43,8 @@ public final class GuiOverlay implements FrameListener {
 
     /** 上一帧开关按键是否按下，用于取「按下沿」。 */
     private boolean toggleWasDown;
+    /** 上一帧 Esc 是否按下，用于取「按下沿」。 */
+    private boolean escapeWasDown;
     /** 上一帧左键是否按下。 */
     private boolean leftWasDown;
     /** 上一帧右键是否按下。 */
@@ -82,6 +86,10 @@ public final class GuiOverlay implements FrameListener {
 
     /** 是否已打印过首帧输入诊断，保证只打印一次。 */
     private boolean loggedFirstInput;
+    /** 上一帧 GUI 是否处于打开状态；用于识别指针捕获的交接沿。 */
+    private boolean wasOpenForPointer;
+    /** 打开 GUI 之前游戏的指针捕获状态；关闭时原样恢复。 */
+    private boolean pointerGrabbedBeforeGui;
 
     @Override
     public void onFrame() {
@@ -102,31 +110,81 @@ public final class GuiOverlay implements FrameListener {
         if (toggleDown && !toggleWasDown) {
             gui.toggle();
             if (gui.isOpen()) {
-                // 打开：把指针从游戏手里要回来，否则坐标恒定在屏幕中心、什么都点不到
-                input.setPointerGrabbed(false);
                 // 重置基准状态，避免上一帧的按下/位置被误判成本帧的新事件
                 lastX = mx;
                 lastY = my;
                 leftWasDown = input.mouseDown(BUTTON_LEFT);
                 rightWasDown = input.mouseDown(BUTTON_RIGHT);
-            } else {
-                // 关闭：交还指针，否则游戏无法转视角
-                input.setPointerGrabbed(true);
+                escapeWasDown = input.keyDown(KEY_ESCAPE);
             }
         }
         toggleWasDown = toggleDown;
 
+        // 指针捕获交接（不是每帧强制）：
+        //   打开 GUI     → 记下游戏原本的捕获状态，然后把指针交还给 GUI；
+        //   打开期间     → 每帧保持释放（游戏中游戏会自行持续捕获，必须重申）；
+        //   关闭的那一帧 → 恢复打开前的状态。
+        // GUI 关闭期间完全不碰这个状态：主菜单/聊天/原生界面本来就需要可见光标，
+        // 无条件捕获会把光标锁死——真机上「鼠标被锁」就是这里来的。
+        boolean open = gui.isOpen();
+        if (open) {
+            if (!wasOpenForPointer) {
+                // 打开沿：记下原状态，供关闭时恢复
+                pointerGrabbedBeforeGui = input.isPointerGrabbed();
+            }
+            input.setPointerGrabbed(false);
+        } else if (wasOpenForPointer) {
+            // 关闭沿：恢复打开前的捕获状态
+            input.setPointerGrabbed(pointerGrabbedBeforeGui);
+        }
+        wasOpenForPointer = open;
+
+        // 滚轮增量每帧取出并清零：GUI 关闭期间也必须消费，否则打开瞬间会把
+        // 关闭期间累积的增量一次性滚动出来。
+        double scroll = input.scrollDelta();
+
         if (!gui.isOpen()) {
+            // 关闭状态保持输入基准同步，避免重开首帧把陈旧按下态误判为新事件
+            leftWasDown = input.mouseDown(BUTTON_LEFT);
+            rightWasDown = input.mouseDown(BUTTON_RIGHT);
+            escapeWasDown = input.keyDown(KEY_ESCAPE);
+            lastX = mx;
+            lastY = my;
             return;
         }
-        if (!loggedFirstDraw) {
-            loggedFirstDraw = true;
-            System.out.println("[noturne] click GUI opened; input=" + input.describe()
-                    + "; backend=" + renderer.backendName());
+
+        // 键盘：目前只需让 Esc 可达（关闭 GUI）。键码为 AWT VK，后端已翻译。
+        boolean escapeDown = input.keyDown(KEY_ESCAPE);
+        if (escapeDown && !escapeWasDown) {
+            gui.keyPressed(KEY_ESCAPE, 0);
+        }
+        escapeWasDown = escapeDown;
+        if (!gui.isOpen()) {
+            // Esc 在本帧关闭了 GUI：同步输入基准，本帧不再绘制。
+            // 指针不在这一帧硬性恢复：下一帧的交接沿会把它还原成打开前的状态
+            // （在主菜单里打开 GUI 再按 Esc，光标必须保持可见）。
+            leftWasDown = input.mouseDown(BUTTON_LEFT);
+            rightWasDown = input.mouseDown(BUTTON_RIGHT);
+            lastX = mx;
+            lastY = my;
+            return;
         }
 
-        // 先同步绘制区域高度，滚动范围才能正确夹取（后端未渲染过时返回 0，此时不做限制）
-        gui.setViewport(renderer.height());
+        if (!loggedFirstDraw) {
+            loggedFirstDraw = true;
+            if (renderer.ready()) {
+                System.out.println("[noturne] click GUI opened; input=" + input.describe()
+                        + "; backend=" + renderer.backendName());
+            } else {
+                // 后端未就绪时叠加层照样会绘制，但可能全帧不可见；明确警告，
+                // 避免与「输入没解析出来」的现象混为一谈。
+                System.out.println("[noturne] WARNING: click GUI opened but renderer not ready;"
+                        + " input=" + input.describe() + "; backend=" + renderer.backendName());
+            }
+        }
+
+        // 先同步绘制区域尺寸，滚动范围与拖动/平移夹取才能正确计算
+        gui.setViewport(renderer.width(), renderer.height());
         gui.update(System.currentTimeMillis(), mx, my);
 
         boolean left = input.mouseDown(BUTTON_LEFT);
@@ -152,7 +210,6 @@ public final class GuiOverlay implements FrameListener {
             gui.mouseReleased(mx, my, BUTTON_RIGHT);
         }
 
-        double scroll = input.scrollDelta();
         if (scroll != 0d) {
             gui.mouseScrolled(mx, my, scroll);
         }
@@ -162,8 +219,14 @@ public final class GuiOverlay implements FrameListener {
         leftWasDown = left;
         rightWasDown = right;
 
+        // begin/end 必须成对：渲染中途抛异常时若不执行 endFrame，
+        // beginFrame 压入的投影/模型视图矩阵栈永远不会弹出（每帧泄漏 2 层，约 16 帧后栈溢出），
+        // 游戏的 3D 画面将永久错乱且不可自愈。
         renderer.beginFrame();
-        gui.render(renderer);
-        renderer.endFrame();
+        try {
+            gui.render(renderer);
+        } finally {
+            renderer.endFrame();
+        }
     }
 }

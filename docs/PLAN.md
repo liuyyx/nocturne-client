@@ -1,80 +1,33 @@
 # 开发计划
 
-目标：**Doomsday 式 JVM 注入 + Epsilon 风格 UI + Vape 式功能**，单 jar 多入口，
-覆盖 Minecraft 1.8.9 – 26.3，Windows / macOS / Linux。
+原则：**每个阶段都以可运行的验证收尾**，不写「应该能行」。文档里的状态只有两种：实测通过、未验证。
 
-每个阶段都必须以**可运行的验证**收尾（不是"能编译"就算完）。
+## 已定架构（不讨论，实现照此）
 
----
+1. 单 jar，**只有注入**一条路径（无模组形态）。
+2. 客户端代码按 **Mojmap 规范名**写，**不写版本分支**。
+3. 版本差异 → **每版本一份映射表 JSON**（自动生成 + 人工补丁，打进 jar 资源）。
+4. 目标版本 → 注入器判定并传 `mcVersion=`，运行时零探测。
+5. 界面与输入 → **用游戏自己的 API**，按代际写后端，成员名查表。
+6. 帧信号 → LWJGL 交换函数（3 个签名，与 MC 版本无关）。
 
-## Phase 1 — 骨架与构建
+## 阶段
 
-| 交付 | 状态 |
-|---|---|
-| Gradle 多模块（`core`/`agent`/`client`/`ui`），全部 `release = 8` | ✅ |
-| `README.md`、`docs/ARCHITECTURE.md`、`docs/PLAN.md` | ✅ |
-| `core` 首个真实实现：`ProcessScanner`（跨平台 JVM 枚举 + MC 识别） | ✅ |
-| `core` 首个真实实现：`Attacher`（反射 attach）+ `Noturne.main` | ✅ |
-| **验收**：`gradle build` 通过；`java -jar core.jar` 能打印本机 JVM 进程列表 | ✅ |
+| 阶段 | 内容 | 验收 |
+|---|---|---|
+| P0 清理 | 删模组路径 / 启动动画 / 版本适配分支；修指针捕获语义 | 构建 + 单测绿（✅ 已完成） |
+| P1 版本传递 | `AgentOptions`（组装 + 版本族归一化）；注入器 GUI 与命令行两条路径；agent 解析并按表名取表 | 单测绿；真机日志出现 `mcVersion=` 与表加载结果（✅ 已完成） |
+| P2 注入点 | 帧交换钩子（已完成）+ **绘制上下文钩子**（已完成，含行为测试） | 补丁后的类能被 JVM 校验并真的拿到形参（✅ 已完成） |
+| P3 映射表生成器 | `tools/mapping/`：ProGuard（1.14.4+）/ SRG+MCP+别名（1.8.9、1.12.2）/ 恒等（26.x）三档；产出 9 个版本的表；`--check` + `--javap` 校验 | 9 个 JSON 生成完毕；每条需求解析或明确 `absent`；覆盖率报告（⏳ 进行中） |
+| P4 绘制后端（3 个代际） | A（1.8.9/1.12.2，FontRenderer 自绘 + `Gui.drawRect` + GL 裁剪）、B（`DrawContext`/`GuiGraphics` 回调形参）、C（`GuiGraphicsExtractor`，文字提交给上下文） | 1.8.9 与 26.3 真机:注入后界面可见、可点 |
+| P5 输入（按代际） | 现代：`InputConstants` + `MouseHandler`；老版：`KeyBinding` + LWJGL2 | 右 Shift 能唤出界面、Esc 能关闭、鼠标可操作 |
+| P6 模块 | 既有 4 个模块 + 实战模块；全部只写 Mojmap 名 | 同一份模块源码在 1.8.9 与 26.3 都生效（不重新编译、不写版本分支） |
+| P7 自实现 attach | 免 `jdk.attach` / `tools.jar`（内嵌 `sun.tools.attach.*` + 原生通道），兼容裁剪 JRE | 在没有 `jdk.attach` 的环境里注入成功 |
 
-## Phase 2 — 注入核心（core）
+## 待办里容易忘的两条
 
-- [ ] 自实现 attach：内嵌 `sun.tools.attach.*` 字节码（按 JDK 版本分支）+ attach 原生库加载，
-      摆脱 `tools.jar` / `jdk.attach` 模块依赖。**未开始**（当前走 JDK attach API）。
-- [x] 载荷格式：定义自有封装（密文 → 解密 → 解压 → `名称→字节码` 表），内存 `ClassLoader` 装载。
-- [x] 单 jar 多入口元数据：`Main-Class` / `Premain-Class` / `Agent-Class` /
-      `fabric.mod.json` / `mods.toml` / `neoforge.mods.toml` 同时打进一个产物。
-- [ ] **验收**：对真实运行的 Minecraft（1.8.9 与 26.x 各一）成功 attach，agent 侧打印握手信息。
-      已在普通 JVM 上验证通过（`ATTACH OK` + `agent loaded via agentmain` + `client installed`），
-      **真实 Minecraft 待验证**。
-
-## Phase 3 — agent 运行时
-
-- [x] `premain` / `agentmain` 接线，持有 `Instrumentation`，另起线程初始化客户端。
-- [x] 客户端引导：事件总线、模块注册表、映射初始化。
-- [x] **验收**：注入后目标 JVM 内可见 noturne 的日志与（空的）模块列表。
-      —— 已在普通 JVM 上验证：`[noturne] client installed (modules=4)`。
-- [x] 帧钩子：ASM 在帧交换点（`Display.update()` / `glfwSwapBuffers`）插入 `NoturneRuntime.onFrame()`。
-
-## Phase 4 — UI（Epsilon 风格）
-
-- [x] 渲染层抽象（兼容 1.8.9 的 OpenGL 与 26.x 的核心 profile）。
-      —— 固定管线路径补上了正交投影与 `glScissor` 裁剪；核心 profile 路径自带投影矩阵。
-- [x] ClickGUI：组件树（Panel/Button/Slider/ToggleSwitch/ModeSelector/ColorPicker）、主题、字体、动画。
-      —— 另含分类栏拖动、滚轮滚动、右键唤出设置面板、鼠标捕获控制。
-- [x] HUD 组件与配置面板。
-- [ ] **验收**：`Right Shift` 唤出 GUI，交互流畅，视觉与参考 UI 一致。
-      —— 输入层（两代 LWJGL 的键鼠轮询 + 指针捕获 + 事件合成）已实现，**待游戏内实机验证**。
-- [ ] 视觉对齐 Epsilon：按 `MD3Theme` 的配色与尺寸常量重做（规格见 `local://epsilon-gui-spec.md`）。
-      注意 Epsilon 为 GPL-3.0，本项目为 All Rights Reserved，**只对齐视觉，不复制代码**。
-
-## Phase 5 — 功能模块（Vape 式）
-
-- [ ] 模块基类 + 值体系 + 分类（Combat / Movement / Render / Player / World / Misc）。
-- [ ] 事件挂钩：Tick、Packet、Render、Input。
-- [ ] 首批模块：AimAssist、Reach、Velocity、Fly、Scaffold、ESP、Xray、FullBright。
-- [ ] **验收**：模块可在游戏内开关并生效。
-
-## Phase 6 — 跨版本适配层
-
-- [ ] `Mapping` 抽象 + 三模式（1.8.9 MCP / 1.21.x Mojmap / 26.1+ 反射）。
-- [ ] wrapper 层：`Minecraft` / `LocalPlayer` / `World` / `Entity` …
-- [ ] **验收**：同一份模块代码在 1.8.9 与 26.x 上都能跑通。
-
-## Phase 7 — 平台与套壳
-
-- [ ] 平台层：Windows / macOS / Linux 的差异封装（原生辅助库可选）。
-- [ ] WinUI 套壳启动器（可选）。
-- [ ] **验收**：三平台均可完成"启动 → 扫描 → 注入 → GUI"闭环。
-
----
-
-## 设计决策记录
-
-| 决策 | 理由 |
-|---|---|
-| 字节码基线 Java 8 | agent 必须能进 1.8.9 的 JVM |
-| 不引入 Mixin | 避免加载器/版本耦合，统一走 JVMTI + ASM |
-| 映射反射优先 | 26.1+ 无混淆，可直接反射；老版本查表 |
-| 模块依赖单向 `ui→client→agent→core` | 注入器可独立运行 |
-| 资源全内存加载 | 不留磁盘痕迹 |
+- **滚轮**：GLFW/SDL 都没有「查询滚轮」的 API，游戏侧也没有可轮询的累加器 →
+  需要在游戏的滚动处理方法上再挂一个注入点（`CallbackHookTransformer` 目前只交首个**引用**形参，
+  滚轮是 `double` 形参，需扩展或另设签名）。当前行为：滚轮为 0 并打一次日志说明。
+- **26.1 与 26.2/26.3 的 HUD 入口不兼容**（形参 vs 字段），属绘制代际 C 内部的两个子形态，
+  织入代码不能共用——按表里的入口描述分别处理。

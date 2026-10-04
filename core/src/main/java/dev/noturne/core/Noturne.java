@@ -1,12 +1,17 @@
 package dev.noturne.core;
 
+import dev.noturne.core.attach.AgentOptions;
 import dev.noturne.core.attach.AttachException;
 import dev.noturne.core.attach.Attacher;
+import dev.noturne.core.attach.CodeSources;
+import dev.noturne.core.attach.CurrentProcess;
 import dev.noturne.core.attach.ProcessScanner;
 import dev.noturne.core.attach.ToolsJarBootstrap;
 
 import java.io.File;
-import java.net.URLDecoder;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -17,6 +22,15 @@ import java.util.List;
  * 或通过 {@code -javaagent} 加载时，则由相应的 loader 入口接管，不进入此处的流程。
  */
 public final class Noturne {
+
+    /** 运行期失败（找不到目标进程、attach 失败）的退出码。 */
+    private static final int EXIT_FAILURE = 1;
+    /** 命令行用法错误的退出码（{@code --pid=} 值非法）。 */
+    private static final int EXIT_USAGE = 2;
+    /** {@code --pid=} 未指定时的哨兵值。 */
+    private static final int PID_UNSPECIFIED = -1;
+    /** {@code --pid=} 的值无法解析为整数时的哨兵值。 */
+    private static final int PID_INVALID = -2;
 
     /** 工具类，禁止实例化。 */
     private Noturne() {
@@ -36,18 +50,37 @@ public final class Noturne {
             return;
         }
         int pid = parsePid(args);
+        if (pid == PID_INVALID) {
+            System.err.println("[noturne] invalid --pid value; expected a positive integer");
+            System.exit(EXIT_USAGE);
+        }
 
         if (hasFlag(args, "--list-json")) {
             printProcessesAsJson();
             return;
         }
+
+        int selfPid = CurrentProcess.pid();
+        if (pid != PID_UNSPECIFIED) {
+            if (pid <= 0) {
+                System.err.println("[noturne] invalid --pid value " + pid + "; expected a positive integer");
+                System.exit(EXIT_USAGE);
+            }
+            if (CurrentProcess.isSelf(pid)) {
+                System.err.println("[noturne] refusing to attach to this JVM itself (pid " + pid + ")");
+                System.exit(EXIT_FAILURE);
+            }
+        }
+
         File self = selfJar();
 
-        List<ProcessScanner.ProcessInfo> candidates = ProcessScanner.minecraftProcesses();
-        if (pid < 0) {
+        // 排除自身 pid：本 jar 常被放在 .minecraft/mods 下，扫描进程的路径/标题同样含 "minecraft"，
+        // 不排除就会把客户端注入到注入器自己的 JVM 里。
+        List<ProcessScanner.ProcessInfo> candidates = withoutSelf(ProcessScanner.minecraftProcesses(), selfPid);
+        if (pid == PID_UNSPECIFIED) {
             if (candidates.isEmpty()) {
                 StringBuilder message = new StringBuilder("No Minecraft process found.\n\nLive JVMs:\n");
-                List<ProcessScanner.ProcessInfo> all = ProcessScanner.javaProcesses();
+                List<ProcessScanner.ProcessInfo> all = withoutSelf(ProcessScanner.javaProcesses(), selfPid);
                 if (all.isEmpty()) {
                     message.append("    (none)\n");
                 } else {
@@ -57,7 +90,7 @@ public final class Noturne {
                 }
                 message.append("\nStart Minecraft first, then run this jar again.");
                 notifyUser(message.toString());
-                return;
+                System.exit(EXIT_FAILURE);
             }
             ProcessScanner.ProcessInfo chosen = candidates.get(0);
             pid = chosen.pid;
@@ -65,8 +98,13 @@ public final class Noturne {
         }
 
         System.out.println("[noturne] attaching to pid " + pid + " with " + self.getName());
+        // 版本由注入侧判定并随选项传给 agent（运行时零探测）：命令行里既有 --version 也有
+        // versions/<实例>/ 路径。拿不到命令行（非 Windows / WMI 被禁用）时传空串，agent 侧按未知处理。
+        String options = AgentOptions.composeVersion(
+                AgentOptions.familyFromCommandLine(
+                        ProcessScanner.javaProcessCommandLines().get(Integer.valueOf(pid))));
         try {
-            Attacher.attach(pid, self, "");
+            Attacher.attach(pid, self, options);
         } catch (AttachException e) {
             System.err.println("[noturne] attach failed: " + e.getMessage());
             // 针对最常见的失败（attach API 不在 classpath 上）给出可操作的提示。
@@ -80,7 +118,7 @@ public final class Noturne {
             } else if (cause != null) {
                 System.err.println("[noturne] cause: " + cause);
             }
-            System.exit(1);
+            System.exit(EXIT_FAILURE);
         }
         System.out.println("[noturne] agent loaded");
     }
@@ -100,10 +138,10 @@ public final class Noturne {
 
     /** 把候选进程以 {@code [{"pid":…,"title":…,"command":…}]} 的形式输出到标准输出，供外部 UI 解析。 */
     private static void printProcessesAsJson() {
-        List<ProcessScanner.ProcessInfo> processes = ProcessScanner.minecraftProcesses();
-        if (processes.isEmpty()) {
-            processes = ProcessScanner.javaProcesses();
-        }
+        // 只输出 Minecraft 进程；找不到时输出空数组，绝不退回「全部 JVM」——
+        // 启动器把列表当作可注入目标，混入无关 JVM 会导致对错误进程注入并误报成功。
+        // 同样排除自身 pid。
+        List<ProcessScanner.ProcessInfo> processes = withoutSelf(ProcessScanner.minecraftProcesses(), CurrentProcess.pid());
         StringBuilder json = new StringBuilder("[");
         for (int i = 0; i < processes.size(); i++) {
             ProcessScanner.ProcessInfo info = processes.get(i);
@@ -116,7 +154,34 @@ public final class Noturne {
                     .append("\"}");
         }
         json.append(']');
-        System.out.println(json);
+        // 固定 UTF-8：启动器按 UTF-8 解码，不能随 JVM 默认编码漂移（否则中文窗口标题乱码）。
+        writeStdoutUtf8(json.toString() + System.lineSeparator());
+    }
+
+    /** 以 UTF-8 编码把文本写入进程标准输出。 */
+    private static void writeStdoutUtf8(String text) {
+        try {
+            PrintStream utf8 = new PrintStream(System.out, true, "UTF-8");
+            utf8.print(text);
+            utf8.flush();
+        } catch (UnsupportedEncodingException e) {
+            // UTF-8 是 JVM 必备字符集，正常不会走到这里；退回默认输出保证不丢数据。
+            System.out.print(text);
+        }
+    }
+
+    /** 过滤掉自身 pid 对应的进程；pid 未知（{@code <= 0}）时原样返回。 */
+    private static List<ProcessScanner.ProcessInfo> withoutSelf(List<ProcessScanner.ProcessInfo> processes, int selfPid) {
+        if (selfPid <= 0 || processes == null || processes.isEmpty()) {
+            return processes;
+        }
+        List<ProcessScanner.ProcessInfo> filtered = new ArrayList<ProcessScanner.ProcessInfo>(processes.size());
+        for (ProcessScanner.ProcessInfo info : processes) {
+            if (info.pid != selfPid) {
+                filtered.add(info);
+            }
+        }
+        return filtered;
     }
 
     /**
@@ -159,31 +224,34 @@ public final class Noturne {
         return out.toString();
     }
 
-    /** 解析 {@code --pid=<n>}，用于跳过自动发现直接指定目标进程。 */
+    /**
+     * 解析 {@code --pid=<n>}，用于跳过自动发现直接指定目标进程。
+     *
+     * @return 解析出的值；未指定时 {@link #PID_UNSPECIFIED}，值非法时 {@link #PID_INVALID}
+     */
     private static int parsePid(String[] args) {
         if (args == null) {
-            return -1;
+            return PID_UNSPECIFIED;
         }
         for (String arg : args) {
-            if (arg.startsWith("--pid=")) {
+            if (arg != null && arg.startsWith("--pid=")) {
                 try {
                     return Integer.parseInt(arg.substring("--pid=".length()).trim());
-                } catch (NumberFormatException ignored) {
-                    return -1;
+                } catch (NumberFormatException e) {
+                    return PID_INVALID;
                 }
             }
         }
-        return -1;
+        return PID_UNSPECIFIED;
     }
 
     /**
      * 定位本类所在的 jar 的绝对路径（它同时就是待注入的 agent jar）。
      *
-     * @throws Exception 代码源不可用或路径含非 UTF-8 字节时抛出
+     * @throws Exception 代码源不可用或路径不是合法文件 URL 时抛出
      */
     private static File selfJar() throws Exception {
-        String path = Noturne.class.getProtectionDomain().getCodeSource().getLocation().getPath();
-        return new File(URLDecoder.decode(path, "UTF-8"));
+        return CodeSources.toFile(Noturne.class);
     }
 
     /**

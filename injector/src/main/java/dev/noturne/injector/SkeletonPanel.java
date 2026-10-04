@@ -9,6 +9,8 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 
 /**
  * 扫描进行中显示的「呼吸」骨架条，让列表区域不会看起来卡死或空着。
@@ -50,13 +52,29 @@ public final class SkeletonPanel extends JPanel {
             }
             repaint();
         });
+
+        // CardLayout 切换卡片只是把组件设为不可见，并不会触发 removeNotify；只靠 removeNotify
+        // 会让定时器在切到表格后继续 25fps 空转。这里监听可见性变化才真正对齐生命周期。
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentShown(ComponentEvent e) {
+                timer.start();
+            }
+
+            @Override
+            public void componentHidden(ComponentEvent e) {
+                timer.stop();
+            }
+        });
     }
 
-    /** 组件被挂到屏幕上时启动动画。 */
+    /** 组件被挂到屏幕上时，若可见则启动动画。 */
     @Override
     public void addNotify() {
         super.addNotify();
-        timer.start();
+        if (isVisible()) {
+            timer.start();
+        }
     }
 
     /** 组件离开屏幕时停止动画，避免隐藏后仍在消耗 CPU。 */

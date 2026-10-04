@@ -66,3 +66,14 @@ java -jar dist/build/libs/noturne-<version>.jar --pid=<pid>     # 注入指定�
 | 版本号传递、两种注入点 | 已完成并有测试 |
 | 界面/输入改为「用游戏自己的 API」 | 待做（当前仍是自绘 GL 路径） |
 | 模组形态 | 已移除（不再支持放进 `mods/`） |
+
+## 许可
+
+本项目以 **GPL-3.0-or-later** 分发，全文见根目录 `LICENSE`。
+
+之所以是 GPL：`ui/` 中的 Skija 绘制层与部分控件视觉移植自 **Setsuna**（上游 commit
+`e4915ae`，作者 ShiYi，声明许可 `GPL-3.0-or-later`）。上游源码快照保存在 `vendor/setsuna/`
+（含其 `LICENSE`、`LICENSE-APACHE` 与来源说明 `UPSTREAM.txt`）。
+
+分发要求：保留版权与许可声明、注明来源，并以 GPL-3.0-or-later 提供完整对应源码；
+**不得**再附加"禁止转售/禁止商用"之类的额外限制。第三方组件清单见 `THIRD-PARTY-NOTICES.md`。

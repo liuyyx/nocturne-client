@@ -13,10 +13,11 @@
 | 最少要带多少文件 | **265 类 / 58,782 行**（全量 330 类 / 62,222 行）→ 只能排掉 65 类 | 闭包脚本，见 §1 |
 | 哪些能逐行不动 | 只有 `render/**` 的纯 Skia 调用 + 主题/几何/控件绘制逻辑 | §2 编译结果 |
 | 哪些必须改写 | 所有带 `net.minecraft.*` 类型的屏幕/模块、5 个 mixin 类、全部 Java 9+ 语法 | §2 计数表 |
-| Skija 能否跨版本 | **按 JVM 版本切，不按 MC 版本切**：Skija 是 Java 9 字节码，Java 8 的 1.8.9 用不了 | §3 class 版本 53 |
+| Skija 能否跨版本 | **能**：`skija-shared` 是 Multi-Release JAR，根目录类是 Java 8 字节码（版本 52），1.8.9 可用 | §3 |
 
 **一句话**：GUI 抄不动"一点点"——它的界面层直接引用模块与设置对象，闭包≈整个客户端；
-而且真正卡住 1.8.9 的不是 MC 版本差异，是 **Java 8 加载不了 Skija**。
+而卡住 1.8.9 的不是 Skija（它的核心 jar 是 Java 8 字节码），而是 Setsuna 源码里的
+**Java 16+ 语法**（模式匹配/record）与 **MC 26.x 专属 API**。
 
 ---
 
@@ -101,33 +102,37 @@ ASM transformer 或直接放弃（它们只提供 accessor，用途可替代）�
 
 ---
 
-## 3. Skija 能否成为跨版本 GUI 层
+## 3. Skija 能否成为跨版本 GUI 层：能，包括 1.8.9
 
-**不能覆盖 1.8.9（当 1.8.9 跑在 Java 8 上）。硬证据：**
+> **修正记录**：本节初版判为"Skija 是 Java 9 字节码（版本 53），1.8.9 用不了"——那是读到了
+> jar 里第一个 `.class`（`META-INF/versions/9/module-info.class`）。实测该 jar 是 Multi-Release JAR，
+> 结论要反过来。
 
 ```
-skija-shared-0.143.17.jar      首类版本 53 (Java 9)   275 类 / 379 KB
-skija-windows-x64-0.143.17.jar 首类版本 53 (Java 9)   10,309 KB
-types-0.2.0.jar                首类版本 53 (Java 9)   8 类
+skija-shared-0.143.17.jar        META-INF/MANIFEST.MF → Multi-Release: true
+                                 根目录 271 个类 → class 版本 52 (Java 8)   ← Java 8 加载这一份
+                                 META-INF/versions/9/ → 10 项，版本 53（module-info 等，Java 8 忽略）
+types-0.2.0.jar                  同上：根目录 7 类 = 版本 52
+skija-windows-x64-0.143.17.jar   仅 module-info.class (53) + 原生库资源 → 与字节码版本无关
 ```
 
-class 版本 53 的类**无法被 Java 8 的 JVM 加载**（`UnsupportedClassVersionError`）。
-1.8.9 的常规启动就是 Java 8 → Skija 通道在 1.8.9 上不可用。
+Java 8 的 JVM 加载根目录的 52 版本类、忽略 `versions/9`，因此 **Skija 可用于 1.8.9**
+（与 `ui/build.gradle.kts` 的注释"skija-shared/types 是 Java 8 字节码，能进 1.8.9 的 JVM（已实测）"一致）。
+**不需要按 JVM 版本分流**：一份 Skija 绘制代码可覆盖全部目标版本。
 
-**切口：按 JVM 版本分流，而不是按 MC 版本。**
+真正的障碍不在 Skija，而在 Setsuna 源码自身：
 
-| 目标 | JVM | GUI 通道 |
-|---|---|---|
-| 1.8.9 / 1.12.2 / 1.16.5（Java 8 启动） | 8 | 自有 GL 后端（`ui/gl/GlRenderer` + `GlApi`，LWJGL2/3 各一代） |
-| 1.8.9 但用 Java 17 启动 | 17 | Skija 可用（class 53 在 17 上正常） |
-| 1.17+ | 17+ | Skija（一份代码管全部） |
+| 障碍 | 规模 | 处理 |
+|---|---:|---|
+| Java 16+ 语法（`instanceof` 模式匹配） | 219 处 | 降级为 `instanceof` + 强转 |
+| `record` 声明 | 35 处 | 改写为普通类 |
+| `List.of` / `Map.of` / `Set.of` | 116 处 | 改写为 `Arrays.asList` / `Collections` |
+| `var` / 文本块 | 17 / 2 处 | 显式类型 / 字符串拼接 |
+| MC 26.x 专属 API（`GuiGraphicsExtractor`、`DeltaTracker`、`Minecraft.screen`、`Hud`） | 1,657 + 162 处 | 写适配层，映射到目标版本的 `GuiScreen`/`FontRenderer`/`ScaledResolution` 等 |
+| Mixin accessor 类 | 5 个 | 改为 ASM/JVMTI 或绕开 |
 
-判定方式：运行时读 `java.class.version`（≥53 才装 Skija 通道），**不要**按 MC 版本猜——
-同一份 1.8.9 在不同启动参数下 JVM 不同。我们的 `OverlayBootstrap` 已经是"装一次、可用即整场使用、
-否则回落按代际的 GL 后端"的结构，把这个判定条件从"探测 Skija 是否能挂上"改成"JVM ≥ 9 才探测"即可。
-
-**附带成本**：Skija 原生库要按平台分发（Windows/macOS/Linux × x64/ARM64），1.0 MB 级
-`skija-<os>-<arch>.jar` 各一份；我们的单 jar 注入方案要么内嵌全部、要么按需下载。
+**为什么值得**：Skija 把"绘制"与 MC 版本解耦（对着当前 GL 上下文建 `DirectContext`、直接画进帧缓冲，
+不用游戏的绘制 API 与字体）。只要消化掉上表，同一套视觉代码即可跑在 1.8.9 – 26.3。
 
 ---
 
@@ -149,13 +154,73 @@ JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-25.0.4.7-hotspot" \
   gradle -p noturne-client/vendor/setsuna-gui compileJava --console=plain --no-daemon
 #    修好 build.gradle.kts 里 mcClientJar 的相对路径（../../../analysis/client-26.1.2.jar）后：
 #    BUILD FAILED，64 个错误，全部落在 MusicScreen / MusicLyricsHUD / KillAura / FeatureRuntime
-# 3) Skija 字节码版本
-unzip -p skija-shared-0.143.17.jar skija/Canvas.class | xxd -s 6 -l 2   # → 00 35 = 53 = Java 9
+# 3) Skija 字节码版本（注意：要看根目录类，不是 META-INF/versions/9/module-info.class）
+unzip -p skija-shared-0.143.17.jar io/github/humbleui/skija/Canvas.class | xxd -s 6 -l 2   # → 00 34 = 52 = Java 8
+unzip -p skija-shared-0.143.17.jar META-INF/MANIFEST.MF | grep -i multi-release               # → Multi-Release: true
 ```
 
 ## 6. 待办（本次未做）
 
 - 未给隔离工程补第三方 stub（`tritium.ncm.*` / `com.viaversion.setsunavia.*`），因此 64 条错误仍在；
   它们只影响音乐播放器界面与 KillAura 的协议版本判断，对 GUI 移植无影响。
-- 未实测 Skija 在 Java 17 启动的 1.8.9 上挂载（`GlApi`/`BackendRenderTarget.makeGL` 路径在 LWJGL2 下的兼容性）。
-- 未评估把 265 类里的 Java 9+ 语法批量降级到 Java 8 的成本（预计不可行：219 处模式匹配 + 35 个 record）。
+- 未实测 Setsuna 的 `SkijaRenderer` 在 1.8.9（LWJGL2 的 GL 上下文）上挂载：字节码层面已确认可用，
+  但 `DirectContext.makeGL` / `BackendRenderTarget.makeGL` 对老 GL 上下文的兼容性要在真机验证。
+- 未评估 Java 16+ 语法的降级改写成本（219 处模式匹配 + 35 个 record + 116 处 `List.of`），
+  可半自动改写，但必须逐处校验语义。
+
+---
+
+## 7. 移植方案与进度（决定：全抄 + 保 1.8.9，项目许可切 GPL-3.0-or-later）
+
+### 分层：抄什么、不抄什么
+
+| 层 | 处理 | 代表文件 |
+|---|---|---|
+| **视觉原语层**（Skija 调用、色板、几何、动画） | **整类照抄**，只做 Java 8 降级与字符集替换 | `render/SkijaUi`、`ui/UiTheme`、`ui/clickgui/ClickGuiLayout`、`ui/screen/PageTransition`、`ui/screen/UiControls`、`ui/screen/ScreenBackdrop`、`ui/hud/HudRenderUtil`、`ui/CategoryGlyphs` |
+| **屏幕壳层**（MC 的 `Screen` 生命周期 / 输入分发） | 抄结构，MC 交互全部下沉到本项目已有的跨版本层（`OverlayBootstrap` / `ReflectiveInput` / 映射表） | `ui/SkijaScreen`、`ui/screen/AbstractSkijaScreen`、`ui/clickgui/*Screen` |
+| **数据层**（玩家/世界/物品的读取） | 抄视觉算法，数据来源换成本项目的映射层 | `ui/hud/*HUD`、`module/modules/render/*` |
+| **不抄** | 上游的 module/setting/event/config/notification 框架（用本项目 `client/` 的 `Module`/`Value`/`EventBus`）、5 个 Mixin accessor、网易云音乐、ViaVersion | — |
+
+**为什么这样切**：上游 UI 与它的模块框架双向耦合（§1 的 265 类闭包），而它的模块又直接引用 26.x 专属
+MC API（`GuiGraphicsExtractor`/`DeltaTracker`/`ClientLevel`）。要让同一套视觉跑在 1.8.9 上，唯一可行的
+是把"绘制"与"MC 交互/数据"分开：绘制层纯 Skija（Skija 本身是 Java 8 字节码，§3），MC 相关的部分由本
+项目的跨版本层提供。
+
+### 包与命名对照
+
+全部落在 `ui/src/main/java/dev/noturne/ui/skija/`（新包），与既有 `ui/gl`、`ui/theme`、`ui/clickgui`
+（本项目自研、Epsilon 风格）并存，互不覆盖。
+
+| 上游 | 本项目 | 主要改动 |
+|---|---|---|
+| `render/SkijaUi` | `SkijaUi` | 去 `Setsuna` 依赖、Java 8 降级、字体资源改 `/assets/noturne/fonts/` |
+| `ui/UiTheme` | `SkijaTheme` | `accent()` 改为可注入静态值 |
+| `ui/SkijaScreen` | `SkijaScreen` | 仅包名 |
+| `ui/screen/PageTransition` | `PageTransition` | 可见性 public |
+| `ui/CategoryGlyphs` | `CategoryGlyphs` | 换成本项目 `Category` 枚举 |
+| `ui/clickgui/ClickGuiLayout` | `ClickGuiLayout` | record → final 类 |
+| `ui/screen/UiControls` | `SkijaControls` | 去 MC/GLFW 输入类型，改原始 `char`/`int` |
+| `ui/screen/ScreenBackdrop` | `SkijaBackdrop` | 去 MC，配置改静态 setter |
+| `ui/hud/HudRenderUtil` | `SkijaHudPrimitives` | `IntSetting` → `int`，内联 `Edges` |
+
+### 依赖替换规则（一致约定）
+
+| 上游用法 | 本项目做法 |
+|---|---|
+| `Setsuna.mc().gameDirectory` | `System.getProperty("user.dir")`（MC 的工作目录即此） |
+| `Setsuna.MOD_ID` | 字面量 `"noturne"` |
+| `Setsuna.LOGGER.warn(...)` | `System.out.println("[noturne] ...")`（与项目其它处一致） |
+| MC 输入事件类（`KeyEvent`/`CharacterEvent`、GLFW 键码） | 原始 `char` / `int` + `java.awt.event.KeyEvent.VK_*`（跨版本，不依赖 LWJGL3） |
+| MC 剪贴板 | 可注入接口（`SkijaControls.Clipboard`） |
+| MC 纹理（`Identifier` → Skia `Image`） | 待建"纹理桥"（本项目映射层 + `SkijaCanvas`），此部分方法暂不搬 |
+| 上游 `Setting` 对象 | 本项目 `client/value/*` 或原始参数 |
+
+### 进度
+
+| 文件 | 状态 |
+|---|---|
+| `SkijaUi` | 移植中（子代理） |
+| `SkijaScreen` / `PageTransition` / `CategoryGlyphs` / `SkijaTheme` / `ClickGuiLayout` | 已落盘 |
+| `SkijaControls` / `SkijaBackdrop` / `SkijaHudPrimitives` | 移植中（子代理） |
+| 屏幕壳层、数据层（HUD/ClickGUI 屏） | 待做：需先建纹理桥与渲染回调对接 |
+| 编译验证（`:ui:compileJava`，release 8） | 待做：等上述文件齐后统一跑 |

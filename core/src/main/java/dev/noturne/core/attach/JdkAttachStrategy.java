@@ -50,6 +50,10 @@ public final class JdkAttachStrategy implements AttachStrategy {
         } catch (java.lang.reflect.InvocationTargetException e) {
             // 抛出反射包装异常对用户毫无意义，这里把真实原因（进程不存在、agent jar 被拒等）透传出去。
             Throwable cause = e.getCause();
+            if (isJdk8ResponseMismatch(cause)) {
+                // 目标侧实际已加载成功，只是客户端读不懂 JDK 8 的响应格式（见方法注释）。
+                return;
+            }
             if (cause instanceof Exception) {
                 throw (Exception) cause;
             }
@@ -61,6 +65,36 @@ public final class JdkAttachStrategy implements AttachStrategy {
                 // detach 失败不能掩盖已成功的 load
             }
         }
+    }
+
+    /**
+     * 判断异常是否为「JDK 9+ 客户端误读 JDK 8 目标响应」造成的假失败。
+     *
+     * <p>JDK 8 的 attach 协议在 {@code load} 命令上返回裸返回码（{@code 0\n}），
+     * 而 JDK 9+ 的客户端按新格式（{@code return code: 0}）解析：整段响应不以
+     * {@code return code: } 开头时，客户端抛
+     * {@code AgentLoadException: Failed to load agent library: <原响应>}。
+     * 实测（JDK 21 客户端 → JDK 8 目标，目标侧以「写文件」证实）：agent 已加载、
+     * {@code agentmain} 已执行、返回码为 0 —— 因此把这种「返回码为 0 的 load 失败」视为成功。
+     *
+     * <p>不能用 {@code instanceof}：attach 类可能是从 tools.jar 的子加载器加载的，
+     * 与编译期类型不同源；这里按异常类名与消息格式判定。
+     *
+     * @param cause {@code loadAgent} 反射调用抛出的原始异常
+     * @return 目标侧实际加载成功时为 true
+     */
+    private static boolean isJdk8ResponseMismatch(Throwable cause) {
+        if (cause == null
+                || !"com.sun.tools.attach.AgentLoadException".equals(cause.getClass().getName())) {
+            return false;
+        }
+        String message = cause.getMessage();
+        String prefix = "Failed to load agent library: ";
+        if (message == null || !message.startsWith(prefix)) {
+            return false;
+        }
+        // 响应是裸返回码（JDK 8 格式）；0 表示 Agent_OnAttach 成功
+        return "0".equals(message.substring(prefix.length()).trim());
     }
 
     /**

@@ -3,22 +3,24 @@ package dev.noturne.core.attach;
 import java.io.File;
 
 /**
- * One way to hand an agent jar to an already-running JVM.
+ * 把 agent jar 交给一个已在运行的 JVM 的一种方式。
  *
- * <p>Implementations are tried in order; the first that succeeds wins. This keeps the
- * standard JDK path fast while leaving room for the self-contained paths (shadow
- * {@code sun.tools.attach.*} bytecode and a native attach helper) that cover JREs where
- * {@code jdk.attach} / {@code tools.jar} is missing.
+ * <p>实现按顺序尝试，第一个成功者胜出。这样既能让标准 JDK 路径保持最快，
+ * 又为自包含路径留出空间 —— 影子化的 {@code sun.tools.attach.*} 字节码以及原生 attach 助手，
+ * 用于覆盖缺少 {@code jdk.attach} / {@code tools.jar} 的 JRE。
  */
 public interface AttachStrategy {
 
-    /** Short human-readable name, used in diagnostics. */
+    /** 简短可读的策略名，用于诊断输出。 */
     String name();
 
     /**
-     * Loads {@code agentJar} into the JVM identified by {@code pid}.
+     * 把 {@code agentJar} 载入 {@code pid} 标识的 JVM。
      *
-     * @throws Exception when this strategy cannot be used or fails; the caller tries the next one
+     * @param pid       目标 JVM 的进程 id
+     * @param agentJar  agent jar 路径
+     * @param options   传给 {@code agentmain} 的参数字串，可为 {@code null}
+     * @throws Exception 本策略不可用或执行失败；调用方会继续尝试下一个策略
      */
     void attach(int pid, File agentJar, String options) throws Exception;
 }

@@ -17,24 +17,35 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@link ModuleConfigPanel} 契约：按值类型生成对应编辑器、编辑器交互写回 {@code Value}，
+ * 以及模块为空时仍能渲染出面板与标题而不抛异常。
+ */
 class ModuleConfigPanelTest {
 
+    /** 测试替身模块：声明三种值（布尔/数值/模式），覆盖全部编辑器映射分支 */
     static final class Configured extends Module {
+        /** 布尔值字段；应生成一个 {@link ToggleSwitch} */
         final BooleanValue enabledValue = add(new BooleanValue("Extra", false));
+        /** 数值字段，范围 [1.0, 10.0]、步长 1.0；应生成一个 {@link Slider} */
         final NumberValue speed = add(new NumberValue("Speed", 5.0, 1.0, 10.0, 1.0));
+        /** 模式字段，候选 A/B；应生成一个 {@link ModeSelector} */
         final ModeValue mode = add(new ModeValue("Mode", "A", "A", "B"));
 
+        /** @return 固定的模块名 */
         @Override
         public String name() {
             return "Configured";
         }
 
+        /** @return 固定归入 MISC 分类 */
         @Override
         public Category category() {
             return Category.MISC;
         }
     }
 
+    /** 新建面板默认不可见；{@code show} 后按值类型各生成一个编辑器，且高度为正 */
     @Test
     void buildsOneEditorPerValueType() {
         ModuleConfigPanel panel = new ModuleConfigPanel();
@@ -62,6 +73,7 @@ class ModuleConfigPanelTest {
         assertTrue(panel.height() > 0f);
     }
 
+    /** 点击每个编辑器后，控件应把结果写回对应的 Value：布尔翻转、数值钳到上限、模式切到下一个候选 */
     @Test
     void editingControlsWritesBackToTheValue() {
         ModuleConfigPanel panel = new ModuleConfigPanel();
@@ -83,6 +95,7 @@ class ModuleConfigPanelTest {
         assertEquals("B", module.mode.get(), "mode selector cycles");
     }
 
+    /** 传入 null 模块时不应抛异常，仍需绘制面板底色与标题文本 */
     @Test
     void missingModuleStillRendersAHeader() {
         ModuleConfigPanel panel = new ModuleConfigPanel();
@@ -90,6 +103,7 @@ class ModuleConfigPanelTest {
         RecordingRenderer renderer = new RecordingRenderer();
         panel.render(renderer);
         assertNotNull(renderer);
-        assertTrue(renderer.count("roundedRect") >= 2, "panel + header");
+        assertTrue(renderer.count("roundedRect") >= 1, "panel background");
+        assertTrue(renderer.count("text:settings") >= 1, "fallback title");
     }
 }

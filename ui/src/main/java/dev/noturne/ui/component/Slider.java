@@ -6,17 +6,31 @@ import dev.noturne.ui.theme.Theme;
 import java.util.function.Consumer;
 
 /**
- * Horizontal numeric slider. Clicking anywhere on the track jumps the knob there; dragging
- * updates continuously. The value is clamped to {@code [min, max]}.
+ * 水平数值滑块：在轨道上任意位置点击即把旋钮跳到该处，按住拖动则连续更新。
+ *
+ * <p>数值始终被夹紧在 {@code [min, max]} 内；每次变化（无论来自拖动还是代码设置）都会
+ * 触发构造时传入的 {@code onChange} 回调，把新值回写到对应的配置项。
  */
 public class Slider extends Component {
 
+    /** 允许的最小值（含）。 */
     private final float min;
+    /** 允许的最大值（含），构造时保证严格大于 {@link #min}。 */
     private final float max;
+    /** 数值变化回调；可为 null（表示仅更新内部状态，不外发）。 */
     private final Consumer<Float> onChange;
+    /** 当前值，恒处于 {@code [min, max]}。 */
     private float value;
+    /** 是否处于拖动中；决定 {@link #mouseDragged} / {@link #mouseReleased} 是否响应。 */
     private boolean dragging;
 
+    /**
+     * @param min     最小值
+     * @param max     最大值，必须大于 {@code min}
+     * @param value   初始值，超出范围的会被夹紧
+     * @param onChange 值变化回调，允许为 null
+     * @throws IllegalArgumentException 当 {@code max <= min}
+     */
     public Slider(float min, float max, float value, Consumer<Float> onChange) {
         if (max <= min) {
             throw new IllegalArgumentException("max must be greater than min");
@@ -27,10 +41,16 @@ public class Slider extends Component {
         this.value = clamp(value);
     }
 
+    /** 返回当前值（已夹紧在 {@code [min, max]} 内）。 */
     public float value() {
         return value;
     }
 
+    /**
+     * 设置新值并（值确有变化时）触发回调。
+     *
+     * <p>夹紧后与当前值相同则直接返回，避免拖动过程中对配置项产生冗余写入与回调风暴。
+     */
     public void setValue(float newValue) {
         float clamped = clamp(newValue);
         if (clamped == value) {
@@ -42,6 +62,7 @@ public class Slider extends Component {
         }
     }
 
+    /** 返回当前是否正在被拖动。 */
     public boolean isDragging() {
         return dragging;
     }
@@ -51,33 +72,46 @@ public class Slider extends Component {
         if (!visible) {
             return;
         }
-        float knobWidth = 6f;
+        // 当前值在区间中的归一化位置，决定已填充轨道长度与把手横向位置
         float fraction = (value - min) / (max - min);
-        float trackY = y + height / 2f - 1.5f;
 
-        renderer.rect(x, trackY, width, 3f, Theme.DISABLED);
-        renderer.rect(x, trackY, width * fraction, 3f, Theme.ACCENT);
-        renderer.rect(x + width * fraction - knobWidth / 2f, y + height / 2f - 4f,
-                knobWidth, 8f, Theme.ACCENT_HOVER);
+        // 轨道整高、圆角 7：未填充部分铺底，已填充部分按进度覆盖为 PRIMARY
+        renderer.roundedRect(x, y, width, height, Theme.CONTROL_RADIUS,
+                Theme.SURFACE_CONTAINER_HIGHEST);
+        float filled = width * fraction;
+        if (filled > 0f) {
+            renderer.roundedRect(x, y, filled, height, Theme.CONTROL_RADIUS, Theme.PRIMARY);
+        }
 
+        // 把手：深色小圆点，在浅色填充与深色轨道上都保持可见；夹取在轨道两端内
+        float knob = 8f;
+        float cx = x + Math.min(Math.max(filled, knob / 2f), width - knob / 2f);
+        renderer.roundedRect(cx - knob / 2f, y + (height - knob) / 2f, knob, knob, knob / 2f,
+                Theme.ON_PRIMARY);
+
+        // 数值文本右对齐到控件右边缘（留出内容缩进）
         String label = format(value);
-        renderer.text(label, x + width - renderer.textWidth(label, Theme.FONT_SIZE_SMALL),
+        renderer.text(label,
+                x + width - renderer.textWidth(label, Theme.FONT_SIZE_SMALL) - Theme.ROW_CONTENT_INSET,
                 y + (height - renderer.textHeight(Theme.FONT_SIZE_SMALL)) / 2f,
-                Theme.FONT_SIZE_SMALL, Theme.TEXT_DIM);
+                Theme.FONT_SIZE_SMALL, Theme.TEXT_SECONDARY);
     }
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // 仅响应左键且必须点在控件内；命中即立即跳转并进入拖动态
         if (button != 0 || !contains(mx, my)) {
             return false;
         }
         dragging = true;
+        // 点击即视为开始拖动，旋钮直接跳到点击位置（而非从原位渐近）
         applyFromMouse(mx);
         return true;
     }
 
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        // 拖动不校验指针是否仍在控件内，允许拖出边界后继续跟随，最后由 clamp 收敛
         if (!dragging) {
             return false;
         }
@@ -87,6 +121,7 @@ public class Slider extends Component {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
+        // 未在拖动则交回事件；一旦开始拖动就独占该次释放
         if (!dragging) {
             return false;
         }
@@ -94,16 +129,25 @@ public class Slider extends Component {
         return true;
     }
 
+    /** 由指针横坐标换算出新值并写入（含越界收敛）。 */
     private void applyFromMouse(double mx) {
+        // 允许 fraction 越界（指针拖出轨道），由 clamp 在 setValue 中收敛
         float fraction = (float) ((mx - x) / width);
         setValue(min + fraction * (max - min));
     }
 
+
+    /** 将 {@code v} 夹紧到 {@code [min, max]}。 */
     private float clamp(float v) {
         return v < min ? min : (v > max ? max : v);
     }
 
-    /** Trims trailing {@code .0} for whole numbers so the label stays compact. */
+    /**
+     * 将数值格式化为标签文本：整数不带小数点，非整数保留两位小数。
+     *
+     * @param v 待格式化的数值
+     * @return 展示用字符串
+     */
     protected String format(float v) {
         if (v == Math.rint(v)) {
             return Integer.toString((int) v);

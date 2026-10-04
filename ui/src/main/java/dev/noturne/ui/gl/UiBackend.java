@@ -3,22 +3,32 @@ package dev.noturne.ui.gl;
 import dev.noturne.ui.render.Renderer;
 
 /**
- * A drawable backend: the {@link Renderer} surface plus per-frame setup/teardown.
+ * 可绘制后端：在 {@link Renderer} 绘制表面之上补上每帧的准备与收尾。
  *
- * <p>Two implementations ship today — {@link GlRenderer} for the fixed-function pipeline
- * (Minecraft ≤ 1.12, LWJGL2) and {@link ModernRenderer} for the OpenGL 3.2 core profile
- * (1.13+ / 26.x, LWJGL3). A Vulkan backend slots in behind the same interface once the game's
- * Vulkan device is reachable, which is why the overlay talks to this type rather than to a
- * concrete renderer.
+ * <p>目前有两个实现——面向固定管线（Minecraft ≤ 1.12、LWJGL2）的 {@link GlRenderer}，
+ * 以及面向 OpenGL 3.2 核心 profile（1.13+ / 26.x、LWJGL3）的 {@link ModernRenderer}。
+ * 将来接入游戏的 Vulkan 设备时，Vulkan 后端可以直接挂在同一接口下，
+ * 这也是覆盖层面向本类型而非某个具体渲染器的原因。
  */
 public interface UiBackend extends Renderer {
 
-    /** Applies per-frame GL state. Called once before the component tree is drawn. */
+    /** 应用每帧的 GL 状态；在绘制组件树之前调用一次。 */
     void beginFrame();
 
-    /** Releases the state set by {@link #beginFrame()}. Called once after drawing. */
+    /** 释放 {@link #beginFrame()} 设置的状态；绘制完成后调用一次。 */
     void endFrame();
 
-    /** Short name for logs and diagnostics, e.g. {@code "gl-fixed"} or {@code "gl-core"}. */
+    /** 用于日志与诊断的短名称，如 {@code "gl-fixed"} 或 {@code "gl-core"}。 */
     String backendName();
+
+    /**
+     * 当前绘制区域的宽度（像素）。
+     *
+     * <p>GUI 用它把窗口坐标映射到绘制坐标：两者在高 DPI 或缩放窗口下并不相等。
+     * 尚未完成首帧、尺寸未知时返回 0。
+     */
+    int width();
+
+    /** 当前绘制区域的高度（像素）；未知时返回 0。 */
+    int height();
 }

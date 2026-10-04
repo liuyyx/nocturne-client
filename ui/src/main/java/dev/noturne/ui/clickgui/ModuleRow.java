@@ -8,22 +8,30 @@ import dev.noturne.ui.render.Renderer;
 import dev.noturne.ui.theme.Theme;
 
 /**
- * One clickable module line: name on the left, on/off reflected by colour, hover highlight.
+ * 一个可点击的模块行：启用态用 PRIMARY_CONTAINER 系底色 + ON_PRIMARY_CONTAINER 文本表达，
+ * 禁用态融入面板表面色，悬停时底色与文本同步提亮（状态层式过渡）。
+ *
+ * <p>左键点击切换模块开关；右键由 {@link ClickGui} 拦截，用于唤出设置面板。
  */
 public final class ModuleRow extends Component {
 
+    /** 本行对应的模块。 */
     private final Module module;
+    /** 悬停高亮动画，0 表示未悬停、1 表示完全高亮。 */
     private final Animation highlight =
             new Animation(Theme.HOVER_MS, Animation.Easing.EASE_OUT_CUBIC, 0f);
 
+    /** @param module 本行代表的模块 */
     public ModuleRow(Module module) {
         this.module = module;
     }
 
+    /** @return 本行代表的模块 */
     public Module module() {
         return module;
     }
 
+    /** 推进高亮动画；每帧调用一次。 */
     public void update(long nowMs) {
         highlight.animateTo(hovered ? 1f : 0f, nowMs);
         highlight.update(nowMs);
@@ -34,10 +42,26 @@ public final class ModuleRow extends Component {
         if (!visible) {
             return;
         }
-        Color background = Theme.PANEL_HEADER.mix(Theme.PANEL_HEADER_HOVER, highlight.value());
-        renderer.roundedRect(x, y, width, height - 1f, Theme.RADIUS_SMALL, background);
-        Color textColor = module.isEnabled() ? Theme.ENABLED : Theme.TEXT_DIM;
-        renderer.text(module.name(), x + 4f, y + 3f, Theme.FONT_SIZE_SMALL, textColor);
+        float hover = highlight.value();
+
+        // 禁用态底色随悬停由 SURFACE_CONTAINER 过渡到 SURFACE_CONTAINER_HIGH；
+        // 启用态为 PRIMARY_CONTAINER，悬停时向 PRIMARY 偏移 15%
+        Color background;
+        if (module.isEnabled()) {
+            background = Theme.PRIMARY_CONTAINER.mix(
+                    Theme.PRIMARY_CONTAINER.mix(Theme.PRIMARY, 0.15f), hover);
+        } else {
+            background = Theme.SURFACE_CONTAINER.mix(Theme.SURFACE_CONTAINER_HIGH, hover);
+        }
+        renderer.roundedRect(x, y, width, height, Theme.CONTROL_RADIUS, background);
+
+        // 启用文本用 ON_PRIMARY_CONTAINER；禁用文本随悬停由次要文本提亮到主文本
+        Color textColor = module.isEnabled()
+                ? Theme.ON_PRIMARY_CONTAINER
+                : Theme.TEXT_SECONDARY.mix(Theme.TEXT_PRIMARY, hover);
+        float textY = y + (height - renderer.textHeight(Theme.FONT_SIZE_SMALL)) / 2f;
+        renderer.text(module.name(), x + Theme.ROW_CONTENT_INSET, textY, Theme.FONT_SIZE_SMALL,
+                textColor);
     }
 
     @Override

@@ -6,8 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 配置值（Value）的单元测试：验证 {@link BooleanValue} 的切换与重置、
+ * {@link NumberValue} 的区间钳制与步长吸附，以及 {@link ModeValue} 的循环与非法取值回退，
+ * 并确认「是否为默认值」标记随赋值变化。
+ */
 class ValueTest {
 
+    /** 验证布尔值：初始即默认值，切换后偏离默认，重置后回到默认且显示串为「Off」。 */
     @Test
     void booleanTogglesAndResets() {
         BooleanValue value = new BooleanValue("Enabled", false);
@@ -23,9 +29,11 @@ class ValueTest {
         assertEquals("Off", value.display());
     }
 
+    /** 验证数值越界时被钳制到 [min, max]，并可安全取整。 */
     @Test
     void numberClampsToRange() {
         NumberValue value = new NumberValue("Reach", 3.0, 3.0, 6.0, 0.0);
+        // 构造参数依次为：名称、默认值、下界、上界、步长（0 表示不吸附）。
         value.set(99.0);
         assertEquals(6.0, value.get(), 1e-9);
         value.set(-5.0);
@@ -33,6 +41,7 @@ class ValueTest {
         assertEquals(3, value.asInt());
     }
 
+    /** 验证数值被吸附到最近的步长网格上（0.62→0.5，0.9→1.0），避免配置出无意义的细粒度值。 */
     @Test
     void numberSnapsToStep() {
         NumberValue value = new NumberValue("Speed", 1.0, 0.0, 1.0, 0.25);
@@ -42,6 +51,10 @@ class ValueTest {
         assertEquals(1.0, value.get(), 1e-9);
     }
 
+    /**
+     * 验证模式值：{@code next} 在选项间循环并在末尾回绕，
+     * 遇到未知选项时回退到第一个，而不是抛异常或留下非法状态。
+     */
     @Test
     void modeCyclesAndRejectsUnknownOptions() {
         ModeValue value = new ModeValue("Mode", "Toggle", "Toggle", "Hold", "Always");
@@ -59,6 +72,7 @@ class ValueTest {
         assertTrue(value.is("Toggle"));
     }
 
+    /** 验证一旦被改写即标记为非默认值，且显示串按整数值格式化。 */
     @Test
     void changingValueMarksItNonDefault() {
         NumberValue value = new NumberValue("Delay", 1.0, 0.0, 5.0, 1.0);

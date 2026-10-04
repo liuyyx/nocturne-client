@@ -4,17 +4,19 @@ import dev.noturne.ui.render.Color;
 import dev.noturne.ui.render.Renderer;
 
 /**
- * {@link Renderer} for the OpenGL 3.2 core profile (Minecraft 1.13+ / 26.x).
+ * OpenGL 3.2 核心 profile（Minecraft 1.13+ / 26.x）下的 {@link Renderer} 实现。
  *
- * <p>The fixed-function {@link GlRenderer} cannot work here: core profile removed immediate mode.
- * Every shape is expanded into triangles on the CPU, uploaded to one reusable VBO and drawn with a
- * two-uniform shader (projection + flat colour). Colour is uniform rather than per-vertex because
- * the UI draws flat fills — batching gradients would cost more than it saves at this scale.
+ * <p>固定管线的 {@link GlRenderer} 在这里行不通：核心 profile 已经移除立即模式。
+ * 所有图形都在 CPU 侧展开成三角形，上传到同一个可复用的 VBO，
+ * 再用一个只有两个 uniform（投影矩阵 + 纯色）的着色器绘制。
+ * 颜色走 uniform 而非逐顶点，是因为 UI 画的都是平涂——在这个规模上，
+ * 为渐变去做批处理的成本大于收益。
  *
- * <p>This is one of the two interchangeable backends; see {@code RenderBackends}.
+ * <p>它是两个可互换后端之一，另见 {@code RenderBackends}。
  */
 public final class ModernRenderer implements UiBackend {
 
+    /** 顶点着色器：把二维屏幕坐标乘以正交投影矩阵后输出裁剪空间坐标。 */
     private static final String VERTEX_SHADER =
             "#version 150 core\n"
                     + "in vec2 aPos;\n"
@@ -23,6 +25,7 @@ public final class ModernRenderer implements UiBackend {
                     + "    gl_Position = uProjection * vec4(aPos, 0.0, 1.0);\n"
                     + "}\n";
 
+    /** 片元着色器：输出常量颜色，对应 UI 的平涂风格。 */
     private static final String FRAGMENT_SHADER =
             "#version 150 core\n"
                     + "uniform vec4 uColor;\n"
@@ -31,34 +34,57 @@ public final class ModernRenderer implements UiBackend {
                     + "    fragColor = uColor;\n"
                     + "}\n";
 
+    /** 每个 90° 圆角细分的段数；与固定管线后端保持一致，保证两条路径观感相同。 */
     private static final int CORNER_SEGMENTS = 6;
 
+    /** 核心 profile 绑定；不得为 {@code null}。 */
     private final ModernGlApi gl;
+    /** 文本渲染器；构造时 {@code null} 会被替换为 {@link TextRenderer#NONE}。 */
     private final TextRenderer text;
 
+    /** 着色器程序 id。 */
     private int program;
+    /** 顶点数组对象（VAO）id。 */
     private int vertexArray;
+    /** 顶点缓冲对象（VBO）id，所有绘制复用它。 */
     private int vertexBuffer;
+    /** {@code uProjection} uniform 的位置。 */
     private int projectionLocation;
+    /** {@code uColor} uniform 的位置。 */
     private int colorLocation;
+    /** 着色器与缓冲是否已创建成功；未就绪时所有绘制调用都会被跳过。 */
     private boolean ready;
+    /** 当前正交投影矩阵（16 个元素，列主序）。 */
     private float[] projection = new float[16];
+    /** 缓存的窗口宽度，用于检测视口变化。 */
     private int screenWidth;
+    /** 缓存的窗口高度，用于检测视口变化。 */
     private int screenHeight;
 
-    /** Scratch buffer reused for every draw call to keep the frame allocation-free. */
+    /** 供每次绘制复用的暂存顶点缓冲，使整个渲染过程不产生逐帧分配。 */
     private float[] scratch = new float[256];
 
+    /**
+     * 构造渲染器。
+     *
+     * @param gl   核心 profile 绑定
+     * @param text 文本渲染器，传 {@code null} 时退化为空实现
+     */
     public ModernRenderer(ModernGlApi gl, TextRenderer text) {
         this.gl = gl;
         this.text = text == null ? TextRenderer.NONE : text;
     }
 
+    /** @return 底层 GL 绑定，供调用方做低层设置或诊断 */
     public ModernGlApi gl() {
         return gl;
     }
 
-    /** Compiles the shader and creates the buffer objects once, when a GL context is current. */
+    /**
+     * 编译着色器并创建缓冲对象。必须已有当前 GL 上下文时调用，且只需调用一次。
+     *
+     * @return 是否初始化成功
+     */
     public boolean initialise() {
         if (ready) {
             return true;
@@ -96,7 +122,12 @@ public final class ModernRenderer implements UiBackend {
         return true;
     }
 
-    /** Sets the viewport used to build the projection matrix; call when the window resizes. */
+    /**
+     * 设置用于构建投影矩阵的视口尺寸；窗口尺寸变化时调用。
+     *
+     * @param width  视口宽度（像素）
+     * @param height 视口高度（像素）
+     */
     public void setViewport(int width, int height) {
         this.screenWidth = width;
         this.screenHeight = height;
@@ -108,7 +139,17 @@ public final class ModernRenderer implements UiBackend {
         return "gl-core";
     }
 
-    /** Applies per-frame GL state; call before drawing the GUI. */
+    @Override
+    public int width() {
+        return screenWidth;
+    }
+
+    @Override
+    public int height() {
+        return screenHeight;
+    }
+
+    /** 应用每帧的 GL 状态；在绘制 GUI 之前调用。 */
     @Override
     public void beginFrame() {
         if (!ready && !initialise()) {
@@ -121,7 +162,7 @@ public final class ModernRenderer implements UiBackend {
         gl.disableTexture();
     }
 
-    /** Tracks the window size so the projection stays correct after a resize or fullscreen toggle. */
+    /** 跟踪窗口尺寸，使窗口缩放或切换全屏后投影矩阵依然正确。 */
     private void syncViewport() {
         int[] viewport = gl.getInteger(ModernGlApi.GL_VIEWPORT, 4);
         if (viewport == null) {
@@ -138,7 +179,7 @@ public final class ModernRenderer implements UiBackend {
         gl.disableBlend();
     }
 
-    // -------------------------------------------------------------- Renderer
+    // -------------------------------------------------------------- Renderer 接口实现
 
     @Override
     public void rect(float x, float y, float width, float height, Color color) {
@@ -147,7 +188,7 @@ public final class ModernRenderer implements UiBackend {
         }
         ensureCapacity(12);
         int i = 0;
-        // two triangles: (x,y) (x+w,y) (x+w,y+h) / (x,y) (x+w,y+h) (x,y+h)
+        // 两个三角形：(x,y) (x+w,y) (x+w,y+h) / (x,y) (x+w,y+h) (x,y+h)
         scratch[i++] = x;
         scratch[i++] = y;
         scratch[i++] = x + width;
@@ -173,11 +214,11 @@ public final class ModernRenderer implements UiBackend {
             rect(x, y, width, height, color);
             return;
         }
-        // centre cross
+        // 中心十字：横向一条 + 左右两条
         rect(x + r, y, width - 2f * r, height, color);
         rect(x, y + r, r, height - 2f * r, color);
         rect(x + width - r, y + r, r, height - 2f * r, color);
-        // corners, each a triangle fan collapsed to triangles, in screen coordinates
+        // 四个角：每段的三角扇在核心 profile 下展开成三角形列表，坐标已在屏幕空间
         corner(x + r, y + r, r, 180f, 270f, color);
         corner(x + width - r, y + r, r, 270f, 360f, color);
         corner(x + width - r, y + height - r, r, 0f, 90f, color);
@@ -201,7 +242,7 @@ public final class ModernRenderer implements UiBackend {
         if (value == null || value.isEmpty()) {
             return;
         }
-        // The game's font renderer issues its own GL calls, so the batch state is released first.
+        // 游戏自带的字体渲染器会自行发出 GL 调用，所以先释放本渲染器的批次状态。
         endFrame();
         text.draw(value, x, y, size, color);
         beginFrame();
@@ -219,16 +260,25 @@ public final class ModernRenderer implements UiBackend {
 
     @Override
     public void pushClip(float x, float y, float width, float height) {
-        // Scissor state needs the current FBO's height; left to the caller for now.
+        // 裁剪测试需要当前 FBO 的高度才能正确换算，暂时留给调用方处理。
     }
 
     @Override
     public void popClip() {
-        // see pushClip
+        // 见 pushClip：本后端尚未启用裁剪测试。
     }
 
-    // -------------------------------------------------------------- internals
+    // -------------------------------------------------------------- 内部实现
 
+    /**
+     * 绘制一个圆角扇形（核心 profile 无 {@code GL_TRIANGLE_FAN}，故展开成三角形列表）。
+     *
+     * @param cx,cy    圆心
+     * @param radius   半径
+     * @param startDeg 起始角度（度）
+     * @param endDeg   结束角度（度）
+     * @param color    平涂颜色
+     */
     private void corner(float cx, float cy, float radius, float startDeg, float endDeg, Color color) {
         ensureCapacity((CORNER_SEGMENTS + 1) * 6);
         int i = 0;
@@ -239,7 +289,7 @@ public final class ModernRenderer implements UiBackend {
             float y0 = cy + (float) Math.sin(a0) * radius;
             float x1 = cx + (float) Math.cos(a1) * radius;
             float y1 = cy + (float) Math.sin(a1) * radius;
-            // triangle: centre, p0, p1
+            // 三角形：圆心、p0、p1
             scratch[i++] = cx;
             scratch[i++] = cy;
             scratch[i++] = x0;
@@ -250,12 +300,19 @@ public final class ModernRenderer implements UiBackend {
         draw(scratch, i, color);
     }
 
+    /** 按需扩容暂存顶点缓冲；容量翻倍以免频繁重分配。 */
     private void ensureCapacity(int floats) {
         if (scratch.length < floats) {
             scratch = new float[Math.max(floats, scratch.length * 2)];
         }
     }
 
+    /**
+     * 上传暂存顶点并绘制。
+     *
+     * <p>这里必须复制成恰好长度的数组——{@code uploadArrayBuffer} 会按数组长度分配直接缓冲区，
+     * 直接传暂存数组会把上次残留的顶点一并上传。
+     */
     private void draw(float[] data, int length, Color color) {
         int vertices = length / 2;
         if (vertices == 0) {
@@ -270,7 +327,7 @@ public final class ModernRenderer implements UiBackend {
         gl.drawTriangles(0, vertices);
     }
 
-    /** Column-major orthographic projection mapping (0,0) to the top-left corner. */
+    /** 列主序正交投影矩阵，把 (0,0) 映射到左上角，使 UI 可以直接使用屏幕像素坐标。 */
     static float[] orthographic(int width, int height) {
         float w = width <= 0 ? 1f : width;
         float h = height <= 0 ? 1f : height;

@@ -5,26 +5,34 @@ import dev.noturne.client.mapping.ClassType;
 import dev.noturne.ui.render.Color;
 
 /**
- * {@link TextRenderer} backed by the game's own font renderer.
+ * 由游戏自带字体渲染器支撑的 {@link TextRenderer} 实现。
  *
- * <p>On 1.8.9 that is {@code net.minecraft.client.gui.FontRenderer} (obfuscated {@code avn}),
- * reached through {@code Minecraft.fontRendererObj} ({@code ave.k}). Using the game's font keeps
- * the look native and needs no texture upload or glyph atlas of our own.
+ * <p>在 1.8.9 上就是 {@code net.minecraft.client.gui.FontRenderer}（混淆名 {@code avn}），
+ * 通过 {@code Minecraft.fontRendererObj}（{@code ave.k}）取得。用游戏字体能保持原生观感，
+ * 也无需自己上传纹理或维护字形图集。
  */
 public final class MinecraftTextRenderer implements TextRenderer {
 
-    /** 1.8.9 draws at a fixed 9px line height; everything else is a scale factor. */
+    /** 1.8.9 的原生行高为 9px；其他一切字号都由它换算得到。 */
     private static final float BASE_HEIGHT = 9f;
 
+    /** 与游戏交互的桥，负责按映射名反射调用。 */
     private final GameBridge bridge;
+    /** {@code FontRenderer} 实例，非 {@code null}。 */
     private final Object fontRenderer;
 
+    /** 仅由 {@link #bind} 创建——必须先在游戏里定位到字体实例。 */
     private MinecraftTextRenderer(GameBridge bridge, Object fontRenderer) {
         this.bridge = bridge;
         this.fontRenderer = fontRenderer;
     }
 
-    /** Binds to the live font renderer, or returns {@code null} when the game is not reachable. */
+    /**
+     * 绑定到游戏正在使用的字体渲染器。
+     *
+     * @param bridge 与游戏的桥
+     * @return 绑定结果；游戏不可达、映射缺失或任何反射异常时返回 {@code null}
+     */
     public static MinecraftTextRenderer bind(GameBridge bridge) {
         if (bridge == null) {
             return null;
@@ -41,6 +49,7 @@ public final class MinecraftTextRenderer implements TextRenderer {
         }
     }
 
+    /** @return 底层的 {@code FontRenderer} 实例，供诊断使用 */
     public Object fontRenderer() {
         return fontRenderer;
     }
@@ -53,9 +62,9 @@ public final class MinecraftTextRenderer implements TextRenderer {
         int rgb = color == null ? 0xFFFFFF : (color.argb & 0xFFFFFF);
         Object result = bridge.callMapped(fontRenderer, ClassType.FONT_RENDERER, "drawString",
                 text, (int) x, (int) y, rgb);
-        // Result is the advance width; ignored here (width() exposes it for layout).
+        // 返回值是文本的推进宽度，但这里用不上（布局请走 width()）。
         if (result == null) {
-            // drawString overload not found: nothing sensible to fall back to
+            // 没找到 drawString 的对应重载：没有任何合理的回退方式，静默忽略。
         }
     }
 
@@ -74,6 +83,12 @@ public final class MinecraftTextRenderer implements TextRenderer {
         return size;
     }
 
+    /**
+     * 把请求字号换算为字体缩放系数。
+     *
+     * @param size 期望的字号（像素）
+     * @return 缩放系数；size 非正时按 1 处理，避免除零或反向缩放
+     */
     private static float scale(float size) {
         return size <= 0f ? 1f : size / BASE_HEIGHT;
     }

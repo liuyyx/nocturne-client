@@ -7,21 +7,27 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Container component: owns children, draws them in order, and routes input to the topmost
- * child under the pointer.
+ * 容器控件：持有子控件、按添加顺序绘制，并把输入路由到指针下最上层的子控件。
+ *
+ * <p>子控件列表顺序即绘制顺序（先添加者先绘制，后添加者覆盖在其上），命中测试与输入派发
+ * 则反向遍历（从后添加者开始），从而让视觉上层优先接收事件。
  */
 public class Panel extends Component {
 
+    /** 子控件列表，顺序即绘制顺序。 */
     protected final List<Component> children = new ArrayList<Component>();
 
+    /** 追加子控件，新控件位于视觉最上层。 */
     public void add(Component child) {
         children.add(child);
     }
 
+    /** 移除子控件（若存在）。 */
     public void remove(Component child) {
         children.remove(child);
     }
 
+    /** 返回只读的子控件视图。 */
     public List<Component> children() {
         return Collections.unmodifiableList(children);
     }
@@ -31,13 +37,15 @@ public class Panel extends Component {
         if (!visible) {
             return;
         }
+        // 顺序绘制，后添加者覆盖先添加者
         for (int i = 0; i < children.size(); i++) {
             children.get(i).render(renderer);
         }
     }
 
-    /** The topmost visible child containing the point, or null. */
+    /** 返回包含该点的最上层可见子控件；无则返回 null。 */
     protected Component hitTest(double mx, double my) {
+        // 逆序遍历：列表尾部在视觉上层，优先命中
         for (int i = children.size() - 1; i >= 0; i--) {
             Component child = children.get(i);
             if (child.isVisible() && child.contains(mx, my)) {
@@ -53,11 +61,13 @@ public class Panel extends Component {
         if (target != null && target.mouseClicked(mx, my, button)) {
             return true;
         }
+        // 无子控件消费时，若点在自身范围内也算消费，避免事件穿透到更底层
         return contains(mx, my);
     }
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
+        // 释放事件不按命中测试，而是广播给第一个愿意消费的子控件（如正在拖拽的滑块）
         boolean consumed = false;
         for (int i = children.size() - 1; i >= 0; i--) {
             Component child = children.get(i);
@@ -71,6 +81,7 @@ public class Panel extends Component {
 
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        // 同上：拖拽可能移出原控件，需广播给所有子控件
         for (int i = children.size() - 1; i >= 0; i--) {
             Component child = children.get(i);
             if (child.isVisible() && child.mouseDragged(mx, my, button, dx, dy)) {
@@ -82,6 +93,7 @@ public class Panel extends Component {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double amount) {
+        // 仅将滚轮投递给指针覆盖的子控件；否则视为自身消费
         for (int i = children.size() - 1; i >= 0; i--) {
             Component child = children.get(i);
             if (child.isVisible() && child.contains(mx, my) && child.mouseScrolled(mx, my, amount)) {
@@ -93,6 +105,7 @@ public class Panel extends Component {
 
     @Override
     public boolean keyPressed(int keyCode, int modifiers) {
+        // 键盘无坐标，逆序广播，首个消费的子控件即终止传播
         for (int i = children.size() - 1; i >= 0; i--) {
             if (children.get(i).keyPressed(keyCode, modifiers)) {
                 return true;

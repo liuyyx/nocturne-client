@@ -6,29 +6,64 @@ import dev.noturne.client.NoturneClient;
 import java.lang.instrument.Instrumentation;
 
 /**
- * The agent entry points.
+ * Java 代理（agent）的入口点。
  *
- * <p>{@code premain} runs when the jar is passed via {@code -javaagent} or loaded by an attach;
- * {@code agentmain} runs when the jar is attached to an already-running JVM. Both hand off to
- * {@link NoturneClient} on a dedicated thread: doing real work here would block class loading of
- * the very JVM we are trying to instrument.
+ * <p>本类通过 MANIFEST 的 {@code Premain-Class}/{@code Agent-Class} 被 JVM 调用，负责拉起整个
+ * Noturne 客户端并安装渲染帧钩子；它是 agent 模块与运行时之间唯一的引导入口。
+ *
+ * <p>{@code premain} 在 jar 以 {@code -javaagent} 方式随 JVM 启动（或由 attach 加载）时执行；
+ * {@code agentmain} 在 jar 被附加到已在运行的 JVM 时执行。两者都把实际工作转交到独立线程上调用
+ * {@link NoturneClient}：若在此直接做初始化，会阻塞我们正试图插桩的那个 JVM 的类加载。
  */
 public final class NoturneAgent {
 
+    /**
+     * GUI 开关按键。
+     *
+     * <p>由 agent 参数 {@code guiKey=<键码>} 覆盖（注入器把用户录制的按键写进这里），缺省为右 Shift。
+     * 声明为 volatile：写入发生在 {@code premain}/{@code agentmain} 的调用线程，读取发生在渲染线程。
+     */
+    private static volatile int guiToggleKey = dev.noturne.ui.gl.GuiOverlay.KEY_RIGHT_SHIFT;
+
     private NoturneAgent() {
+        // 纯静态工具类，禁止实例化
     }
 
+    /**
+     * 启动期代理入口（{@code -javaagent} 或 attach 加载 jar 时由 JVM 调用）。
+     *
+     * @param agentArgs 代理参数字符串（{@code -javaagent:...=args} 中 {@code =} 之后的部分），可能为 null
+     * @param instrumentation JVM 注入的插桩句柄，用于类转换与重转换
+     */
     public static void premain(String agentArgs, Instrumentation instrumentation) {
         start("premain", agentArgs, instrumentation);
     }
 
+    /**
+     * 运行期附加代理入口（jar 被 attach 到已启动的 JVM 时由 JVM 调用）。
+     *
+     * @param agentArgs 代理参数字符串，可能为 null
+     * @param instrumentation JVM 注入的插桩句柄
+     */
     public static void agentmain(String agentArgs, Instrumentation instrumentation) {
         start("agentmain", agentArgs, instrumentation);
     }
 
+    /**
+     * 两个入口共用的启动流程：打印加载来源，并在守护线程 {@code noturne-init} 上执行
+     * 客户端引导、安装帧钩子与叠加层。
+     *
+     * <p>之所以另起线程而非在调用线程上直接执行：{@code premain}/{@code agentmain} 由 JVM 在类
+     * 加载/附加的关键路径上回调，在此阻塞会拖死待插桩 JVM 的类加载；守护线程则不会阻止 JVM 退出。
+     *
+     * @param via 触发来源标识（{@code "premain"} 或 {@code "agentmain"}），仅用于日志
+     * @param agentArgs 代理参数，用于日志
+     * @param instrumentation 插桩句柄，透传给各安装步骤
+     */
     private static void start(String via, final String agentArgs, final Instrumentation instrumentation) {
         log("agent loaded via " + via
                 + (agentArgs == null || agentArgs.isEmpty() ? "" : " args=[" + agentArgs + "]"));
+        guiToggleKey = parseToggleKey(agentArgs);
 
         Thread init = new Thread(new Runnable() {
             @Override
@@ -48,12 +83,11 @@ public final class NoturneAgent {
     }
 
     /**
-     * Patches the frame swap point so {@code NoturneRuntime.onFrame()} runs once per frame.
+     * 给渲染帧交换点打补丁，使 {@code NoturneRuntime.onFrame()} 每帧执行一次。
      *
-     * <p>Two render paths exist across the supported range: LWJGL2's {@code Display.update()}
-     * (Minecraft ≤ 1.12) and LWJGL3's {@code GLFW.glfwSwapBuffers(long)} (1.13+). Whichever class is
-     * actually loaded decides which one gets patched. The swap point is used because drawing there
-     * survives to the screen — drawing at the start of the frame would be overwritten.
+     * <p>受支持版本范围内存在两条渲染路径：LWJGL2 的 {@code Display.update()}（Minecraft ≤ 1.12）
+     * 与 LWJGL3 的 {@code GLFW.glfwSwapBuffers(long)}（1.13+）。哪个类已被实际加载，就决定补丁打在
+     * 哪一个上。选择交换点是因为在此处绘制的画面才能存活到屏幕上——若在帧开始处绘制会被后续覆盖。
      */
     private static void installFrameHook(Instrumentation instrumentation) {
         if (instrumentation == null) {
@@ -78,11 +112,14 @@ public final class NoturneAgent {
         }
 
         try {
+            // canRetransform=true：目标类此刻可能已被加载，注册后需立即重转换才能补上钩子。
             instrumentation.addTransformer(transformer, true);
         } catch (Throwable t) {
             log("could not register transformer: " + t);
             return;
         }
+        // 两类情况：目标类已加载 → 显式 retransform 立刻打补丁；尚未加载 → 保持注册，
+        // 待其首次加载时由 transformer 自动处理。
         for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
             if (targetClass.equals(loaded.getName())) {
                 try {
@@ -97,46 +134,39 @@ public final class NoturneAgent {
         log(targetClass + " not loaded yet; frame hook will apply when it loads");
     }
 
-    /** Binds GL and attaches the click-GUI overlay to the frame hook. */
+    /**
+     * 绑定 GL 能力，并把点击式 GUI 叠加层挂到帧钩子上。
+     *
+     * <p>任一步骤失败（GL 未加载、无可用入口、后端不可用）都只记录日志并放弃叠加层，
+     * 绝不向上抛出——绝不能因为叠加层问题影响游戏本身的运行。
+     */
     private static void installOverlay(Instrumentation instrumentation) {
         try {
-            // Resolve GL through the classes the game actually loaded: with Fabric/Forge the game
-            // runs under an isolated class loader, so the system loader cannot see LWJGL.
+            // 用游戏实际加载的类加载器：Fabric/Forge 下游戏跑在隔离类加载器中，
+            // 系统类加载器看不到 LWJGL。
             Class<?> gl11 = findLoadedClass(instrumentation, "org.lwjgl.opengl.GL11");
-            if (gl11 == null) {
-                log("GL11 not loaded yet; GUI overlay disabled");
-                return;
-            }
-            dev.noturne.ui.gl.GlApi gl = dev.noturne.ui.gl.GlApi.bind(gl11);
-            if (gl == null) {
-                log("GL11 has no usable entry points; GUI overlay disabled");
-                return;
-            }
-
-            dev.noturne.client.mapping.Mapping mapping = selectMapping(instrumentation);
-            dev.noturne.client.game.GameBridge bridge =
-                    new dev.noturne.client.game.GameBridge(instrumentation, mapping);
-            dev.noturne.ui.gl.TextRenderer font = dev.noturne.ui.gl.MinecraftTextRenderer.bind(bridge);
-            NoturneClient.get().setGameBridge(bridge);
-            log("mapping: " + mapping.describe() + "; font: " + (font == null ? "none" : "game"));
-
-            dev.noturne.ui.gl.UiBackend backend = selectBackend(gl, gl11, font);
-            dev.noturne.ui.gl.GuiOverlay overlay = new dev.noturne.ui.gl.GuiOverlay(
-                    NoturneClient.get().modules(), backend, gl11.getClassLoader());
-            dev.noturne.client.runtime.NoturneRuntime.addListener(overlay);
+            ClassLoader loader = gl11 != null
+                    ? gl11.getClassLoader()
+                    : ClassLoader.getSystemClassLoader();
+            // 交给 OverlayBootstrap：它在 GL 真正可用后才安装，模组路径复用同一套逻辑。
+            OverlayBootstrap.install(loader, instrumentation, guiToggleKey);
             dev.noturne.client.runtime.NoturneRuntime.trace(true);
-            log("GUI overlay attached; backend=" + backend.backendName()
-                    + "; input=" + overlay.keyBackend() + "; Right Shift toggles it");
+            log("overlay bootstrap registered; toggle key=" + guiToggleKey);
         } catch (Throwable t) {
             log("overlay attach failed: " + t);
         }
     }
 
     /**
-     * Chooses the draw backend for this runtime.
+     * 为当前运行环境挑选绘制后端。
      *
-     * <p>Binding the core-profile entry points succeeding is what tells us the game is 1.13+; on
-     * 1.8.9 those functions do not exist and the fixed-function renderer is the only option.
+     * <p>能成功绑定核心配置的入口（core profile，即 VAO 等 1.13+ 才有的一组函数），正是「游戏为
+     * 1.13+」的判据：在 1.8.9 上这些函数根本不存在，此时固定管线渲染器是唯一可选后端。
+     *
+     * @param fixed 已绑定核心类/兼容入口的 GL API（固定管线）
+     * @param gl11 游戏实际加载的 GL11 类，用于取得正确的类加载器
+     * @param font 文本渲染器，可为 null（表示无可用游戏字体）
+     * @return 绘制后端，永不为 null
      */
     private static dev.noturne.ui.gl.UiBackend selectBackend(
             dev.noturne.ui.gl.GlApi fixed, Class<?> gl11, dev.noturne.ui.gl.TextRenderer font) {
@@ -148,6 +178,16 @@ public final class NoturneAgent {
         return new dev.noturne.ui.gl.GlRenderer(fixed, font);
     }
 
+    /**
+     * 在已加载类中查找指定名字的类。
+     *
+     * <p>必须经由游戏自己的类加载器定位 GL：Fabric/Forge 下游戏跑在隔离的类加载器中，
+     * 系统类加载器看不到 LWJGL 的类文件。
+     *
+     * @param instrumentation 插桩句柄，为 null 时直接返回 null
+     * @param className 类名（如 {@code org.lwjgl.opengl.GL11}）
+     * @return 找到的 {@link Class}，未加载或句柄缺失时返回 null
+     */
     private static Class<?> findLoadedClass(Instrumentation instrumentation, String className) {
         if (instrumentation == null) {
             return null;
@@ -160,10 +200,15 @@ public final class NoturneAgent {
         return null;
     }
 
-    /** Picks the mapping table for the running build; falls back to identity. */
+    /**
+     * 为当前运行的构建挑选映射表；无法判定时退化为恒等映射。
+     *
+     * @param instrumentation 插桩句柄，为 null 时直接走恒等映射
+     * @return Minecraft 类名/字段名映射，永不为 null
+     */
     private static dev.noturne.client.mapping.Mapping selectMapping(Instrumentation instrumentation) {
-        // 26.1+ ships unobfuscated: the canonical class name is loaded as-is, so the mapping is the
-        // identity. Only older builds need the 1.8.9 table.
+        // 26.1+ 版本为未混淆发行：规范化类名原样加载，因此映射即为恒等映射；
+        // 只有更老的版本才需要 1.8.9 映射表。
         if (isLoaded(instrumentation, dev.noturne.client.mapping.ClassType.MINECRAFT.canonicalName())) {
             return new dev.noturne.client.mapping.IdentityMapping();
         }
@@ -174,6 +219,15 @@ public final class NoturneAgent {
         }
     }
 
+    /**
+     * 判断指定类此刻是否已加载。
+     *
+     * <p>这是探测运行版本的廉价手段：先启动的游戏必然已经加载过自己的主类。
+     *
+     * @param instrumentation 插桩句柄，为 null 时视为未加载
+     * @param className 类名
+     * @return 已加载返回 true
+     */
     private static boolean isLoaded(Instrumentation instrumentation, String className) {
         if (instrumentation == null) {
             return false;
@@ -186,6 +240,33 @@ public final class NoturneAgent {
         return false;
     }
 
+    /**
+     * 从 agent 参数中解析 GUI 开关按键。
+     *
+     * <p>参数由注入器以逗号分隔的 {@code key=value} 形式传入（JDK attach 的 options 约定）。
+     * 任何畸形输入都退回默认的右 Shift：一个拼错的参数不该让整个 GUI 无法唤出。
+     *
+     * @param agentArgs 代理参数字符串，可为 null
+     * @return 解析出的键码，或默认的 {@link dev.noturne.ui.gl.GuiOverlay#KEY_RIGHT_SHIFT}
+     */
+    private static int parseToggleKey(String agentArgs) {
+        if (agentArgs == null || agentArgs.isEmpty()) {
+            return dev.noturne.ui.gl.GuiOverlay.KEY_RIGHT_SHIFT;
+        }
+        for (String part : agentArgs.split(",")) {
+            String trimmed = part.trim();
+            if (trimmed.startsWith("guiKey=")) {
+                try {
+                    return Integer.parseInt(trimmed.substring("guiKey=".length()).trim());
+                } catch (NumberFormatException malformed) {
+                    return dev.noturne.ui.gl.GuiOverlay.KEY_RIGHT_SHIFT;
+                }
+            }
+        }
+        return dev.noturne.ui.gl.GuiOverlay.KEY_RIGHT_SHIFT;
+    }
+
+    /** 统一的日志输出，统一加 {@code [noturne]} 前缀，便于在游戏日志中检索。 */
     private static void log(String message) {
         System.out.println("[noturne] " + message);
     }

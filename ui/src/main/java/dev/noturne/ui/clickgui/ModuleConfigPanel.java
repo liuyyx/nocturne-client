@@ -75,7 +75,9 @@ public final class ModuleConfigPanel extends Panel {
                     continue;
                 }
                 editors.add(editor);
-                labels.add(value instanceof BooleanValue ? value.name() : null);
+                // 开关与滑块自身不画设置名（滑块右侧画的是当前值），在行首补标签
+                labels.add(value instanceof BooleanValue || value instanceof NumberValue
+                        ? value.name() : null);
                 add(editor);
                 cursor += Theme.SETTING_HEIGHT + Theme.SETTING_GAP;
             }

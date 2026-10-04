@@ -329,3 +329,32 @@ LAB 已启用模块数=4
 ```
 截图：`docs/research/setsuna-gui-hud.png`（品牌卡 / `noturne` 与 `XYZ 128 64 -512` 两行模块文本 /
 `240 FPS` / 右侧四个启用模块卡与强调色侧条）。
+
+### 纹理桥与背景模糊（阶段 F）
+
+- 新增 `SkijaTextureBridge`：把「已上传的 GL 纹理」与「当前帧内容」变成 Skia 可绘制的 `Image`。
+  - `borrowGlTexture(context, glTextureId, w, h)`：**借**（不拷像素）——照上游
+    `SkijaRenderer.borrowTexture` 的做法（`BackendTexture.makeGL` + `GLTextureInfo` +
+    `Image.borrowTextureFrom`）；返回的句柄必须成对释放 `Image` 与 backend；
+  - `snapshot(surface)`：用 Skija 自身的 `Surface.makeImageSnapshot()` 抓帧内容。上游走 MC 帧缓冲
+    读数，这里省掉了那一层 MC 依赖；
+  - **刻意不依赖 Minecraft**：只接受 GL 纹理 id 与尺寸，取 id 的事留给调用方（映射层）——于是本类
+    在没有游戏的进程里也能被完整验证。
+- 补上 `SkijaHudPrimitives.blur(...)`（本系列最初未搬的那部分）：移植自上游 `drawBlurredBackdrop`，
+  改动是由调用方传入帧快照、并省掉上游按 `window.getGuiScaledWidth()` 推的缩放换算（我们的画布本身
+  就是像素坐标 1:1），只保留「裁切 → 采样 → 模糊」。
+- `SkijaCanvas` 暴露 `context()` / `surface()`：借用纹理要前者（GL 纹理只在创建它的上下文里有效），
+  抓快照要后者。
+
+验证：
+1. **模糊**（光栅；`docs/research/LabTextureBlur.java`）：黑白棋盘 → 抓快照 → 对照组原样贴
+   （14400 个极端像素，仍是纯黑白）、模糊组走 `blur`（14354 个中间灰像素）→ 生效。
+   截图 `docs/research/setsuna-blur.png`（右侧是圆角毛玻璃块）。
+2. **GL 纹理借用**（真 GL 上下文；`docs/research/LabTextureBorrow.java`）：Java 8 + GL 4.6 下上传
+   一张 4×4 纹理（左红右蓝）→ 借用 → 放大绘制 → 读回像素：红 8240 / 蓝 8240 → 生效。
+   截图 `docs/research/setsuna-borrow.png`。
+
+**真机待验**（lab 覆盖不到的部分）：
+- 从 MC 取纹理 id：需用映射层读 `AbstractTexture` 的 GL 纹理名（1.8.9 与 26.x 字段名不同）；
+- 快照时机：必须在绘制 UI **之前**抓，真机上要确认与游戏自身绘制的先后关系；
+- 纹理内部格式假设 RGBA8：老版本个别纹理可能是别的格式，需要按纹理实际格式取参数。

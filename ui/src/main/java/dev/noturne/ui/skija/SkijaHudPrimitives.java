@@ -18,6 +18,9 @@ package dev.noturne.ui.skija;
 
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.ClipMode;
+import io.github.humbleui.skija.FilterTileMode;
+import io.github.humbleui.skija.Image;
+import io.github.humbleui.skija.ImageFilter;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.PaintMode;
 import io.github.humbleui.skija.PaintStrokeCap;
@@ -26,6 +29,7 @@ import io.github.humbleui.skija.Path;
 import io.github.humbleui.skija.PathBuilder;
 import io.github.humbleui.skija.PathDirection;
 import io.github.humbleui.skija.PathMeasure;
+import io.github.humbleui.skija.SamplingMode;
 import io.github.humbleui.skija.Shader;
 import io.github.humbleui.types.RRect;
 import io.github.humbleui.types.Rect;
@@ -374,6 +378,46 @@ public final class SkijaHudPrimitives {
     public static void hairline(Canvas canvas, float x, float y, float width, float height, int color) {
         if (width <= 0.0F || height <= 0.0F) return;
         SkijaUi.fill(canvas, x, y, width, height, color);
+    }
+
+    /**
+     * 背景模糊：把给定的**帧快照**在指定区域内模糊后画上去（HUD/GUI 的"毛玻璃"底）。
+     *
+     * <p>移植自上游 {@code render/SkijaRenderer.drawBlurredBackdrop}（见 THIRD-PARTY-NOTICES.md）。
+     * 改动：上游自己去取 Minecraft 帧缓冲、并按 {@code window.getGuiScaledWidth()} 推算缩放比；
+     * 这里由调用方传入抓好的快照，且本项目的画布本身就是像素坐标（1:1），因此省掉整套缩放换算，
+     * 只保留"裁切 → 采样 → 模糊"这一步。
+     *
+     * <p>硬约束：{@code backdrop} 必须是**画 UI 之前**抓的快照，否则会把本帧要模糊的那层 UI 一起
+     * 采样进来，越模糊越亮（上游注释里同样强调了这一点）。
+     *
+     * <p>Paint 在这里按需构造并随 try 释放，不复用静态实例：模糊画笔带 image filter，复用会污染
+     * 其它绘制路径。这个方法只在确实需要毛玻璃时被调用，构造成本不落在每帧的常规路径上。
+     *
+     * @param radius   圆角半径；{@code <= 0} 表示方形裁切
+     * @param strength 模糊半径（像素）；{@code <= 0.01} 时直接不画
+     */
+    public static void blur(Canvas canvas, float x, float y, float width, float height,
+                            float radius, float strength, Image backdrop) {
+        if (canvas == null || backdrop == null || strength <= 0.01F
+                || width <= 1.0F || height <= 1.0F) {
+            return;
+        }
+        try (ImageFilter filter = ImageFilter.makeBlur(strength, strength, FilterTileMode.CLAMP);
+             Paint paint = new Paint().setAntiAlias(true).setImageFilter(filter)) {
+            int save = canvas.save();
+            try {
+                if (radius > 0.0F) {
+                    canvas.clipRRect(RRect.makeXYWH(x, y, width, height, radius), true);
+                } else {
+                    canvas.clipRect(Rect.makeXYWH(x, y, width, height), true);
+                }
+                Rect area = Rect.makeLTRB(x, y, x + width, y + height);
+                canvas.drawImageRect(backdrop, area, area, SamplingMode.LINEAR, paint, true);
+            } finally {
+                canvas.restoreToCount(save);
+            }
+        }
     }
 
     /**

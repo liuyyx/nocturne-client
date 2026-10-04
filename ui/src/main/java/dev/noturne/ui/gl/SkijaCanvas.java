@@ -81,6 +81,24 @@ public final class SkijaCanvas {
     }
 
     /**
+     * Skia 的 GL 上下文；尚未绘制过时为 {@code null}。
+     *
+     * <p>纹理借用（{@code SkijaTextureBridge}）需要它：借来的 GL 纹理只在同一个上下文里有效。
+     */
+    public DirectContext context() {
+        return context;
+    }
+
+    /**
+     * 当前绘制表面；尚未开始绘制时为 {@code null}。
+     *
+     * <p>背景模糊要在绘制 UI **之前**用它抓一份快照，否则会把已经画上去的 UI 一起模糊掉。
+     */
+    public Surface surface() {
+        return surface;
+    }
+
+    /**
      * 提交本帧绘制。
      *
      * <p>{@code flushAndSubmit(false)}：只提交 GPU 命令、不同步等待，避免把帧线程卡住。

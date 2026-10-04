@@ -218,8 +218,41 @@ public final class DrawContextBackend implements UiBackend {
 
     @Override
     public void roundedRect(float x, float y, float width, float height, float radius, Color color) {
-        // DrawContext 没有圆角原语；先用直角矩形保证内容可见，圆角留待后续近似。
-        rect(x, y, width, height, color);
+        float r = Math.min(radius, Math.min(width, height) / 2f);
+        if (r <= 1f) {
+            rect(x, y, width, height, color);
+            return;
+        }
+        // DrawContext 没有圆角原语：用若干条横向矩形按圆弧内缩近似四角。
+        // 层数取半径的整数像素数（UI 尺寸下最多 8 层已经看不出台阶），
+        // 相邻层多铺 0.5px 以避免出现缝隙。
+        int steps = Math.max(2, Math.min(8, Math.round(r)));
+        float band = r / steps;
+        for (int i = 0; i < steps; i++) {
+            float dy = i * band;
+            float inset = cornerInset(r, dy);
+            rect(x + inset, y + dy, width - 2f * inset, band + 0.5f, color);
+        }
+        // 中段：圆角之间是完整的矩形
+        rect(x, y + r, width, height - 2f * r, color);
+        // 下半部分与上半对称
+        for (int i = 0; i < steps; i++) {
+            float dy = i * band;
+            float inset = cornerInset(r, dy);
+            rect(x + inset, y + height - r + dy, width - 2f * inset, band + 0.5f, color);
+        }
+    }
+
+    /**
+     * 计算圆角在距顶部 {@code dy} 处的水平内缩量。
+     *
+     * @param radius 圆角半径
+     * @param dy     距该圆角起始边的距离，取值 {@code [0, radius]}
+     * @return 该行两端应内缩的像素数
+     */
+    private static float cornerInset(float radius, float dy) {
+        float d = radius - dy;
+        return radius - (float) Math.sqrt(Math.max(0f, radius * radius - d * d));
     }
 
     @Override

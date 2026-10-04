@@ -8,6 +8,12 @@ target/
 tmp/
 *.log
 
+# Vendored Setsuna (照抄的第三方源码) 的隔离编译探针工程：
+# 其中的 Fabric 模块 jar 是从 mods 里的 fat jar 拆出来的编译期依赖，不入库（见该目录 build.gradle.kts）。
+vendor/setsuna-gui/libs/
+vendor/setsuna-gui/build/
+vendor/setsuna-gui/.gradle/
+
 # .NET launcher
 launcher/bin/
 launcher/obj/

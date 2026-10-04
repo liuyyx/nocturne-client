@@ -27,7 +27,21 @@
 | `ui/src/main/java/dev/noturne/ui/skija/SkijaTheme.java` | `ui/UiTheme.java` | 改名（UiTheme → SkijaTheme）；`accent()` 改为可注入静态值，去掉对上游模块设置对象的依赖 |
 | `ui/src/main/java/dev/noturne/ui/skija/SkijaControls.java` | `ui/screen/UiControls.java` | 去 MC/GLFW 输入类型（改原始 `int keyCode`/`int codePoint` + AWT `VK_*`）；剪贴板改为可注入 `Clipboard` 接口；`record Box` → Java 8 类；`Objects.requireNonNullElse`/`String.repeat`/`StringBuilder.isEmpty` 降级 |
 | `ui/src/main/java/dev/noturne/ui/skija/SkijaBackdrop.java` | `ui/screen/ScreenBackdrop.java` | 去 `Minecraft`（背景目录与网格模式改为可注入静态状态）、去 `Setsuna` 日志、`ColorListener`→`println`；`record TraceLine` → Java 8 类；`readAllBytes` 自实现 |
-| `ui/src/main/java/dev/noturne/ui/skija/SkijaHudPrimitives.java` | `ui/hud/HudRenderUtil.java` | `IntSetting` 参数改原始 `int`；内联 `HudFusionManager.Edges`（16 组合 enum + `of` 工厂）；**未搬** `blur(...)`（依赖 MC 帧缓冲快照，待纹理桥）；`BorderMode` 常量名保持不变以免改动 HUD 设置文案 |
+| `ui/src/main/java/dev/noturne/ui/skija/SkijaHudPrimitives.java` | `ui/hud/HudRenderUtil.java` | `IntSetting` 参数改原始 `int`；内联 `HudFusionManager.Edges`（16 组合 enum + `of` 工厂）；`BorderMode` 常量名保持不变以免改动 HUD 设置文案。其中 `blur(...)` 为后续补齐，来自 `render/SkijaRenderer.drawBlurredBackdrop`：只搬「裁切 → 采样 → 模糊」，快照改由调用方传入，并省掉上游按 `window.getGuiScaledWidth()` 推的换算（我们的画布是像素坐标 1:1） |
+| `ui/src/main/java/dev/noturne/ui/skija/SkijaTextureBridge.java` | `render/SkijaRenderer.java`（纹理借用段） | 抽成独立类；去掉 Minecraft 依赖——只接受 GL 纹理 id 与尺寸，取 id 的事留给调用方（映射层），于是本类在没有游戏的进程里也能被完整验证；快照改用 Skija 自身的 `Surface.makeImageSnapshot`（上游走 MC 帧缓冲读数） |
+
+### 本项目原创（不属于上游代码）
+
+以下文件是用上述移植件**搭建**的界面实现，由本项目独立编写，不包含上游代码：
+
+| 文件 | 说明 |
+|---|---|
+| `ui/src/main/java/dev/noturne/ui/skija/SetsunaClickGui.java` | 三栏 ClickGUI（分类导航 / 模块列表 / 设置详情），含颜色选择器与右键恢复默认 |
+| `ui/src/main/java/dev/noturne/ui/skija/SetsunaHud.java` | 常显 HUD（品牌 / 模块文本 / 帧率 / 已启用模块列表），元素化并受 `HudLayout` 支配 |
+| `ui/src/main/java/dev/noturne/ui/skija/SetsunaHudEditor.java` | HUD 编辑器（拖动摆放、重置、完成），功能对应上游 `HudEditorScreen` 但为本项目重写 |
+| `ui/src/main/java/dev/noturne/ui/skija/HudLayout.java` | HUD 元素位置表（懒初始化默认值） |
+| `ui/src/main/java/dev/noturne/ui/skija/SkijaHudSink.java` | `HudSink` 的 UI 侧实现（接住模块发布的文本行） |
+| `ui/src/main/java/dev/noturne/ui/gl/OverlayGui.java` · `SkijaBackend` 的画布暴露 · `GuiOverlay` 的三层调度 | 界面契约与叠加层接线 |
 
 ### 已移植的资源
 

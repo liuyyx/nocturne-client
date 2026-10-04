@@ -18,7 +18,7 @@
 | `core/` | 进程发现、attach（JDK attach API + JDK 8 的 tools.jar 自举）、agent 选项组装（`AgentOptions`） |
 | `agent/` | 目标 JVM 内的入口（`agentmain`/`premain`）、ASM 子加载器、两种注入点（帧交换钩子 / 绘制上下文钩子）、按版本选表 |
 | `client/` | 事件总线、模块与值框架、映射层（`Mapping` / `ObfuscatedMapping` / `IdentityMapping`）、游戏桥（`GameBridge`） |
-| `ui/` | ClickGUI 与 HUD（组件树 / 主题 / 动画）、**按代际**的游戏绘制后端、输入 |
+| `ui/` | **Setsuna 风格界面**（Canvas 直绘）：三栏 ClickGUI、常显 HUD、HUD 编辑器、Skija 绘制原语与纹理桥；另有面向 `Renderer` 抽象的组件树（四列 GUI，作为非 Skija 后端的回落） |
 | `injector/` | Swing 注入器 GUI（扫描进程 → 选版本 → 注入） |
 | `tools/mapping/` | 映射表生成器（见 `docs/research/mapping-sources.md` 调研报告） |
 
@@ -38,7 +38,7 @@
 |---|---|
 | 类/字段/方法名 | 映射表（每版本一份 JSON，打进 jar 资源） |
 | 目标版本 | 注入器传入 `mcVersion`，运行时**不探测** |
-| 界面绘制与字体 | **用游戏自己的 API**，按代际写 3 个后端（成员名查表） |
+| 界面绘制与字体 | **Skija 直绘**：对着当前 GL 上下文把界面画进游戏帧缓冲，自带字体栈（含中文回退），完全不依赖游戏的绘制 API——一份代码管所有版本。Skija 不可用时回落到按代际的自绘 GL 后端（成员名查表） |
 | 输入 | 用游戏自己的键鼠状态（成员名查表） |
 | 帧信号 | LWJGL 的交换函数（3 个签名，属于 LWJGL 而非 MC，MC 改版不影响） |
 
@@ -64,7 +64,11 @@ java -jar dist/build/libs/noturne-<version>.jar --pid=<pid>     # 注入指定�
 | 注入链路（attach → agentmain → 帧钩子生效 → 叠加层装载） | **在真实 Java 8 + LWJGL2 + OpenGL 栈上已验证**（`tmp/lab189/targetH.log`：帧钩子 live、叠加层 attach、`backend=gl-fixed`）。⚠️ 该验证跑在 LWJGL2 实验靶（`Fake189v5`，320×240 空白窗口、120 帧）上，**JVM 内没有 Minecraft**——Minecraft 相关的一切（FontRenderer、Gui.drawRect、Options、player/world）均未验证 |
 | 映射表生成器（9 个版本） | 进行中（`tools/mapping/`） |
 | 版本号传递、两种注入点 | 已完成并有测试 |
-| 界面/输入改为「用游戏自己的 API」 | 待做（当前仍是自绘 GL 路径） |
+| 界面：Setsuna 风格三栏 ClickGUI（分类导航 / 模块列表 / 设置详情，含颜色选择器与右键恢复默认） | **已完成并离屏验证**（Java 8 + LWJGL2 + Skija 真实 GL）。方案、证据与截图见 `docs/research/setsuna-gui-port.md` |
+| HUD（常显）+ HUD 编辑器（拖动摆放） | **已完成并离屏验证**。顺带补齐了一直缺失的 `HudSink` 实现——此前模块发布的文本行全部落到空处 |
+| 纹理桥（GL 纹理借用 / 帧快照 / 背景模糊） | **已完成并验证**：真 GL 上下文下借用 4×4 纹理、棋盘模糊均有像素级判定；从 MC 取纹理 id 与快照时机待真机 |
+| Skija 通道 | 首选后端（Skija 绑定是 Multi-Release JAR，Java 8 可用且已实测）；不可用时回落按代际的自绘 GL 后端 |
+| ⚠️ 上述界面 / HUD / 纹理桥**均未在真实 Minecraft 内验证** | 验证跑在无 MC 的 GL 靶与离屏光栅上；待真机项（取纹理 id、快照时机、屏幕壳层与输入适配、HUD 真实数据源）逐条列在 `docs/research/setsuna-gui-port.md` |
 | 模组形态 | 已移除（不再支持放进 `mods/`） |
 
 ## 许可

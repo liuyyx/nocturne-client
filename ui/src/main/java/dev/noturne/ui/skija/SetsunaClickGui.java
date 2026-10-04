@@ -111,6 +111,14 @@ public final class SetsunaClickGui implements OverlayGui {
     /** 展开调色板的颜色项；{@code null} 表示没有展开。 */
     private ColorValue expandedColor;
 
+    /** 点「编辑 HUD」时的回调；由叠加层接到 HUD 编辑器（{@code null} 时该按钮是空操作）。 */
+    private Runnable onEditHud;
+
+    /** 设置「编辑 HUD」回调。 */
+    public void setOnEditHud(Runnable callback) {
+        this.onEditHud = callback;
+    }
+
     /**
      * @param registry 模块注册表
      */
@@ -209,7 +217,7 @@ public final class SetsunaClickGui implements OverlayGui {
         return new SkijaControls.Box(layout.x(), layout.y(), layout.width(), layout.height());
     }
 
-    /** 标题栏：品牌名（字距排版）+ 强调色圆点 + 右侧提示。 */
+    /** 标题栏：品牌名（字距排版）+ 强调色圆点 + 「编辑 HUD」按钮 + 右侧提示。 */
     private void drawHeader(Canvas canvas) {
         float headerHeight = layout.headerHeight();
         float top = layout.y();
@@ -221,13 +229,25 @@ public final class SetsunaClickGui implements OverlayGui {
         x += 12f;
         SkijaControls.brand(canvas, "NOTURNE", x, top, headerHeight, textColor, size, tracking);
 
+        SkijaControls.Box editBox = editHudButton();
+        SkijaControls.button(canvas, editBox, "编辑 HUD", editBox.contains(mouseX, mouseY), true,
+                SkijaControls.Tone.NORMAL);
         String hint = "ESC 关闭 · 右键重置";
         float hintWidth = SkijaUi.textWidth(hint, 8.5f);
-        SkijaUi.text(canvas, hint, layout.x() + layout.width() - hintWidth - 12f, top,
-                headerHeight, SkijaControls.TEXT_FAINT, 8.5f);
+        SkijaUi.text(canvas, hint, editBox.x - hintWidth - 12f, top, headerHeight,
+                SkijaControls.TEXT_FAINT, 8.5f);
         // 标题栏底部一条分隔线：用弱描边的低透明，替代上游的整块 header 底色
         SkijaUi.fill(canvas, layout.x() + 1f, top + headerHeight, layout.width() - 2f, 1f,
                 SkijaTheme.withAlpha(SkijaTheme.BORDER_SOFT, 90));
+    }
+
+    /** 标题栏「编辑 HUD」按钮的几何；绘制与命中测试共用，避免两处各算一次导致点不准。 */
+    private SkijaControls.Box editHudButton() {
+        float buttonWidth = 64f;
+        float buttonHeight = Math.min(18f, Math.max(12f, layout.headerHeight() - 10f));
+        return new SkijaControls.Box(layout.x() + layout.width() - buttonWidth - 10f,
+                layout.y() + (layout.headerHeight() - buttonHeight) * 0.5f,
+                buttonWidth, buttonHeight);
     }
 
     /** 三栏之间的两条竖直分隔线。 */
@@ -613,6 +633,13 @@ public final class SetsunaClickGui implements OverlayGui {
         }
         if (button != 0) {
             return false;
+        }
+        // 标题栏的「编辑 HUD」按钮：这是"切界面"，不是"选分类"，所以在分类导航之前判断
+        if (editHudButton().contains(mx, my)) {
+            if (onEditHud != null) {
+                onEditHud.run();
+            }
+            return true;
         }
         // 分类导航
         Category railHit = railAt(mx, my);

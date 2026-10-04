@@ -5,30 +5,32 @@ import dev.noturne.client.runtime.FrameListener;
 import dev.noturne.ui.clickgui.ClickGui;
 import dev.noturne.ui.skija.SetsunaClickGui;
 import dev.noturne.ui.skija.SetsunaHud;
+import dev.noturne.ui.skija.SetsunaHudEditor;
 import dev.noturne.ui.skija.SkijaHudSink;
 
 import io.github.humbleui.skija.Canvas;
 
 /**
- * 把 HUD 与点击式 GUI 叠加到游戏画面上，并承担 GUI 的全部输入。
+ * 把 HUD、点击式 GUI 与 HUD 编辑器叠加到游戏画面上，并承担它们的全部输入。
  *
  * <p>由被补丁的帧交换点每帧调用一次（见 {@code NoturneRuntime}）。这里不做事件 hook，而是每帧
  * 轮询一次指针与按键状态，再自己合成为点击 / 拖拽 / 释放 / 滚轮事件：轮询只需一个查询接口，
  * 而两代 LWJGL 的回调模型差异全部被 {@link InputSource} 吸收，代价是每帧几次反射调用。
  *
- * <p>绘制分两层，共用同一次 Skija 帧：**HUD 常显**（GUI 开关不影响它），GUI 仅在打开时绘制。
- * 这样只需一次 {@code beginFrame/endFrame}——Skija 的原生表面每帧只能建立与提交一次，
- * 两层各画一帧会把先提交的内容丢掉。
+ * <p>三层的关系：**HUD 常显**；GUI 与 HUD 编辑器互斥（同一时刻只有一个在前台接输入），
+ * 从 GUI 标题栏的「编辑 HUD」进入编辑器、「完成」或 Esc 回到 GUI。三层共用同一次 Skija 帧——
+ * 原生表面每帧只能建立与提交一次，各画一帧会把先提交的内容丢掉。
  *
  * <p>界面实现由后端能力决定（见 {@link OverlayGui}）：Skija 可用时用 Canvas 直绘的
- * {@link SetsunaClickGui} 与 {@link SetsunaHud}（能画玻璃层/阴影/图标字体，视觉与上游一致），
- * 否则用面向 {@code Renderer} 抽象的 {@link ClickGui}（四列布局，任何后端都能画；此时没有 HUD）。
+ * {@link SetsunaClickGui} / {@link SetsunaHud} / {@link SetsunaHudEditor}（能画玻璃层/阴影/图标字体，
+ * 视觉与上游一致），否则用面向 {@code Renderer} 抽象的 {@link ClickGui}（四列布局，任何后端都能画；
+ * 此时没有 HUD，也没有编辑器）。
  *
  * <p>三个容易踩空的地方，都在这里集中处理：
  * <ul>
- *   <li><b>指针捕获</b>：游戏中指针被游戏锁住用于转视角，此时坐标恒定、GUI 无法操作。打开 GUI 时
+ *   <li><b>指针捕获</b>：游戏中指针被游戏锁住用于转视角，此时坐标恒定、GUI 无法操作。打开界面时
  *       必须解除捕获，关闭时恢复。</li>
- *   <li><b>基准状态同步</b>：打开 GUI 的那一刻要把「上一帧的按键/坐标」重置为当前值，否则上一帧
+ *   <li><b>基准状态同步</b>：打开界面的那一刻要把「上一帧的按键/坐标」重置为当前值，否则上一帧
  *       的按下状态会在本帧被误判为一次新的点击或拖拽。</li>
  *   <li><b>绘制时机</b>：必须在帧交换点之内完成绘制，否则画面会被游戏后续的绘制覆盖。</li>
  * </ul>
@@ -50,8 +52,10 @@ public final class GuiOverlay implements FrameListener {
     /** 单帧间隔超过这个秒数就不参与平滑：卡顿/暂停（例如窗口失焦）会把均值拖到无意义的低位。 */
     private static final float FPS_MAX_DELTA_SECONDS = 1f;
 
-    /** 被叠加的点击式 GUI。 */
+    /** 点击式 GUI。 */
     private final OverlayGui gui;
+    /** HUD 编辑器；仅 Skija 后端可用时为非空。 */
+    private final SetsunaHudEditor editor;
     /** HUD；仅 Skija 后端可用时为非空。 */
     private final SetsunaHud hud;
     /** 绘制后端。 */
@@ -98,8 +102,33 @@ public final class GuiOverlay implements FrameListener {
         // 选择界面实现：Skija 后端能提供画布，就用 Canvas 直绘的 Setsuna 界面；否则用抽象绘制面
         // 上实现的四列界面。判定放在构造期而不是每帧，是为了让「用哪套界面」在日志里可见。
         boolean skija = renderer instanceof SkijaBackend;
-        this.gui = skija ? new SetsunaClickGui(registry) : new ClickGui(registry);
-        this.hud = skija ? new SetsunaHud(registry, sink) : null;
+        if (skija) {
+            final SetsunaClickGui clickGui = new SetsunaClickGui(registry);
+            final SetsunaHud setsunaHud = new SetsunaHud(registry, sink, null);
+            final SetsunaHudEditor hudEditor = new SetsunaHudEditor(setsunaHud);
+            // 两个界面互斥：进入编辑器要先把 GUI 关掉，返回时再打开——否则两者会同时接输入，
+            // 点一下编辑器既拖了方块又改了模块开关。
+            clickGui.setOnEditHud(new Runnable() {
+                @Override
+                public void run() {
+                    clickGui.setOpen(false);
+                    hudEditor.setOpen(true);
+                }
+            });
+            hudEditor.setOnClose(new Runnable() {
+                @Override
+                public void run() {
+                    clickGui.setOpen(true);
+                }
+            });
+            this.gui = clickGui;
+            this.hud = setsunaHud;
+            this.editor = hudEditor;
+        } else {
+            this.gui = new ClickGui(registry);
+            this.hud = null;
+            this.editor = null;
+        }
         this.renderer = renderer;
         this.input = input;
         this.toggleKey = toggleKey;
@@ -115,6 +144,11 @@ public final class GuiOverlay implements FrameListener {
         return hud;
     }
 
+    /** @return HUD 编辑器；非 Skija 后端时为 {@code null} */
+    public SetsunaHudEditor editor() {
+        return editor;
+    }
+
     /** @return 实际生效的输入后端名称，用于日志诊断；按键「没反应」时先看这里是不是 {@code "none"} */
     public String keyBackend() {
         return input.describe();
@@ -125,11 +159,16 @@ public final class GuiOverlay implements FrameListener {
         return toggleKey;
     }
 
+    /** @return 当前在前台接输入的界面：编辑器优先，否则是 GUI */
+    private OverlayGui active() {
+        return editor != null && editor.isOpen() ? editor : gui;
+    }
+
     /** 是否已打印过首帧输入诊断，保证只打印一次。 */
     private boolean loggedFirstInput;
-    /** 上一帧 GUI 是否处于打开状态；用于识别指针捕获的交接沿。 */
+    /** 上一帧是否有界面处于打开状态；用于识别指针捕获的交接沿。 */
     private boolean wasOpenForPointer;
-    /** 打开 GUI 之前游戏的指针捕获状态；关闭时原样恢复。 */
+    /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
     private boolean pointerGrabbedBeforeGui;
 
     @Override
@@ -150,8 +189,14 @@ public final class GuiOverlay implements FrameListener {
                     + " toggleKey=" + toggleKey + " down=" + toggleDown);
         }
         if (toggleDown && !toggleWasDown) {
-            gui.toggle();
-            if (gui.isOpen()) {
+            if (editor != null && editor.isOpen()) {
+                // 编辑器里按开关键 = 返回 GUI（与点「完成」同一语义）
+                editor.setOpen(false);
+                gui.setOpen(true);
+            } else {
+                gui.toggle();
+            }
+            if (active().isOpen()) {
                 // 重置基准状态，避免上一帧的按下/位置被误判成本帧的新事件
                 lastX = mx;
                 lastY = my;
@@ -163,50 +208,48 @@ public final class GuiOverlay implements FrameListener {
         toggleWasDown = toggleDown;
 
         // 指针捕获交接（不是每帧强制）：
-        //   打开 GUI     → 记下游戏原本的捕获状态，然后把指针交还给 GUI；
-        //   打开期间     → 每帧保持释放（游戏中游戏会自行持续捕获，必须重申）；
-        //   关闭的那一帧 → 恢复打开前的状态。
-        // GUI 关闭期间完全不碰这个状态：主菜单/聊天/原生界面本来就需要可见光标，
+        //   打开界面      → 记下游戏原本的捕获状态，然后把指针交还给界面；
+        //   界面打开期间  → 每帧保持释放（游戏中游戏会自行持续捕获，必须重申）；
+        //   关闭的那一帧  → 恢复打开前的状态。
+        // 界面关闭期间完全不碰这个状态：主菜单/聊天/原生界面本来就需要可见光标，
         // 无条件捕获会把光标锁死——真机上「鼠标被锁」就是这里来的。
-        boolean open = gui.isOpen();
+        boolean open = active().isOpen();
         if (open) {
             if (!wasOpenForPointer) {
-                // 打开沿：记下原状态，供关闭时恢复
                 pointerGrabbedBeforeGui = input.isPointerGrabbed();
             }
             input.setPointerGrabbed(false);
         } else if (wasOpenForPointer) {
-            // 关闭沿：恢复打开前的捕获状态
             input.setPointerGrabbed(pointerGrabbedBeforeGui);
         }
         wasOpenForPointer = open;
 
-        // 滚轮增量每帧取出并清零：GUI 关闭期间也必须消费，否则打开瞬间会把
+        // 滚轮增量每帧取出并清零：界面关闭期间也必须消费，否则打开瞬间会把
         // 关闭期间累积的增量一次性滚动出来。
         double scroll = input.scrollDelta();
 
-        if (!gui.isOpen()) {
+        if (!active().isOpen()) {
             // 关闭状态保持输入基准同步，避免重开首帧把陈旧按下态误判为新事件
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
             escapeWasDown = input.keyDown(KEY_ESCAPE);
             lastX = mx;
             lastY = my;
-            // GUI 关闭不等于不绘制：HUD 是常显层，这里必须继续走绘制
+            // 界面关闭不等于不绘制：HUD 是常显层，这里必须继续走绘制
             drawFrame();
             return;
         }
 
-        // 键盘：目前只需让 Esc 可达（关闭 GUI）。键码为 AWT VK，后端已翻译。
+        // 键盘：目前只需让 Esc 可达（关闭当前界面）。键码为 AWT VK，后端已翻译。
         boolean escapeDown = input.keyDown(KEY_ESCAPE);
         if (escapeDown && !escapeWasDown) {
-            gui.keyPressed(KEY_ESCAPE, 0);
+            active().keyPressed(KEY_ESCAPE, 0);
         }
         escapeWasDown = escapeDown;
-        if (!gui.isOpen()) {
-            // Esc 在本帧关闭了 GUI：同步输入基准后只画 HUD。
+        if (!active().isOpen()) {
+            // Esc 在本帧关闭了界面：同步输入基准后只画 HUD。
             // 指针不在这一帧硬性恢复：下一帧的交接沿会把它还原成打开前的状态
-            // （在主菜单里打开 GUI 再按 Esc，光标必须保持可见）。
+            // （在主菜单里打开界面再按 Esc，光标必须保持可见）。
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
             lastX = mx;
@@ -218,21 +261,25 @@ public final class GuiOverlay implements FrameListener {
         if (!loggedFirstDraw) {
             loggedFirstDraw = true;
             if (renderer.ready()) {
-                System.out.println("[noturne] click GUI opened; input=" + input.describe()
+                System.out.println("[noturne] overlay active; input=" + input.describe()
                         + "; backend=" + renderer.backendName()
                         + "; screen=" + gui.getClass().getSimpleName()
                         + "; hud=" + (hud == null ? "none" : "setsuna"));
             } else {
                 // 后端未就绪时叠加层照样会绘制，但可能全帧不可见；明确警告，
                 // 避免与「输入没解析出来」的现象混为一谈。
-                System.out.println("[noturne] WARNING: click GUI opened but renderer not ready;"
+                System.out.println("[noturne] WARNING: overlay opened but renderer not ready;"
                         + " input=" + input.describe() + "; backend=" + renderer.backendName());
             }
         }
 
         // 先同步绘制区域尺寸，滚动范围与拖动/平移夹取才能正确计算
-        gui.setViewport(renderer.width(), renderer.height());
-        gui.update(System.currentTimeMillis(), mx, my);
+        OverlayGui current = active();
+        current.setViewport(renderer.width(), renderer.height());
+        if (editor != null) {
+            editor.setFps(fps);
+        }
+        current.update(System.currentTimeMillis(), mx, my);
 
         boolean left = input.mouseDown(BUTTON_LEFT);
         boolean right = input.mouseDown(BUTTON_RIGHT);
@@ -241,24 +288,24 @@ public final class GuiOverlay implements FrameListener {
 
         // 左键：按下沿 → 点击；按住且有位移 → 拖拽；松开沿 → 释放
         if (left && !leftWasDown) {
-            gui.mouseClicked(mx, my, BUTTON_LEFT);
+            current.mouseClicked(mx, my, BUTTON_LEFT);
         } else if (left && (dx != 0d || dy != 0d)) {
-            gui.mouseDragged(mx, my, BUTTON_LEFT, dx, dy);
+            current.mouseDragged(mx, my, BUTTON_LEFT, dx, dy);
         }
         if (!left && leftWasDown) {
-            gui.mouseReleased(mx, my, BUTTON_LEFT);
+            current.mouseReleased(mx, my, BUTTON_LEFT);
         }
 
         // 右键只用于「恢复默认值 / 打开模块设置」，不参与拖拽
         if (right && !rightWasDown) {
-            gui.mouseClicked(mx, my, BUTTON_RIGHT);
+            current.mouseClicked(mx, my, BUTTON_RIGHT);
         }
         if (!right && rightWasDown) {
-            gui.mouseReleased(mx, my, BUTTON_RIGHT);
+            current.mouseReleased(mx, my, BUTTON_RIGHT);
         }
 
         if (scroll != 0d) {
-            gui.mouseScrolled(mx, my, scroll);
+            current.mouseScrolled(mx, my, scroll);
         }
 
         lastX = mx;
@@ -270,14 +317,19 @@ public final class GuiOverlay implements FrameListener {
     }
 
     /**
-     * 绘制本帧：HUD 常显，GUI 仅在打开时绘制。
+     * 绘制本帧：HUD 常显，前台界面（GUI 或 HUD 编辑器）叠加其上。
+     *
+     * <p>编辑器打开时由它自己画 HUD 预览，所以这里不再重复画 HUD——重复画会让卡片叠出更实的心色，
+     * 而编辑器看到的应当就是最终效果。
      *
      * <p>begin/end 必须成对且**每帧只有一次**：Skija 的原生表面每帧只能建立与提交一次，
-     * 两层各走一遍会把先绘制的内容丢掉；渲染中途抛异常时若不执行 endFrame，GL 状态与
+     * 多层各走一遍会把先绘制的内容丢掉；渲染中途抛异常时若不执行 endFrame，GL 状态与
      * 原生表面都会留在中间态。
      */
     private void drawFrame() {
-        if (hud == null && !gui.isOpen()) {
+        boolean editorOpen = editor != null && editor.isOpen();
+        boolean guiOpen = gui.isOpen() && !editorOpen;
+        if (hud == null && !guiOpen && !editorOpen) {
             return;
         }
         renderer.beginFrame();
@@ -286,11 +338,19 @@ public final class GuiOverlay implements FrameListener {
             Canvas canvas = renderer instanceof SkijaBackend
                     ? ((SkijaBackend) renderer).canvas()
                     : null;
-            if (canvas != null && hud != null) {
-                hud.render(canvas, renderer.width(), renderer.height(), fps);
-            }
-            if (gui.isOpen()) {
-                gui.render(renderer, canvas);
+            if (canvas != null) {
+                int width = renderer.width();
+                int height = renderer.height();
+                if (editorOpen) {
+                    editor.render(renderer, canvas);
+                } else {
+                    if (hud != null) {
+                        hud.render(canvas, width, height, fps);
+                    }
+                    if (guiOpen) {
+                        gui.render(renderer, canvas);
+                    }
+                }
             }
         } finally {
             renderer.endFrame();

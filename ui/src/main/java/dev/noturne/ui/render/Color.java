@@ -104,6 +104,11 @@ public final class Color {
         return argb & 0xFF;
     }
 
+    /** @return 打包后的原始值，布局 {@code 0xAARRGGBB}；供需要 int 的绘制后端使用 */
+    public int packed() {
+        return argb;
+    }
+
     /** @return 归一化到 0–1 的 alpha，供 OpenGL 直接使用 */
     public float af() {
         return a() / 255f;

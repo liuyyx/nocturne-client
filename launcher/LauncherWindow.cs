@@ -405,19 +405,34 @@ public sealed class LauncherWindow : Window
                 return candidate;
             }
         }
-        string[] probes =
+        // Vendors install JDKs side by side under these roots. Pick the highest version by name
+        // rather than hard-coding one machine's exact build directory.
+        string[] roots =
         {
-            @"C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\java.exe",
-            @"C:\Program Files\Eclipse Adoptium\jdk-21.0.12.8-hotspot\bin\java.exe",
+            @"C:\Program Files\Microsoft",
+            @"C:\Program Files\Eclipse Adoptium",
+            @"C:\Program Files\Java",
+            @"C:\Program Files\Amazon Corretto",
+            @"C:\Program Files\Zulu",
         };
-        foreach (string probe in probes)
+        string? best = null;
+        foreach (string root in roots)
         {
-            if (File.Exists(probe))
+            if (!Directory.Exists(root))
             {
-                return probe;
+                continue;
+            }
+            foreach (string dir in Directory.GetDirectories(root, "jdk*"))
+            {
+                string candidate = Path.Combine(dir, "bin", "java.exe");
+                if (File.Exists(candidate)
+                    && (best == null || string.CompareOrdinal(candidate, best) > 0))
+                {
+                    best = candidate;
+                }
             }
         }
-        return "java";
+        return best ?? "java";
     }
 
     private static string? FindJar()

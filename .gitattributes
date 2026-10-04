@@ -1,0 +1,14 @@
+# Normalise line endings so the repository stops reporting CRLF churn on
+# every checkout. Source is LF; Windows-only scripts stay CRLF.
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.cs   text eol=crlf
+*.csproj text eol=crlf
+*.manifest text eol=crlf
+
+*.jar  binary
+*.dll  binary
+*.exe  binary
+*.png  binary

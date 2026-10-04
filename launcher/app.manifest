@@ -1,9 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  启动器应用程序清单。
+  只声明 DPI 感知策略：启动器是深色卡片式 UI，若不声明 DPI 感知，
+  Windows 会把它当作 DPI 不感知进程并做位图拉伸，放大后圆角与文字都会发虚。
+-->
+
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <!-- 程序集标识：name 为逻辑名，version 固定 1.0.0.0 以满足 Windows 装载要求。 -->
   <assemblyIdentity version="1.0.0.0" name="NoturneLauncher.app"/>
+  <!-- application/windowsSettings 段：承载 Vista 及之后的应用级设置。 -->
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <!-- DPI 设置。 -->
     <windowsSettings>
+      <!-- 旧版（Vista/Win7 命名空间）DPI 感知：true=系统感知，pm=按显示器。
+           Windows 7 及更早系统只认这个属性，故与下一行并存。 -->
       <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <!-- 新版（Win10 1703+）DPI 感知：permonitorv2 表示按每显示器缩放，
+           且允许非客户端区自动缩放（标题栏/拖动区域），高 DPI 混合缩放下最清晰。 -->
       <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">permonitorv2</dpiAwareness>
     </windowsSettings>
   </application>

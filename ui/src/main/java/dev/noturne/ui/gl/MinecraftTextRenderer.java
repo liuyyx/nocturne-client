@@ -193,7 +193,7 @@ public final class MinecraftTextRenderer implements TextRenderer {
      */
     private static GlApi resolveFixedPipeline(Object font) {
         ClassLoader loader = font.getClass().getClassLoader();
-        if (Reflect.load("org.lwjgl.opengl.GL11C", loader) != null) {
+        if (Reflect.loadWithoutInit("org.lwjgl.opengl.GL11C", loader) != null) {
             return null;
         }
         return GlApi.bind("org.lwjgl.opengl.GL11", loader);

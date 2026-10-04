@@ -150,7 +150,7 @@ public final class GlApi {
      * @param loader    游戏类加载器，用于解析 LWJGL 类
      */
     public static GlApi bind(String className, ClassLoader loader) {
-        return bind(Reflect.load(className, loader));
+        return bind(Reflect.loadWithoutInit(className, loader));
     }
 
     /**

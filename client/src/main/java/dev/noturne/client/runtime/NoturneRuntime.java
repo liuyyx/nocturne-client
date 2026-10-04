@@ -1,12 +1,13 @@
 package dev.noturne.client.runtime;
 
 import dev.noturne.client.NoturneClient;
+import dev.noturne.client.game.GameBridge;
+import dev.noturne.client.module.ModuleRegistry;
 
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
-
 /**
  * 运行时入口，由注入的字节码调用。
  *
@@ -144,6 +145,21 @@ public final class NoturneRuntime {
         NoturneClient client = NoturneClient.get();
         if (client == null) {
             return;
+        }
+        // 闸门由唯一生产驱动者接线：进入世界时开、离开世界时关。
+        // 修复前 ModuleRegistry.setActive 在生产里零调用 → active 恒 false，
+        // 三个非豁免模块（Sprint / FullBright / Watermark）的 onTick 一次都不会执行。
+        GameBridge bridge = client.gameBridge();
+        boolean inWorld = bridge != null && bridge.isResolved();
+        boolean wasInWorld = false;
+        ModuleRegistry registry = client.modules();
+        try {
+            wasInWorld = registry.isActive();
+        } catch (Throwable ignored) {
+            // 闸门查询失败不改变行为，维持上一次判断
+        }
+        if (inWorld != wasInWorld) {
+            registry.setActive(inWorld);
         }
         client.modules().tick();
     }

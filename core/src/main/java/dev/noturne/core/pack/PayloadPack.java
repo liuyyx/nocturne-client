@@ -36,6 +36,15 @@ public final class PayloadPack {
     private static final int MAX_ENTRY = 64 * 1024 * 1024;
     /** 解压后明文允许的最大字节数（512 MiB），用于防御解压炸弹。 */
     private static final long MAX_PLAIN = 512L * 1024 * 1024;
+
+    /**
+     * 交付 payload 上限：整个 payload（含 5 字节头 + nonce + 密文）的最大字节数。
+     * 缺这一层，真正防线在 PayloadLoader.readFully（仅流入口），绕过它直接调
+     * {@link #unpack(byte[], byte[])} 就没有任何最大长度门禁。
+     * 与 PayloadLoader.readFully 的 MAX_PAYLOAD_BYTES 对齐：压缩态 256 MiB。
+     */
+    public static final long MAX_PACKED_BYTES = 256L * 1024 * 1024;
+
     /** 要求的 AES 密钥长度（字节）——必须是 32 字节的 AES-256。 */
     public static final int KEY_LENGTH = 32;
 
@@ -77,6 +86,10 @@ public final class PayloadPack {
         if (packed == null || packed.length < 4 + 1 + NONCE_LEN + TAG_BITS / 8) {
             throw new IOException("payload too short");
         }
+        if (packed.length > MAX_PACKED_BYTES) {
+            throw new IOException("payload too large: " + packed.length + " bytes (limit "
+                    + MAX_PACKED_BYTES + ")");
+        }
         for (int i = 0; i < MAGIC.length; i++) {
             if (packed[i] != MAGIC[i]) {
                 throw new IOException("bad magic");
@@ -85,10 +98,8 @@ public final class PayloadPack {
         if (packed[4] != VERSION) {
             throw new IOException("unsupported payload version " + packed[4]);
         }
-        byte[] body = new byte[packed.length - 5];
-        System.arraycopy(packed, 5, body, 0, body.length);
-
-        byte[] compressed = open(body, key);
+        // 直接把密文段以偏移形式交给 open，避免为跳过 5 字节头而整份复制一个大数组。
+        byte[] compressed = open(packed, 5, packed.length - 5, key);
         return deserialize(inflate(compressed));
     }
 
@@ -103,10 +114,17 @@ public final class PayloadPack {
     }
 
     /**
-     * 加密一段数据（{@code AES/GCM/NoPadding}），输出前缀为随机 nonce。
-     *
-     * @throws IOException 加密失败或密钥长度非法
+     * 供 GCM 认证用的 AAD：文件头（魔数 + 版本）。头部由此纳入完整性保护——
+     * 修改 MAGIC 或 VERSION 的任何一点都会变成 AEADBadTagException，而不是被静默放过
+     * （AEADBadTagException 之前不触发，反而被当作「不支持的版本」拒收）。
      */
+    private static byte[] headerAad() {
+        byte[] aad = new byte[MAGIC.length + 1];
+        System.arraycopy(MAGIC, 0, aad, 0, MAGIC.length);
+        aad[MAGIC.length] = VERSION;
+        return aad;
+    }
+
     private static byte[] seal(byte[] data, byte[] key) throws IOException {
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -114,6 +132,7 @@ public final class PayloadPack {
             new java.security.SecureRandom().nextBytes(nonce);
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"),
                     new GCMParameterSpec(TAG_BITS, nonce));
+            cipher.updateAAD(headerAad());
             byte[] cipherText = cipher.doFinal(data);
             byte[] out = new byte[NONCE_LEN + cipherText.length];
             System.arraycopy(nonce, 0, out, 0, NONCE_LEN);
@@ -127,37 +146,57 @@ public final class PayloadPack {
     /**
      * 解密一段 {@code [ nonce | 密文+标签 ]} 数据。
      *
-     * @throws IOException 密文过短、密钥错误或认证标签校验失败（数据被篡改）
+     * @throws IOException 密文过短（非唯一路径），或密钥错误 / 数据被篡改 / 头部被改写
+     *   （后三种统一表现为 AEADBadTagException，形如 "open failed"）
      */
     private static byte[] open(byte[] data, byte[] key) throws IOException {
+        return open(data, 0, data.length, key);
+    }
+
+    /**
+     * 解密 {@code data[offset .. offset+length)} 里的 {@code [ nonce | 密文+标签 ]}。
+     *
+     * <p>提供 offset/length 重载是给 {@link #unpack} 直接传密文段用的——修复前会把
+     * {@code packed} 整个复制一份 body 再传给单数的 open，峰值内存放大一整份密文数组。
+     *
+     * @throws IOException 密文过短，或密钥错误 / 数据被篡改 / 头部被改写
+     */
+    private static byte[] open(byte[] data, int offset, int length, byte[] key) throws IOException {
         // 仅有 nonce 而没有密文+标签（16 字节）时不可能是合法的 GCM 输出
-        if (data.length <= NONCE_LEN) {
+        if (length < NONCE_LEN + TAG_BITS / 8) {
             throw new IOException("ciphertext too short");
         }
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             byte[] nonce = new byte[NONCE_LEN];
-            System.arraycopy(data, 0, nonce, 0, NONCE_LEN);
+            System.arraycopy(data, offset, nonce, 0, NONCE_LEN);
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
                     new GCMParameterSpec(TAG_BITS, nonce));
-            return cipher.doFinal(data, NONCE_LEN, data.length - NONCE_LEN);
+            cipher.updateAAD(headerAad());
+            return cipher.doFinal(data, offset + NONCE_LEN, length - NONCE_LEN);
+        } catch (javax.crypto.AEADBadTagException e) {
+            // 认证失败可能来自：错误密钥 / 数据被篡改 / 头部改写（含降级到未来 v2）
+            throw new IOException("authentication failed (bad key, tampered payload, or header tweak)", e);
         } catch (Exception e) {
             throw new IOException("open failed", e);
         }
     }
 
-    // ------------------------------------------------------------- compression
-
     /** 用 {@code Deflater.BEST_COMPRESSION} 压缩数据。 */
-    private static byte[] deflate(byte[] data) {
+    private static byte[] deflate(byte[] data) throws IOException {
         Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
         try {
             deflater.setInput(data);
             deflater.finish();
-            ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(64, data.length / 2));
+            ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(64, data.length / 8));
             byte[] buf = new byte[8192];
             while (!deflater.finished()) {
                 int n = deflater.deflate(buf);
+                if (n == 0) {
+                    // 与 inflate 侧对称的「无进展即失败」守卫：finish() 保证正常时 n > 0，
+                    // 若未来改为流式喂 deflate() 不再 finish()，一次 Pat 滞回就是死循环
+                    throw new IOException("deflate made no progress");
+                }
                 out.write(buf, 0, n);
             }
             return out.toByteArray();
@@ -250,7 +289,13 @@ public final class PayloadPack {
             String name = in.readUTF();
             int length = in.readInt();
             if (length < 0 || length > MAX_ENTRY) {
-                throw new IOException("bad entry length for " + name + ": " + length);
+                throw new IOException("bad entry length for entry #" + i + ": " + length);
+            }
+            // 先校验剩余字节，再分配：6 字节明文即可强制服务端预分配一个 64 MiB 的数组
+            // （修复前是先 new byte[length] 再 readFully 抛 EOF，浪费堆）。
+            if (length > in.available()) {
+                throw new IOException("entry #" + i + " claims " + length
+                        + " bytes but only " + in.available() + " remain");
             }
             byte[] value = new byte[length];
             in.readFully(value);
@@ -258,6 +303,12 @@ public final class PayloadPack {
                 // 重复条目名会静默覆盖，使实际条目数与 count 不符；这里显式拒绝。
                 throw new IOException("duplicate entry: " + name);
             }
+        }
+        // 明文必须是 canonical 的：非规范形会让「未来版本加大端元数据」被静默忽略
+        // （返回「成功」），也使得 count/长度/重名三项不变性只在无尾随数据时成立。
+        if (in.available() != 0) {
+            throw new IOException("trailing data after entry table: " + in.available() + " bytes; "
+                    + "payload is not canonical");
         }
         return out;
     }

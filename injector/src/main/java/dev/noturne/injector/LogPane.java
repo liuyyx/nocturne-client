@@ -122,16 +122,25 @@ public final class LogPane extends JPanel {
     public void info(String message) {
         append(message);
     }
-    /** 追加一条失败行；文案由调用方决定。 */
+
+    /** 追加一条失败行。文案由调用方决定；与 info 的差别是这里带 `!` 前缀便于肉眼检索。 */
     public void error(String message) {
-        append(message);
+        append("! " + message);
     }
 
 
-    /** 清空全部日志行。 */
+    /** 清空全部日志行。与 append 一样可从任意线程调：正文重设投递到 EDT。
+     */
     public void clear() {
-        lines.clear();
-        area.setText("");
+        Runnable task = () -> {
+            lines.clear();
+            area.setText("");
+        };
+        if (SwingUtilities.isEventDispatchThread()) {
+            task.run();
+        } else {
+            SwingUtilities.invokeLater(task);
+        }
     }
     /**
      * 追加一行带时间戳的日志，受 {@link #MAX_LINES} 限制。

@@ -117,23 +117,28 @@ public final class FullBrightModule extends Module {
         }
     }
 
-    /** 把 gamma 还原为启用前的快照；快照缺失时退回 {@link #FALLBACK_GAMMA}。 */
+    /** 把 gamma 还原为启用前的快照；快照缺失时保守不动，绝不把玩家亮度覆盖成 FALLBACK。 */
     private void restoreOriginal() {
         Object snapshot = savedGamma;
+        if (snapshot == null) {
+            // (1) 启用时根本没读到原值 — 无法盲目还原到 1.0，那会覆盖玩家自定的亮度；
+            // (2) 已在别处被恢复过 → snapshot 已清空，再次调用是无害的重入
+            return;
+        }
         savedGamma = null;
-        double target = snapshot instanceof Number ? ((Number) snapshot).doubleValue() : FALLBACK_GAMMA;
+        double target = ((Number) snapshot).doubleValue();
 
         GameBridge bridge = bridge();
         Object options = bridge == null ? null : options(bridge);
         Object field = options == null ? null : bridge.readField(options, ClassType.OPTIONS, "gamma");
         if (field == null) {
-            // 客户端已不可用：无需也无法还原，快照已清空避免下次启用携带陈旧值
+            // 客户端已不可用：快照已清空避免下次启用携带陈旧值
             return;
         }
         if (writeGamma(bridge, options, field, target)) {
             writeFailureLogged = false;
         } else {
-            logWriteFailure("禁用时无法把 gamma 还原为快照值" + target);
+            logWriteFailure("gamma 还原失败，玩家亮度可能停留在启用时的值");
         }
     }
 

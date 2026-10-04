@@ -98,20 +98,29 @@ public final class JdkAttachStrategy implements AttachStrategy {
      * 与编译期类型不同源；这里按异常类名与消息格式判定。
      *
      * @param cause {@code loadAgent} 反射调用抛出的原始异常
-     * @return 目标侧实际加载成功时为 true
+     * @return 目标侧实际加载成功时为 true；包可见以便单元测试直接钉住行为
      */
-    private static boolean isJdk8ResponseMismatch(Throwable cause) {
-        if (cause == null
-                || !"com.sun.tools.attach.AgentLoadException".equals(cause.getClass().getName())) {
+    static boolean isJdk8ResponseMismatch(Throwable cause) {
+        if (cause == null) {
+            return false;
+        }
+        String name = cause.getClass().getName();
+        // JDK 21 客户端读 JDK 8 目标响应时抛的可能不是 AgentLoadException
+        // 而是 IOException（Unexpected reply from target JVM: 0）等。
+        if (!"com.sun.tools.attach.AgentLoadException".equals(name)
+                && !"java.io.IOException".equals(name)
+                && !"com.sun.tools.attach.AgentInitializationException".equals(name)) {
             return false;
         }
         String message = cause.getMessage();
-        String prefix = "Failed to load agent library: ";
-        if (message == null || !message.startsWith(prefix)) {
+        if (message == null) {
             return false;
         }
-        // 响应是裸返回码（JDK 8 格式）；0 表示 Agent_OnAttach 成功
-        return "0".equals(message.substring(prefix.length()).trim());
+        // 响应本身就是裸返回码（JDK 8 格式），trim 后为纯数字即视为成功。
+        // 不能只接 "Failed to load agent library: 0"——那条前缀是 JDK 9 客户端
+        // `loadAgentLibrary` 的报错路径，不是 "return code: " 的裸数字形态。
+        String trimmed = message.trim();
+        return trimmed.matches("[0-9]+") && "0".equals(trimmed);
     }
 
     /**

@@ -60,8 +60,11 @@ public final class ModernRenderer implements UiBackend {
     private int colorLocation;
     /** 着色器与缓冲是否已创建成功；未就绪时所有绘制调用都会被跳过。 */
     private boolean ready;
-    /** 初始化是否已明确失败；失败后不再每帧重试，避免累积 GL 对象。 */
-    private boolean initFailed;
+    /** 初始化失败计数；达到上限后停止重试（避免无限重试的产生与清理泄漏）。 */
+    private int initFailures;
+    /** 初始化重试上限：超过即视为环境不支持，永久放弃（真实驱动失败不会短暂恢复）。 */
+    private static final int MAX_INIT_FAILURES = 5;
+    private long nextRetryNanos;
 
     /** 当前正交投影矩阵（16 个元素，列主序）。 */
     private float[] projection = new float[16];
@@ -83,11 +86,12 @@ public final class ModernRenderer implements UiBackend {
 
     /** 是否已保存 {@link #beginFrame()} 之前的开关状态；保存后由 {@link #endFrame()} 还原。 */
     private boolean stateSaved;
-    /** beginFrame 之前的混合开关状态。 */
-    private boolean blendWasEnabled;
+    /** beginFrame 之前的混合因子（GL_BLEND_SRC/DST_RGB/ALPHA 四项）。 */
+    private int[] blendBefore;
     /** beginFrame 之前的深度测试状态。 */
     private boolean depthWasEnabled;
-    /** beginFrame 之前的背面剔除状态。 */
+    /** beginFrame 之前的混合开关状态。 */
+    private boolean blendWasEnabled;
     private boolean cullWasEnabled;
 
     /** 供每次绘制复用的暂存顶点缓冲，使整个渲染过程不产生逐帧分配。 */
@@ -121,7 +125,7 @@ public final class ModernRenderer implements UiBackend {
         if (ready) {
             return true;
         }
-        if (initFailed) {
+        if (initFailures > 0 && System.nanoTime() < nextRetryNanos) {
             return false;
         }
 
@@ -131,7 +135,7 @@ public final class ModernRenderer implements UiBackend {
         if (vertex == 0 || !gl.compileOk(vertex)) {
             System.err.println("[noturne] vertex shader failed: " + gl.shaderLog(vertex));
             gl.deleteShader(vertex);
-            initFailed = true;
+            recordInitFailure();
             return false;
         }
 
@@ -142,7 +146,7 @@ public final class ModernRenderer implements UiBackend {
             System.err.println("[noturne] fragment shader failed: " + gl.shaderLog(fragment));
             gl.deleteShader(fragment);
             gl.deleteShader(vertex);
-            initFailed = true;
+            recordInitFailure();
             return false;
         }
 
@@ -151,7 +155,7 @@ public final class ModernRenderer implements UiBackend {
             System.err.println("[noturne] glCreateProgram failed");
             gl.deleteShader(vertex);
             gl.deleteShader(fragment);
-            initFailed = true;
+            recordInitFailure();
             return false;
         }
         program = created;
@@ -169,7 +173,7 @@ public final class ModernRenderer implements UiBackend {
             System.err.println("[noturne] program link failed: " + gl.programLog(program));
             gl.deleteProgram(program);
             program = 0;
-            initFailed = true;
+            recordInitFailure();
             return false;
         }
 
@@ -180,7 +184,7 @@ public final class ModernRenderer implements UiBackend {
                     + " uColor=" + colorLocation);
             gl.deleteProgram(program);
             program = 0;
-            initFailed = true;
+            recordInitFailure();
             return false;
         }
 
@@ -197,7 +201,7 @@ public final class ModernRenderer implements UiBackend {
             vertexBuffer = 0;
             gl.deleteVertexArray(vertexArray);
             vertexArray = 0;
-            initFailed = true;
+            recordInitFailure();
             return false;
         }
         gl.bindVertexArray(vertexArray);
@@ -270,9 +274,20 @@ public final class ModernRenderer implements UiBackend {
     /** @return 后端是否已成功初始化并处于可绘制状态 */
     @Override
     public boolean ready() {
-        return ready || (!initFailed && initialise());
+        return ready || (canRetry() && initialise());
     }
 
+    /** @return 尚未达到重试上限且当前已过退避时间 */
+    private boolean canRetry() {
+        return initFailures < MAX_INIT_FAILURES && System.nanoTime() >= nextRetryNanos;
+    }
+
+    /** 记录一次初始化失败，按指数退避推迟下一次重试（上限 {@value #MAX_INIT_FAILURES} 次）。 */
+    private void recordInitFailure() {
+        initFailures++;
+        nextRetryNanos = System.nanoTime() + Math.min(4_000_000_000L,
+                (1L << Math.min(initFailures, 10)) * 250_000_000L);
+    }
     /** 应用每帧的 GL 状态；在绘制 GUI 之前调用。 */
     @Override
     public void beginFrame() {
@@ -287,7 +302,7 @@ public final class ModernRenderer implements UiBackend {
         saveState();
         gl.useProgram(program);
         gl.bindVertexArray(vertexArray);
-        gl.enableBlend();
+        blendBefore = gl.enableBlendAndReadPrevious();
         gl.disableDepthTest();
         // 投影含 -2/h 的 Y 翻转，所有三角形按绕序都是「背面」；不关剔除整个 GUI 会被剔光。
         gl.disableCullFace();
@@ -326,15 +341,26 @@ public final class ModernRenderer implements UiBackend {
             restore(ModernGlApi.GL_BLEND, blendWasEnabled);
             restore(ModernGlApi.GL_DEPTH_TEST, depthWasEnabled);
             restore(ModernGlApi.GL_CULL_FACE, cullWasEnabled);
+            // 还原混合因子：修复前只还原开关位，glBlendFunc 的 src/dst 因子永远留在我们的
+            // src-alpha 值上，同帧后续的游戏 pass 若用别的因子（发光/加色/粒子）会被静默改写。
+            gl.restoreBlendFunc(blendBefore);
+            blendBefore = null;
             stateSaved = false;
         }
         if (clipDepth > 0) {
             gl.disableScissorTest();
             clipDepth = 0;
         }
+        // 解绑 program/VAO/array buffer：1.13+ 的 GlStateManager 缓存这些绑定；不还原会让
+        // 后续游戏代码「绑定自己的 VAO」被判为已绑定而跳过真实调用 → 画面损坏或崩溃。
+        if (ready) {
+            gl.bindVertexArray(0);
+            gl.bindArrayBuffer(0);
+            gl.useProgram(0);
+        }
     }
 
-    /** 把某项能力还原为 {@code enabled} 指定的状态。 */
+    /** 还原单个开关位。 */
     private void restore(int cap, boolean enabled) {
         if (enabled) {
             gl.enableCap(cap);

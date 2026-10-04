@@ -110,9 +110,11 @@ public final class ReflectiveInput implements InputSource {
         this.surfaceWidth = surfaceWidth;
         this.surfaceHeight = surfaceHeight;
 
-        Class<?> mouse = Reflect.load("org.lwjgl.input.Mouse", loader);
-        Class<?> keyboard = Reflect.load("org.lwjgl.input.Keyboard", loader);
-        Class<?> display = Reflect.load("org.lwjgl.opengl.Display", loader);
+        // 探测用 loadWithoutInit（M-73）：对未知类执行 <clinit> 若抛错，JVM 会把该类
+        // 永久标记为 erroneous，等于注入动作本身把游戏搞崩。这里只是「在不在」，不是「初始化」。
+        Class<?> mouse = Reflect.loadWithoutInit("org.lwjgl.input.Mouse", loader);
+        Class<?> keyboard = Reflect.loadWithoutInit("org.lwjgl.input.Keyboard", loader);
+        Class<?> display = Reflect.loadWithoutInit("org.lwjgl.opengl.Display", loader);
         Method mGetX = mouse == null ? null : Reflect.method(mouse, "getX");
         Method mGetY = mouse == null ? null : Reflect.method(mouse, "getY");
         Method mIsButtonDown = mouse == null ? null : Reflect.method(mouse, "isButtonDown", int.class);
@@ -147,7 +149,7 @@ public final class ReflectiveInput implements InputSource {
             return;
         }
 
-        Class<?> glfw = Reflect.load("org.lwjgl.glfw.GLFW", loader);
+        Class<?> glfw = Reflect.loadWithoutInit("org.lwjgl.glfw.GLFW", loader);
         Method gCursorPos = glfw == null ? null
                 : Reflect.method(glfw, "glfwGetCursorPos", long.class, double[].class, double[].class);
         Method gMouseButton = glfw == null ? null
@@ -160,7 +162,9 @@ public final class ReflectiveInput implements InputSource {
                 : Reflect.method(glfw, "glfwSetInputMode", long.class, int.class, int.class);
         Method gGetWindowAttrib = glfw == null ? null
                 : Reflect.method(glfw, "glfwGetWindowAttrib", long.class, int.class);
-        Class<?> callback = glfw == null ? null : Reflect.load("org.lwjgl.glfw.GLFWScrollCallbackI", loader);
+        // 接口探测也用 loadWithoutInit：它可能没有被加载过，加载了也不会 <clinit>
+        Class<?> callback = glfw == null ? null
+                : Reflect.loadWithoutInit("org.lwjgl.glfw.GLFWScrollCallbackI", loader);
         Method callbackInvoke = callback == null ? null
                 : Reflect.method(callback, "invoke", long.class, double.class, double.class);
         Method gSetScroll = callback == null ? null
@@ -229,8 +233,8 @@ public final class ReflectiveInput implements InputSource {
         if ("none".equals(input.backend)) {
             // 两代输入栈都没解析出来时，把探测结果打出来——否则日志里只有一句 input=none，无从下手。
             System.out.println("[noturne] no input backend; lwjgl2-mouse="
-                    + (Reflect.load("org.lwjgl.input.Mouse", loader) != null)
-                    + " glfw=" + (Reflect.load("org.lwjgl.glfw.GLFW", loader) != null)
+                    + (Reflect.loadWithoutInit("org.lwjgl.input.Mouse", loader) != null)
+                    + " glfw=" + (Reflect.loadWithoutInit("org.lwjgl.glfw.GLFW", loader) != null)
                     + " loader=" + loader);
         }
         return "none".equals(input.backend) ? new NoInput() : input;

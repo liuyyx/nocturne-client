@@ -29,6 +29,11 @@ import java.util.zip.ZipInputStream;
  * 调用方据此跳过帧钩子安装，其余功能（客户端引导、叠加层）不受影响。
  */
 public final class EmbeddedAsmLoader extends ClassLoader {
+    /** 与 MemoryClassLoader 同源：声明「按类名并行可加载」，否则所有类加载串行在 loader 监视器上。 */
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
+
 
     /** 内嵌 ASM jar 的资源路径，由 dist 打包任务固定写入（K3）。 */
     private static final String ASM_JAR_RESOURCE = "dev/noturne/agent/asm.jar";
@@ -36,8 +41,8 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     /** 需要 child-first 的 ASM 包前缀。 */
     private static final String ASM_PACKAGE_PREFIX = "org.objectweb.asm.";
 
-    /** 需要 child-first 的转换器类名前缀（覆盖匿名内部类 {@code $1}/{@code $2}）。 */
-    private static final String TRANSFORMER_PREFIX = "dev.noturne.agent.transform.FrameHookTransformer";
+    /** 需要 child-first 的转换器包前缀（覆盖 FrameHookTransformer、CallbackHookTransformer 及匿名内部类）。 */
+    private static final String TRANSFORMER_PREFIX = "dev.noturne.agent.transform.";
 
     /** 转换器类名与钩子目标，与 {@link FrameHookTransformer} 的契约一致。 */
     private static final String TRANSFORMER_CLASS = "dev.noturne.agent.transform.FrameHookTransformer";

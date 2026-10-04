@@ -124,7 +124,8 @@ public final class ModernGlApi {
 
     /** 复用的直接缓冲区，避免每次上传都 {@code memAlloc}；不足时按需扩容。 */
     private FloatBuffer staging;
-
+    /** 复用的直接 IntBuffer，供 {@link #getIntegerv} 读取 GL 参数（如视口）。 */
+    private java.nio.IntBuffer viewportStaging;
     /** 句柄在 {@link #bind} 中逐项解析后写入；未解析到的保持 {@code null}。 */
     private ModernGlApi() {
     }
@@ -213,7 +214,20 @@ public final class ModernGlApi {
         api.blendFunc = find(loader, "glBlendFunc", int.class, int.class);
         api.scissor = find(loader, "glScissor", int.class, int.class, int.class, int.class);
         api.newFloatBuffer = findBufferUtils(loader);
-        api.getIntegerv = find(loader, "glGetIntegerv", int.class, int[].class);
+        // LWJGL3 只暴露 glGetIntegerv(int, IntBuffer)；没有 (int, int[]) 重载。
+        // 修复前试图查找 (int, int[]) 结果必然 null → 视口读不出来 → 26.x 上 GUI 一个像素都画不出。
+        // LWJGL 的 checkBuffer 需要 buffer 有余量，所以容量给 32 元素（大于视口实际 4）。
+        api.getIntegerv = find(loader, "glGetIntegerv", int.class, java.nio.IntBuffer.class);
+        if (api.getIntegerv == null) {
+            // 兜底：老版本 LWJGL3 可能有 legacy (int, int[]) 形态，继续尝试
+            api.getIntegerv = find(loader, "glGetIntegerv", int.class, int[].class);
+        }
+        if (api.getIntegerv != null) {
+            api.viewportStaging = java.nio.ByteBuffer
+                    .allocateDirect(32 * 4)
+                    .order(java.nio.ByteOrder.nativeOrder())
+                    .asIntBuffer();
+        }
         return api;
     }
 
@@ -228,11 +242,26 @@ public final class ModernGlApi {
         if (getIntegerv == null) {
             return null;
         }
+        // IntBuffer 形态优先（LWJGL3 是 (int, IntBuffer)）
+        if (viewportStaging != null) {
+            viewportStaging.clear();
+            viewportStaging.limit(count);
+            try {
+                getIntegerv.invoke(null, name, viewportStaging);
+            } catch (Throwable t) {
+                return null;
+            }
+            int[] out = new int[count];
+            viewportStaging.flip();
+            viewportStaging.get(out, 0, count);
+            return out;
+        }
+        // 数组形态兜底（老版本 LWJGL3）
         int[] out = new int[count];
         try {
             // 不走 Reflect.call：后者把失败一律变成 null，而 void 方法成功时也是 null，
             // 结果就是「句柄存在但调用抛异常」被伪装成 {0,0,0,0}。
-            getIntegerv.invoke(null, name, out);
+            getIntegerv.invoke(null, name, (Object) out);
         } catch (Throwable t) {
             return null;
         }
@@ -260,7 +289,7 @@ public final class ModernGlApi {
                 "org.lwjgl.opengl.GL14C", "org.lwjgl.opengl.GL14",
         };
         for (String owner : owners) {
-            Method method = Reflect.method(Reflect.load(owner, loader), name, parameters);
+            Method method = Reflect.method(Reflect.loadWithoutInit(owner, loader), name, parameters);
             if (method != null) {
                 return method;
             }
@@ -270,7 +299,7 @@ public final class ModernGlApi {
 
     /** 解析 {@code BufferUtils.createFloatBuffer}，用于把 float 数组包成直接缓冲区。 */
     private static Method findBufferUtils(ClassLoader loader) {
-        return Reflect.method(Reflect.load("org.lwjgl.BufferUtils", loader),
+        return Reflect.method(Reflect.loadWithoutInit("org.lwjgl.BufferUtils", loader),
                 "createFloatBuffer", int.class);
     }
 
@@ -509,10 +538,37 @@ public final class ModernGlApi {
 
     // ------------------------------------------------------------- 状态开关
 
-    /** 开启混合并使用常规的 src-alpha 混合因子。 */
-    public void enableBlend() {
+    /** 开启混合并使用常规的 src-alpha 混合因子，同时返回下发前的因子对（还原时用）。 */
+    public int[] enableBlendAndReadPrevious() {
+        int[] previous = null;
+        if (getIntegerv != null && viewportStaging != null) {
+            // GL_BLEND_SRC_RGB / GL_BLEND_DST_RGB / GL_BLEND_SRC_ALPHA / GL_BLEND_DST_ALPHA
+            // 一次 getIntegerv 只能查一个平面；这里用四个单独查询（视口以内）。查不到就返回 null。
+            int[][] queries = {{0x0C30, 0x0C31}, {0x0C32, 0x0C33}};
+            int[] prev = new int[4];
+            for (int i = 0; i < 4; i++) {
+                int[] read = getInteger(queries[i / 2][i % 2], 1);
+                if (read == null) {
+                    prev = null;
+                    break;
+                }
+                prev[i] = read[0];
+            }
+            if (prev != null && prev[0] > 0 && prev[2] > 0) {
+                // GL 常量 GL_ONE==1；值 >0 说明读到了真实因子
+                previous = prev;
+            }
+        }
         enableCap(GL_BLEND);
         Reflect.call(blendFunc, null, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        return previous;
+    }
+
+    /** 还原 enableBlendAndReadPrevious 读到的混合因子对；读不到时不做（读本后端自己每帧下发）。 */
+    public void restoreBlendFunc(int[] previous) {
+        if (previous != null && blendFunc != null) {
+            Reflect.call(blendFunc, null, previous[0], previous[1]);
+        }
     }
 
     /** 关闭深度测试；UI 与游戏共用同一缓冲时避免被世界几何遮挡。 */

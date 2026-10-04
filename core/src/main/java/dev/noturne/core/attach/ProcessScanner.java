@@ -179,9 +179,13 @@ public final class ProcessScanner {
                 if (!isDigits(pid)) {
                     continue; // localised "no tasks" message, or a malformed row
                 }
+                Integer pidValue = parsePidSafely(pid);
+                if (pidValue == null) {
+                    continue; // 溢出/非正数不算 fatal，跳过该行即可，不能打断整个扫描
+                }
                 out.add(new ProcessInfo(
-                        Integer.parseInt(pid),
-                        image,
+                        pidValue.intValue(),
+                        normalizeTitle(cols.get(0)),   // 真的 Image Name 列，不再用循环变量
                         "",
                         normalizeTitle(cols.get(8))));
             }
@@ -217,9 +221,14 @@ public final class ProcessScanner {
      * @throws InterruptedException 等待子进程时被中断
      */
     private static List<ProcessInfo> onUnix() throws IOException, InterruptedException {
-        List<String> lines = run(FAST_TIMEOUT_MS, "ps", "-e", "-o", "pid=,comm=,args=");
+        // -ww：不加它 ps 在管道输出下会按 80 列截断 args（JDK 8 目标 JVM 的 -cp 很长），
+        // javadoc 声称的「完整参数」从此变成谎言。BSD 与 procps 都接受 -ww。
+        List<String> lines = run(FAST_TIMEOUT_MS, "ps", "-e", "-ww", "-o", "pid=,ucomm=,args=");
         List<ProcessInfo> out = new ArrayList<ProcessInfo>();
         for (String line : lines) {
+            // ucomm 是不含路径的短可执行名（macOS 与 Linux 都是 basename，无空格），
+            // 因此第一列之后就是它，再往后才是 args —— 这里绕开了 macOS comm 全路径含空格
+            // 导致按空格切分腰斩的问题（修复前的 critical 缺陷，见此注释归档）。
             String trimmed = line.trim();
             if (trimmed.isEmpty()) {
                 continue;
@@ -234,22 +243,39 @@ public final class ProcessScanner {
             }
             String rest = trimmed.substring(sp1 + 1).trim();
             int sp2 = rest.indexOf(' ');
-            String image = sp2 < 0 ? rest : rest.substring(0, sp2);
+            String ucomm = sp2 < 0 ? rest : rest.substring(0, sp2);
             String args = sp2 < 0 ? "" : rest.substring(sp2 + 1).trim();
-            String base = basename(image);
-            if (!base.startsWith("java")) {
+            // 精确匹配 java/javaw（大小写不敏感），既不放 javac/javadoc，也不丢 /Library/Java/…
+            // 下部行和名字被截断的 Java 进程。修复前用 startsWith("java")，两端的误收/误删全踩。
+            String base = ucomm.toLowerCase(Locale.ROOT);
+            if (!base.equals("java") && !base.equals("javaw")) {
                 continue;
             }
-            out.add(new ProcessInfo(Integer.parseInt(pidPart), image, args, ""));
+            Integer pid = parsePidSafely(pidPart);
+            if (pid == null) {
+                continue;
+            }
+            out.add(new ProcessInfo(pid.intValue(), ucomm, args, ""));
         }
         return out;
     }
 
-    /** 取路径的最后一段（同时处理 {@code /} 与 {@code \}）。 */
+    /** 把 pid 字符串安全转成 int：超 int 范围时返回 null 而不是抛 NumberFormatException 打断整个扫描。 */
+    private static Integer parsePidSafely(String pidPart) {
+        try {
+            long value = Long.parseLong(pidPart);
+            return (value > 0L && value <= Integer.MAX_VALUE) ? Integer.valueOf((int) value) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** 取路径的最后一段（仅 {@code /}；Unix 上 {@code \} 是合法文件名字符，Windows 分隔符残留是 bug）。 */
     private static String basename(String path) {
-        int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        int slash = path.lastIndexOf('/');
         return slash < 0 ? path : path.substring(slash + 1);
     }
+
 
     // ------------------------------------------------------------------ helpers
 

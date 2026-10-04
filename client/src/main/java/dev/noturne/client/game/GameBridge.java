@@ -41,7 +41,7 @@ public final class GameBridge {
     private volatile Class<?> minecraftClass;
     /** 主游戏类的单例访问器（静态、无参）；未解析成功时为 {@code null}。 */
     private volatile Method getInstanceMethod;
-    /** 上次尝试解析失败的时间戳（纳秒）；0 表示尚未尝试。用于限流全表扫描。 */
+    /** 上次尝试解析的时间戳（纳秒）；成功后才可清零，失败时必须保留退避（M-71），否则每帧一次全表扫描。 */
     private volatile long lastResolveAttemptNanos;
 
     /** 已成功定位的字段句柄，键为（宿主类，字段名）。 */
@@ -100,7 +100,7 @@ public final class GameBridge {
         }
         long now = System.nanoTime();
         long last = lastResolveAttemptNanos;
-        if (last != 0L && now - last < RESOLVE_RETRY_INTERVAL_NANOS) {
+        if (now - last < RESOLVE_RETRY_INTERVAL_NANOS) {
             return false;
         }
         lastResolveAttemptNanos = now;
@@ -336,7 +336,16 @@ public final class GameBridge {
     private void invalidate() {
         minecraftClass = null;
         getInstanceMethod = null;
-        lastResolveAttemptNanos = 0L;
+        setLastResolveAttemptNow();   // 失败时保留退避，不清零否则每帧一次全表扫描（definite / critical）
+        // 句柄缓存以 Class 对象（identityHashCode）为键且永不失效；类被重载/attach 二次引导
+        // 时，旧 Class 强引用其 ClassLoader → 泄漏落地。javadoc 承诺的「适应重载」在这里落实。
+        fieldCache.clear();
+        methodCache.clear();
+    }
+
+    /** 记录一次「现在已尝试过解析」，供 {@link #resolve()} 的 250ms 退避判定使用。 */
+    private void setLastResolveAttemptNow() {
+        lastResolveAttemptNanos = System.nanoTime();
     }
 
     /** 依次尝试候选名称，返回第一个已加载的类；全部未加载返回 {@code null}。 */

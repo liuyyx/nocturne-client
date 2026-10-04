@@ -23,6 +23,18 @@ import java.util.Map;
  */
 public final class MemoryClassLoader extends ClassLoader {
 
+    /** 新建一个 MemoryClassLoader 时即向 JVM 声明「本加载器按类名并行可加载」。
+     *
+     *  缺这一行，getClassLoadingLock(name) 返回的是 loader 自身，javadoc 里
+     *  「按类名分配的可重入锁」「委派父加载器不持锁」两条承诺全部落空：
+     *  - 不同名字的类加载在同一个监视器上串行（退化成全类加载串行）；
+     *  - 委派 super.loadClass 内部同样锁 this，父加载器一旦反过来
+     *    请求本加载器的类，就是经典 AB-BA 死锁。
+     */
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
+
     /** 类全名到字节码的映射；构造时复制，此后不再变化。 */
     private final Map<String, byte[]> definitions;
 
@@ -83,15 +95,20 @@ public final class MemoryClassLoader extends ClassLoader {
             if (bytes != null) {
                 try {
                     loaded = defineClass(name, bytes, 0, bytes.length);
-                } catch (LinkageError e) {
-                    // 表的 key 与字节码内声明的类名不符时，defineClass 抛 NoClassDefFoundError；
-                    // 按 loadClass 的签名契约转成 ClassNotFoundException。
-                    throw new ClassNotFoundException("cannot define class " + name + " from memory", e);
+                    if (resolve) {
+                        resolveClass(loaded);
+                    }
+                    return loaded;
+                } catch (LinkageError | RuntimeException e) {
+                    // 把按 loadClass 的签名契约可能抛出的非受检异常（LinkageError 来自
+                    // 表 key 与字节码声明名不符 / 超类解析失败 / UnsupportedClassVersionError；
+                    // SecurityException 来自被禁用的包名（java.*、sun.*...，是 JDK 规定）；
+                    // IllegalArgumentException 来自空类名）统一转成 ClassNotFoundException。
+                    // 不过这里要小心：SecurityException 比 LinkageError 更危险，
+                    // 但由于 PayloadPack.deserialize 端已拒绝非法键，这两者都指配置错误。
+                    throw new ClassNotFoundException(
+                            "cannot define class " + name + " from memory: " + e, e);
                 }
-                if (resolve) {
-                    resolveClass(loaded);
-                }
-                return loaded;
             }
         }
         // 表中没有：交给父加载器（JDK 类、游戏类），此时不持有本加载器的名字锁

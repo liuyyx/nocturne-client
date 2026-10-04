@@ -32,10 +32,31 @@ public interface Mapping {
      * 表中记录的某方法的 JNI 描述符（若存在）。
      *
      * <p>之所以需要它，是因为混淆构建会复用短方法名，描述符才是区分它们的依据。
-     * 恒等映射返回 {@code null}。
+     *
+     * <p><b>三态契约</b>：返回 {@code null} 只表示「表中<b>没有</b>该方法的描述符记录」，绝不表示
+     * 「零参方法」——零参方法在表里是一条非空的 {@code ()...} 描述符，与「未知」天然可区分。
+     * 调用方因此<b>不得</b>把 {@code null} 当作空参数组使用；应先询问 {@link #hasMethodDescriptor}
+     * 判断「表中是否确实有描述符」，没有时再按实参类型推导形参（H-35）。恒等映射永远返回
+     * {@code null}，其 {@link #hasMethodDescriptor} 恒为 {@code false}。
      */
     default String methodDescriptor(ClassType owner, String canonicalName) {
         return null;
+    }
+
+    /**
+     * 表中是否确实为某方法记录了 JNI 描述符。
+     *
+     * <p>把 {@link #methodDescriptor} 的「未知」与「零参」两种含义显式拆开：只有本方法返回
+     * {@code true} 时，{@link #methodDescriptor} 的返回值才可用于挑选重载；返回 {@code false}
+     * 时调用方应按实参类型推导（未混淆构建），而不是退化成无参查找。默认实现以
+     * {@code methodDescriptor != null} 判定，恒等映射沿用默认即恒为 {@code false}。
+     *
+     * @param owner         声明该方法的类
+     * @param canonicalName 未混淆的规范方法名
+     * @return 表中是否有该方法的描述符记录
+     */
+    default boolean hasMethodDescriptor(ClassType owner, String canonicalName) {
+        return methodDescriptor(owner, canonicalName) != null;
     }
 
     /** 恒等映射返回 true，供调用方走「无需查表」的快路径。 */

@@ -1,0 +1,611 @@
+# Canonical (Mojmap) -> MCP 1.8.9 alias table for DarkClient's 1.8.9 mappings.
+#
+# The Rust code always spells the *latest* Mojmap name (a `MinecraftClassType`
+# for classes, a string literal for members). This table translates those names
+# to the **MCP 1.8.9** names, which `gen_legacy_mappings.py` then joins through
+# `joined.srg` + `methods.csv`/`fields.csv` to the obfuscated 1.8.9 name (and
+# the obfuscated JNI descriptor).
+#
+# Chain (all four steps are done by the generator):
+#   canonical (Mojmap)  --this table-->  MCP 1.8.9
+#     --forge189 methods.csv/fields.csv (human name -> SRG)-->  func_/field_
+#     --vanilla189 joined.srg (SRG + owner -> obf)-->  obf name + obf descriptor
+#
+# Resolution rules used by the generator for one (class, kind, member):
+#   1. `[overrides."<canonical class>"]` wins (per-class exception), then
+#   2. `[methods.<member>]` / `[fields.<member>]` (same resolution for every class).
+#   A resolution is either the MCP human name (optionally with a `scope` = the
+#   MCP class whose SRG entry to read, for members inherited from a
+#   1.8.9-declared superclass) or an explicit `srg` name (when one human name
+#   has several SRGs in the same class), or `skip`/`unsupported`.
+#
+#   `unsupported`  = 1.8.9 has no equivalent API; the member is left out of the
+#                    generated JSON on purpose (the Rust call site needs a
+#                    per-version branch).
+#   `skip`         = resolution happens elsewhere (java.* classes live in
+#                    java_mappings.json, trait-internal helpers, ...).
+#
+# Every `note` is copied into the generator's coverage report.
+
+version = "1.8.9"
+
+# --------------------------------------------------------------------------
+# Classes: canonical (as spelled in client/src/mapping/class_type.rs) -> MCP
+# --------------------------------------------------------------------------
+[classes]
+"net/minecraft/client/Minecraft" = "net/minecraft/client/Minecraft"
+"net/minecraft/client/player/LocalPlayer" = "net/minecraft/client/entity/EntityPlayerSP"
+"net/minecraft/client/multiplayer/ClientLevel" = "net/minecraft/client/multiplayer/WorldClient"
+"net/minecraft/world/entity/player/Player" = "net/minecraft/entity/player/EntityPlayer"
+"net/minecraft/world/entity/player/Abilities" = "net/minecraft/entity/player/PlayerCapabilities"
+"net/minecraft/world/entity/Entity" = "net/minecraft/entity/Entity"
+"net/minecraft/world/phys/Vec3" = "net/minecraft/util/Vec3"
+"net/minecraft/client/multiplayer/MultiPlayerGameMode" = "net/minecraft/client/multiplayer/PlayerControllerMP"
+"net/minecraft/world/entity/Mob" = "net/minecraft/entity/monster/EntityMob"
+"net/minecraft/client/gui/screens/Screen" = "net/minecraft/client/gui/GuiScreen"
+"net/minecraft/client/renderer/GameRenderer" = "net/minecraft/client/renderer/EntityRenderer"
+"net/minecraft/client/gui/Gui" = "net/minecraft/client/gui/GuiIngame"
+"net/minecraft/world/entity/LivingEntity" = "net/minecraft/entity/EntityLivingBase"
+"net/minecraft/network/chat/Component" = "net/minecraft/util/IChatComponent"
+"net/minecraft/world/level/LevelReader" = "net/minecraft/world/IBlockAccess"
+"net/minecraft/world/level/chunk/LevelChunk" = "net/minecraft/world/chunk/Chunk"
+"net/minecraft/world/level/block/entity/BlockEntity" = "net/minecraft/tileentity/TileEntity"
+"net/minecraft/world/level/block/entity/ChestBlockEntity" = "net/minecraft/tileentity/TileEntityChest"
+"net/minecraft/world/level/block/entity/EnderChestBlockEntity" = "net/minecraft/tileentity/TileEntityEnderChest"
+"net/minecraft/core/BlockPos" = "net/minecraft/util/BlockPos"
+"net/minecraft/core/Vec3i" = "net/minecraft/util/Vec3i"
+"net/minecraft/client/multiplayer/PlayerInfo" = "net/minecraft/client/network/NetworkPlayerInfo"
+"net/minecraft/world/level/GameType" = "net/minecraft/world/WorldSettings$GameType"
+"net/minecraft/client/Options" = "net/minecraft/client/settings/GameSettings"
+"net/minecraft/world/entity/player/Inventory" = "net/minecraft/entity/player/InventoryPlayer"
+"net/minecraft/world/item/ItemStack" = "net/minecraft/item/ItemStack"
+"net/minecraft/world/item/Item" = "net/minecraft/item/Item"
+"net/minecraft/world/item/Items" = "net/minecraft/init/Items"
+"net/minecraft/world/inventory/AbstractContainerMenu" = "net/minecraft/inventory/Container"
+"net/minecraft/world/level/block/state/BlockState" = "net/minecraft/block/state/IBlockState"
+"net/minecraft/core/Direction" = "net/minecraft/util/EnumFacing"
+"net/minecraft/world/phys/BlockHitResult" = "net/minecraft/util/MovingObjectPosition"
+"net/minecraft/client/gui/screens/ChatScreen" = "net/minecraft/client/gui/GuiChat"
+"net/minecraft/client/gui/screens/PauseScreen" = "net/minecraft/client/gui/GuiIngameMenu"
+"net/minecraft/client/gui/screens/inventory/AbstractContainerScreen" = "net/minecraft/client/gui/inventory/GuiContainer"
+"net/minecraft/client/gui/screens/inventory/InventoryScreen" = "net/minecraft/client/gui/inventory/GuiInventory"
+"net/minecraft/client/gui/screens/inventory/CraftingScreen" = "net/minecraft/client/gui/inventory/GuiCrafting"
+"net/minecraft/client/gui/screens/inventory/CreativeModeInventoryScreen" = "net/minecraft/client/gui/inventory/GuiContainerCreative"
+# Network packets: the 1.8.9 protocol classes are shaped differently
+# (C03PacketPlayer has no accessors; S12 exposes int motion, not a Vec3), so the
+# class names are usable for `resolve_class`/`is_instance_of` but the packet
+# snapshot members are not mapped (see the raw-JNI section of the report).
+"net/minecraft/network/protocol/game/ServerboundMovePlayerPacket" = "net/minecraft/network/play/client/C03PacketPlayer"
+"net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Pos" = "net/minecraft/network/play/client/C03PacketPlayer$C04PacketPlayerPosition"
+"net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$PosRot" = "net/minecraft/network/play/client/C03PacketPlayer$C06PacketPlayerPosLook"
+"net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Rot" = "net/minecraft/network/play/client/C03PacketPlayer$C05PacketPlayerLook"
+# 1.8.9 has no separate "status only" class: the abstract C03PacketPlayer itself
+# carries only the on-ground flag, which is what StatusOnly adds in 1.21.
+"net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$StatusOnly" = "net/minecraft/network/play/client/C03PacketPlayer"
+"net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket" = "net/minecraft/network/play/server/S12PacketEntityVelocity"
+"net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket" = "net/minecraft/network/play/server/S38PacketPlayerListItem"
+
+# java.* is never obfuscated; those classes are carried by the hand-written
+# java_mappings.json that the loader merges next to the version mapping.
+"java/lang/Iterable" = { skip = "java.* 不混淆 —— 由 java_mappings.json 提供（1.8.9 同名同签名）" }
+"java/util/Iterator" = { skip = "java.* 不混淆 —— 由 java_mappings.json 提供（1.8.9 同名同签名）" }
+"java/util/Map" = { skip = "java.* 不混淆 —— 由 java_mappings.json 提供（1.8.9 同名同签名）" }
+"java/lang/Object" = { skip = "java.* 不混淆 —— 由 java_mappings.json 提供（1.8.9 同名同签名）" }
+"java/lang/Integer" = { skip = "java.* 不混淆 —— 由 java_mappings.json 提供（1.8.9 同名同签名）" }
+"java/lang/Double" = { skip = "java.* 不混淆 —— 由 java_mappings.json 提供（1.8.9 同名同签名）" }
+
+# Classes with no 1.8.9 counterpart at all.
+"com/mojang/blaze3d/platform/Window" = { unsupported = "1.8.9 没有 Window 类：窗口是 LWJGL org.lwjgl.opengl.Display（无句柄对象）" }
+"net/minecraft/client/Camera" = { unsupported = "1.8.9 没有独立的 Camera 对象；相机状态是 EntityRenderer 的 cameraZoom/cameraPitch/cameraYaw 字段，视角由 renderViewEntity 推导" }
+"net/minecraft/client/OptionInstance" = { unsupported = "1.8.9 没有 OptionInstance；GameSettings 直接存放原始字段（GameSettings 项见 [overrides]）" }
+"net/minecraft/world/level/block/entity/BarrelBlockEntity" = { unsupported = "木桶是 1.14 加入的" }
+"net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity" = { unsupported = "潜影盒是 1.9 加入的" }
+"net/minecraft/world/InteractionHand" = { unsupported = "EnumHand 是 1.9 加入的；1.8.9 交互方法不带手参数（PlayerControllerMP.onPlayerRightClick 无 EnumHand）" }
+"net/minecraft/world/item/component/SwingAnimation" = { unsupported = "SwingAnimation 是 26.3 加入的；1.8.9 是 EntityLivingBase.swingItem()" }
+"net/minecraft/world/inventory/ContainerInput" = { unsupported = "ClickType 是 1.19 加入的；1.8.9 用 Container.windowClick 的 int mode/button（0=PICKUP 1=QUICK_MOVE 2=SWAP）" }
+"net/minecraft/world/entity/EquipmentSlot" = { unsupported = "EntityEquipmentSlot 是 1.9 加入的；1.8.9 用 int 槽位（EntityLivingBase.getEquipmentInSlot(int)）" }
+
+# --------------------------------------------------------------------------
+# Members shared by every class that references them.
+#   mcp   = MCP 1.8.9 human name (methods.csv / fields.csv `name` column)
+#   scope = MCP class whose SRG entry is read (default: the class itself)
+#   srg   = pin an exact SRG name when one human name is overloaded
+# --------------------------------------------------------------------------
+
+[methods.getInstance]
+mcp = "getMinecraft"
+scope = "net/minecraft/client/Minecraft"
+
+[methods.getBlockPos]
+mcp = "getPos"
+scope = "net/minecraft/tileentity/TileEntity"
+
+[methods.getString]
+mcp = "getFormattedText"
+scope = "net/minecraft/util/IChatComponent"
+note = "1.8.9 无 getString()；getFormattedText() 同样返回带样式码的整串文本"
+
+[methods.getItems]
+mcp = "getInventory"
+scope = "net/minecraft/inventory/Container"
+note = "返回 java.util.List（1.21 是 NonNullList）"
+
+[methods.attack]
+mcp = "attackEntity"
+scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
+[methods.stopDestroyBlock]
+mcp = "resetBlockRemoving"
+scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
+[methods.startDestroyBlock]
+mcp = "clickBlock"
+scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
+[methods.continueDestroyBlock]
+mcp = "onPlayerDamageBlock"
+scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
+[methods.getId]
+mcp = "getEntityId"
+scope = "net/minecraft/entity/Entity"
+
+[methods.position]
+mcp = "getPositionVector"
+scope = "net/minecraft/entity/Entity"
+
+[methods.getEyePosition]
+mcp = "getPositionEyes"
+scope = "net/minecraft/entity/Entity"
+note = "1.8.9 只有 getPositionEyes(float partialTicks)（1 参）；Rust 调用点传 0 参，需要 1.8.9 分支补 partialTicks"
+
+[methods.distanceToSqr]
+mcp = "getDistanceSq"
+srg = "func_70092_e"
+scope = "net/minecraft/entity/Entity"
+note = "Entity.getDistanceSq 在 1.8.9 有两个重载（DDD / BlockPos），此处按 (DDD)D 固定到 func_70092_e"
+
+[methods.isSprinting]
+mcp = "isSprinting"
+scope = "net/minecraft/entity/Entity"
+
+[methods.setSprinting]
+mcp = "setSprinting"
+scope = "net/minecraft/entity/Entity"
+
+[methods.setPos]
+mcp = "setPosition"
+scope = "net/minecraft/entity/Entity"
+
+[methods.isShiftKeyDown]
+mcp = "isSneaking"
+scope = "net/minecraft/entity/Entity"
+note = "1.8.9 的下蹲键状态就叫 isSneaking()"
+
+[methods.getName]
+mcp = "getName"
+scope = "net/minecraft/entity/Entity"
+note = "用 Entity.getName()（返回 String）对齐已发布的 mappings-1.8.9.json；1.21 的 getName() 返回 Component，语义由调用方处理"
+
+[methods.getHealth]
+mcp = "getHealth"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[methods.getMaxHealth]
+mcp = "getMaxHealth"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[methods.isUsingItem]
+mcp = "isUsingItem"
+scope = "net/minecraft/entity/player/EntityPlayer"
+note = "1.8.9 只在 EntityPlayer 上声明；LivingEntity/Mob 包装类型上 JNI 无法解析（见 [overrides]）"
+
+[methods.getSpeed]
+mcp = "getAIMoveSpeed"
+scope = "net/minecraft/entity/EntityLivingBase"
+note = "语义差：1.8.9 是 AI 移动速度（由 AI 设置），1.21 getSpeed() 是属性派生速度"
+
+[methods.swing]
+mcp = "swingItem"
+scope = "net/minecraft/entity/EntityLivingBase"
+note = "1.8.9 swingItem() 无参；Rust 侧 swing(InteractionHand...) 需要 1.8.9 分支"
+
+[methods.entitiesForRendering]
+mcp = "getLoadedEntityList"
+scope = "net/minecraft/world/World"
+note = "声明在 World（ClientLevel 的 1.8.9 名 WorldClient 继承自它）"
+
+[methods.getBlockState]
+mcp = "getBlockState"
+scope = "net/minecraft/world/World"
+
+[methods.getChunk]
+mcp = "getChunkFromChunkCoords"
+scope = "net/minecraft/world/World"
+
+[methods.getBlockEntities]
+mcp = "getTileEntityMap"
+scope = "net/minecraft/world/chunk/Chunk"
+
+[methods.setFlyingSpeed]
+mcp = "setFlySpeed"
+scope = "net/minecraft/entity/player/PlayerCapabilities"
+
+[methods.getX]
+mcp = "getX"
+scope = "net/minecraft/util/Vec3i"
+
+[methods.getY]
+mcp = "getY"
+scope = "net/minecraft/util/Vec3i"
+
+[methods.getZ]
+mcp = "getZ"
+scope = "net/minecraft/util/Vec3i"
+
+# --- members with no 1.8.9 API (or none that can be called the same way) ----
+[methods.getYRot]
+unsupported = "1.8.9 是 public float rotationYaw 字段（无 getYRot()）—— 需要改成读字段"
+
+[methods.getXRot]
+unsupported = "1.8.9 是 public float rotationPitch 字段"
+
+[methods.setYRot]
+unsupported = "1.8.9 是 rotationYaw 字段（setRotationYawHead 是头部朝向，不等价）"
+
+[methods.setXRot]
+unsupported = "1.8.9 是 rotationPitch 字段"
+
+[methods.getBbWidth]
+unsupported = "1.8.9 是 public float width 字段"
+
+[methods.getBbHeight]
+unsupported = "1.8.9 是 public float height 字段"
+
+[methods.onGround]
+unsupported = "1.8.9 是 public boolean onGround 字段"
+
+[methods.getDeltaMovement]
+unsupported = "1.8.9 是 motionX/motionY/motionZ 三个字段"
+
+[methods.setDeltaMovement]
+unsupported = "1.8.9 是 motionX/motionY/motionZ 三个字段"
+
+[methods.setPermanentlyInvulnerable]
+unsupported = "1.8.9 是 public boolean invulnerable 字段（setEntityInvulnerable 是 1.9+）"
+
+[methods.resetFallDistance]
+unsupported = "1.8.9 无对应方法：直接写 fallDistance = 0"
+
+[methods.isDeadOrDying]
+unsupported = "语义相反：1.8.9 只有 isEntityAlive()（活着的判断），映射会反转结果"
+
+[methods.getAttackStrengthScale]
+unsupported = "攻击冷却（1.9+）不存在于 1.8.9；1.8.9 用 EntityPlayer.swingProgressInt / 无冷却缩放"
+
+[methods.getEquipmentSlotForItem]
+unsupported = "1.8.9 用 EntityLivingBase.getEquipmentInSlot(int)（int 槽位，无 EquipmentSlot 对象）"
+
+[methods.get]
+unsupported = "OptionInstance 不存在于 1.8.9"
+
+[methods.handleContainerInput]
+unsupported = "1.8.9 是 Container.windowClick(int,int,int,int,EntityPlayer)ItemStack —— 第 4 参是 int 模式而非 ClickType 对象（0=PICKUP 1=QUICK_MOVE 2=SWAP），Rust 调用点需要 1.8.9 分支"
+
+[methods.useItemOn]
+unsupported = "1.8.9 是 PlayerControllerMP.onPlayerRightClick(EntityPlayerSP,WorldClient,ItemStack,BlockPos,EnumFacing,Vec3)Z（6 参，且无 InteractionHand），Rust 调用点需要 1.8.9 分支"
+
+[methods.mainCamera]
+unsupported = "1.8.9 EntityRenderer 不返回 Camera 对象"
+
+[methods.handle]
+unsupported = "1.8.9 没有 Window 对象/GLFW 句柄（LWJGL Display）"
+
+[methods.equals]
+skip = "MappedObject::equals 在 obf 模式下的既有行为就是不映射（1.21.10 mappings.json 同样没有 equals）—— 保持版本一致，不写死到 1.8.9"
+
+# --------------------------------------------------------------------------
+# Fields (class fields + static constants share this table)
+# --------------------------------------------------------------------------
+
+[fields.gameRenderer]
+mcp = "entityRenderer"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.options]
+mcp = "gameSettings"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.gui]
+mcp = "ingameGUI"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.screen]
+mcp = "currentScreen"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.player]
+mcp = "thePlayer"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.level]
+mcp = "theWorld"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.fov]
+mcp = "fovSetting"
+scope = "net/minecraft/client/settings/GameSettings"
+note = "类型差：1.8.9 是 float，不是 OptionInstance"
+
+[fields.gamma]
+mcp = "gammaSetting"
+scope = "net/minecraft/client/settings/GameSettings"
+note = "类型差：1.8.9 是 float"
+
+[fields.sensitivity]
+mcp = "mouseSensitivity"
+scope = "net/minecraft/client/settings/GameSettings"
+note = "类型差：1.8.9 是 float"
+
+[fields.noPhysics]
+mcp = "noClip"
+scope = "net/minecraft/entity/Entity"
+
+[fields.yRotO]
+mcp = "prevRotationYaw"
+scope = "net/minecraft/entity/Entity"
+
+[fields.xRotO]
+mcp = "prevRotationPitch"
+scope = "net/minecraft/entity/Entity"
+
+[fields.fallDistance]
+mcp = "fallDistance"
+scope = "net/minecraft/entity/Entity"
+note = "类型差：1.8.9 是 float（1.21 是 double）—— Rust 调用点的 FieldType::Double 需要 1.8.9 分支改为 Float"
+
+[fields.tickCount]
+mcp = "ticksExisted"
+scope = "net/minecraft/entity/Entity"
+
+[fields.xxa]
+mcp = "moveStrafing"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[fields.zza]
+mcp = "moveForward"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[fields.jumping]
+mcp = "isJumping"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[fields.flying]
+mcp = "isFlying"
+scope = "net/minecraft/entity/player/PlayerCapabilities"
+
+[fields.mayfly]
+mcp = "allowFlying"
+scope = "net/minecraft/entity/player/PlayerCapabilities"
+
+[fields.containerId]
+mcp = "windowId"
+scope = "net/minecraft/inventory/Container"
+
+[fields.x]
+mcp = "xCoord"
+scope = "net/minecraft/util/Vec3"
+
+[fields.y]
+mcp = "yCoord"
+scope = "net/minecraft/util/Vec3"
+
+[fields.z]
+mcp = "zCoord"
+scope = "net/minecraft/util/Vec3"
+
+[fields.SPECTATOR]
+mcp = "SPECTATOR"
+scope = "net/minecraft/world/WorldSettings$GameType"
+
+[fields.DOWN]
+mcp = "DOWN"
+scope = "net/minecraft/util/EnumFacing"
+
+[fields.UP]
+mcp = "UP"
+scope = "net/minecraft/util/EnumFacing"
+
+[fields.NORTH]
+mcp = "NORTH"
+scope = "net/minecraft/util/EnumFacing"
+
+[fields.SOUTH]
+mcp = "SOUTH"
+scope = "net/minecraft/util/EnumFacing"
+
+[fields.WEST]
+mcp = "WEST"
+scope = "net/minecraft/util/EnumFacing"
+
+[fields.EAST]
+mcp = "EAST"
+scope = "net/minecraft/util/EnumFacing"
+
+[fields.fovEffectScale]
+unsupported = "1.8.9 没有 FOV Effects 滑条（GameSettings 无该字段）"
+
+[fields.MAIN_HAND]
+unsupported = "EnumHand 不存在于 1.8.9"
+
+[fields.DEFAULT]
+unsupported = "SwingAnimation 不存在于 1.8.9"
+
+[fields.TOTEM_OF_UNDYING]
+unsupported = "不死图腾是 1.11 加入的；1.8.9 Items 无该字段（且 1.8.9 字段名是 snake_case）"
+
+# --------------------------------------------------------------------------
+# Per-class overrides: the same canonical member name resolves differently
+# (or not at all) per class.
+# --------------------------------------------------------------------------
+
+[overrides."net/minecraft/client/Minecraft"]
+gameMode = { mcp = "playerController", scope = "net/minecraft/client/Minecraft" }
+getWindow = { unsupported = "1.8.9 Minecraft 没有 getWindow()（窗口是 LWJGL Display）" }
+
+[overrides."net/minecraft/client/multiplayer/PlayerInfo"]
+gameMode = { mcp = "gameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
+
+[overrides."net/minecraft/client/gui/Gui"]
+screen = { unsupported = "1.8.9 GuiIngame 没有 screen()；当前界面在 Minecraft.currentScreen" }
+
+[overrides."net/minecraft/world/entity/player/Inventory"]
+getItem = { mcp = "getStackInSlot", scope = "net/minecraft/entity/player/InventoryPlayer" }
+
+[overrides."net/minecraft/world/entity/player/Player"]
+getInventory = { unsupported = "1.8.9 EntityPlayer.getInventory() 返回 ItemStack[]；Inventory 对象是字段 inventory" }
+containerMenu = { mcp = "openContainer", scope = "net/minecraft/entity/player/EntityPlayer" }
+getAbilities = { unsupported = "1.8.9 是 public PlayerCapabilities capabilities 字段" }
+
+[overrides."net/minecraft/world/item/ItemStack"]
+getItem = { mcp = "getItem", scope = "net/minecraft/item/ItemStack" }
+isEmpty = { unsupported = "1.8.9 没有 isEmpty()：判断 stackSize == 0 / getItem() == null" }
+
+
+[overrides."net/minecraft/world/entity/LivingEntity"]
+isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer，JNI 从 EntityLivingBase 查不到" }
+
+[overrides."net/minecraft/world/entity/Mob"]
+isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer，JNI 从 EntityMob 查不到" }
+
+[overrides."net/minecraft/world/level/block/state/BlockState"]
+isAir = { unsupported = "1.8.9 IBlockState 没有 isAir()；用 Block.isAir 判断（1.8.9 无该方法）/ 比较 Blocks.air" }
+
+[overrides."net/minecraft/world/entity/EquipmentSlot"]
+isArmor = { unsupported = "EquipmentSlot 不存在于 1.8.9" }
+getIndex = { unsupported = "EquipmentSlot 不存在于 1.8.9" }
+
+# LocalPlayer also inherits PlayerRef/LivingEntityRef/EntityRef members; the
+# only extra ones are handled here.
+[overrides."net/minecraft/client/player/LocalPlayer"]
+playerInfo = { mcp = "playerInfo", scope = "net/minecraft/client/entity/AbstractClientPlayer" }
+
+# --------------------------------------------------------------------------
+# Indirect references: members the extractor cannot see as a literal call
+# (the name travels through a variable). Added to the extracted set verbatim.
+# --------------------------------------------------------------------------
+[[indirect]]
+class = "net/minecraft/client/multiplayer/MultiPlayerGameMode"
+kind = "method"
+name = "startDestroyBlock"
+reason = "destroy_block(\"startDestroyBlock\", ..) —— 名字经变量传入 call_method"
+
+[[indirect]]
+class = "net/minecraft/client/multiplayer/MultiPlayerGameMode"
+kind = "method"
+name = "continueDestroyBlock"
+reason = "destroy_block(\"continueDestroyBlock\", ..) —— 名字经变量传入 call_method"
+
+[[indirect]]
+class = "net/minecraft/core/Direction"
+kind = "field"
+name = "DOWN"
+reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
+
+[[indirect]]
+class = "net/minecraft/core/Direction"
+kind = "field"
+name = "UP"
+reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
+
+[[indirect]]
+class = "net/minecraft/core/Direction"
+kind = "field"
+name = "NORTH"
+reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
+
+[[indirect]]
+class = "net/minecraft/core/Direction"
+kind = "field"
+name = "SOUTH"
+reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
+
+[[indirect]]
+class = "net/minecraft/core/Direction"
+kind = "field"
+name = "WEST"
+reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
+
+[[indirect]]
+class = "net/minecraft/core/Direction"
+kind = "field"
+name = "EAST"
+reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
+
+# ==========================================================================
+# noturne-client additions
+# --------------------------------------------------------------------------
+# The surface below comes from the shipped mappings-1.8.9.json (the client's
+# curated runtime surface).  DarkClient's table already resolves almost all of
+# it; these entries fill the remaining gaps (its generator saw a different set
+# of call sites).
+# ==========================================================================
+
+[class-aliases]
+# Canonical name as the client spells it -> the MCP 1.8.9 class it lives in.
+# (Separate from [classes] so this file can be extended without reopening a
+#  table header, which TOML forbids.)
+"net/minecraft/client/player/RemotePlayer" = "net/minecraft/client/entity/EntityOtherPlayerMP"
+"net/minecraft/client/gui/FontRenderer" = "net/minecraft/client/gui/FontRenderer"
+
+[methods.runGameLoop]
+mcp = "runGameLoop"
+scope = "net/minecraft/client/Minecraft"
+
+[methods.runTick]
+mcp = "runTick"
+scope = "net/minecraft/client/Minecraft"
+
+[methods.displayGuiScreen]
+mcp = "displayGuiScreen"
+srg = "func_147108_a"
+scope = "net/minecraft/client/Minecraft"
+
+[methods.respawnPlayer]
+mcp = "respawnPlayer"
+scope = "net/minecraft/client/entity/EntityPlayerSP"
+
+# FontRenderer: MCP 1.8.9 collapses all three to obf "a"; drawString is
+# overloaded, so pin the (String,int,int,int) variant the table records.
+[methods.drawString]
+mcp = "drawString"
+srg = "func_78276_b"
+scope = "net/minecraft/client/gui/FontRenderer"
+
+[methods.drawStringWithShadow]
+mcp = "drawStringWithShadow"
+scope = "net/minecraft/client/gui/FontRenderer"
+
+[methods.getStringWidth]
+mcp = "getStringWidth"
+scope = "net/minecraft/client/gui/FontRenderer"
+
+[fields.fontRenderer]
+mcp = "fontRendererObj"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.currentScreen]
+mcp = "currentScreen"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.displayWidth]
+mcp = "displayWidth"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.displayHeight]
+mcp = "displayHeight"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.isDead]
+mcp = "isDead"
+scope = "net/minecraft/entity/Entity"

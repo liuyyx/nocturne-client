@@ -1,5 +1,5 @@
 {
-    "version": "1.8.9",
+    "version": "1.12.2",
     "classes": {
         "com/mojang/blaze3d/platform/InputConstants": {
             "absent": true,
@@ -27,25 +27,25 @@
             "fields": {}
         },
         "net/minecraft/client/Minecraft": {
-            "name": "ave",
+            "name": "bib",
             "methods": {
                 "displayGuiScreen": {
                     "name": "a",
-                    "signature": "(Laxu;)V"
+                    "signature": "(Lblk;)V"
                 },
                 "getInstance": {
-                    "name": "A",
-                    "signature": "()Lave;"
+                    "name": "z",
+                    "signature": "()Lbib;"
                 },
                 "renderFrame": {
                     "absent": true
                 },
                 "runGameLoop": {
-                    "name": "av",
+                    "name": "az",
                     "signature": "()V"
                 },
                 "runTick": {
-                    "name": "s",
+                    "name": "t",
                     "signature": "()V"
                 }
             },
@@ -97,17 +97,17 @@
             "fields": {}
         },
         "net/minecraft/client/Options": {
-            "name": "avh",
+            "name": "bid",
             "methods": {},
             "fields": {
                 "fov": {
-                    "name": "aI"
+                    "name": "aD"
                 },
                 "gamma": {
-                    "name": "aJ"
+                    "name": "aE"
                 },
                 "sensitivity": {
-                    "name": "a"
+                    "name": "c"
                 }
             }
         },
@@ -117,7 +117,7 @@
             "fields": {}
         },
         "net/minecraft/client/gui/FontRenderer": {
-            "name": "avn",
+            "name": "bip",
             "methods": {
                 "drawString": {
                     "name": "a",
@@ -135,7 +135,7 @@
             "fields": {}
         },
         "net/minecraft/client/gui/Gui": {
-            "name": "avo",
+            "name": "biq",
             "methods": {
                 "drawRect": {
                     "absent": true
@@ -172,17 +172,17 @@
             "fields": {}
         },
         "net/minecraft/client/gui/screens/ChatScreen": {
-            "name": "awv",
+            "name": "bkn",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/PauseScreen": {
-            "name": "axp",
+            "name": "blg",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/Screen": {
-            "name": "axu",
+            "name": "blk",
             "methods": {
                 "render": {
                     "absent": true
@@ -191,57 +191,57 @@
             "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/AbstractContainerScreen": {
-            "name": "ayl",
+            "name": "bmg",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/CraftingScreen": {
-            "name": "ays",
+            "name": "bmn",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/CreativeModeInventoryScreen": {
-            "name": "ayu",
+            "name": "bmp",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/InventoryScreen": {
-            "name": "azc",
+            "name": "bmx",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/multiplayer/ClientLevel": {
-            "name": "bdb",
+            "name": "bsb",
             "methods": {
                 "entitiesForRendering": {
-                    "name": "E",
+                    "name": "L",
                     "signature": "()Ljava/util/List;"
                 },
                 "getBlockState": {
-                    "name": "p",
-                    "signature": "(Lcj;)Lalz;"
+                    "name": "o",
+                    "signature": "(Let;)Lawt;"
                 },
                 "getChunk": {
                     "name": "a",
-                    "signature": "(II)Lamy;"
+                    "signature": "(II)Laxw;"
                 }
             },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
-            "name": "bda",
+            "name": "bsa",
             "methods": {
                 "attack": {
                     "name": "a",
-                    "signature": "(Lwn;Lpk;)V"
+                    "signature": "(Laed;Lvg;)V"
                 },
                 "continueDestroyBlock": {
-                    "name": "c",
-                    "signature": "(Lcj;Lcq;)Z"
+                    "name": "b",
+                    "signature": "(Let;Lfa;)Z"
                 },
                 "startDestroyBlock": {
-                    "name": "b",
-                    "signature": "(Lcj;Lcq;)Z"
+                    "name": "a",
+                    "signature": "(Let;Lfa;)Z"
                 },
                 "stopDestroyBlock": {
                     "name": "c",
@@ -251,63 +251,63 @@
             "fields": {}
         },
         "net/minecraft/client/multiplayer/PlayerInfo": {
-            "name": "bdc",
+            "name": "bsc",
             "methods": {},
             "fields": {
                 "gameMode": {
-                    "name": "b"
+                    "name": "c"
                 }
             }
         },
         "net/minecraft/client/player/LocalPlayer": {
-            "name": "bew",
+            "name": "bud",
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
+                    "name": "d",
                     "signature": "(DDD)D"
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;"
+                    "name": "f",
+                    "signature": "(F)Lbhe;"
                 },
                 "getHealth": {
-                    "name": "bn",
+                    "name": "cd",
                     "signature": "()F"
                 },
                 "getId": {
-                    "name": "F",
+                    "name": "S",
                     "signature": "()I"
                 },
                 "getMaxHealth": {
-                    "name": "bu",
+                    "name": "cj",
                     "signature": "()F"
                 },
                 "getName": {
-                    "name": "e_",
+                    "name": "h_",
                     "signature": "()Ljava/lang/String;"
                 },
                 "getSpeed": {
-                    "name": "bI",
+                    "name": "cy",
                     "signature": "()F"
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
+                    "name": "aU",
                     "signature": "()Z"
                 },
                 "isSprinting": {
-                    "name": "aw",
+                    "name": "aV",
                     "signature": "()Z"
                 },
                 "isUsingItem": {
-                    "name": "bS",
+                    "name": "cG",
                     "signature": "()Z"
                 },
                 "position": {
                     "name": "d",
-                    "signature": "()Laui;"
+                    "signature": "()Lbhe;"
                 },
                 "respawnPlayer": {
-                    "name": "cb",
+                    "name": "cY",
                     "signature": "()V"
                 },
                 "setPos": {
@@ -315,51 +315,50 @@
                     "signature": "(DDD)V"
                 },
                 "setSprinting": {
-                    "name": "d",
+                    "name": "f",
                     "signature": "(Z)V"
                 },
                 "swing": {
-                    "name": "bw",
-                    "signature": "()V"
+                    "absent": true
                 }
             },
             "fields": {
                 "fallDistance": {
-                    "name": "O"
+                    "name": "L"
                 },
                 "jumping": {
-                    "name": "aY"
+                    "name": "bd"
                 },
                 "noPhysics": {
-                    "name": "T"
+                    "name": "Q"
                 },
                 "playerInfo": {
-                    "name": "a"
+                    "name": "d"
                 },
                 "tickCount": {
-                    "name": "W"
+                    "name": "T"
                 },
                 "xRotO": {
-                    "name": "B"
+                    "name": "y"
                 },
                 "xxa": {
-                    "name": "aZ"
+                    "name": "be"
                 },
                 "yRotO": {
-                    "name": "A"
+                    "name": "x"
                 },
                 "zza": {
-                    "name": "ba"
+                    "name": "bg"
                 }
             }
         },
         "net/minecraft/client/player/RemotePlayer": {
-            "name": "bex",
+            "name": "bue",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/renderer/GameRenderer": {
-            "name": "bfk",
+            "name": "buq",
             "methods": {},
             "fields": {}
         },
@@ -379,25 +378,25 @@
             "fields": {}
         },
         "net/minecraft/core/BlockPos": {
-            "name": "cj",
+            "name": "et",
             "methods": {
                 "getX": {
-                    "name": "n",
+                    "name": "p",
                     "signature": "()I"
                 },
                 "getY": {
-                    "name": "o",
+                    "name": "q",
                     "signature": "()I"
                 },
                 "getZ": {
-                    "name": "p",
+                    "name": "r",
                     "signature": "()I"
                 }
             },
             "fields": {}
         },
         "net/minecraft/core/Direction": {
-            "name": "cq",
+            "name": "fa",
             "methods": {},
             "fields": {
                 "DOWN": {
@@ -421,12 +420,12 @@
             }
         },
         "net/minecraft/core/Vec3i": {
-            "name": "df",
+            "name": "fq",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/chat/Component": {
-            "name": "eu",
+            "name": "hh",
             "methods": {
                 "getString": {
                     "name": "d",
@@ -436,269 +435,267 @@
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket": {
-            "name": "gz",
+            "name": "jp",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket": {
-            "name": "hm",
+            "name": "kf",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket": {
-            "name": "ip",
+            "name": "lk",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Pos": {
-            "name": "ip$a",
+            "name": "lk$a",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$PosRot": {
-            "name": "ip$b",
+            "name": "lk$b",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Rot": {
-            "name": "ip$c",
+            "name": "lk$c",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$StatusOnly": {
-            "name": "ip",
+            "name": "lk",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/entity/Entity": {
-            "name": "pk",
+            "name": "vg",
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
+                    "name": "d",
                     "signature": "(DDD)D"
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;"
+                    "name": "f",
+                    "signature": "(F)Lbhe;"
                 },
                 "getId": {
-                    "name": "F",
+                    "name": "S",
                     "signature": "()I"
                 },
                 "getName": {
-                    "name": "e_",
+                    "name": "h_",
                     "signature": "()Ljava/lang/String;"
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
+                    "name": "aU",
                     "signature": "()Z"
                 },
                 "isSprinting": {
-                    "name": "aw",
+                    "name": "aV",
                     "signature": "()Z"
                 },
                 "position": {
                     "name": "d",
-                    "signature": "()Laui;"
+                    "signature": "()Lbhe;"
                 },
                 "setPos": {
                     "name": "b",
                     "signature": "(DDD)V"
                 },
                 "setSprinting": {
-                    "name": "d",
+                    "name": "f",
                     "signature": "(Z)V"
                 }
             },
             "fields": {
                 "fallDistance": {
-                    "name": "O"
+                    "name": "L"
                 },
                 "isDead": {
-                    "name": "I"
+                    "name": "F"
                 },
                 "noPhysics": {
-                    "name": "T"
+                    "name": "Q"
                 },
                 "tickCount": {
-                    "name": "W"
+                    "name": "T"
                 },
                 "xRotO": {
-                    "name": "B"
+                    "name": "y"
                 },
                 "yRotO": {
-                    "name": "A"
+                    "name": "x"
                 }
             }
         },
         "net/minecraft/world/entity/LivingEntity": {
-            "name": "pr",
+            "name": "vp",
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
+                    "name": "d",
                     "signature": "(DDD)D"
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;"
+                    "name": "f",
+                    "signature": "(F)Lbhe;"
                 },
                 "getHealth": {
-                    "name": "bn",
+                    "name": "cd",
                     "signature": "()F"
                 },
                 "getId": {
-                    "name": "F",
+                    "name": "S",
                     "signature": "()I"
                 },
                 "getMaxHealth": {
-                    "name": "bu",
+                    "name": "cj",
                     "signature": "()F"
                 },
                 "getName": {
-                    "name": "e_",
+                    "name": "h_",
                     "signature": "()Ljava/lang/String;"
                 },
                 "getSpeed": {
-                    "name": "bI",
+                    "name": "cy",
                     "signature": "()F"
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
+                    "name": "aU",
                     "signature": "()Z"
                 },
                 "isSprinting": {
-                    "name": "aw",
+                    "name": "aV",
                     "signature": "()Z"
                 },
                 "position": {
                     "name": "d",
-                    "signature": "()Laui;"
+                    "signature": "()Lbhe;"
                 },
                 "setPos": {
                     "name": "b",
                     "signature": "(DDD)V"
                 },
                 "setSprinting": {
-                    "name": "d",
+                    "name": "f",
                     "signature": "(Z)V"
                 },
                 "swing": {
-                    "name": "bw",
-                    "signature": "()V"
+                    "absent": true
                 }
             },
             "fields": {
                 "fallDistance": {
-                    "name": "O"
+                    "name": "L"
                 },
                 "jumping": {
-                    "name": "aY"
+                    "name": "bd"
                 },
                 "noPhysics": {
-                    "name": "T"
+                    "name": "Q"
                 },
                 "tickCount": {
-                    "name": "W"
+                    "name": "T"
                 },
                 "xRotO": {
-                    "name": "B"
+                    "name": "y"
                 },
                 "xxa": {
-                    "name": "aZ"
+                    "name": "be"
                 },
                 "yRotO": {
-                    "name": "A"
+                    "name": "x"
                 },
                 "zza": {
-                    "name": "ba"
+                    "name": "bg"
                 }
             }
         },
         "net/minecraft/world/entity/Mob": {
-            "name": "vv",
+            "name": "ade",
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
+                    "name": "d",
                     "signature": "(DDD)D"
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;"
+                    "name": "f",
+                    "signature": "(F)Lbhe;"
                 },
                 "getHealth": {
-                    "name": "bn",
+                    "name": "cd",
                     "signature": "()F"
                 },
                 "getId": {
-                    "name": "F",
+                    "name": "S",
                     "signature": "()I"
                 },
                 "getMaxHealth": {
-                    "name": "bu",
+                    "name": "cj",
                     "signature": "()F"
                 },
                 "getName": {
-                    "name": "e_",
+                    "name": "h_",
                     "signature": "()Ljava/lang/String;"
                 },
                 "getSpeed": {
-                    "name": "bI",
+                    "name": "cy",
                     "signature": "()F"
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
+                    "name": "aU",
                     "signature": "()Z"
                 },
                 "isSprinting": {
-                    "name": "aw",
+                    "name": "aV",
                     "signature": "()Z"
                 },
                 "position": {
                     "name": "d",
-                    "signature": "()Laui;"
+                    "signature": "()Lbhe;"
                 },
                 "setPos": {
                     "name": "b",
                     "signature": "(DDD)V"
                 },
                 "setSprinting": {
-                    "name": "d",
+                    "name": "f",
                     "signature": "(Z)V"
                 },
                 "swing": {
-                    "name": "bw",
-                    "signature": "()V"
+                    "absent": true
                 }
             },
             "fields": {
                 "fallDistance": {
-                    "name": "O"
+                    "name": "L"
                 },
                 "jumping": {
-                    "name": "aY"
+                    "name": "bd"
                 },
                 "noPhysics": {
-                    "name": "T"
+                    "name": "Q"
                 },
                 "tickCount": {
-                    "name": "W"
+                    "name": "T"
                 },
                 "xRotO": {
-                    "name": "B"
+                    "name": "y"
                 },
                 "xxa": {
-                    "name": "aZ"
+                    "name": "be"
                 },
                 "yRotO": {
-                    "name": "A"
+                    "name": "x"
                 },
                 "zza": {
-                    "name": "ba"
+                    "name": "bg"
                 }
             }
         },
         "net/minecraft/world/entity/player/Abilities": {
-            "name": "wl",
+            "name": "aeb",
             "methods": {
                 "setFlyingSpeed": {
                     "name": "a",
@@ -715,111 +712,110 @@
             }
         },
         "net/minecraft/world/entity/player/Inventory": {
-            "name": "wm",
+            "name": "aec",
             "methods": {
                 "getItem": {
                     "name": "a",
-                    "signature": "(I)Lzx;"
+                    "signature": "(I)Laip;"
                 }
             },
             "fields": {}
         },
         "net/minecraft/world/entity/player/Player": {
-            "name": "wn",
+            "name": "aed",
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
+                    "name": "d",
                     "signature": "(DDD)D"
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;"
+                    "name": "f",
+                    "signature": "(F)Lbhe;"
                 },
                 "getHealth": {
-                    "name": "bn",
+                    "name": "cd",
                     "signature": "()F"
                 },
                 "getId": {
-                    "name": "F",
+                    "name": "S",
                     "signature": "()I"
                 },
                 "getMaxHealth": {
-                    "name": "bu",
+                    "name": "cj",
                     "signature": "()F"
                 },
                 "getName": {
-                    "name": "e_",
+                    "name": "h_",
                     "signature": "()Ljava/lang/String;"
                 },
                 "getSpeed": {
-                    "name": "bI",
+                    "name": "cy",
                     "signature": "()F"
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
+                    "name": "aU",
                     "signature": "()Z"
                 },
                 "isSprinting": {
-                    "name": "aw",
+                    "name": "aV",
                     "signature": "()Z"
                 },
                 "isUsingItem": {
-                    "name": "bS",
+                    "name": "cG",
                     "signature": "()Z"
                 },
                 "position": {
                     "name": "d",
-                    "signature": "()Laui;"
+                    "signature": "()Lbhe;"
                 },
                 "setPos": {
                     "name": "b",
                     "signature": "(DDD)V"
                 },
                 "setSprinting": {
-                    "name": "d",
+                    "name": "f",
                     "signature": "(Z)V"
                 },
                 "swing": {
-                    "name": "bw",
-                    "signature": "()V"
+                    "absent": true
                 }
             },
             "fields": {
                 "containerMenu": {
-                    "name": "bk"
+                    "name": "by"
                 },
                 "fallDistance": {
-                    "name": "O"
+                    "name": "L"
                 },
                 "jumping": {
-                    "name": "aY"
+                    "name": "bd"
                 },
                 "noPhysics": {
-                    "name": "T"
+                    "name": "Q"
                 },
                 "tickCount": {
-                    "name": "W"
+                    "name": "T"
                 },
                 "xRotO": {
-                    "name": "B"
+                    "name": "y"
                 },
                 "xxa": {
-                    "name": "aZ"
+                    "name": "be"
                 },
                 "yRotO": {
-                    "name": "A"
+                    "name": "x"
                 },
                 "zza": {
-                    "name": "ba"
+                    "name": "bg"
                 }
             }
         },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
-            "name": "xi",
+            "name": "afr",
             "methods": {
                 "getItems": {
                     "name": "a",
-                    "signature": "()Ljava/util/List;"
+                    "signature": "()Lfi;"
                 }
             },
             "fields": {
@@ -829,27 +825,27 @@
             }
         },
         "net/minecraft/world/item/Item": {
-            "name": "zw",
+            "name": "ain",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/item/ItemStack": {
-            "name": "zx",
+            "name": "aip",
             "methods": {
                 "getItem": {
-                    "name": "b",
-                    "signature": "()Lzw;"
+                    "name": "c",
+                    "signature": "()Lain;"
                 }
             },
             "fields": {}
         },
         "net/minecraft/world/item/Items": {
-            "name": "zy",
+            "name": "air",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/GameType": {
-            "name": "adp$a",
+            "name": "ams",
             "methods": {},
             "fields": {
                 "SPECTATOR": {
@@ -858,62 +854,62 @@
             }
         },
         "net/minecraft/world/level/LevelReader": {
-            "name": "adq",
+            "name": "amy",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/entity/BlockEntity": {
-            "name": "akw",
+            "name": "avj",
             "methods": {
                 "getBlockPos": {
-                    "name": "v",
-                    "signature": "()Lcj;"
+                    "name": "w",
+                    "signature": "()Let;"
                 }
             },
             "fields": {}
         },
         "net/minecraft/world/level/block/entity/ChestBlockEntity": {
-            "name": "aky",
+            "name": "avl",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/entity/EnderChestBlockEntity": {
-            "name": "alf",
+            "name": "avs",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {
-            "name": "alz",
+            "name": "awt",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/chunk/LevelChunk": {
-            "name": "amy",
+            "name": "axw",
             "methods": {
                 "getBlockEntities": {
-                    "name": "r",
+                    "name": "s",
                     "signature": "()Ljava/util/Map;"
                 }
             },
             "fields": {}
         },
         "net/minecraft/world/phys/BlockHitResult": {
-            "name": "auh",
+            "name": "bhc",
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/phys/Vec3": {
-            "name": "aui",
+            "name": "bhe",
             "methods": {},
             "fields": {
                 "x": {
-                    "name": "a"
-                },
-                "y": {
                     "name": "b"
                 },
-                "z": {
+                "y": {
                     "name": "c"
+                },
+                "z": {
+                    "name": "d"
                 }
             }
         }

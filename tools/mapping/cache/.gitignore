@@ -1,0 +1,8 @@
+# Downloaded mapping sources and client jars are local caches only.
+#
+# The ProGuard client_mappings carry a no-redistribution copyright header, so
+# the raw client-<version>.txt files MUST NOT be committed or packed into the
+# jar — only the generated ../..//client/src/main/resources/mappings-*.json are
+# shipped. Client jars are big and likewise not redistributed.
+*
+!.gitignore

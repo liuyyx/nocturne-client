@@ -283,6 +283,17 @@ public final class SkijaUi {
         return (alpha << 24) | (red << 16) | (green << 8) | blue;
     }
 
+    /**
+     * 给定字号的行高（ascent→descent）。
+     *
+     * <p>本项目的组件树按「顶边 + 行高」布局，需要一个不依赖上游实现细节的行高度量；与
+     * {@link #text} 内部使用的同一字体、同一度量，避免文字被行盒裁掉或行距忽大忽小。
+     */
+    public static float lineHeight(float size) {
+        FontMetrics metrics = font(false, size, effectiveFontName()).getMetrics();
+        return metrics.getDescent() - metrics.getAscent();
+    }
+
     public static float textWidth(String text) {
         return textWidth(text, FONT_SIZE);
     }

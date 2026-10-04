@@ -25,6 +25,9 @@
 | `ui/src/main/java/dev/noturne/ui/skija/PageTransition.java` | `ui/screen/PageTransition.java` | 改包名；可见性提升为 public |
 | `ui/src/main/java/dev/noturne/ui/skija/CategoryGlyphs.java` | `ui/CategoryGlyphs.java` | 改包名；`Category` 换成本项目枚举；switch 表达式降级；加 `default` 回落 |
 | `ui/src/main/java/dev/noturne/ui/skija/SkijaTheme.java` | `ui/UiTheme.java` | 改名（UiTheme → SkijaTheme）；`accent()` 改为可注入静态值，去掉对上游模块设置对象的依赖 |
+| `ui/src/main/java/dev/noturne/ui/skija/SkijaControls.java` | `ui/screen/UiControls.java` | 去 MC/GLFW 输入类型（改原始 `int keyCode`/`int codePoint` + AWT `VK_*`）；剪贴板改为可注入 `Clipboard` 接口；`record Box` → Java 8 类；`Objects.requireNonNullElse`/`String.repeat`/`StringBuilder.isEmpty` 降级 |
+| `ui/src/main/java/dev/noturne/ui/skija/SkijaBackdrop.java` | `ui/screen/ScreenBackdrop.java` | 去 `Minecraft`（背景目录与网格模式改为可注入静态状态）、去 `Setsuna` 日志、`ColorListener`→`println`；`record TraceLine` → Java 8 类；`readAllBytes` 自实现 |
+| `ui/src/main/java/dev/noturne/ui/skija/SkijaHudPrimitives.java` | `ui/hud/HudRenderUtil.java` | `IntSetting` 参数改原始 `int`；内联 `HudFusionManager.Edges`（16 组合 enum + `of` 工厂）；**未搬** `blur(...)`（依赖 MC 帧缓冲快照，待纹理桥）；`BorderMode` 常量名保持不变以免改动 HUD 设置文案 |
 
 ### 已移植的资源
 

@@ -2,20 +2,11 @@ package dev.noturne.ui.gl;
 
 import dev.noturne.ui.render.Color;
 import dev.noturne.ui.render.Renderer;
+import dev.noturne.ui.skija.SkijaUi;
 
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.ClipMode;
-import io.github.humbleui.skija.Font;
-import io.github.humbleui.skija.FontMgr;
-import io.github.humbleui.skija.FontStyle;
-import io.github.humbleui.skija.Paint;
-import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.Typeface;
-import io.github.humbleui.types.RRect;
 import io.github.humbleui.types.Rect;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * {@link Renderer} 的 Skija 实现：把组件树画到 {@link SkijaCanvas} 给出的画布上。
@@ -23,29 +14,15 @@ import java.util.Map;
  * <p>与 GL 实现的关系：{@code GlRenderer}/{@code ModernRenderer} 是按「游戏用哪代 OpenGL」分的，
  * 本类**不分代**——Skia 只要拿到当前 GL 上下文就能画，因此同一份组件代码在 1.8.9 与 26.x 上行为一致。
  *
- * <p>字体自带：优先系统中文字体（界面文案是中文），失败则退回系统默认字体；字号→{@link Font} 有缓存，
- * 避免每帧新建原生对象。
+ * <p>绘制原语与字体栈全部委托 {@link SkijaUi}（自 Setsuna 移植，GPL-3.0-or-later，见
+ * THIRD-PARTY-NOTICES.md）：本类只做接口适配与边界防护，不再自己管理画笔与字体缓存——两套字体
+ * 度量并存会让测量宽度与实际绘制对不上（文本居中、省略号都会错位）。
  */
 public final class SkijaRenderer implements Renderer {
-
-    /** 系统中文字体候选（按顺序取第一个存在的）；都取不到时用 Skia 默认字体。 */
-    private static final String[] TYPEFACE_CANDIDATES = {
-            "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", "Noto Sans CJK SC",
-            "PingFang SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "sans-serif",
-    };
-
-    /** 共享的字体管理器（Skia 全局唯一）。 */
-    private static Typeface sharedTypeface;
 
     /** 当前帧的画布；由 {@link #bind(Canvas)} 设置，为空时所有绘制都是空操作。 */
     private Canvas canvas;
 
-    /** 复用的填充/描边画笔，避免每帧分配原生对象。 */
-    private final Paint fill = new Paint().setAntiAlias(true).setMode(PaintMode.FILL);
-    private final Paint stroke = new Paint().setAntiAlias(true).setMode(PaintMode.STROKE);
-
-    /** 字号 → 字体缓存。 */
-    private final Map<Integer, Font> fonts = new HashMap<Integer, Font>();
     /** 裁剪是否开启（对应 {@link #pushClip}/{@link #popClip} 的配对）。 */
     private int clipDepth;
 
@@ -59,74 +36,37 @@ public final class SkijaRenderer implements Renderer {
         this.clipDepth = 0;
     }
 
-    /** 取（必要时创建）指定字号的字体。 */
-    private Font font(float size) {
-        int key = Math.max(1, Math.round(size));
-        Font cached = fonts.get(Integer.valueOf(key));
-        if (cached != null) {
-            return cached;
-        }
-        if (sharedTypeface == null) {
-            sharedTypeface = pickTypeface();
-        }
-        Font created = sharedTypeface == null ? new Font() : new Font(sharedTypeface, key);
-        fonts.put(Integer.valueOf(key), created);
-        return created;
-    }
-
-    /** 挑一个支持中文的系统字体；取不到时返回 {@code null}（由 Skia 用默认字体）。 */
-    private static Typeface pickTypeface() {
-        FontMgr manager = FontMgr.getDefault();
-        if (manager == null) {
-            return null;
-        }
-        for (String family : TYPEFACE_CANDIDATES) {
-            try {
-                Typeface typeface = manager.matchFamilyStyle(family, FontStyle.NORMAL);
-                if (typeface != null) {
-                    System.out.println("[noturne] skija typeface: " + family);
-                    return typeface;
-                }
-            } catch (Throwable ignored) {
-                // 该字体不可用，继续试下一个
-            }
-        }
-        return null;
-    }
-
     @Override
     public void rect(float x, float y, float width, float height, Color color) {
-        if (canvas == null || color == null || width <= 0f || height <= 0f || color.a() == 0) {
+        if (!drawable(width, height, color)) {
             return;
         }
-        fill.setColor(color.packed());
-        canvas.drawRect(Rect.makeXYWH(x, y, width, height), fill);
+        SkijaUi.fill(canvas, x, y, width, height, color.packed());
     }
 
     @Override
     public void roundedRect(float x, float y, float width, float height, float radius, Color color) {
-        if (canvas == null || color == null || width <= 0f || height <= 0f || color.a() == 0) {
+        if (!drawable(width, height, color)) {
             return;
         }
         if (radius <= 0.5f) {
-            rect(x, y, width, height, color);
+            SkijaUi.fill(canvas, x, y, width, height, color.packed());
             return;
         }
-        fill.setColor(color.packed());
-        canvas.drawRRect(RRect.makeXYWH(x, y, width, height, radius), fill);
+        SkijaUi.rounded(canvas, x, y, width, height, radius, color.packed());
     }
 
     @Override
     public void outline(float x, float y, float width, float height, float lineWidth, Color color) {
-        if (canvas == null || color == null || width <= 0f || height <= 0f || color.a() == 0) {
+        if (!drawable(width, height, color) || lineWidth <= 0f) {
             return;
         }
-        stroke.setColor(color.packed());
         // 描边以线宽为半径居中在边界上：内缩半个线宽，视觉上才与填充矩形对齐。
-        float inset = Math.max(0f, lineWidth) / 2f;
+        float inset = lineWidth / 2f;
         float radius = Math.min(3f, Math.min(width, height) / 4f);
-        canvas.drawRRect(RRect.makeXYWH(x + inset, y + inset,
-                Math.max(0f, width - lineWidth), Math.max(0f, height - lineWidth), radius), stroke);
+        SkijaUi.outline(canvas, x + inset, y + inset,
+                Math.max(0f, width - lineWidth), Math.max(0f, height - lineWidth),
+                radius, lineWidth, color.packed());
     }
 
     @Override
@@ -134,11 +74,9 @@ public final class SkijaRenderer implements Renderer {
         if (canvas == null || text == null || text.isEmpty() || color == null || color.a() == 0) {
             return;
         }
-        Font font = font(size);
-        fill.setColor(color.packed());
-        // Skija 的 y 是基线位置：组件树按「左上角 + 字号高度」给坐标，这里下移一个 ascent。
-        float baseline = y + font.getMetrics().getAscent() * -1f;
-        canvas.drawString(text, x, baseline, font, fill);
+        // SkijaUi 的 text 以「行盒」定位：给定顶边与行盒高度，内部按 ascent/descent 垂直居中。
+        // 这里行盒高度取字号本身，与组件树的坐标约定一致。
+        SkijaUi.text(canvas, text, x, y, size, color.packed(), size);
     }
 
     @Override
@@ -146,12 +84,14 @@ public final class SkijaRenderer implements Renderer {
         if (text == null || text.isEmpty()) {
             return 0f;
         }
-        return font(size).measureTextWidth(text);
+        // 走 SkijaUi 的度量：它带 CJK 回退——同一个字符串在「测量」与「绘制」上用同一套字体选择，
+        // 否则中文段的宽度会与预期不符。
+        return SkijaUi.textWidth(text, size);
     }
 
     @Override
     public float textHeight(float size) {
-        return font(size).getMetrics().getHeight();
+        return SkijaUi.lineHeight(size);
     }
 
     @Override
@@ -171,5 +111,10 @@ public final class SkijaRenderer implements Renderer {
         }
         canvas.restore();
         clipDepth--;
+    }
+
+    /** 本帧可绘制的统一前置条件：有画布、颜色有效、尺寸为正、不透明。 */
+    private boolean drawable(float width, float height, Color color) {
+        return canvas != null && color != null && width > 0f && height > 0f && color.a() != 0;
     }
 }

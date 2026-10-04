@@ -219,8 +219,17 @@ MC API（`GuiGraphicsExtractor`/`DeltaTracker`/`ClientLevel`）。要让同一�
 
 | 文件 | 状态 |
 |---|---|
-| `SkijaUi` | 移植中（子代理） |
-| `SkijaScreen` / `PageTransition` / `CategoryGlyphs` / `SkijaTheme` / `ClickGuiLayout` | 已落盘 |
-| `SkijaControls` / `SkijaBackdrop` / `SkijaHudPrimitives` | 移植中（子代理） |
-| 屏幕壳层、数据层（HUD/ClickGUI 屏） | 待做：需先建纹理桥与渲染回调对接 |
-| 编译验证（`:ui:compileJava`，release 8） | 待做：等上述文件齐后统一跑 |
+| `SkijaUi`（840 行） | ✅ 完成：class 版本 52；字体资源 6 个中只保留 4 个图标字体（苹方不打包，见 §7 字体取舍） |
+| `SkijaScreen` / `PageTransition` / `CategoryGlyphs` / `SkijaTheme` / `ClickGuiLayout` | ✅ 完成 |
+| `SkijaControls`（725 行）/ `SkijaBackdrop`（548 行）/ `SkijaHudPrimitives`（484 行） | ✅ 完成 |
+| 接入本项目渲染路径 | ✅ `ui/gl/SkijaRenderer` 已改为委托 `SkijaUi`（原语 + 自带字体栈 + CJK 回退），并新增 `SkijaUi.lineHeight` 供组件树算行距 |
+| 编译/测试验证（release 8） | ✅ `gradle test` 全模块通过 |
+| **纹理桥（MC 纹理/帧缓冲 → Skia）** | ⛔ 未建，阻塞 3 处：`SkijaHudPrimitives.blur(...)`（上游唯一实现是 `render/SkijaRenderer.drawBlurredBackdrop`，依赖 MC 帧快照）、`SkijaRenderer.borrowTexture`（皮肤/旗帜/物品图标）、HUD 图标绘制 |
+| 屏幕壳层（`AbstractSkijaScreen` 等）与数据层（HUD/ClickGUI 屏） | 待做：先建纹理桥与渲染回调对接 |
+
+### 字体取舍（本批的刻意偏离）
+
+上游打包了 6 个字体，本批只搬 4 个图标字体（`icomoon` / `music` / `icon` / `lucide`，合计 ~880 KB）。
+`pf_normal.ttf` 与 `pf_middleblack.ttf`（各约 10 MB）**未搬**：它们的内部 family 名是 `.PingFang SC`，
+即苹果苹方字体，苹果的字体许可不允许在非苹果设备上再分发。缺失时 `SkijaUi.loadTypeface()` 按设计
+回落到系统字体（`Microsoft YaHei UI` 等），中文显示正常；需要原字形可用 `SkijaUi.importFont` 自行导入。

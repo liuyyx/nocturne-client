@@ -4,19 +4,25 @@ import dev.noturne.client.module.ModuleRegistry;
 import dev.noturne.client.runtime.FrameListener;
 import dev.noturne.ui.clickgui.ClickGui;
 import dev.noturne.ui.skija.SetsunaClickGui;
+import dev.noturne.ui.skija.SetsunaHud;
+import dev.noturne.ui.skija.SkijaHudSink;
 
 import io.github.humbleui.skija.Canvas;
 
 /**
- * 把点击式 GUI 叠加到游戏画面上，并承担它的全部输入。
+ * 把 HUD 与点击式 GUI 叠加到游戏画面上，并承担 GUI 的全部输入。
  *
  * <p>由被补丁的帧交换点每帧调用一次（见 {@code NoturneRuntime}）。这里不做事件 hook，而是每帧
  * 轮询一次指针与按键状态，再自己合成为点击 / 拖拽 / 释放 / 滚轮事件：轮询只需一个查询接口，
  * 而两代 LWJGL 的回调模型差异全部被 {@link InputSource} 吸收，代价是每帧几次反射调用。
  *
+ * <p>绘制分两层，共用同一次 Skija 帧：**HUD 常显**（GUI 开关不影响它），GUI 仅在打开时绘制。
+ * 这样只需一次 {@code beginFrame/endFrame}——Skija 的原生表面每帧只能建立与提交一次，
+ * 两层各画一帧会把先提交的内容丢掉。
+ *
  * <p>界面实现由后端能力决定（见 {@link OverlayGui}）：Skija 可用时用 Canvas 直绘的
- * {@link SetsunaClickGui}（能画玻璃层/阴影/图标字体，视觉与上游一致），否则用面向
- * {@code Renderer} 抽象的 {@link ClickGui}（四列布局，任何后端都能画）。
+ * {@link SetsunaClickGui} 与 {@link SetsunaHud}（能画玻璃层/阴影/图标字体，视觉与上游一致），
+ * 否则用面向 {@code Renderer} 抽象的 {@link ClickGui}（四列布局，任何后端都能画；此时没有 HUD）。
  *
  * <p>三个容易踩空的地方，都在这里集中处理：
  * <ul>
@@ -39,8 +45,15 @@ public final class GuiOverlay implements FrameListener {
     /** 右键编号。 */
     private static final int BUTTON_RIGHT = 1;
 
+    /** 帧率指数平滑系数：越小越稳（HUD 上的读数不该逐帧跳）。 */
+    private static final float FPS_SMOOTHING = 0.15f;
+    /** 单帧间隔超过这个秒数就不参与平滑：卡顿/暂停（例如窗口失焦）会把均值拖到无意义的低位。 */
+    private static final float FPS_MAX_DELTA_SECONDS = 1f;
+
     /** 被叠加的点击式 GUI。 */
     private final OverlayGui gui;
+    /** HUD；仅 Skija 后端可用时为非空。 */
+    private final SetsunaHud hud;
     /** 绘制后端。 */
     private final UiBackend renderer;
     /** 输入来源。 */
@@ -62,6 +75,10 @@ public final class GuiOverlay implements FrameListener {
     private double lastY;
     /** 是否已打印过「GUI 已打开」日志，保证只打印一次。 */
     private boolean loggedFirstDraw;
+    /** 上一次帧回调的时间戳（纳秒）；0 表示尚未收到第一帧。 */
+    private long lastFrameNanos;
+    /** 平滑后的帧率；0 表示还没算出来。 */
+    private float fps;
 
     /**
      * @param registry  模块注册表，GUI 据此列出各分类下的模块
@@ -70,11 +87,19 @@ public final class GuiOverlay implements FrameListener {
      * @param toggleKey 开关 GUI 的键码
      */
     public GuiOverlay(ModuleRegistry registry, UiBackend renderer, InputSource input, int toggleKey) {
+        this(registry, renderer, input, toggleKey, null);
+    }
+
+    /**
+     * @param sink 模块文本行的汇；非空且为 Skija 后端时 HUD 会显示这些行
+     */
+    public GuiOverlay(ModuleRegistry registry, UiBackend renderer, InputSource input, int toggleKey,
+                      SkijaHudSink sink) {
         // 选择界面实现：Skija 后端能提供画布，就用 Canvas 直绘的 Setsuna 界面；否则用抽象绘制面
         // 上实现的四列界面。判定放在构造期而不是每帧，是为了让「用哪套界面」在日志里可见。
-        this.gui = renderer instanceof SkijaBackend
-                ? new SetsunaClickGui(registry)
-                : new ClickGui(registry);
+        boolean skija = renderer instanceof SkijaBackend;
+        this.gui = skija ? new SetsunaClickGui(registry) : new ClickGui(registry);
+        this.hud = skija ? new SetsunaHud(registry, sink) : null;
         this.renderer = renderer;
         this.input = input;
         this.toggleKey = toggleKey;
@@ -83,6 +108,11 @@ public final class GuiOverlay implements FrameListener {
     /** @return 被叠加的 GUI，供外部（如设置界面）直接操作 */
     public OverlayGui gui() {
         return gui;
+    }
+
+    /** @return HUD 实现；非 Skija 后端时为 {@code null} */
+    public SetsunaHud hud() {
+        return hud;
     }
 
     /** @return 实际生效的输入后端名称，用于日志诊断；按键「没反应」时先看这里是不是 {@code "none"} */
@@ -108,6 +138,7 @@ public final class GuiOverlay implements FrameListener {
         // 否则一帧内指针移动会造成命中测试与事件坐标不一致。
         double mx = input.mouseX();
         double my = input.mouseY();
+        updateFps(System.nanoTime());
 
         boolean toggleDown = input.keyDown(toggleKey);
         if (!loggedFirstInput) {
@@ -161,6 +192,8 @@ public final class GuiOverlay implements FrameListener {
             escapeWasDown = input.keyDown(KEY_ESCAPE);
             lastX = mx;
             lastY = my;
+            // GUI 关闭不等于不绘制：HUD 是常显层，这里必须继续走绘制
+            drawFrame();
             return;
         }
 
@@ -171,13 +204,14 @@ public final class GuiOverlay implements FrameListener {
         }
         escapeWasDown = escapeDown;
         if (!gui.isOpen()) {
-            // Esc 在本帧关闭了 GUI：同步输入基准，本帧不再绘制。
+            // Esc 在本帧关闭了 GUI：同步输入基准后只画 HUD。
             // 指针不在这一帧硬性恢复：下一帧的交接沿会把它还原成打开前的状态
             // （在主菜单里打开 GUI 再按 Esc，光标必须保持可见）。
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
             lastX = mx;
             lastY = my;
+            drawFrame();
             return;
         }
 
@@ -186,7 +220,8 @@ public final class GuiOverlay implements FrameListener {
             if (renderer.ready()) {
                 System.out.println("[noturne] click GUI opened; input=" + input.describe()
                         + "; backend=" + renderer.backendName()
-                        + "; screen=" + gui.getClass().getSimpleName());
+                        + "; screen=" + gui.getClass().getSimpleName()
+                        + "; hud=" + (hud == null ? "none" : "setsuna"));
             } else {
                 // 后端未就绪时叠加层照样会绘制，但可能全帧不可见；明确警告，
                 // 避免与「输入没解析出来」的现象混为一谈。
@@ -214,7 +249,7 @@ public final class GuiOverlay implements FrameListener {
             gui.mouseReleased(mx, my, BUTTON_LEFT);
         }
 
-        // 右键只用于「打开模块设置」，不参与拖拽
+        // 右键只用于「恢复默认值 / 打开模块设置」，不参与拖拽
         if (right && !rightWasDown) {
             gui.mouseClicked(mx, my, BUTTON_RIGHT);
         }
@@ -231,18 +266,52 @@ public final class GuiOverlay implements FrameListener {
         leftWasDown = left;
         rightWasDown = right;
 
-        // begin/end 必须成对：渲染中途抛异常时若不执行 endFrame，
-        // beginFrame 压入的投影/模型视图矩阵栈永远不会弹出（每帧泄漏 2 层，约 16 帧后栈溢出），
-        // 游戏的 3D 画面将永久错乱且不可自愈。
+        drawFrame();
+    }
+
+    /**
+     * 绘制本帧：HUD 常显，GUI 仅在打开时绘制。
+     *
+     * <p>begin/end 必须成对且**每帧只有一次**：Skija 的原生表面每帧只能建立与提交一次，
+     * 两层各走一遍会把先绘制的内容丢掉；渲染中途抛异常时若不执行 endFrame，GL 状态与
+     * 原生表面都会留在中间态。
+     */
+    private void drawFrame() {
+        if (hud == null && !gui.isOpen()) {
+            return;
+        }
         renderer.beginFrame();
         try {
             // 画布必须在 beginFrame 之后取：Skija 后端在这一步才建立/复用原生表面
             Canvas canvas = renderer instanceof SkijaBackend
                     ? ((SkijaBackend) renderer).canvas()
                     : null;
-            gui.render(renderer, canvas);
+            if (canvas != null && hud != null) {
+                hud.render(canvas, renderer.width(), renderer.height(), fps);
+            }
+            if (gui.isOpen()) {
+                gui.render(renderer, canvas);
+            }
         } finally {
             renderer.endFrame();
         }
+    }
+
+    /**
+     * 更新平滑帧率。
+     *
+     * <p>用指数平滑而不是逐帧瞬时值：HUD 上的数字逐帧跳动既难读、也掩盖不了真实的趋势。
+     * 间隔超过 {@link #FPS_MAX_DELTA_SECONDS} 的帧（暂停、断点、窗口最小化）不参与计算，
+     * 否则恢复后的头几帧读数会被拖到无意义的低位。
+     */
+    private void updateFps(long nowNanos) {
+        if (lastFrameNanos != 0L) {
+            float delta = (nowNanos - lastFrameNanos) / 1_000_000_000f;
+            if (delta > 0f && delta < FPS_MAX_DELTA_SECONDS) {
+                float instant = 1f / delta;
+                fps = fps <= 0f ? instant : fps + (instant - fps) * FPS_SMOOTHING;
+            }
+        }
+        lastFrameNanos = nowNanos;
     }
 }

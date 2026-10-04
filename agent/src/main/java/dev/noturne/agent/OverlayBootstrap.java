@@ -11,10 +11,11 @@ import dev.noturne.ui.gl.InputSource;
 import dev.noturne.ui.gl.MinecraftTextRenderer;
 import dev.noturne.ui.gl.ModernGlApi;
 import dev.noturne.ui.gl.ModernRenderer;
-import dev.noturne.ui.gl.SkijaBackend;
 import dev.noturne.ui.gl.ReflectiveInput;
+import dev.noturne.ui.gl.SkijaBackend;
 import dev.noturne.ui.gl.TextRenderer;
 import dev.noturne.ui.gl.UiBackend;
+import dev.noturne.ui.skija.SkijaHudSink;
 
 import java.lang.instrument.Instrumentation;
 
@@ -118,7 +119,13 @@ public final class OverlayBootstrap implements FrameListener {
 
         UiBackend backend = selectBackend(gl, gl11, font);
         InputSource input = ReflectiveInput.create(loader, backend::width, backend::height);
-        GuiOverlay overlay = new GuiOverlay(client.modules(), backend, input, toggleKey);
+        // HUD 行汇：模块只面向 HudSink 发布文本行，接住它们的实现必须由 UI 侧提供。此前没有任何
+        // 实现，模块的发布全部落到空处——HUD 上永远看不到模块文本，而模块自身毫无察觉。
+        SkijaHudSink hudSink = backend instanceof SkijaBackend ? new SkijaHudSink() : null;
+        if (hudSink != null) {
+            client.setHudSink(hudSink);
+        }
+        GuiOverlay overlay = new GuiOverlay(client.modules(), backend, input, toggleKey, hudSink);
         NoturneRuntime.addListener(overlay);
 
         installed = true;

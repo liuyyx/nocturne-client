@@ -306,3 +306,26 @@ LAB 颜色滑块 ✓ 命中于 y=329（相对 settingsY +122），tint ff3ed6b4 
 
 尚未实现（后续）：颜色项的 alpha 分量、上游的其它界面（主菜单 / AltManager / HUD 编辑器）、
 以及 §7 前面提到的纹理桥。
+
+### HUD（阶段 E）
+
+- 新增 `SkijaHudSink`（`HudSink` 的 Skija 侧实现）：模块发布的文本行按注册顺序保存、每帧拉取；
+  单个供给器抛异常只跳过该行，不打断整帧。**此前没有任何 `HudSink` 实现**——`NoturneClient.setHudSink`
+  从未被调用，模块的发布全部落到空处（优雅降级，但 HUD 上永远看不到模块文本，而模块毫无察觉）。
+- 新增 `SetsunaHud`（Canvas 直绘、**不铺背板**）：左上品牌卡（强调色圆点 + 字距排版）、其下是模块
+  文本行、右上帧率卡、右侧已启用模块列表（每行小卡片 + 强调色侧条）。数据全部来自现有抽象
+  （`ModuleRegistry` / `HudSink` / 调用方传入的 fps），不碰 Minecraft，因此 1.8.9 与 26.x 同一份代码、
+  不需要映射表。
+- `GuiOverlay` 重构为「每帧总入口」：**HUD 常显**（GUI 开关不影响它），GUI 仅打开时绘制；两层共用
+  同一次 Skija 帧——原生表面每帧只能建立与提交一次，两层各走一遍会把先绘制的丢掉。同时加入指数
+  平滑的帧率（超过 1 秒的间隔不参与计算，避免暂停/断点后读数被拖到无意义低位）。
+- `OverlayBootstrap` 安装行汇并把 HUD 接进叠加层（仅 Skija 后端）。
+
+验证（离屏光栅；`docs/research/LabSetsunaHud.java`）：
+```
+LAB sink 行数=3（Watermark + LabInfo 的两行，其中一行故意抛异常）
+[noturne] hud row 'lab.broken' failed: java.lang.IllegalStateException: boom   ← 坏行只跳过自己
+LAB 已启用模块数=4
+```
+截图：`docs/research/setsuna-gui-hud.png`（品牌卡 / `noturne` 与 `XYZ 128 64 -512` 两行模块文本 /
+`240 FPS` / 右侧四个启用模块卡与强调色侧条）。

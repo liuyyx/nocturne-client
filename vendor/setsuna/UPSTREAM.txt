@@ -1,1 +1,18 @@
-e4915ae093748d48d92ee47c38cdb8b2746a4730 Sun Aug 30 20:46:25 2026 +0800 Restore original README
+Setsuna 客户端源码快照（研究 / 编译基线用，复制自用户提供的上游工程 SetsunaClient/）
+
+上游 commit : e4915ae093748d48d92ee47c38cdb8b2746a4730  Sun Aug 30 20:46:25 2026 +0800  "Restore original README"
+上游作者     : ShiYi（QQ 1782605215 / @FS_Oracle）
+上游声明许可 : GPL-3.0-or-later（SetsunaClient/gradle.properties: license=GPL-3.0-or-later）
+上游附带文件 : LICENSE（GPL-3.0 全文）、LICENSE-APACHE（Apache-2.0 全文，本目录同样保留）
+上游 README   : "这是Setsuna的开源版本 允许你进行任何操作 甚至魔改后售卖"
+
+许可判定：
+  * 正式声明为 GPL-3.0-or-later，故本项目按 GPL-3.0-or-later 处理。
+  * 目录内虽附带 Apache-2.0 全文，但上游没有任何文字声明"GPL-3.0 OR Apache-2.0 二选一"，
+    仅凭文件存在不足以主张双许可，不作为更宽松授权的依据。
+  * GPL-3.0 与上游 README 的口头许可相容：可以修改、可以售卖，条件是分发时保留许可与版权
+    声明、并以 GPL-3.0 提供完整对应源码；不得再附加"禁止转售/非商业"等额外限制。
+
+使用边界：
+  * 本目录只作研究与编译基线，不进入 noturne-client 的构建产物。
+  * 一旦其中代码被编译进 noturne-client 的单 jar，noturne-client 整体即成为 GPL-3.0-or-later 作品。

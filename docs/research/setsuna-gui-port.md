@@ -386,3 +386,18 @@ LAB 完成后 editor.isOpen=false 回调触发=true
 
 与上游的对应关系：本编辑器对应上游 `ui/hud/HudEditorScreen` 的**功能**（拖动摆放 HUD），不是逐行移植
 ——上游那一屏建立在它的 HUD 元素注册表与设置系统上，这里是按本项目的 `HudLayout` + `SkijaHud` 重写的。
+
+### 顺带：让闲置的移植件生效
+
+`SkijaBackdrop`（上游 `ui/screen/ScreenBackdrop`，548 行）在搬进来后一度**没有任何调用方**。现在
+`SetsunaClickGui` 的全屏背板改用它：渐变 + 网格（或自定义背景图）+ 扫描线 + 视差 + 边缘压暗，
+`shadeAlpha = 180`。截图 `docs/research/setsuna-gui-backdrop.png`。
+
+### 评估过但**未实现**的上游界面（诚实清单）
+
+| 上游 | 为什么不做 |
+|---|---|
+| `ui/screen/MainMenuScreen`（替换游戏主菜单） | 它要靠 Mixin 接管 MC 的 `TitleScreen` 并转发游戏菜单动作。本项目的注入链路是「帧钩子 + ASM 单点插桩」，不做 Mixin；强行接管主菜单等于给每个目标版本各写一套屏幕替换，收益（一个主菜单外观）远小于风险（把游戏启动路径改坏）。 |
+| `ui/screen/AltManagerScreen`（账号管理） | 依赖 MC 的账号/会话系统（`Minecraft.getUser()`、`AccountList`、`Yggdrasil` 登录流程）。本项目没有账号管理需求，且这部分 API 在 1.8.9 与 26.x 之间差异极大（映射成本高、可验证性差）。 |
+| `MusicScreen` / `MusicLyricsHUD` 及其它网易云音乐界面 | 依赖上游的 `tritium.ncm.*` 第三方音乐库，与客户端功能无关（§2 里那 64 个编译错误的来源）。 |
+| `ui/hud/*` 里依赖 MC 数据的 HUD（雷达、目标 HUD、物品栏、物品标签、药水…） | 它们读 `ClientLevel`/`Entity`/`ItemStack` 等 26.x 专属 API。要做需要先在本项目里建「HUD 数据源」抽象（走映射层），那是独立的一轮工作；本轮的 HUD 只做不依赖 MC 的四块（品牌/模块文本/帧率/模块列表）。 |

@@ -203,8 +203,9 @@ public final class SetsunaClickGui implements OverlayGui {
     private void draw(Canvas canvas) {
         int width = Math.round(viewportWidth > 0 ? viewportWidth : 854);
         int height = Math.round(viewportHeight > 0 ? viewportHeight : 480);
-        // 背板：整屏压暗，让面板浮起来（上游独立屏幕同样是全屏背板）
-        SkijaUi.fill(canvas, 0, 0, width, height, SkijaTheme.BACKDROP);
+        // 背板：SkijaBackdrop 的动画背景（渐变 + 网格或自定义图 + 扫描线 + 视差 + 边缘压暗），
+        // shadeAlpha 用 180 ≈ 原来那层背板的不透明度。上游独立屏幕同样是「背景 + 压暗」两段。
+        SkijaBackdrop.draw(canvas, width, height, 180);
         SkijaControls.panel(canvas, panelBox());
         drawHeader(canvas);
         drawSeparators(canvas);

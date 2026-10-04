@@ -79,6 +79,15 @@ public final class DrawContextBackend implements UiBackend {
         if (fill == null || first == null || second == null) {
             return null;
         }
+        // 探测文字绘制入口：带 String 参数的方法即候选（签名在版本间会变，按特征扫）。
+        for (Method method : drawContext.getClass().getMethods()) {
+            for (Class<?> type : method.getParameterTypes()) {
+                if (type == String.class) {
+                    System.out.println("[noturne] text-candidate: " + method);
+                    break;
+                }
+            }
+        }
         try {
             fill.setAccessible(true);
             first.setAccessible(true);

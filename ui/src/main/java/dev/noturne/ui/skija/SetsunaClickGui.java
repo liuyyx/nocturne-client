@@ -31,13 +31,15 @@ import java.util.List;
  * （Lucide 图标字体）。这些文件均移植自 Setsuna，许可见 THIRD-PARTY-NOTICES.md。
  *
  * <p>交互：左键点分类切换栏目；左键点模块行的**右侧圆点**切换启用、点行的其余部分选中模块；
- * 左键点设置区的开关/数值/模式控件直接改值（数值可按住拖动）；滚轮在模块列表与设置区分别滚动；
- * Esc 关闭（叠加层也会派发）。
+ * 设置区里布尔是胶囊、数值是轨道（可拖）、模式点一下循环、颜色点色块展开 H/S/V 调色、
+ * **右键任意设置项恢复默认值**；滚轮在模块列表与设置区分别滚动；Esc 关闭（叠加层也会派发）。
  */
 public final class SetsunaClickGui implements OverlayGui {
 
     /** Esc 键码（AWT VK_ESCAPE）。 */
     private static final int KEY_ESCAPE = 27;
+    /** 右键编号，用于「恢复默认值」。 */
+    private static final int BUTTON_RIGHT = 1;
 
     /** 分类导航项的边长与间距。 */
     private static final float RAIL_ITEM = 30f;
@@ -49,13 +51,19 @@ public final class SetsunaClickGui implements OverlayGui {
     private static final float MODULE_TOGGLE_HIT_WIDTH = 30f;
     /** 列表标题占用的高度（"Modules" 那行）。 */
     private static final float LIST_TITLE_HEIGHT = 20f;
-    /** 设置区每行的高度。 */
+    /** 设置区单行的高度。 */
     private static final float SETTING_ROW_HEIGHT = 34f;
     /** 数值滑块的轨道高度。 */
     private static final float TRACK_HEIGHT = 4f;
     /** 布尔开关胶囊的尺寸。 */
     private static final float PILL_WIDTH = 30f;
     private static final float PILL_HEIGHT = 16f;
+    /** 颜色色块的尺寸。 */
+    private static final float SWATCH_WIDTH = 34f;
+    private static final float SWATCH_HEIGHT = 14f;
+    /** 颜色编辑器里每条分量滑块的高度与间距。 */
+    private static final float COLOR_SLIDER_HEIGHT = 12f;
+    private static final float COLOR_SLIDER_GAP = 5f;
 
     /** 模块注册表：栏目与模块的来源。 */
     private final ModuleRegistry registry;
@@ -77,11 +85,31 @@ public final class SetsunaClickGui implements OverlayGui {
     private float detailScroll;
     /** 本帧布局；输入与绘制共用同一份，避免两处各算一次导致热区与视觉错位。 */
     private ClickGuiLayout layout;
-    /** 正在拖动的数值设置（{@code null} 表示没有拖动）。 */
-    private NumberValue dragging;
-    /** 拖动开始时滑块轨道的左边界与宽度。 */
+
+    /** 正在拖动的对象类型。 */
+    private enum DragKind {
+        /** 没有拖动。 */
+        NONE,
+        /** 数值设置项的轨道。 */
+        NUMBER,
+        /** 颜色编辑器：色相。 */
+        COLOR_H,
+        /** 颜色编辑器：饱和度。 */
+        COLOR_S,
+        /** 颜色编辑器：明度。 */
+        COLOR_V
+    }
+
+    private DragKind dragKind = DragKind.NONE;
+    /** 正在拖动的数值设置项（{@link DragKind#NUMBER} 时有效）。 */
+    private NumberValue draggingNumber;
+    /** 正在调色的颜色项（颜色拖动时有效）。 */
+    private ColorValue draggingColor;
+    /** 拖动开始时滑块轨道的左边界与宽度（两种拖动共用）。 */
     private float draggingTrackX;
     private float draggingTrackWidth;
+    /** 展开调色板的颜色项；{@code null} 表示没有展开。 */
+    private ColorValue expandedColor;
 
     /**
      * @param registry 模块注册表
@@ -165,8 +193,8 @@ public final class SetsunaClickGui implements OverlayGui {
 
     /** 一帧的完整绘制：背板 → 面板 → 三栏 → 内容。 */
     private void draw(Canvas canvas) {
-        int width = layout == null ? viewportWidth : Math.round(viewportWidth);
-        int height = layout == null ? viewportHeight : Math.round(viewportHeight);
+        int width = Math.round(viewportWidth > 0 ? viewportWidth : 854);
+        int height = Math.round(viewportHeight > 0 ? viewportHeight : 480);
         // 背板：整屏压暗，让面板浮起来（上游独立屏幕同样是全屏背板）
         SkijaUi.fill(canvas, 0, 0, width, height, SkijaTheme.BACKDROP);
         SkijaControls.panel(canvas, panelBox());
@@ -193,7 +221,7 @@ public final class SetsunaClickGui implements OverlayGui {
         x += 12f;
         SkijaControls.brand(canvas, "NOTURNE", x, top, headerHeight, textColor, size, tracking);
 
-        String hint = "ESC 关闭";
+        String hint = "ESC 关闭 · 右键重置";
         float hintWidth = SkijaUi.textWidth(hint, 8.5f);
         SkijaUi.text(canvas, hint, layout.x() + layout.width() - hintWidth - 12f, top,
                 headerHeight, SkijaControls.TEXT_FAINT, 8.5f);
@@ -245,9 +273,7 @@ public final class SetsunaClickGui implements OverlayGui {
         if (listHeight <= 1f) {
             return;
         }
-        List<Module> modules = activeCategory == null
-                ? new ArrayList<Module>()
-                : registry.byCategory(activeCategory);
+        List<Module> modules = modulesOfActive();
 
         canvas.save();
         canvas.clipRect(Rect.makeXYWH(listX, layout.bodyY(), listWidth, layout.bodyHeight()),
@@ -275,6 +301,10 @@ public final class SetsunaClickGui implements OverlayGui {
                     SkijaControls.TEXT_FAINT, 8.5f);
         }
         canvas.restore();
+    }
+
+    private List<Module> modulesOfActive() {
+        return activeCategory == null ? new ArrayList<Module>() : registry.byCategory(activeCategory);
     }
 
     private String titleOfActive() {
@@ -336,8 +366,11 @@ public final class SetsunaClickGui implements OverlayGui {
     /**
      * 画一行设置项，返回下一行的 y。
      *
-     * <p>按值的运行时类型分派：布尔是胶囊开关、数值是轨道滑块、模式是左右循环、颜色是色块预览。
-     * 用 {@code instanceof} 而不是引入访问者接口，是为了让值框架不认识 UI（见 {@code Value} 的注释）。
+     * <p>行高按控件类型决定（颜色项展开调色板时会变高），因此绘制与命中测试都必须走
+     * {@link #settingRowHeight(Value)}——两处若各自算一次，展开后下面的行就会错位。
+     *
+     * <p>按值的运行时类型分派：布尔是胶囊开关、数值是轨道滑块、模式是左右循环、颜色是色块 +
+     * 可展开的调色板。用 {@code instanceof} 而不是引入访问者接口，是为了让值框架不认识 UI。
      */
     private float drawSetting(Canvas canvas, Value<?> value, float x, float y, float width) {
         SkijaUi.text(canvas, value.name(), x, y, 14f, SkijaControls.TEXT_MUTED, 8.5f);
@@ -350,18 +383,9 @@ public final class SetsunaClickGui implements OverlayGui {
         }
         if (value instanceof NumberValue) {
             NumberValue number = (NumberValue) value;
-            String shown = number.display();
-            float shownWidth = SkijaUi.textWidth(shown, 8.5f);
-            SkijaUi.text(canvas, shown, x + width - shownWidth, y, 14f, SkijaControls.TEXT, 8.5f);
+            drawValueLabel(canvas, number.display(), x, y, width, SkijaControls.TEXT);
             float trackY = y + 16f;
-            float trackWidth = width;
-            float fraction = fractionOf(number);
-            SkijaUi.rounded(canvas, x, trackY, trackWidth, TRACK_HEIGHT, TRACK_HEIGHT * 0.5f,
-                    SkijaControls.CARD);
-            SkijaUi.rounded(canvas, x, trackY, Math.max(TRACK_HEIGHT, trackWidth * fraction),
-                    TRACK_HEIGHT, TRACK_HEIGHT * 0.5f, SkijaTheme.accent());
-            SkijaControls.disc(canvas, x + trackWidth * fraction - 4f, trackY - 2.5f, 9f,
-                    SkijaTheme.accent());
+            drawTrack(canvas, x, trackY, width, fractionOf(number), SkijaTheme.accent(), true);
             return y + SETTING_ROW_HEIGHT;
         }
         if (value instanceof ModeValue) {
@@ -377,17 +401,116 @@ public final class SetsunaClickGui implements OverlayGui {
         }
         if (value instanceof ColorValue) {
             ColorValue color = (ColorValue) value;
-            SkijaUi.rounded(canvas, x + width - 34f, y - 1f, 18f, 14f, 3f, color.argb());
-            String shown = color.display();
-            float shownWidth = SkijaUi.textWidth(shown, 8f);
-            SkijaUi.text(canvas, shown, x + width - 38f - shownWidth, y, 14f,
-                    SkijaControls.TEXT_MUTED, 8f);
-            return y + SETTING_ROW_HEIGHT;
+            boolean expanded = color == expandedColor;
+            SkijaControls.Box swatch = new SkijaControls.Box(x + width - SWATCH_WIDTH, y - 2f,
+                    SWATCH_WIDTH, SWATCH_HEIGHT);
+            int stroke = expanded ? SkijaTheme.accent() : SkijaControls.STROKE_STRONG;
+            SkijaUi.rounded(canvas, swatch.x, swatch.y, swatch.width, swatch.height, 3f, stroke);
+            SkijaUi.rounded(canvas, swatch.x + 1f, swatch.y + 1f, swatch.width - 2f,
+                    swatch.height - 2f, 2f, color.argb());
+            drawValueLabel(canvas, color.display(), x, y, width - SWATCH_WIDTH - 6f,
+                    SkijaControls.TEXT_MUTED);
+            if (expanded) {
+                drawColorEditor(canvas, color, x, y + SETTING_ROW_HEIGHT - 6f, width);
+            }
+            return y + settingRowHeight(value);
         }
         // 未知值类型：只显示文本，不提供交互（新增值类型时在这里补控件）
-        SkijaUi.text(canvas, value.display(), x + width - 40f, y, 14f,
-                SkijaControls.TEXT_MUTED, 8.5f);
+        drawValueLabel(canvas, value.display(), x, y, width, SkijaControls.TEXT_MUTED);
         return y + SETTING_ROW_HEIGHT;
+    }
+
+    /** 行右对齐的值文本（自动按可用宽度省略）。 */
+    private void drawValueLabel(Canvas canvas, String text, float x, float y, float width,
+                                int color) {
+        String shown = SkijaControls.ellipsize(text, Math.max(0f, width - 4f));
+        float shownWidth = SkijaUi.textWidth(shown, 8.5f);
+        SkijaUi.text(canvas, shown, x + width - shownWidth, y, 14f, color, 8.5f);
+    }
+
+    /**
+     * 一行设置项占用的高度。
+     *
+     * <p>数值/布尔/模式固定一行；颜色项展开调色板时多出三条分量滑块。
+     */
+    private float settingRowHeight(Value<?> value) {
+        if (value instanceof ColorValue && value == expandedColor) {
+            return SETTING_ROW_HEIGHT + 3f * (COLOR_SLIDER_HEIGHT + COLOR_SLIDER_GAP) + 2f;
+        }
+        return SETTING_ROW_HEIGHT;
+    }
+
+    /** 数值/颜色共用的轨道：底色 + 按比例的填充 + 手柄。 */
+    private void drawTrack(Canvas canvas, float x, float y, float width, float fraction,
+                           int fillColor, boolean handle) {
+        SkijaUi.rounded(canvas, x, y, width, TRACK_HEIGHT, TRACK_HEIGHT * 0.5f, SkijaControls.CARD);
+        SkijaUi.rounded(canvas, x, y, Math.max(TRACK_HEIGHT, width * fraction), TRACK_HEIGHT,
+                TRACK_HEIGHT * 0.5f, fillColor);
+        if (handle) {
+            SkijaControls.disc(canvas, x + width * fraction - 4f, y - 2.5f, 9f, fillColor);
+        }
+    }
+
+    /**
+     * 颜色编辑器：H（六段彩虹）/S/V（按当前另外两个分量的渐变）三条可拖滑块。
+     *
+     * <p>用 HSV 而不是 RGB：三个分量相互独立且渐变轨能直接显示"拖到这儿会是什么颜色"，
+     * 这是调色界面的通用做法。
+     */
+    private void drawColorEditor(Canvas canvas, ColorValue color, float x, float y, float width) {
+        float[] hsv = toHsv(color.argb());
+        float labelWidth = 11f;
+        float valueWidth = 24f;
+        float trackX = x + labelWidth;
+        float trackWidth = Math.max(24f, width - labelWidth - valueWidth - 6f);
+        String[] labels = {"H", "S", "V"};
+        for (int channel = 0; channel < 3; channel++) {
+            float rowY = y + channel * (COLOR_SLIDER_HEIGHT + COLOR_SLIDER_GAP);
+            SkijaUi.text(canvas, labels[channel], x, rowY - 1f, COLOR_SLIDER_HEIGHT,
+                    SkijaControls.TEXT_FAINT, 8f);
+            drawColorTrack(canvas, trackX, rowY, trackWidth, channel, hsv);
+            float fraction = channelFraction(hsv, channel);
+            SkijaControls.disc(canvas, trackX + trackWidth * fraction - 3.5f,
+                    rowY + COLOR_SLIDER_HEIGHT * 0.5f - 3.5f, 7f, 0xFFFFFFFF);
+            String shown = channel == 0 ? String.valueOf(Math.round(hsv[0]))
+                    : String.valueOf(Math.round(hsv[channel] * 100f));
+            SkijaUi.text(canvas, shown, trackX + trackWidth + 4f, rowY - 1f, COLOR_SLIDER_HEIGHT,
+                    SkijaControls.TEXT_MUTED, 8f);
+        }
+    }
+
+    /** 分量滑块的渐变轨道。 */
+    private void drawColorTrack(Canvas canvas, float x, float y, float width, int channel,
+                                float[] hsv) {
+        float radius = COLOR_SLIDER_HEIGHT * 0.5f;
+        if (channel == 0) {
+            // 色相：六段纯色拼出一条完整彩虹
+            float segment = width / 6f;
+            for (int i = 0; i < 6; i++) {
+                int from = fromHsv(i * 60f, 1f, 1f, 255);
+                int to = fromHsv((i + 1) * 60f, 1f, 1f, 255);
+                SkijaUi.gradient(canvas, x + segment * i, y, segment + 0.5f, COLOR_SLIDER_HEIGHT,
+                        from, to, false, i == 0 || i == 5 ? radius : 0f);
+            }
+            return;
+        }
+        if (channel == 1) {
+            SkijaUi.gradient(canvas, x, y, width, COLOR_SLIDER_HEIGHT,
+                    fromHsv(hsv[0], 0f, hsv[2], 255), fromHsv(hsv[0], 1f, hsv[2], 255),
+                    false, radius);
+            return;
+        }
+        SkijaUi.gradient(canvas, x, y, width, COLOR_SLIDER_HEIGHT,
+                fromHsv(hsv[0], hsv[1], 0f, 255), fromHsv(hsv[0], hsv[1], 1f, 255),
+                false, radius);
+    }
+
+    /** 分量在 [0,1] 中的归一化位置（色相按 360 归一）。 */
+    private static float channelFraction(float[] hsv, int channel) {
+        if (channel == 0) {
+            return Math.max(0f, Math.min(1f, hsv[0] / 360f));
+        }
+        return Math.max(0f, Math.min(1f, hsv[channel]));
     }
 
     /** 布尔胶囊：开=强调色填充+靠右的圆点，关=暗底+靠左的圆点。 */
@@ -413,15 +536,83 @@ public final class SetsunaClickGui implements OverlayGui {
         return (float) Math.max(0d, Math.min(1d, fraction));
     }
 
+    // ------------------------------------------------------------------ 颜色换算
+
+    /** 0xAARRGGBB → {H(0–360), S(0–1), V(0–1)}。 */
+    private static float[] toHsv(int argb) {
+        float r = ((argb >> 16) & 0xFF) / 255f;
+        float g = ((argb >> 8) & 0xFF) / 255f;
+        float b = (argb & 0xFF) / 255f;
+        float max = Math.max(r, Math.max(g, b));
+        float min = Math.min(r, Math.min(g, b));
+        float delta = max - min;
+        float hue;
+        if (delta == 0f) {
+            hue = 0f;
+        } else if (max == r) {
+            hue = 60f * (((g - b) / delta) % 6f);
+        } else if (max == g) {
+            hue = 60f * (((b - r) / delta) + 2f);
+        } else {
+            hue = 60f * (((r - g) / delta) + 4f);
+        }
+        if (hue < 0f) {
+            hue += 360f;
+        }
+        float saturation = max == 0f ? 0f : delta / max;
+        return new float[]{hue, saturation, max};
+    }
+
+    /** {H,S,V} + alpha → 0xAARRGGBB。 */
+    private static int fromHsv(float hue, float saturation, float value, int alpha) {
+        float c = value * saturation;
+        float hp = ((hue % 360f) + 360f) % 360f / 60f;
+        float x = c * (1f - Math.abs(hp % 2f - 1f));
+        float r = 0f;
+        float g = 0f;
+        float b = 0f;
+        if (hp < 1f) {
+            r = c;
+            g = x;
+        } else if (hp < 2f) {
+            r = x;
+            g = c;
+        } else if (hp < 3f) {
+            g = c;
+            b = x;
+        } else if (hp < 4f) {
+            g = x;
+            b = c;
+        } else if (hp < 5f) {
+            r = x;
+            b = c;
+        } else {
+            r = c;
+            b = x;
+        }
+        float m = value - c;
+        int red = Math.round((r + m) * 255f);
+        int green = Math.round((g + m) * 255f);
+        int blue = Math.round((b + m) * 255f);
+        return (alpha << 24) | (red << 16) | (green << 8) | blue;
+    }
+
     // ------------------------------------------------------------------ 输入
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        if (!open || button != 0) {
+        if (!open) {
             return false;
         }
         if (layout == null) {
             layout = currentLayout();
+        }
+        if (button == BUTTON_RIGHT) {
+            // 右键：设置项恢复默认（不改选中状态，也不影响其它区域）
+            return detailContains(mx, my) && detailRightClicked(mx, my);
+        }
+        if (button != 0) {
+            return false;
         }
         // 分类导航
         Category railHit = railAt(mx, my);
@@ -438,17 +629,18 @@ public final class SetsunaClickGui implements OverlayGui {
             } else {
                 selectedModule = rowHit.module;
                 detailScroll = 0f;
+                expandedColor = null;
             }
             return true;
         }
-        // 设置区：启用按钮、布尔胶囊、数值轨道、模式行
+        // 设置区：启用按钮、布尔胶囊、数值轨道、模式行、颜色块与调色板
         if (detailContains(mx, my)) {
             return detailClicked(mx, my);
         }
         return false;
     }
 
-    /** 右栏内的点击：这里按与绘制相同的顺序重算热区，保证"点哪儿改哪儿"。 */
+    /** 右栏内的左键：按与绘制相同的顺序重算热区，保证"点哪儿改哪儿"。 */
     private boolean detailClicked(double mx, double my) {
         Module module = selectedModule;
         if (module == null) {
@@ -473,40 +665,174 @@ public final class SetsunaClickGui implements OverlayGui {
                     return true;
                 }
             } else if (value instanceof NumberValue) {
-                if (mx >= x && mx <= x + width && my >= y - 2f && my <= y + 22f) {
-                    NumberValue number = (NumberValue) value;
-                    dragging = number;
-                    draggingTrackX = x;
-                    draggingTrackWidth = width;
-                    applyDrag(mx);
+                if (withinRow(mx, my, x, y, width, 22f)) {
+                    beginNumberDrag((NumberValue) value, x, width, mx);
                     return true;
                 }
             } else if (value instanceof ModeValue) {
-                if (mx >= x && mx <= x + width && my >= y - 2f && my <= y + 18f) {
+                if (withinRow(mx, my, x, y, width, 18f)) {
                     ((ModeValue) value).next();
                     return true;
                 }
+            } else if (value instanceof ColorValue) {
+                ColorValue color = (ColorValue) value;
+                SkijaControls.Box swatch = new SkijaControls.Box(x + width - SWATCH_WIDTH, y - 2f,
+                        SWATCH_WIDTH, SWATCH_HEIGHT);
+                if (swatch.contains(mx, my) || withinRow(mx, my, x, y, width - SWATCH_WIDTH - 6f, 18f)) {
+                    expandedColor = color == expandedColor ? null : color;
+                    if (expandedColor != null) {
+                        // 展开后的行会变高：若因此超出可视区，自动滚动使其完整可见——否则用户
+                        // 点开了调色板却看不到（也点不到）那三条滑块，看起来就像"点了没反应"。
+                        ensureRowVisible(color);
+                    }
+                    return true;
+                }
+                if (color == expandedColor) {
+                    int channel = colorChannelAt(mx, my, x, y + SETTING_ROW_HEIGHT - 6f, width);
+                    if (channel >= 0) {
+                        beginColorDrag(color, channel, mx);
+                        return true;
+                    }
+                }
             }
-            y += SETTING_ROW_HEIGHT;
+            y += settingRowHeight(value);
         }
         return false;
     }
 
-    /** 把指针位置换算成数值并写入正在拖动的设置项。 */
+    /** 右栏内的右键：命中的设置项恢复默认值。 */
+    private boolean detailRightClicked(double mx, double my) {
+        Module module = selectedModule;
+        if (module == null) {
+            return false;
+        }
+        float x = layout.detailX() + 12f;
+        float width = layout.detailWidth() - 24f;
+        float y = layout.settingsY() + detailScroll + 42f + 30f;
+        for (Value<?> value : module.values()) {
+            if (withinRow(mx, my, x, y, width, settingRowHeight(value) - 4f)) {
+                value.reset();
+                return true;
+            }
+            y += settingRowHeight(value);
+        }
+        return false;
+    }
+
+    /** 指针是否落在某行的横向范围内。 */
+    private static boolean withinRow(double mx, double my, float x, float y, float width,
+                                     float height) {
+        return mx >= x && mx <= x + width && my >= y - 2f && my <= y + height;
+    }
+
+    /**
+     * 调整设置区滚动偏移，使某个设置项（含它展开后的完整高度）落在可视区内。
+     *
+     * <p>调用时机必须是「该项的行高已经变化之后」——即先设置展开状态、再调用本方法，
+     * 否则算出来的高度是展开前的，滚动了还是会露不全。
+     */
+    private void ensureRowVisible(Value<?> target) {
+        Module module = selectedModule;
+        if (module == null) {
+            return;
+        }
+        float offset = 0f;
+        for (Value<?> value : module.values()) {
+            if (value == target) {
+                break;
+            }
+            offset += settingRowHeight(value);
+        }
+        // 详情内容顶端到第一个设置项的距离（模块名 22 + 分类 20 + 启用按钮 30）
+        float rowTop = 72f + offset;
+        float rowBottom = rowTop + settingRowHeight(target);
+        float visible = layout.settingsHeight();
+        float scroll = detailScroll;
+        if (rowBottom + scroll > visible) {
+            scroll = visible - rowBottom;
+        }
+        if (rowTop + scroll < 0f) {
+            scroll = -rowTop;
+        }
+        detailScroll = clampScroll(scroll, detailContentHeight(), visible);
+    }
+
+    /** 颜色编辑器里命中的分量（0=H 1=S 2=V，-1 表示没命中）。 */
+    private int colorChannelAt(double mx, double my, float x, float y, float width) {
+        float labelWidth = 11f;
+        float trackX = x + labelWidth;
+        float trackWidth = Math.max(24f, width - labelWidth - 30f);
+        if (mx < trackX - 4f || mx > trackX + trackWidth + 4f) {
+            return -1;
+        }
+        for (int channel = 0; channel < 3; channel++) {
+            float rowY = y + channel * (COLOR_SLIDER_HEIGHT + COLOR_SLIDER_GAP);
+            if (my >= rowY - 2f && my <= rowY + COLOR_SLIDER_HEIGHT + 2f) {
+                return channel;
+            }
+        }
+        return -1;
+    }
+
+    private void beginNumberDrag(NumberValue value, float trackX, float trackWidth, double mx) {
+        dragKind = DragKind.NUMBER;
+        draggingNumber = value;
+        draggingColor = null;
+        draggingTrackX = trackX;
+        draggingTrackWidth = trackWidth;
+        applyDrag(mx);
+    }
+
+    private void beginColorDrag(ColorValue color, int channel, double mx) {
+        dragKind = channel == 0 ? DragKind.COLOR_H : (channel == 1 ? DragKind.COLOR_S : DragKind.COLOR_V);
+        draggingColor = color;
+        draggingNumber = null;
+        float labelWidth = 11f;
+        draggingTrackX = layout.detailX() + 12f + labelWidth;
+        draggingTrackWidth = Math.max(24f, layout.detailWidth() - 24f - labelWidth - 30f);
+        applyDrag(mx);
+    }
+
+    /** 把指针位置换算成设置值并写入正在拖动的对象。 */
     private void applyDrag(double mx) {
-        if (dragging == null || draggingTrackWidth <= 0f) {
+        if (draggingTrackWidth <= 0f) {
             return;
         }
         double fraction = (mx - draggingTrackX) / draggingTrackWidth;
         fraction = Math.max(0d, Math.min(1d, fraction));
-        double min = dragging.min();
-        double max = dragging.max();
-        dragging.set(Double.valueOf(min + (max - min) * fraction));
+        if (dragKind == DragKind.NUMBER) {
+            if (draggingNumber == null) {
+                return;
+            }
+            double min = draggingNumber.min();
+            double max = draggingNumber.max();
+            draggingNumber.set(Double.valueOf(min + (max - min) * fraction));
+            return;
+        }
+        if (draggingColor == null || dragKind == DragKind.NONE) {
+            return;
+        }
+        float[] hsv = toHsv(draggingColor.argb());
+        switch (dragKind) {
+            case COLOR_H:
+                hsv[0] = (float) (fraction * 360d);
+                break;
+            case COLOR_S:
+                hsv[1] = (float) fraction;
+                break;
+            case COLOR_V:
+                hsv[2] = (float) fraction;
+                break;
+            default:
+                return;
+        }
+        int alpha = (draggingColor.argb() >>> 24) & 0xFF;
+        draggingColor.set(Integer.valueOf(fromHsv(hsv[0], hsv[1], hsv[2], alpha)));
     }
 
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
-        if (!open || dragging == null) {
+        if (!open || dragKind == DragKind.NONE) {
             return false;
         }
         applyDrag(mx);
@@ -515,8 +841,10 @@ public final class SetsunaClickGui implements OverlayGui {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
-        boolean wasDragging = dragging != null;
-        dragging = null;
+        boolean wasDragging = dragKind != DragKind.NONE;
+        dragKind = DragKind.NONE;
+        draggingNumber = null;
+        draggingColor = null;
         return open && wasDragging;
     }
 
@@ -530,7 +858,8 @@ public final class SetsunaClickGui implements OverlayGui {
         }
         float step = (float) -amount * 18f;
         if (detailContains(mx, my)) {
-            detailScroll = clampScroll(detailScroll + step, detailContentHeight(), layout.settingsHeight());
+            detailScroll = clampScroll(detailScroll + step, detailContentHeight(),
+                    layout.settingsHeight());
             return true;
         }
         listScroll = clampScroll(listScroll + step, listContentHeight(), layout.moduleListHeight());
@@ -551,7 +880,10 @@ public final class SetsunaClickGui implements OverlayGui {
 
     @Override
     public void cancelInteractions() {
-        dragging = null;
+        dragKind = DragKind.NONE;
+        draggingNumber = null;
+        draggingColor = null;
+        expandedColor = null;
         detailScroll = 0f;
         listScroll = 0f;
     }
@@ -573,17 +905,14 @@ public final class SetsunaClickGui implements OverlayGui {
         return null;
     }
 
-    /** 命中的模块行：模块对象 + 该行的左右边界（右端是启用开关的热区）。 */
+    /** 命中的模块行：模块对象 + 该行的右边界（右端是启用开关的热区）。 */
     private ModuleRowHit moduleRowAt(double mx, double my) {
         if (mx < layout.moduleX() || mx > layout.moduleX() + layout.moduleWidth()
                 || my < layout.bodyY() || my > layout.bodyY() + layout.bodyHeight()) {
             return null;
         }
-        List<Module> modules = activeCategory == null
-                ? new ArrayList<Module>()
-                : registry.byCategory(activeCategory);
         float rowY = layout.moduleListY() + listScroll;
-        for (Module module : modules) {
+        for (Module module : modulesOfActive()) {
             SkijaControls.Box row = new SkijaControls.Box(layout.moduleX() + 6f, rowY,
                     layout.moduleWidth() - 12f, MODULE_ROW_HEIGHT);
             if (row.contains(mx, my)) {
@@ -601,20 +930,20 @@ public final class SetsunaClickGui implements OverlayGui {
 
     /** 模块列表的内容高度（用于滚动夹取）。 */
     private float listContentHeight() {
-        if (activeCategory == null) {
-            return 0f;
-        }
-        int count = registry.byCategory(activeCategory).size();
-        return count * (MODULE_ROW_HEIGHT + MODULE_ROW_GAP);
+        return modulesOfActive().size() * (MODULE_ROW_HEIGHT + MODULE_ROW_GAP);
     }
 
-    /** 设置区的内容高度（用于滚动夹取）。 */
+    /** 设置区的内容高度（用于滚动夹取）；与绘制同一套行高计算。 */
     private float detailContentHeight() {
         Module module = selectedModule;
         if (module == null) {
             return 0f;
         }
-        return 72f + module.values().size() * SETTING_ROW_HEIGHT;
+        float height = 72f;
+        for (Value<?> value : module.values()) {
+            height += settingRowHeight(value);
+        }
+        return height;
     }
 
     /** 把滚动偏移夹取到 [可视高 - 内容高, 0]；内容不足时归零。 */

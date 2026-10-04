@@ -282,5 +282,27 @@ LAB 有模块处于启用状态 = true                     # 模块开关真的�
 ```
 截图：`docs/research/setsuna-gui-interact.png`（模块行选中态 + 青绿启用圆点 + 右栏详情）。
 
-尚未实现（后续）：颜色选择器（现在只显示色块与 hex）、文本/按键设置项的编辑、上游的其它界面
-（主菜单、AltManager、HUD 编辑器）、以及 §7 前面提到的纹理桥。
+### 设置控件补全（阶段 D）
+
+- **颜色选择器**：点色块展开 H/S/V 三条可拖滑块（色相条是六段彩虹；S/V 条按当前另两个分量取渐变），
+  拖动实时写回 `ColorValue`；HSV↔RGB 换算在本类内实现（不引第三方）。
+- **设置项右键恢复默认**（`Value.reset()`）。
+- **行高按控件动态计算**（`settingRowHeight`）：颜色项展开后多占三条滑块的高度；绘制、命中测试与
+  滚动范围三处共用同一函数——若各自算一次，展开后下面的行会全部错位。
+- 修掉一个真实可用性缺陷：**展开调色板时若该项超出可视区，自动滚动使其完整可见**
+  （`ensureRowVisible`）。否则用户点开调色板却看不到（也点不到）滑块，现象等同"点了没反应"。
+  这个缺陷是在 854×480 的 lab 里真实撞出来的：`Tint` 是第 4 项，行本身就在面板底边。
+
+验证（离屏光栅、脚本化输入；`docs/research/LabSetsunaControls.java`，用一个带齐
+Boolean/Number/Mode/Color 四种值的测试模块驱动）：
+```
+LAB 拖 Amount -> true                          LAB amount=8.0（0.8 位置 → 8.0，线性正确）
+LAB 点 Mode  -> true                           LAB mode=Slow（Fast → Slow）
+LAB 右键重置                                    LAB amount=3.0（回到默认）
+LAB 点色块   -> true（展开并自动滚动）
+LAB 颜色滑块 ✓ 命中于 y=329（相对 settingsY +122），tint ff3ed6b4 -> ffaed63e
+```
+截图：`docs/research/setsuna-gui-controls.png`（展开的 H/S/V 调色板 + 自动滚动后的完整布局）。
+
+尚未实现（后续）：颜色项的 alpha 分量、上游的其它界面（主菜单 / AltManager / HUD 编辑器）、
+以及 §7 前面提到的纹理桥。

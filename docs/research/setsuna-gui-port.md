@@ -233,3 +233,21 @@ MC API（`GuiGraphicsExtractor`/`DeltaTracker`/`ClientLevel`）。要让同一�
 `pf_normal.ttf` 与 `pf_middleblack.ttf`（各约 10 MB）**未搬**：它们的内部 family 名是 `.PingFang SC`，
 即苹果苹方字体，苹果的字体许可不允许在非苹果设备上再分发。缺失时 `SkijaUi.loadTypeface()` 按设计
 回落到系统字体（`Microsoft YaHei UI` 等），中文显示正常；需要原字形可用 `SkijaUi.importFont` 自行导入。
+
+### 本批验证证据
+
+1. `gradle test` 全模块 BUILD SUCCESSFUL；移植件编译产物均为 **class 版本 52（Java 8）**（`javap` 核对）。
+2. **真实链路冒烟**：Java 8（1.8.0_492）+ LWJGL2 离屏 Pbuffer + Skija（GL 4.6 / NVIDIA）下，
+   用 `dist` 产出的单 jar 跑 `LabSkijaGui`：
+   ```
+   LAB java=1.8.0_492 GL=4.6.0 NVIDIA 610.74
+   [noturne] skija surface 854x480 ready
+   LAB skija backend -> skija
+   LAB frames=10 distinctColors=24 glGetError=0 wrote=…/skija-gui-ported.png viewport=854x480
+   LAB PASS（Skija 画出了真实 GUI）
+   ```
+   截图存于 `docs/research/skija-gui-after-port.png`，lab 源码同样归档到本目录。
+   结论：改造后的 `SkijaRenderer`（委托 `SkijaUi` 原语 + 自带字体栈 + CJK 回退）在 1.8.9 的
+   JVM/GL 栈上可用，10 帧无 GL 错误。
+3. ⚠️ 该截图仍是**本项目自有的四列 ClickGUI**——本批只替换了绘制层。要得到 Setsuna 的三栏外观，
+   下一步必须用 `ClickGuiLayout` + `SkijaControls` + `SkijaTheme` 重写视图层（尚无调用方）。

@@ -3,6 +3,7 @@ package dev.noturne.ui.clickgui;
 import dev.noturne.client.module.Category;
 import dev.noturne.client.module.Module;
 import dev.noturne.ui.component.Panel;
+import dev.noturne.ui.render.Color;
 import dev.noturne.ui.render.Renderer;
 import dev.noturne.ui.theme.Theme;
 
@@ -13,9 +14,12 @@ import java.util.List;
 /**
  * 一个分类栏：可折叠的标题栏 + 每个模块一行。
  *
+ * <p>视觉与布局逐值对齐 Epsilon 的 dropdown 面板：面板 130 宽、圆角 10、标题栏 28 高，
+ * 模块行 19 高、紧贴排列（行自身绘制 0.5px 分隔线），底部留 8px 空白。
+ *
  * <p>标题栏同时是拖动把手——按住并移动即整列跟随指针，原地按下再松开则折叠/展开。两者用位移阈值
- * 区分，因此「想拖动却触发了折叠」不会发生。折叠时整栏收窄为 42px 的窄条（参照 MD3 导航栏形态），
- * 展开时恢复 120px 宽。
+ * 区分，因此「想拖动却触发了折叠」不会发生。折叠只隐藏内容并把高度收为标题栏（宽度不变），
+ * 与参照实现一致。
  *
  * <p>行使用绝对坐标布局（继承自 {@link Panel} 的约定），所以移动整列时必须同步平移所有行。
  */
@@ -43,19 +47,20 @@ public final class CategoryPanel extends Panel {
 
     public CategoryPanel(Category category, List<Module> modules, float x, float y) {
         this.category = category;
-        setBounds(x, y, Theme.RAIL_EXPANDED_WIDTH, 0f);
+        setBounds(x, y, Theme.PANEL_WIDTH, 0f);
 
-        // 行内缩 OUTER_PADDING，行间留 ROW_GAP，首行与标题栏之间留 SECTION_GAP
-        float cursor = Theme.HEADER_HEIGHT + Theme.SECTION_GAP;
+        // 行紧贴标题栏向下排列、行间无空隙（分隔线由行自身绘制），底部留 PANEL_BOTTOM_PADDING
+        float cursor = Theme.PANEL_HEADER_HEIGHT;
         for (Module module : modules) {
             ModuleRow row = new ModuleRow(module);
-            row.setBounds(x + Theme.OUTER_PADDING, y + cursor,
-                    Theme.RAIL_EXPANDED_WIDTH - Theme.OUTER_PADDING * 2f, Theme.CONTROL_HEIGHT);
+            row.setBounds(x, y + cursor, Theme.PANEL_WIDTH, Theme.MODULE_HEIGHT);
             rows.add(row);
             add(row);
-            cursor += Theme.CONTROL_HEIGHT + Theme.ROW_GAP;
+            cursor += Theme.MODULE_HEIGHT;
         }
-        height = rows.isEmpty() ? Theme.HEADER_HEIGHT : cursor - Theme.ROW_GAP + Theme.OUTER_PADDING;
+        height = rows.isEmpty()
+                ? Theme.PANEL_HEADER_HEIGHT
+                : cursor + Theme.PANEL_BOTTOM_PADDING;
     }
 
     /** @return 本栏对应的分类 */
@@ -73,7 +78,7 @@ public final class CategoryPanel extends Panel {
         return expanded;
     }
 
-    /** 展开或折叠；折叠时隐藏全部行并把整栏收窄为窄条，展开时按行数还原宽度与高度。 */
+    /** 展开或折叠；折叠时隐藏全部行并把高度收为标题栏，展开时按行数还原高度。 */
     public void setExpanded(boolean value) {
         if (this.expanded == value) {
             return;
@@ -82,24 +87,17 @@ public final class CategoryPanel extends Panel {
         for (ModuleRow row : rows) {
             row.setVisible(value);
         }
-        if (value) {
-            width = Theme.RAIL_EXPANDED_WIDTH;
-            height = expandedHeight();
-        } else {
-            width = Theme.RAIL_COLLAPSED_WIDTH;
-            height = Theme.HEADER_HEIGHT;
-        }
+        height = value ? expandedHeight() : Theme.PANEL_HEADER_HEIGHT;
     }
 
-    /** 展开状态下的整栏高度：标题栏 + 分区间距 + 各行与行间距 + 底部内边距。 */
+    /** 展开状态下的整栏高度：标题栏 + 各行 + 底部留白。 */
     private float expandedHeight() {
         if (rows.isEmpty()) {
-            return Theme.HEADER_HEIGHT;
+            return Theme.PANEL_HEADER_HEIGHT;
         }
-        return Theme.HEADER_HEIGHT + Theme.SECTION_GAP
-                + rows.size() * Theme.CONTROL_HEIGHT
-                + (rows.size() - 1) * Theme.ROW_GAP
-                + Theme.OUTER_PADDING;
+        return Theme.PANEL_HEADER_HEIGHT
+                + rows.size() * Theme.MODULE_HEIGHT
+                + Theme.PANEL_BOTTOM_PADDING;
     }
 
     /** 推进本栏各行的高亮动画；每帧调用一次。 */
@@ -109,7 +107,12 @@ public final class CategoryPanel extends Panel {
         }
     }
 
-    /** 绘制整栏：面板底色、标题栏（悬停时叠状态层、含折叠标记），最后是各行。 */
+    /**
+     * 绘制整栏：圆角面板底色、标题栏（标题 + 折叠指示三角），最后是各行。
+     *
+     * <p>绘制序列对应 Epsilon AbstractDropdownPanel.drawBackground + ModuleButton.draw：
+     * 圆角面板、{@code x + 10} 处的标题、右侧的折叠三角、直角模块行。
+     */
     @Override
     public void render(Renderer renderer) {
         if (!visible) {
@@ -117,27 +120,34 @@ public final class CategoryPanel extends Panel {
         }
         renderer.roundedRect(x, y, width, height, Theme.PANEL_RADIUS, Theme.SURFACE_CONTAINER);
 
-        // 标题栏悬停反馈用 MD3 状态层手法：在底色上叠一层低 alpha 的强调色
-        if (hoveredHeader) {
-            renderer.roundedRect(x, y, width, Theme.HEADER_HEIGHT, Theme.PANEL_RADIUS,
-                    Theme.PRIMARY.withAlpha(Theme.STATE_LAYER_ALPHA));
-        }
-        float titleY = y + (Theme.HEADER_HEIGHT - renderer.textHeight(Theme.FONT_SIZE)) / 2f;
-        // 折叠后栏宽收窄，标题裁剪到栏内，避免文字溢出到旁边的列
-        renderer.pushClip(x, y, width, Theme.HEADER_HEIGHT);
-        renderer.text(category.name(), x + Theme.PANEL_TITLE_INSET, titleY, Theme.FONT_SIZE,
+        float titleY = y + (Theme.PANEL_HEADER_HEIGHT - renderer.textHeight(Theme.HEADER_TEXT_SIZE)) / 2f;
+        renderer.text(category.name(), x + Theme.PANEL_TITLE_INSET, titleY, Theme.HEADER_TEXT_SIZE,
                 Theme.TEXT_PRIMARY);
-        renderer.popClip();
-        String mark = expanded ? "-" : "+";
-        renderer.text(mark,
-                x + width - Theme.ROW_CONTENT_INSET - renderer.textWidth(mark, Theme.FONT_SIZE),
-                titleY, Theme.FONT_SIZE, Theme.TEXT_MUTED);
+        drawTriangle(renderer, x + width - 10f, y + Theme.PANEL_HEADER_HEIGHT * 0.5f, expanded);
 
         super.render(renderer);
     }
 
-    /** 指针是否悬停在标题栏上；与整列的悬停状态分开维护，标题栏高亮才能独立。 */
-    private boolean hoveredHeader;
+    /**
+     * 折叠指示三角：用三条横向矩形近似一个实心三角。
+     *
+     * <p>对应 Epsilon 的 {@code scope.triangle(x + width - 10, y + header/2, 3, expand, color)}；
+     * DrawContext 没有三角原语，用矩形拼出向下（展开）或向右（折叠）的形态。
+     */
+    private void drawTriangle(Renderer renderer, float cx, float cy, boolean expanded) {
+        Color color = Theme.TEXT_MUTED;
+        if (expanded) {
+            // 向下：宽 6 / 4 / 2 三行，高共 3px、垂直居中于 cy
+            renderer.rect(cx - 3f, cy - 1.5f, 6f, 1f, color);
+            renderer.rect(cx - 2f, cy - 0.5f, 4f, 1f, color);
+            renderer.rect(cx - 1f, cy + 0.5f, 2f, 1f, color);
+        } else {
+            // 向右：高 6 / 4 / 2 三列，宽共 3px、水平居中于 cx
+            renderer.rect(cx - 1.5f, cy - 3f, 1f, 6f, color);
+            renderer.rect(cx - 0.5f, cy - 2f, 1f, 4f, color);
+            renderer.rect(cx + 0.5f, cy - 1f, 1f, 2f, color);
+        }
+    }
 
     /**
      * 标题栏上按下左键只记录起点，真正的语义（折叠还是拖动）留到拖拽或释放时判定；
@@ -205,11 +215,6 @@ public final class CategoryPanel extends Panel {
 
     /** @return 点是否落在标题栏区域内（不可见时恒为 false） */
     private boolean inHeader(double mx, double my) {
-        return visible && mx >= x && mx <= x + width && my >= y && my <= y + Theme.HEADER_HEIGHT;
-    }
-
-    /** 与 {@link #hovered} 分开维护，让标题栏高亮拥有独立状态（悬停整列 ≠ 悬停标题栏）。 */
-    public void updateHeaderHover(double mx, double my) {
-        hoveredHeader = inHeader(mx, my);
+        return visible && mx >= x && mx <= x + width && my >= y && my <= y + Theme.PANEL_HEADER_HEIGHT;
     }
 }

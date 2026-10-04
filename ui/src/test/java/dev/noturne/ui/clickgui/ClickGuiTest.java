@@ -4,6 +4,7 @@ import dev.noturne.client.module.Category;
 import dev.noturne.client.module.Module;
 import dev.noturne.client.module.ModuleRegistry;
 import dev.noturne.ui.RecordingRenderer;
+import dev.noturne.ui.theme.Theme;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -94,7 +95,7 @@ class ClickGuiTest {
         assertTrue(fly.isEnabled());
     }
 
-    /** 点击分类面板标题折叠/展开：折叠后高度变小、宽度收窄为窄条且模块行隐藏，再点一次恢复 */
+    /** 点击分类面板标题折叠/展开：折叠后高度收为标题栏（宽度不变）且模块行隐藏，再点一次恢复 */
     @Test
     void collapseHidesRowsAndShrinksPanel() {
         ClickGui gui = guiWith(new TestModule("Fly", Category.MOVEMENT));
@@ -113,7 +114,7 @@ class ClickGuiTest {
         assertTrue(panel.mouseReleased(panel.x() + 2, panel.y() + 2, 0), "header release collapses");
         assertFalse(panel.isExpanded());
         assertTrue(panel.height() < fullHeight);
-        assertTrue(panel.width() < fullWidth, "collapsed rail narrows");
+        assertEquals(fullWidth, panel.width(), 0.01f, "collapse keeps the panel width");
         assertFalse(panel.rows().get(0).isVisible());
 
         panel.mouseClicked(panel.x() + 2, panel.y() + 2, 0);
@@ -182,7 +183,7 @@ class ClickGuiTest {
         for (int i = 0; i < 40; i++) {
             gui.mouseScrolled(panel.x() + 2, panel.y() + 2, -1d);
         }
-        assertEquals(12f, panel.y(), 0.01f, "clamped to the top margin");
+        assertEquals(Theme.PANEL_MARGIN, panel.y(), 0.01f, "clamped to the top margin");
     }
 
     /** 定位指定分类的面板 */

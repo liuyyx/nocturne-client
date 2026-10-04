@@ -27,8 +27,8 @@ import java.util.List;
  */
 public final class ModuleConfigPanel extends Panel {
 
-    /** 面板宽度（像素）；规格表未作规定，沿用既有值。 */
-    private static final float WIDTH = 178f;
+    /** 面板宽度（像素）；与分类面板同宽，对齐 Epsilon 的 PANEL_WIDTH。 */
+    private static final float WIDTH = Theme.PANEL_WIDTH;
 
     /** 当前正在编辑的模块；为 {@code null} 表示面板尚未绑定模块。 */
     private Module module;
@@ -64,26 +64,26 @@ public final class ModuleConfigPanel extends Panel {
         editors.clear();
         labels.clear();
 
-        // 行内缩 OUTER_PADDING、行高 CONTROL_HEIGHT、行间留 ROW_GAP
-        float cursor = Theme.HEADER_HEIGHT + Theme.SECTION_GAP;
+        // 行内缩 SETTING_PADDING_X、行高 SETTING_HEIGHT、行间留 SETTING_GAP
+        float cursor = Theme.PANEL_HEADER_HEIGHT;
 
         if (module != null) {
             for (Value<?> value : module.values()) {
-                Component editor = create(value, x + Theme.OUTER_PADDING, y + cursor,
-                        WIDTH - Theme.OUTER_PADDING * 2f);
+                Component editor = create(value, x + Theme.SETTING_PADDING_X, y + cursor,
+                        WIDTH - Theme.SETTING_PADDING_X * 2f);
                 if (editor == null) {
                     continue;
                 }
                 editors.add(editor);
                 labels.add(value instanceof BooleanValue ? value.name() : null);
                 add(editor);
-                cursor += Theme.CONTROL_HEIGHT + Theme.ROW_GAP;
+                cursor += Theme.SETTING_HEIGHT + Theme.SETTING_GAP;
             }
         }
         if (editors.isEmpty()) {
-            cursor += Theme.CONTROL_HEIGHT + Theme.ROW_GAP;
+            cursor += Theme.SETTING_HEIGHT + Theme.SETTING_GAP;
         }
-        setBounds(x, y, WIDTH, cursor - Theme.ROW_GAP + Theme.OUTER_PADDING);
+        setBounds(x, y, WIDTH, cursor - Theme.SETTING_GAP + Theme.PANEL_BOTTOM_PADDING);
         setVisible(true);
     }
 
@@ -109,9 +109,9 @@ public final class ModuleConfigPanel extends Panel {
         if (value instanceof BooleanValue) {
             final BooleanValue bool = (BooleanValue) value;
             ToggleSwitch toggle = new ToggleSwitch(bool.get(), v -> bool.set(v));
-            // 开关靠行尾对齐，在 18px 控件行内垂直居中
+            // 开关靠行尾对齐，在 SETTING_HEIGHT 行内垂直居中
             toggle.setBounds(x + width - Theme.SWITCH_WIDTH,
-                    y + (Theme.CONTROL_HEIGHT - Theme.SWITCH_HEIGHT) / 2f,
+                    y + (Theme.SETTING_HEIGHT - Theme.SWITCH_HEIGHT) / 2f,
                     Theme.SWITCH_WIDTH, Theme.SWITCH_HEIGHT);
             return toggle;
         }
@@ -119,18 +119,18 @@ public final class ModuleConfigPanel extends Panel {
             final NumberValue number = (NumberValue) value;
             Slider slider = new Slider((float) number.min(), (float) number.max(),
                     number.get().floatValue(), f -> number.set(f.doubleValue()));
-            slider.setBounds(x, y, width, Theme.CONTROL_HEIGHT);
+            slider.setBounds(x, y, width, Theme.SETTING_HEIGHT);
             return slider;
         }
         if (value instanceof ModeValue) {
             ModeSelector selector = new ModeSelector((ModeValue) value);
-            selector.setBounds(x, y, width, Theme.CONTROL_HEIGHT);
+            selector.setBounds(x, y, width, Theme.SETTING_HEIGHT);
             return selector;
         }
         if (value instanceof ColorValue) {
             final ColorValue color = (ColorValue) value;
             ColorPicker picker = new ColorPicker(color.get(), v -> color.set(v));
-            picker.setBounds(x, y, width, Theme.CONTROL_HEIGHT);
+            picker.setBounds(x, y, width, Theme.SETTING_HEIGHT);
             return picker;
         }
         return null;
@@ -144,8 +144,8 @@ public final class ModuleConfigPanel extends Panel {
         }
         renderer.roundedRect(x, y, width, height, Theme.PANEL_RADIUS, Theme.SURFACE_CONTAINER);
         String title = module == null ? "settings" : module.name();
-        float titleY = y + (Theme.HEADER_HEIGHT - renderer.textHeight(Theme.FONT_SIZE)) / 2f;
-        renderer.text(title, x + Theme.PANEL_TITLE_INSET, titleY, Theme.FONT_SIZE,
+        float titleY = y + (Theme.PANEL_HEADER_HEIGHT - renderer.textHeight(Theme.HEADER_TEXT_SIZE)) / 2f;
+        renderer.text(title, x + Theme.PANEL_TITLE_INSET, titleY, Theme.HEADER_TEXT_SIZE,
                 Theme.TEXT_PRIMARY);
 
         // 开关控件本身不画名称，在行首补画设置项标签，与控件垂直居中对齐
@@ -156,15 +156,15 @@ public final class ModuleConfigPanel extends Panel {
             }
             Component editor = editors.get(i);
             float labelY = editor.y()
-                    + (editor.height() - renderer.textHeight(Theme.FONT_SIZE_SMALL)) / 2f;
-            renderer.text(label, x + Theme.OUTER_PADDING + Theme.ROW_CONTENT_INSET, labelY,
-                    Theme.FONT_SIZE_SMALL, Theme.TEXT_PRIMARY);
+                    + (editor.height() - renderer.textHeight(Theme.SETTING_TEXT_SIZE)) / 2f;
+            renderer.text(label, x + Theme.SETTING_PADDING_X + Theme.ROW_CONTENT_INSET, labelY,
+                    Theme.SETTING_TEXT_SIZE, Theme.TEXT_PRIMARY);
         }
 
         if (module != null && module.values().isEmpty()) {
-            renderer.text("no settings", x + Theme.OUTER_PADDING + Theme.ROW_CONTENT_INSET,
-                    y + Theme.HEADER_HEIGHT + Theme.SECTION_GAP,
-                    Theme.FONT_SIZE_SMALL, Theme.TEXT_MUTED);
+            renderer.text("no settings", x + Theme.SETTING_PADDING_X + Theme.ROW_CONTENT_INSET,
+                    y + Theme.PANEL_HEADER_HEIGHT,
+                    Theme.SETTING_TEXT_SIZE, Theme.TEXT_MUTED);
         }
         super.render(renderer);
     }

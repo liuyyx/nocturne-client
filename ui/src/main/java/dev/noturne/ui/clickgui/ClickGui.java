@@ -22,10 +22,10 @@ public final class ClickGui extends Panel {
     private static final int KEY_ESCAPE = 256;
     /** 右键编号，用于唤出模块设置面板。 */
     private static final int BUTTON_RIGHT = 1;
-    /** 内容与视口边缘保持的最小间距（像素）。 */
-    private static final float MARGIN = 12f;
-    /** 相邻两个分类栏之间的间距（像素）；规格表未作规定，取略大于栏内间距的值以区分成组。 */
-    private static final float COLUMN_GAP = 8f;
+    /** 内容与视口边缘保持的最小间距（像素）；对齐 Epsilon 的 PANEL_MARGIN_X/Y。 */
+    private static final float MARGIN = Theme.PANEL_MARGIN;
+    /** 相邻两个分类栏之间的间距（像素）；对齐 Epsilon 的 PANEL_GAP。 */
+    private static final float COLUMN_GAP = Theme.PANEL_GAP;
     /** 滚轮每格移动的像素数；游戏上报的滚轮增量通常为 ±1。 */
     private static final float SCROLL_STEP = 24f;
 
@@ -49,7 +49,7 @@ public final class ClickGui extends Panel {
                     new CategoryPanel(category, registry.byCategory(category), cursorX, top);
             panels.add(panel);
             add(panel);
-            cursorX += Theme.RAIL_EXPANDED_WIDTH + COLUMN_GAP;
+            cursorX += Theme.PANEL_WIDTH + COLUMN_GAP;
         }
         // 最后添加 = 视觉最上层，也是输入派发的第一顺位
         add(configPanel);
@@ -91,7 +91,6 @@ public final class ClickGui extends Panel {
         }
         for (CategoryPanel panel : panels) {
             panel.update(nowMs);
-            panel.updateHeaderHover(mouseX, mouseY);
             for (ModuleRow row : panel.rows()) {
                 row.updateHover(mouseX, mouseY);
             }
@@ -125,7 +124,7 @@ public final class ClickGui extends Panel {
         if (button == BUTTON_RIGHT) {
             ModuleRow row = rowAt(mx, my);
             if (row != null) {
-                configPanel.show(row.module(), row.x() + row.width() + Theme.ROW_GAP, row.y());
+                configPanel.show(row.module(), row.x() + row.width() + Theme.SETTING_GAP, row.y());
             } else {
                 configPanel.hide();
             }

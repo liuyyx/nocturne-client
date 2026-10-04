@@ -44,8 +44,8 @@ public final class ModuleRow extends Component {
         }
         float hover = highlight.value();
 
-        // 禁用态底色随悬停由 SURFACE_CONTAINER 过渡到 SURFACE_CONTAINER_HIGH；
-        // 启用态为 PRIMARY_CONTAINER，悬停时向 PRIMARY 偏移 15%
+        // 行底色：启用 = PRIMARY_CONTAINER（悬停时向 PRIMARY 偏移 15%）；禁用 = SURFACE_CONTAINER → HIGH
+        // （对应 Epsilon DropdownTheme.moduleEnabled / moduleDisabled）
         Color background;
         if (module.isEnabled()) {
             background = Theme.PRIMARY_CONTAINER.mix(
@@ -53,14 +53,18 @@ public final class ModuleRow extends Component {
         } else {
             background = Theme.SURFACE_CONTAINER.mix(Theme.SURFACE_CONTAINER_HIGH, hover);
         }
-        renderer.roundedRect(x, y, width, height, Theme.CONTROL_RADIUS, background);
+        // 直角矩形、左右各内缩 2px：对应 Epsilon scope.rect(2, 0, width - 4, MODULE_HEIGHT, bg)
+        renderer.rect(x + 2f, y, width - 4f, height, background);
+        // 底部 0.5px 分隔线、左右各内缩 3px：对应 Epsilon moduleDivider
+        renderer.rect(x + 3f, y + height - 0.5f, width - 6f, 0.5f,
+                Theme.OUTLINE.withAlpha(Theme.MODULE_DIVIDER_ALPHA));
 
         // 启用文本用 ON_PRIMARY_CONTAINER；禁用文本随悬停由次要文本提亮到主文本
         Color textColor = module.isEnabled()
                 ? Theme.ON_PRIMARY_CONTAINER
                 : Theme.TEXT_SECONDARY.mix(Theme.TEXT_PRIMARY, hover);
-        float textY = y + (height - renderer.textHeight(Theme.FONT_SIZE_SMALL)) / 2f;
-        renderer.text(module.name(), x + Theme.ROW_CONTENT_INSET, textY, Theme.FONT_SIZE_SMALL,
+        float textY = y + (height - renderer.textHeight(Theme.MODULE_TEXT_SIZE)) / 2f;
+        renderer.text(module.name(), x + Theme.MODULE_PADDING_X, textY, Theme.MODULE_TEXT_SIZE,
                 textColor);
     }
 

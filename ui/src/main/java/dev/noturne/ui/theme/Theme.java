@@ -42,25 +42,50 @@ public final class Theme {
     public static final int STATE_LAYER_ALPHA = 20;
 
     // 圆角
-    public static final float PANEL_RADIUS = 17f;
-    public static final float SECTION_RADIUS = 13f;
-    public static final float CARD_RADIUS = 9f;
+    /** 面板圆角；对应 Epsilon DropdownTheme.PANEL_RADIUS。 */
+    public static final float PANEL_RADIUS = 10f;
+    /** 控件圆角（按钮、滑块、开关等）。 */
     public static final float CONTROL_RADIUS = 7f;
 
     // 间距与缩进
-    public static final float OUTER_PADDING = 5f;
-    public static final float SECTION_GAP = 3f;
-    public static final float INNER_PADDING = 5f;
-    public static final float ROW_GAP = 3f;
-    public static final float PANEL_TITLE_INSET = 6f;
+    /** 标题栏文本左内缩；对应 Epsilon 标题的 {@code x + 10}。 */
+    public static final float PANEL_TITLE_INSET = 10f;
+    /** 控件内文本与控件边缘的间距。 */
     public static final float ROW_CONTENT_INSET = 5f;
 
-    // 分类栏与控件尺寸
-    public static final float RAIL_COLLAPSED_WIDTH = 42f;
-    public static final float RAIL_EXPANDED_WIDTH = 120f;
-    public static final float CONTROL_HEIGHT = 18f;
-    /** 标题栏高度；规格表未作规定，沿用既有值。 */
-    public static final float HEADER_HEIGHT = 22f;
+    // ── dropdown 面板规格（逐值对齐 Epsilon DropdownTheme）──
+    /** 面板宽度；分类面板与设置面板同宽。 */
+    public static final float PANEL_WIDTH = 130f;
+    /** 面板标题栏高度。 */
+    public static final float PANEL_HEADER_HEIGHT = 28f;
+    /** 相邻面板之间的间距。 */
+    public static final float PANEL_GAP = 14f;
+    /** 面板与绘制区边缘的边距。 */
+    public static final float PANEL_MARGIN = 20f;
+    /** 面板底部留白。 */
+    public static final float PANEL_BOTTOM_PADDING = 8f;
+
+    // 模块行与文字：字号 = 14 × Epsilon 的缩放系数（其字体度量 textHeight(scale) ≈ 14·scale）
+    /** 模块行高度；对应 Epsilon MODULE_HEIGHT。 */
+    public static final float MODULE_HEIGHT = 19f;
+    /** 模块行文本左内缩；对应 Epsilon MODULE_PADDING_X。 */
+    public static final float MODULE_PADDING_X = 7f;
+    /** 模块行文字号；对应 Epsilon MODULE_TEXT_SCALE = 0.7。 */
+    public static final float MODULE_TEXT_SIZE = 9.8f;
+    /** 标题栏文字号；对应 Epsilon HEADER_TEXT_SCALE = 0.82。 */
+    public static final float HEADER_TEXT_SIZE = 11.5f;
+    /** 模块行底部分隔线的 alpha（叠在 OUTLINE 上）；对应 Epsilon moduleDivider。 */
+    public static final int MODULE_DIVIDER_ALPHA = 24;
+
+    // 设置行
+    /** 设置行高度；对应 Epsilon SETTING_HEIGHT。 */
+    public static final float SETTING_HEIGHT = 16f;
+    /** 设置行文字号；对应 Epsilon SETTING_TEXT_SCALE = 0.65。 */
+    public static final float SETTING_TEXT_SIZE = 9.1f;
+    /** 设置行之间的间距；对应 Epsilon SETTING_GAP。 */
+    public static final float SETTING_GAP = 3f;
+    /** 设置行左右内缩；对应 Epsilon SETTING_PADDING_X。 */
+    public static final float SETTING_PADDING_X = 6f;
 
     // 开关（26×16，滑块 off 8 / on 12，内缩 off 4 / on 2）
     public static final float SWITCH_WIDTH = 26f;

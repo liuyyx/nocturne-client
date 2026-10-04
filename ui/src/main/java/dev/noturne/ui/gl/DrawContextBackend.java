@@ -12,13 +12,21 @@ import java.lang.reflect.Method;
  * 状态与提交顺序覆盖，画面上什么都不会留下。模组路径下唯一可靠的做法是让 MC 自己提交绘制，
  * 也就是调用 {@code DrawContext} 的填充方法。
  *
- * <p>类名与方法名在运行时都是 intermediary（{@code class_332} / {@code method_25294} …），
- * 因此全部按签名反射解析：矩形填充是唯一一个「五个 int 参数」的方法；缩放后的宽高则是两个
- * 无参 int getter（横屏下较大者为宽，声明顺序不保证）。
- *
- * <p>文字渲染暂未接入（需要 MC 的字体 API），当前只保证图形部分可见。
+ * <p>方法在运行时都是 intermediary 名，解析策略是「固定名优先 + 签名兜底」：
+ * <ul>
+ *   <li>填充 {@code method_25294(int,int,int,int,int)}（1.20–1.21 未变）</li>
+ *   <li>文字 {@code method_25303}（无阴影）/ {@code method_51433}（带阴影），字体 {@code class_327}</li>
+ *   <li>宽度度量 {@code class_327.method_1727(String) -> int}</li>
+ *   <li>矩阵栈 {@code method_51448()} 返回 JOML 的 {@code Matrix3x2fStack}——公开类，方法名不混淆，
+ *       文字缩放直接走 {@code pushMatrix / translate / scale / popMatrix}</li>
+ *   <li>裁剪 {@code method_44379}（enableScissor）/ {@code method_44380}（disableScissor）</li>
+ * </ul>
+ * 所有探测失败都退化为「不绘制」或估算值，不影响其余功能。
  */
 public final class DrawContextBackend implements UiBackend {
+
+    /** MC 字体基准行高（像素）：字号按它换算为矩阵缩放系数。 */
+    private static final float FONT_BASE_HEIGHT = 9f;
 
     /** 每帧由帧驱动同步进来的 DrawContext 实例。 */
     private Object drawContext;
@@ -31,6 +39,18 @@ public final class DrawContextBackend implements UiBackend {
     private Method drawText;
     /** 游戏字体对象（class_327）；为 {@code null} 时文字退化为占位矩形。 */
     private Object font;
+    /** 字体宽度度量；解析失败为 {@code null}，此时宽度退化为估算值。 */
+    private Method fontWidth;
+    /** 矩阵栈入口 {@code method_51448()}，返回 JOML 的 Matrix3x2fStack。 */
+    private Method matrices;
+    /** 矩阵栈的压栈 / 出栈 / 平移 / 缩放；全部来自 JOML 的公开 API。 */
+    private Method matrixPush;
+    private Method matrixPop;
+    private Method matrixTranslate;
+    private Method matrixScale;
+    /** 裁剪压栈与出栈；两者必须成对解析成功才会启用。 */
+    private Method enableScissor;
+    private Method disableScissor;
 
     /** 当前缩放后的绘制区域宽度。 */
     private int width;
@@ -47,29 +67,67 @@ public final class DrawContextBackend implements UiBackend {
      * 从一个 DrawContext 实例上解析所需方法。
      *
      * @param drawContext 本帧的 DrawContext 实例
-     * @return 可用的后端；签名解析失败时返回 {@code null}（调用方应保持原后端）
+     * @return 可用的后端；连填充与尺寸都无法解析时返回 {@code null}（调用方应保持原后端）
      */
     public static DrawContextBackend bind(Object drawContext) {
         if (drawContext == null) {
             return null;
         }
-        Method candidateA = null;
-        Method candidateB = null;
+        Class<?> contextClass = drawContext.getClass();
+
+        // 填充：固定名优先（intermediary 名跨 1.20–1.21 稳定），失败再按签名挑候选
+        Method fill = Reflect.method(contextClass, "method_25294",
+                int.class, int.class, int.class, int.class, int.class);
+        if (fill == null) {
+            fill = pickFill(contextClass);
+        }
+
+        // 缩放尺寸：两个无参 int getter（横屏下较大者为宽，声明顺序不保证）
+        Method sizeA = null;
+        Method sizeB = null;
+        for (Method method : contextClass.getMethods()) {
+            if (method.getParameterCount() == 0 && method.getReturnType() == int.class
+                    && !"hashCode".equals(method.getName())) {
+                if (sizeA == null) {
+                    sizeA = method;
+                } else if (sizeB == null) {
+                    sizeB = method;
+                }
+            }
+        }
+        if (fill == null || sizeA == null || sizeB == null) {
+            return null;
+        }
+
+        DrawContextBackend backend = new DrawContextBackend(fill, sizeA, sizeB);
+        backend.drawText = resolveDrawText(contextClass);
+        backend.font = resolveFont(contextClass.getClassLoader());
+        backend.fontWidth = resolveFontWidth(backend.font);
+        backend.resolveMatrixStack(contextClass);
+        backend.resolveScissor(contextClass);
+        backend.update(drawContext);
+        System.out.println("[noturne] draw context bound; fill=" + fill.getName()
+                + "; drawText=" + (backend.drawText == null ? "none" : backend.drawText.getName())
+                + "; textScale=" + (backend.matrixScale == null ? "none" : "ok")
+                + "; clip=" + (backend.enableScissor == null ? "none" : "ok")
+                + "; font=" + (backend.font == null ? "none" : "ok")
+                + "; fontWidth=" + (backend.fontWidth == null ? "none" : "ok"));
+        return backend;
+    }
+
+    /**
+     * 兜底：按签名挑选填充方法。
+     *
+     * <p>五参 int 的候选通常有两个（实心填充与画边框），签名完全相同、无法从反射区分。
+     * 实测：列表里第一个只画线框，第二个才是实心填充，因此优先取第二个。
+     */
+    private static Method pickFill(Class<?> contextClass) {
         Method first = null;
         Method second = null;
-        for (Method method : drawContext.getClass().getMethods()) {
+        for (Method method : contextClass.getMethods()) {
             Class<?>[] parameters = method.getParameterTypes();
             if (parameters.length == 5 && allInts(parameters)
                     && method.getReturnType() == void.class) {
-                if (candidateA == null) {
-                    candidateA = method;
-                } else if (candidateB == null) {
-                    candidateB = method;
-                }
-                continue;
-            }
-            if (parameters.length == 0 && method.getReturnType() == int.class
-                    && !"hashCode".equals(method.getName())) {
                 if (first == null) {
                     first = method;
                 } else if (second == null) {
@@ -77,40 +135,30 @@ public final class DrawContextBackend implements UiBackend {
                 }
             }
         }
-        // 五参 int 的候选有两个（实心填充与画边框），签名完全相同、无法从反射区分。
-        // 实测：列表里第一个只画线框，第二个才是实心填充，因此优先取第二个。
-        Method fill = candidateB != null ? candidateB : candidateA;
-        if (fill == null || first == null || second == null) {
-            return null;
-        }
-        // 文字绘制入口：签名是 drawText(TextRenderer, String, int, int, int[, boolean])，
-        // 第一个参数是字体对象 —— 按「第二参为 String、第一参非 int」筛出来。
-        Method drawText = null;
-        for (Method method : drawContext.getClass().getMethods()) {
+        return second != null ? second : first;
+    }
+
+    /**
+     * 解析文字绘制入口：签名是 {@code drawText(Font, String, int, int, int[, boolean])}，
+     * 第一个参数是字体对象 —— 按「第二参为 String、第一参非 int」筛出来；优先无阴影的五参重载。
+     */
+    private static Method resolveDrawText(Class<?> contextClass) {
+        Method five = null;
+        Method six = null;
+        for (Method method : contextClass.getMethods()) {
             Class<?>[] parameters = method.getParameterTypes();
             if (parameters.length >= 5 && parameters[1] == String.class
                     && parameters[0] != int.class && method.getReturnType() == void.class) {
-                if (drawText == null) {
-                    drawText = method;
+                if (parameters.length == 5) {
+                    if (five == null) {
+                        five = method;
+                    }
+                } else if (six == null) {
+                    six = method;
                 }
             }
         }
-        try {
-            fill.setAccessible(true);
-            first.setAccessible(true);
-            second.setAccessible(true);
-        } catch (Throwable ignored) {
-            // 拿不到访问权限就视为不可用，交由调用方回退。
-            return null;
-        }
-        DrawContextBackend backend = new DrawContextBackend(fill, first, second);
-        backend.drawText = drawText;
-        backend.font = resolveFont(drawContext.getClass().getClassLoader());
-        backend.update(drawContext);
-        System.out.println("[noturne] draw context bound; fill=" + fill.getName()
-                + "; drawText=" + (drawText == null ? "none" : drawText.getName())
-                + "; font=" + (backend.font == null ? "none" : "ok"));
-        return backend;
+        return five != null ? five : six;
     }
 
     /**
@@ -150,6 +198,83 @@ public final class DrawContextBackend implements UiBackend {
             System.out.println("[noturne] font resolve failed: " + t);
         }
         return null;
+    }
+
+    /** 解析字体宽度度量：固定名 {@code method_1727(String)} 优先，失败按 {@code (String) -> int} 兜底。 */
+    private static Method resolveFontWidth(Object font) {
+        if (font == null) {
+            return null;
+        }
+        Method named = Reflect.method(font.getClass(), "method_1727", String.class);
+        if (named != null) {
+            return named;
+        }
+        for (Method method : font.getClass().getMethods()) {
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length == 1 && parameters[0] == String.class
+                    && method.getReturnType() == int.class) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 解析矩阵栈：{@code method_51448()} 返回 JOML 的 {@code Matrix3x2fStack}。
+     *
+     * <p>JOML 是公开库，{@code pushMatrix / popMatrix / translate / scale} 不混淆，可直接按名取；
+     * {@code translate} 与 {@code scale} 声明在父类 {@code Matrix3x2f} 上，必须走
+     * {@link Class#getMethod}（含继承）而不是 {@code getDeclaredMethod}。
+     */
+    private void resolveMatrixStack(Class<?> contextClass) {
+        Method matrices = Reflect.method(contextClass, "method_51448");
+        if (matrices == null) {
+            for (Method method : contextClass.getMethods()) {
+                if (method.getParameterCount() == 0
+                        && method.getReturnType().getName().contains("Matrix3x2fStack")) {
+                    matrices = method;
+                    break;
+                }
+            }
+        }
+        if (matrices == null) {
+            return;
+        }
+        Class<?> stackClass = matrices.getReturnType();
+        Method push = findPublicMethod(stackClass, "pushMatrix");
+        Method pop = findPublicMethod(stackClass, "popMatrix");
+        Method translate = findPublicMethod(stackClass, "translate", float.class, float.class);
+        Method scale = findPublicMethod(stackClass, "scale", float.class, float.class);
+        if (push == null || pop == null || translate == null || scale == null) {
+            return;
+        }
+        this.matrices = matrices;
+        this.matrixPush = push;
+        this.matrixPop = pop;
+        this.matrixTranslate = translate;
+        this.matrixScale = scale;
+    }
+
+    /** 解析裁剪：{@code method_44379(int,int,int,int)} 压栈、{@code method_44380()} 弹栈。 */
+    private void resolveScissor(Class<?> contextClass) {
+        Method enable = Reflect.method(contextClass, "method_44379",
+                int.class, int.class, int.class, int.class);
+        Method disable = Reflect.method(contextClass, "method_44380");
+        if (enable != null && disable != null) {
+            this.enableScissor = enable;
+            this.disableScissor = disable;
+        }
+    }
+
+    /** 在类及其父类上查找公开方法；未找到返回 {@code null}。 */
+    private static Method findPublicMethod(Class<?> owner, String name, Class<?>... parameterTypes) {
+        try {
+            Method method = owner.getMethod(name, parameterTypes);
+            method.setAccessible(true);
+            return method;
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     /** @return 参数类型是否全为 {@code int} */
@@ -210,10 +335,18 @@ public final class DrawContextBackend implements UiBackend {
             return;
         }
         // DrawContext 的填充接口收的是「左上 + 右下」两对坐标。
-        Reflect.call(fill, drawContext,
-                Math.round(x), Math.round(y),
-                Math.round(x + width), Math.round(y + height),
-                color.packed());
+        int x1 = Math.round(x);
+        int y1 = Math.round(y);
+        int x2 = Math.round(x + width);
+        int y2 = Math.round(y + height);
+        // 亚像素尺寸（如 0.5px 的分隔线）取整后会退化到零宽高，强制保留 1px。
+        if (x2 <= x1) {
+            x2 = x1 + 1;
+        }
+        if (y2 <= y1) {
+            y2 = y1 + 1;
+        }
+        Reflect.call(fill, drawContext, x1, y1, x2, y2, color.packed());
     }
 
     @Override
@@ -223,28 +356,27 @@ public final class DrawContextBackend implements UiBackend {
             rect(x, y, width, height, color);
             return;
         }
-        // DrawContext 没有圆角原语：用若干条横向矩形按圆弧内缩近似四角。
-        // 层数取半径的整数像素数（UI 尺寸下最多 8 层已经看不出台阶），
-        // 相邻层多铺 0.5px 以避免出现缝隙。
-        int steps = Math.max(2, Math.min(8, Math.round(r)));
-        float band = r / steps;
+        // DrawContext 没有圆角原语：用整数像素分层逼近四角。
+        // 每层边界都取整、层与层不重叠——半透明色重叠会叠出可见的横纹；
+        // 内缩量按层的垂直中点计算，台阶在 UI 尺寸下不可辨。
+        int steps = Math.max(2, (int) Math.ceil(r));
         for (int i = 0; i < steps; i++) {
-            float dy = i * band;
-            float inset = cornerInset(r, dy);
-            rect(x + inset, y + dy, width - 2f * inset, band + 0.5f, color);
+            int y0 = Math.round(i * r / steps);
+            int y1 = Math.round((i + 1) * r / steps);
+            int band = y1 - y0;
+            if (band <= 0) {
+                continue;
+            }
+            int inset = Math.round(cornerInset(r, (y0 + y1) * 0.5f));
+            rect(x + inset, y + y0, width - 2f * inset, band, color);
+            rect(x + inset, y + height - y1, width - 2f * inset, band, color);
         }
-        // 中段：圆角之间是完整的矩形
+        // 中段：上下圆角之间是完整的矩形
         rect(x, y + r, width, height - 2f * r, color);
-        // 下半部分与上半对称
-        for (int i = 0; i < steps; i++) {
-            float dy = i * band;
-            float inset = cornerInset(r, dy);
-            rect(x + inset, y + height - r + dy, width - 2f * inset, band + 0.5f, color);
-        }
     }
 
     /**
-     * 计算圆角在距顶部 {@code dy} 处的水平内缩量。
+     * 计算圆角在距该圆角起始边 {@code dy} 处的水平内缩量。
      *
      * @param radius 圆角半径
      * @param dy     距该圆角起始边的距离，取值 {@code [0, radius]}
@@ -269,24 +401,56 @@ public final class DrawContextBackend implements UiBackend {
         if (value == null || value.isEmpty() || drawContext == null) {
             return;
         }
-        if (drawText != null && font != null) {
-            // 签名是 (font, text, x, y, color[, shadow])：坐标取整、颜色用 ARGB。
-            if (drawText.getParameterCount() >= 6) {
-                Reflect.call(drawText, drawContext, font, value,
-                        Math.round(x), Math.round(y), color.packed(), false);
-            } else {
-                Reflect.call(drawText, drawContext, font, value,
-                        Math.round(x), Math.round(y), color.packed());
-            }
+        if (drawText == null || font == null) {
+            // 字体没解析出来时退化为一条细矩形，至少让布局可见。
+            rect(x, y + size * 0.75f, Math.min(value.length() * size * 0.5f, size * 8f), 1f, color);
             return;
         }
-        // 字体没解析出来时退化为一条细矩形，至少让布局可见。
-        rect(x, y + size * 0.75f, Math.min(value.length() * size * 0.5f, size * 8f), 1f, color);
+        float scale = size <= 0f ? 1f : size / FONT_BASE_HEIGHT;
+        if (scale != 1f && matrices != null) {
+            // 走矩阵栈：平移到位、缩放到目标字号，文字本身在原点绘制。
+            // pushMatrix / translate / scale 成功时都返回 this（非 null），失败时 Reflect 返回 null。
+            Object stack = Reflect.call(matrices, drawContext);
+            if (stack != null && Reflect.call(matrixPush, stack) != null) {
+                boolean positioned = Reflect.call(matrixTranslate, stack, x, y) != null
+                        && Reflect.call(matrixScale, stack, scale, scale) != null;
+                if (positioned) {
+                    callDrawText(value, 0f, 0f, color);
+                }
+                Reflect.call(matrixPop, stack);
+                if (positioned) {
+                    return;
+                }
+            }
+        }
+        callDrawText(value, x, y, color);
+    }
+
+    /** 调用文字绘制入口；六参重载追加「无阴影」标志。 */
+    private void callDrawText(String value, float x, float y, Color color) {
+        if (drawText.getParameterCount() >= 6) {
+            Reflect.call(drawText, drawContext, font, value,
+                    Math.round(x), Math.round(y), color.packed(), false);
+        } else {
+            Reflect.call(drawText, drawContext, font, value,
+                    Math.round(x), Math.round(y), color.packed());
+        }
     }
 
     @Override
     public float textWidth(String value, float size) {
-        return value == null ? 0f : value.length() * size * 0.5f;
+        if (value == null || value.isEmpty()) {
+            return 0f;
+        }
+        float scale = size <= 0f ? 1f : size / FONT_BASE_HEIGHT;
+        if (font != null && fontWidth != null) {
+            Object measured = Reflect.call(fontWidth, font, value);
+            if (measured instanceof Number) {
+                return ((Number) measured).floatValue() * scale;
+            }
+        }
+        // 无字体度量时的估算：每字符半宽
+        return value.length() * size * 0.5f;
     }
 
     @Override
@@ -296,11 +460,19 @@ public final class DrawContextBackend implements UiBackend {
 
     @Override
     public void pushClip(float x, float y, float width, float height) {
-        // 裁剪需要确认 enableScissor 的签名，暂不实现（不影响整体可见性）。
+        if (drawContext == null || enableScissor == null) {
+            return;
+        }
+        // enableScissor 收的是「左上 + 右下」两对坐标（缩放后坐标）
+        Reflect.call(enableScissor, drawContext,
+                Math.round(x), Math.round(y), Math.round(x + width), Math.round(y + height));
     }
 
     @Override
     public void popClip() {
-        // 见 pushClip。
+        if (drawContext == null || disableScissor == null) {
+            return;
+        }
+        Reflect.call(disableScissor, drawContext);
     }
 }

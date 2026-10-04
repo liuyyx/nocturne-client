@@ -73,7 +73,10 @@ val distJar = tasks.register<Jar>("distJar") {
     // 过滤掉目录形态的依赖，只解包 jar 形态，否则 zipTree 会在目录上报错。
     from(configurations.runtimeClasspath.get()
             .filter { it.name.endsWith(".jar") }
-            .map { zipTree(it) })
+            .map { zipTree(it) }) {
+        // 排除必须挂在这一次 from 上：顶层 exclude 对 zipTree 展开出来的内容不生效。
+        exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
+    }
 
     // 逐个并入各业务模块的 main 输出，并显式 dependsOn 其 classes 任务以保证构建顺序。
     listOf(":core", ":agent", ":client", ":ui", ":injector").forEach { path ->
@@ -85,6 +88,13 @@ val distJar = tasks.register<Jar>("distJar") {
     // 依赖 jar 里的模块描述符与多版本目录必须排除：它们会让 javac 把这个 jar 当成模块处理，
     // 于是任何「以本 jar 为 classpath」的编译都会报「程序包 xxx 不存在」。
     exclude("module-info.class", "META-INF/versions/**")
+
+    // 字节码操作库（ASM / Mixin / MixinExtras）必须排除：加载器自己也带这些库，
+    // 而 Fabric 的 KnotClassLoader 会先在 mods jar 里找类——于是同一个 org.objectweb.asm.MethodVisitor
+    // 被两个加载器各加载一次，MixinExtras 与 sponge-mixin 拿到的类型对不上，直接 VerifyError 崩溃。
+    // 排除后：模组路径用加载器自带的版本；agent 路径若目标 JVM 没有 ASM，
+    // 帧钩子会优雅降级（只记录日志），不影响其余功能。
+    exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
 }
 
 tasks.named("assemble") {

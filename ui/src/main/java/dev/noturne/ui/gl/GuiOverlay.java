@@ -80,6 +80,9 @@ public final class GuiOverlay implements FrameListener {
         return toggleKey;
     }
 
+    /** 是否已打印过首帧输入诊断，保证只打印一次。 */
+    private boolean loggedFirstInput;
+
     @Override
     public void onFrame() {
         // 指针位置只取一次：开关判定、悬停更新与事件派发必须基于同一份坐标，
@@ -88,6 +91,14 @@ public final class GuiOverlay implements FrameListener {
         double my = input.mouseY();
 
         boolean toggleDown = input.keyDown(toggleKey);
+        if (!loggedFirstInput) {
+            loggedFirstInput = true;
+            // 首次进入叠加层时把输入侧的真实状态打出来：按键「没反应」时，
+            // 这行能直接区分「输入源没解析出来」与「键没被按下」。
+            System.out.println("[noturne] overlay first frame: input=" + input.describe()
+                    + " mouse=" + Math.round(mx) + "," + Math.round(my)
+                    + " toggleKey=" + toggleKey + " down=" + toggleDown);
+        }
         if (toggleDown && !toggleWasDown) {
             gui.toggle();
             if (gui.isOpen()) {

@@ -51,6 +51,10 @@ Fabric / Forge / NeoForge 模组加载。目标覆盖 **Minecraft 1.8.9 – 26.3
 > 模组路径下没有 `Instrumentation`，装不了帧钩子，叠加层改挂加载器的逐帧渲染事件
 > （Fabric 用 `HudRenderCallback`），所以**模组式下 GUI 同样能显示**；
 > 但依赖 `Instrumentation` 的能力（字节码插桩）在模组路径下不可用。
+>
+> 绘制后端按运行环境自动选择：**MC 1.21.9+ 走 `DrawContext`**（让游戏自己提交绘制 ——
+> 它的新渲染管线会覆盖直接发出的 GL 调用，画面上什么都不会留下），更老的版本回退到 GL 后端。
+> 模组路径的开关按键固定为右 Shift；注入器里录制的按键只作用于注入路径。
 
 ## 构建
 

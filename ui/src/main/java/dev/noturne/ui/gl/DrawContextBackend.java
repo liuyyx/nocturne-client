@@ -49,14 +49,19 @@ public final class DrawContextBackend implements UiBackend {
         if (drawContext == null) {
             return null;
         }
-        Method fill = null;
+        Method candidateA = null;
+        Method candidateB = null;
         Method first = null;
         Method second = null;
         for (Method method : drawContext.getClass().getMethods()) {
             Class<?>[] parameters = method.getParameterTypes();
-            if (fill == null && parameters.length == 5 && allInts(parameters)
+            if (parameters.length == 5 && allInts(parameters)
                     && method.getReturnType() == void.class) {
-                fill = method;
+                if (candidateA == null) {
+                    candidateA = method;
+                } else if (candidateB == null) {
+                    candidateB = method;
+                }
                 continue;
             }
             if (parameters.length == 0 && method.getReturnType() == int.class
@@ -68,6 +73,9 @@ public final class DrawContextBackend implements UiBackend {
                 }
             }
         }
+        // 五参 int 的候选有两个（实心填充与画边框），签名完全相同、无法从反射区分。
+        // 实测：列表里第一个只画线框，第二个才是实心填充，因此优先取第二个。
+        Method fill = candidateB != null ? candidateB : candidateA;
         if (fill == null || first == null || second == null) {
             return null;
         }

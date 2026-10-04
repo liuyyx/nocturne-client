@@ -35,7 +35,7 @@ public final class ModFrameDriver {
             return;
         }
         // 模组路径同样要装叠加层：GL 此刻还没加载，OverlayBootstrap 会在渲染跑起来后自行完成。
-        // 开关按键没有注入器可传参，固定用右 Shift。
+        // 开关按键没有注入器可传参，固定用右 Shift（GLFW 344）。
         OverlayBootstrap.install(loader, null, dev.noturne.ui.gl.GuiOverlay.KEY_RIGHT_SHIFT);
         installFabric(loader);
     }
@@ -51,14 +51,22 @@ public final class ModFrameDriver {
                 "net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback", loader);
         if (callback == null) {
             // 没装 Fabric API（或版本改了包名）：模组仍可加载，只是没有叠加层。
+            System.out.println("[noturne] fabric HudRenderCallback not found; overlay stays hidden");
             return;
         }
         Object event = Reflect.staticField(callback, "EVENT");
         if (event == null) {
+            System.out.println("[noturne] fabric hud EVENT field missing; overlay stays hidden");
             return;
         }
-        Method register = Reflect.method(event.getClass(), "register", Object.class);
+        // register 声明在 Event 接口上，实现类通常不重新声明它；Reflect.method 走的是
+        // getDeclaredMethod（只查本类），因此必须在接口类型上解析，否则永远找不到。
+        Class<?> eventType = Reflect.load("net.fabricmc.fabric.api.event.Event", loader);
+        Method register = eventType != null
+                ? Reflect.method(eventType, "register", Object.class)
+                : Reflect.method(event.getClass(), "register", Object.class);
         if (register == null) {
+            System.out.println("[noturne] fabric Event.register() not found; overlay stays hidden");
             return;
         }
         InvocationHandler handler = new InvocationHandler() {
@@ -71,5 +79,6 @@ public final class ModFrameDriver {
         };
         Object listener = Proxy.newProxyInstance(loader, new Class<?>[]{callback}, handler);
         Reflect.call(register, event, listener);
+        System.out.println("[noturne] fabric frame driver registered (HudRenderCallback)");
     }
 }

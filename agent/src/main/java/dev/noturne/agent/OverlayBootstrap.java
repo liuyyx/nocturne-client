@@ -118,9 +118,14 @@ public final class OverlayBootstrap implements FrameListener {
      * 探测失败时退化为恒等映射，最坏结果是模块找不到目标方法，而不是崩溃。
      */
     private Mapping selectMapping() {
-        if (Reflect.load(ClassType.MINECRAFT.canonicalName(), gameLoader) != null) {
+        String canonical = ClassType.MINECRAFT.canonicalName();
+        if (Reflect.load(canonical, gameLoader) != null) {
             return new IdentityMapping();
         }
+        // Fabric 运行时用的是 intermediary 名（如 net.minecraft.class_310），探测规范名必然失败；
+        // 打出来才能区分「真的老版本」与「只是类名被重映射」。
+        System.out.println("[noturne] canonical Minecraft class not visible: " + canonical
+                + "; falling back to 1.8.9 mappings");
         try {
             return ObfuscatedMapping.load("/mappings-1.8.9.json");
         } catch (Throwable t) {
@@ -141,6 +146,9 @@ public final class OverlayBootstrap implements FrameListener {
         if (modern != null) {
             return new ModernRenderer(modern, font);
         }
+        // 1.13+ 只有核心 profile：回退到固定管线等于画不出来，必须留下痕迹。
+        System.out.println("[noturne] core profile bind failed; falling back to fixed pipeline"
+                + " (this will render nothing on 1.13+)");
         return new dev.noturne.ui.gl.GlRenderer(fixed, font);
     }
 

@@ -162,7 +162,8 @@ public final class ModernGlApi {
      * @return 可用的绑定；若绘制必需的子集不完整则返回 {@code null}
      */
     public static ModernGlApi bind(ClassLoader loader) {
-        Method genBuffers = find(loader, "glGenBuffers", int.class, int[].class);
+        // LWJGL 的数组重载是 glGenBuffers(int[])，不存在 (int, int[]) 这种形式。
+        Method genBuffers = find(loader, "glGenBuffers", int[].class);
         Method bindBuffer = find(loader, "glBindBuffer", int.class, int.class);
         Method bufferData = find(loader, "glBufferData", int.class, FloatBuffer.class, int.class);
         Method createShader = find(loader, "glCreateShader", int.class);
@@ -182,6 +183,22 @@ public final class ModernGlApi {
                 || shaderSource == null || compileShader == null || createProgram == null
                 || useProgram == null || genVertexArrays == null || bindVertexArray == null
                 || enableVertexAttribArray == null || vertexAttribPointer == null || drawArrays == null) {
+            // 核心 profile 绑定失败时列出缺了哪一项：1.13+ 只有核心 profile，
+            // 回退到固定管线等于整个 GUI 画不出来，必须能一眼看出原因。
+            System.out.println("[noturne] core profile bind miss:"
+                    + " genBuffers=" + (genBuffers != null)
+                    + " bindBuffer=" + (bindBuffer != null)
+                    + " bufferData=" + (bufferData != null)
+                    + " createShader=" + (createShader != null)
+                    + " shaderSource=" + (shaderSource != null)
+                    + " compileShader=" + (compileShader != null)
+                    + " createProgram=" + (createProgram != null)
+                    + " useProgram=" + (useProgram != null)
+                    + " genVertexArrays=" + (genVertexArrays != null)
+                    + " bindVertexArray=" + (bindVertexArray != null)
+                    + " enableVertexAttribArray=" + (enableVertexAttribArray != null)
+                    + " vertexAttribPointer=" + (vertexAttribPointer != null)
+                    + " drawArrays=" + (drawArrays != null));
             return null;
         }
 

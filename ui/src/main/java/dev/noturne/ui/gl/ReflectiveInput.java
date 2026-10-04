@@ -62,8 +62,12 @@ public final class ReflectiveInput implements InputSource {
     private final double[] pendingScroll = new double[1];
     /** 复用的光标坐标暂存，避免逐帧分配。 */
     private final double[] cursorOut = new double[2];
+    /** y 坐标的独立暂存：GLFW 的 {@code glfwGetCursorPos} 要求 x、y 各一个数组参数。 */
+    private final double[] cursorOutY = new double[2];
     /** 复用的窗口尺寸暂存。 */
     private final int[] windowSizeOut = new int[2];
+    /** 窗口高度的独立暂存：GLFW 的 {@code glfwGetWindowSize} 同样要求两个数组参数。 */
+    private final int[] windowSizeOutY = new int[2];
 
     /** 实际生效的后端名称。 */
     private final String backend;
@@ -103,16 +107,42 @@ public final class ReflectiveInput implements InputSource {
 
         Class<?> glfw = Reflect.load("org.lwjgl.glfw.GLFW", loader);
         if (glfw != null) {
-            this.glfwGetCursorPos = Reflect.method(glfw, "glfwGetCursorPos", long.class, double[].class);
+            this.glfwGetCursorPos = Reflect.method(glfw, "glfwGetCursorPos",
+                    long.class, double[].class, double[].class);
             this.glfwGetMouseButton = Reflect.method(glfw, "glfwGetMouseButton", long.class, int.class);
             this.glfwGetKey = Reflect.method(glfw, "glfwGetKey", long.class, int.class);
             this.glfwGetCurrentContext = Reflect.method(glfw, "glfwGetCurrentContext");
-            this.glfwGetWindowSize = Reflect.method(glfw, "glfwGetWindowSize", long.class, int[].class);
+            this.glfwGetWindowSize = Reflect.method(glfw, "glfwGetWindowSize",
+                    long.class, int[].class, int[].class);
             this.glfwSetInputMode = Reflect.method(glfw, "glfwSetInputMode", long.class, int.class, int.class);
             this.scrollCallbackType = Reflect.load("org.lwjgl.glfw.GLFWScrollCallbackI", loader);
             this.glfwSetScrollCallback = scrollCallbackType == null
                     ? null
                     : Reflect.method(glfw, "glfwSetScrollCallback", long.class, scrollCallbackType);
+            if (glfwGetCursorPos == null) {
+                // 类找到了却解析不出方法时，把「类本身长什么样」打出来：加载器、方法总数、
+                // 以及逐个探测结果——否则只能看到一句 input=none。
+                System.out.println("[noturne] glfw present but unresolved; loader=" + glfw.getClassLoader()
+                        + " declared=" + glfw.getDeclaredMethods().length
+                        + " cursorPos=" + (glfwGetCursorPos != null)
+                        + " mouseButton=" + (glfwGetMouseButton != null)
+                        + " key=" + (glfwGetKey != null)
+                        + " context=" + (glfwGetCurrentContext != null)
+                        + " windowSize=" + (glfwGetWindowSize != null));
+                // 直接查一次并打印异常：区分「没有这个方法」与「解析过程本身出错」。
+                try {
+                    java.lang.reflect.Method direct =
+                            glfw.getDeclaredMethod("glfwGetCursorPos", long.class, double[].class);
+                    System.out.println("[noturne] direct getDeclaredMethod ok: " + direct);
+                } catch (Throwable t) {
+                    System.out.println("[noturne] direct getDeclaredMethod failed: " + t);
+                }
+                for (java.lang.reflect.Method m : glfw.getDeclaredMethods()) {
+                    if (m.getName().contains("CursorPos")) {
+                        System.out.println("[noturne]   candidate: " + m);
+                    }
+                }
+            }
         } else {
             this.glfwGetCursorPos = null;
             this.glfwGetMouseButton = null;
@@ -145,6 +175,13 @@ public final class ReflectiveInput implements InputSource {
      */
     public static InputSource create(ClassLoader loader, IntSupplier surfaceWidth, IntSupplier surfaceHeight) {
         ReflectiveInput input = new ReflectiveInput(loader, surfaceWidth, surfaceHeight);
+        if ("none".equals(input.backend)) {
+            // 两代输入栈都没解析出来时，把探测结果打出来——否则日志里只有一句 input=none，无从下手。
+            System.out.println("[noturne] no input backend; lwjgl2-mouse="
+                    + (Reflect.load("org.lwjgl.input.Mouse", loader) != null)
+                    + " glfw=" + (Reflect.load("org.lwjgl.glfw.GLFW", loader) != null)
+                    + " loader=" + loader);
+        }
         return "none".equals(input.backend) ? new NoInput() : input;
     }
 
@@ -162,9 +199,8 @@ public final class ReflectiveInput implements InputSource {
         if (!ensureGlfwWindow()) {
             return 0d;
         }
-        if (Reflect.call(glfwGetCursorPos, null, glfwWindow, cursorOut) == null) {
-            // 调用失败时 cursorOut 保持上一次的值，据此返回而不是抛异常。
-        }
+        // GLFW 要求 x、y 各一个数组参数，两个都要传。
+        Reflect.call(glfwGetCursorPos, null, glfwWindow, cursorOut, cursorOutY);
         return cursorOut[0] * scaleX();
     }
 
@@ -182,8 +218,8 @@ public final class ReflectiveInput implements InputSource {
         if (!ensureGlfwWindow()) {
             return 0d;
         }
-        Reflect.call(glfwGetCursorPos, null, glfwWindow, cursorOut);
-        return cursorOut[1] * scaleY();
+        Reflect.call(glfwGetCursorPos, null, glfwWindow, cursorOut, cursorOutY);
+        return cursorOutY[0] * scaleY();
     }
 
     @Override
@@ -290,7 +326,7 @@ public final class ReflectiveInput implements InputSource {
         if (!ensureGlfwWindow()) {
             return 0;
         }
-        Reflect.call(glfwGetWindowSize, null, glfwWindow, windowSizeOut);
+        Reflect.call(glfwGetWindowSize, null, glfwWindow, windowSizeOut, windowSizeOutY);
         return windowSizeOut[0];
     }
 
@@ -303,8 +339,8 @@ public final class ReflectiveInput implements InputSource {
         if (!ensureGlfwWindow()) {
             return 0;
         }
-        Reflect.call(glfwGetWindowSize, null, glfwWindow, windowSizeOut);
-        return windowSizeOut[1];
+        Reflect.call(glfwGetWindowSize, null, glfwWindow, windowSizeOut, windowSizeOutY);
+        return windowSizeOutY[0];
     }
 
     /** @return 绘制区域宽度 / 窗口宽度；任一未知时退化为 1（即不做缩放） */

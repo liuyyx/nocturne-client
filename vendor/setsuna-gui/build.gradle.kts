@@ -8,7 +8,7 @@ val userHome = System.getProperty("user.home")
 val mcRoot = "$userHome/AppData/Roaming/.minecraft"
 val mcLibs = "$mcRoot/libraries"
 val mcVers = "$mcRoot/versions"
-val mcClientJar = file("../../analysis/client-26.1.2.jar")
+val mcClientJar = file("../../../analysis/client-26.1.2.jar")
 
 // 26.1.2 对应版本的 fabric-api（拆出嵌套模块 jar，供编译期直接可见）。
 val fabricApi26Dir = file("$mcVers/26.1.2-epsilon/mods")

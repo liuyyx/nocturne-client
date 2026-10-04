@@ -43,3 +43,23 @@ subprojects {
         useJUnitPlatform()
     }
 }
+
+// 根项目没有源码：默认的 jar 任务会产出只含 META-INF 的空壳（约 261 字节），
+// 极易被误当成可用的客户端 jar（双击无反应、放进 mods 也无效）。这里禁用它，
+// 并把真正的交付 jar（dist 的多入口 jar）复制到根 build/libs/，
+// 让 `build` 之后在惯常位置就能拿到可用产物。
+tasks.named("jar") {
+    enabled = false
+}
+
+val copyDistJar = tasks.register<Copy>("copyDistJar") {
+    group = "build"
+    description = "Copies the dist delivery jar into the root build/libs."
+    dependsOn(":dist:distJar")
+    from(project(":dist").layout.buildDirectory.file("libs/noturne-${version}.jar"))
+    into(layout.buildDirectory.dir("libs"))
+}
+
+tasks.named("build") {
+    dependsOn(copyDistJar)
+}

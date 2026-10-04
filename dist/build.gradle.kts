@@ -100,3 +100,9 @@ val distJar = tasks.register<Jar>("distJar") {
 tasks.named("assemble") {
     dependsOn(distJar)
 }
+
+// java 插件默认的 jar 任务会产出只含 META-INF 的空壳（约 1KB），与交付 jar 并列会误导；
+// 交付物只有上面的 distJar。
+tasks.named("jar") {
+    enabled = false
+}

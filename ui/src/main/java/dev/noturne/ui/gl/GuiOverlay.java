@@ -3,6 +3,9 @@ package dev.noturne.ui.gl;
 import dev.noturne.client.module.ModuleRegistry;
 import dev.noturne.client.runtime.FrameListener;
 import dev.noturne.ui.clickgui.ClickGui;
+import dev.noturne.ui.skija.SetsunaClickGui;
+
+import io.github.humbleui.skija.Canvas;
 
 /**
  * 把点击式 GUI 叠加到游戏画面上，并承担它的全部输入。
@@ -10,6 +13,10 @@ import dev.noturne.ui.clickgui.ClickGui;
  * <p>由被补丁的帧交换点每帧调用一次（见 {@code NoturneRuntime}）。这里不做事件 hook，而是每帧
  * 轮询一次指针与按键状态，再自己合成为点击 / 拖拽 / 释放 / 滚轮事件：轮询只需一个查询接口，
  * 而两代 LWJGL 的回调模型差异全部被 {@link InputSource} 吸收，代价是每帧几次反射调用。
+ *
+ * <p>界面实现由后端能力决定（见 {@link OverlayGui}）：Skija 可用时用 Canvas 直绘的
+ * {@link SetsunaClickGui}（能画玻璃层/阴影/图标字体，视觉与上游一致），否则用面向
+ * {@code Renderer} 抽象的 {@link ClickGui}（四列布局，任何后端都能画）。
  *
  * <p>三个容易踩空的地方，都在这里集中处理：
  * <ul>
@@ -33,7 +40,7 @@ public final class GuiOverlay implements FrameListener {
     private static final int BUTTON_RIGHT = 1;
 
     /** 被叠加的点击式 GUI。 */
-    private final ClickGui gui;
+    private final OverlayGui gui;
     /** 绘制后端。 */
     private final UiBackend renderer;
     /** 输入来源。 */
@@ -63,14 +70,18 @@ public final class GuiOverlay implements FrameListener {
      * @param toggleKey 开关 GUI 的键码
      */
     public GuiOverlay(ModuleRegistry registry, UiBackend renderer, InputSource input, int toggleKey) {
-        this.gui = new ClickGui(registry);
+        // 选择界面实现：Skija 后端能提供画布，就用 Canvas 直绘的 Setsuna 界面；否则用抽象绘制面
+        // 上实现的四列界面。判定放在构造期而不是每帧，是为了让「用哪套界面」在日志里可见。
+        this.gui = renderer instanceof SkijaBackend
+                ? new SetsunaClickGui(registry)
+                : new ClickGui(registry);
         this.renderer = renderer;
         this.input = input;
         this.toggleKey = toggleKey;
     }
 
     /** @return 被叠加的 GUI，供外部（如设置界面）直接操作 */
-    public ClickGui gui() {
+    public OverlayGui gui() {
         return gui;
     }
 
@@ -174,7 +185,8 @@ public final class GuiOverlay implements FrameListener {
             loggedFirstDraw = true;
             if (renderer.ready()) {
                 System.out.println("[noturne] click GUI opened; input=" + input.describe()
-                        + "; backend=" + renderer.backendName());
+                        + "; backend=" + renderer.backendName()
+                        + "; screen=" + gui.getClass().getSimpleName());
             } else {
                 // 后端未就绪时叠加层照样会绘制，但可能全帧不可见；明确警告，
                 // 避免与「输入没解析出来」的现象混为一谈。
@@ -224,7 +236,11 @@ public final class GuiOverlay implements FrameListener {
         // 游戏的 3D 画面将永久错乱且不可自愈。
         renderer.beginFrame();
         try {
-            gui.render(renderer);
+            // 画布必须在 beginFrame 之后取：Skija 后端在这一步才建立/复用原生表面
+            Canvas canvas = renderer instanceof SkijaBackend
+                    ? ((SkijaBackend) renderer).canvas()
+                    : null;
+            gui.render(renderer, canvas);
         } finally {
             renderer.endFrame();
         }

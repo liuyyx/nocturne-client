@@ -251,3 +251,36 @@ MC API（`GuiGraphicsExtractor`/`DeltaTracker`/`ClientLevel`）。要让同一�
    JVM/GL 栈上可用，10 帧无 GL 错误。
 3. ⚠️ 该截图仍是**本项目自有的四列 ClickGUI**——本批只替换了绘制层。要得到 Setsuna 的三栏外观，
    下一步必须用 `ClickGuiLayout` + `SkijaControls` + `SkijaTheme` 重写视图层（尚无调用方）。
+
+### 视图层重写（阶段 A–C，已完成）
+
+| 阶段 | 做了什么 | 结果 |
+|---|---|---|
+| A 配色 | `ui/theme/Theme` 的语义 token 全部改指向 `SkijaTheme`（MD3 层级名 → Setsuna 色板） | 所有既有组件自动换成近黑表面 + 青绿强调 |
+| B 布局 | 新增 `SetsunaClickGui`（Canvas 直绘三栏），几何用 `ClickGuiLayout` | 分类导航 / 模块列表 / 设置详情三栏 |
+| C 控件 | 控件绘制用 `SkijaControls`（玻璃表面、卡片行、按钮、品牌字距排版）+ `SkijaUi.icon` 图标字体 | 视觉与上游一致 |
+
+接线方式（不动既有实现，零回归）：
+- 新增 `OverlayGui` 接口，`ClickGui`（四列）与 `SetsunaClickGui`（三栏）都实现它；
+- `SkijaBackend` 暴露本帧画布（`canvas()`），`GuiOverlay` 在**构造期**按后端能力选界面：
+  Skija → 三栏 Canvas 直绘；其它后端 → 四列抽象绘制；
+- `GuiOverlay` 渲染时把 `renderer` 与 `canvas` 一起传给界面，由实现各自取用。
+
+验证（Java 8 + LWJGL2 + Skija，真实 GL 上下文，`dist` 单 jar）：
+```
+[noturne] click GUI opened; input=lab-fake; backend=skija; screen=SetsunaClickGui
+LAB frames=10 distinctColors=56 glGetError=0 viewport=854x480
+LAB PASS（Skija 画出了真实 GUI）
+```
+截图：`docs/research/setsuna-gui-3column.png`。
+
+交互链路（离屏光栅，脚本化点击；`docs/research/LabSetsunaInteract.java`）：
+```
+LAB click 模块行 @ 274,166 -> consumed=true      # 选中模块 → 右栏出现详情
+LAB click 启用按钮 @ 408,259 -> consumed=true    # 点「已启用」按钮
+LAB 有模块处于启用状态 = true                     # 模块开关真的被改写
+```
+截图：`docs/research/setsuna-gui-interact.png`（模块行选中态 + 青绿启用圆点 + 右栏详情）。
+
+尚未实现（后续）：颜色选择器（现在只显示色块与 hex）、文本/按键设置项的编辑、上游的其它界面
+（主菜单、AltManager、HUD 编辑器）、以及 §7 前面提到的纹理桥。

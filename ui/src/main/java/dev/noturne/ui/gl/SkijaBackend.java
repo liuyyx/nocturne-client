@@ -28,6 +28,14 @@ public final class SkijaBackend implements UiBackend {
     private int viewportHeight;
     /** 最近一帧是否真的拿到了画布（Skija 可用）。 */
     private boolean lastFrameUsable;
+    /**
+     * 本帧的画布；未开始绘制或 Skija 不可用时为 {@code null}。
+     *
+     * <p>供**Canvas 直绘界面**（如 {@code SetsunaClickGui}）取用：那类界面直接用 Skija 画
+     * 玻璃层/模糊/图标字体，这些效果无法用 {@link dev.noturne.ui.render.Renderer} 的
+     * 矩形+文字原语表达。
+     */
+    private Canvas frameCanvas;
 
     public SkijaBackend(GlApi gl) {
         this.gl = gl;
@@ -64,6 +72,7 @@ public final class SkijaBackend implements UiBackend {
         }
         Canvas canvas = skija.beginFrame(viewportWidth, viewportHeight);
         lastFrameUsable = canvas != null;
+        frameCanvas = canvas;
         renderer.bind(canvas);
     }
 
@@ -71,6 +80,17 @@ public final class SkijaBackend implements UiBackend {
     public void endFrame() {
         skija.endFrame();
         renderer.bind(null);
+        frameCanvas = null;
+    }
+
+    /**
+     * 本帧的画布；当前不在 Skija 绘制期（或 Skija 不可用）时为 {@code null}。
+     *
+     * <p>仅在 {@link #beginFrame()} 与 {@link #endFrame()} 之间有效——Canvas 直绘界面必须在这段
+     * 窗口内使用它，跨帧持有会指向已被提交/复用的原生表面。
+     */
+    public Canvas canvas() {
+        return frameCanvas;
     }
 
     @Override

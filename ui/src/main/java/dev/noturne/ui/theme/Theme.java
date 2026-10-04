@@ -1,59 +1,89 @@
 package dev.noturne.ui.theme;
 
 import dev.noturne.ui.render.Color;
+import dev.noturne.ui.skija.SkijaTheme;
 
 /**
- * 视觉语言：Material Design 3 深色主题——带透明度的暖黑表面、淡紫强调色、
- * 大圆角面板与小圆角控件。所有数值取自规格表（MD3 深色基准值）。
+ * 视觉语言：Setsuna 风格——近黑分层表面、青绿强调、（相对）小圆角。
+ *
+ * <p>色值一律取自 {@link SkijaTheme}（自 Setsuna 上游 {@code ui/UiTheme} 移植，见
+ * THIRD-PARTY-NOTICES.md），本类只做**语义映射**：Material Design 3 的层级命名
+ * （surface container / primary / on-primary…）映射到 Setsuna 的色板。这样组件树沿用原有
+ * 取名，换主题只需改这一处。
+ *
+ * <p>命名与 Setsuna 色板的对应关系写在每个字段的注释里，便于日后对照上游。
+ *
+ * <p>注意：强调色在 Setsuna 里是**可配置**的（{@link SkijaTheme#accent()}），本类是编译期常量，
+ * 取的是默认强调色。需要跟随用户设置的地方请直接用 {@code SkijaTheme.accent()}。
  */
 public final class Theme {
 
-    // 表面（AARRGGBB）：暖黑系，自带透明度，层级越高越浅
-    public static final Color SHADOW = Color.hex("60000000");
-    public static final Color SURFACE = Color.hex("EE141218");
-    public static final Color SURFACE_DIM = Color.hex("E80F0D13");
-    public static final Color SURFACE_CONTAINER_LOW = Color.hex("F01D1B20");
-    public static final Color SURFACE_CONTAINER = Color.hex("F4211F26");
-    public static final Color SURFACE_CONTAINER_HIGH = Color.hex("F82B2930");
-    public static final Color SURFACE_CONTAINER_HIGHEST = Color.hex("FC36343B");
+    // 表面（AARRGGBB）：近黑系，自带透明度，层级越高越浅
+    /** 投影 ← Setsuna {@code SHADOW}。 */
+    public static final Color SHADOW = Color.of(SkijaTheme.SHADOW);
+    /** 面板底色 ← Setsuna {@code SURFACE}。 */
+    public static final Color SURFACE = Color.of(SkijaTheme.SURFACE);
+    /** 更暗的一层（全屏背板） ← Setsuna {@code BACKDROP}。 */
+    public static final Color SURFACE_DIM = Color.of(SkijaTheme.BACKDROP);
+    /** 面板内的分区 ← Setsuna {@code SURFACE_ALT}。 */
+    public static final Color SURFACE_CONTAINER_LOW = Color.of(SkijaTheme.SURFACE_ALT);
+    /** 抬升表面 ← Setsuna {@code SURFACE_RAISED}。 */
+    public static final Color SURFACE_CONTAINER = Color.of(SkijaTheme.SURFACE_RAISED);
+    /** 悬停表面 ← Setsuna {@code SURFACE_HOVER}。 */
+    public static final Color SURFACE_CONTAINER_HIGH = Color.of(SkijaTheme.SURFACE_HOVER);
+    /** 最高的悬停表面（控件悬停） ← Setsuna {@code CONTROL_HOVER}。 */
+    public static final Color SURFACE_CONTAINER_HIGHEST = Color.of(SkijaTheme.CONTROL_HOVER);
 
     // 描边
-    public static final Color OUTLINE = Color.hex("B4938F99");
-    public static final Color OUTLINE_SOFT = Color.hex("60938F99");
+    /** 常规描边 ← Setsuna {@code BORDER}。 */
+    public static final Color OUTLINE = Color.of(SkijaTheme.BORDER);
+    /** 弱描边（分隔线，自带透明度） ← Setsuna {@code BORDER_SOFT}。 */
+    public static final Color OUTLINE_SOFT = Color.of(SkijaTheme.BORDER_SOFT);
 
-    // 强调色（淡紫 #D0BCFF）与其容器、内容色
-    public static final Color PRIMARY = Color.hex("FFD0BCFF");
-    public static final Color ON_PRIMARY = Color.hex("FF381E72");
-    public static final Color PRIMARY_CONTAINER = Color.hex("EC4F378B");
-    public static final Color ON_PRIMARY_CONTAINER = Color.hex("FFEADDFF");
+    // 强调色（Setsuna 的青绿 #3ED6B4）与其容器、内容色
+    /** 强调色 ← Setsuna {@code ACCENT}（默认值；动态值用 {@code SkijaTheme.accent()}）。 */
+    public static final Color PRIMARY = Color.of(SkijaTheme.ACCENT);
+    /** 强调色之上的文字 ← Setsuna {@code ACCENT_DARK}（亮青绿上要压深色才读得清）。 */
+    public static final Color ON_PRIMARY = Color.of(SkijaTheme.ACCENT_DARK);
+    /** 强调色的半透明铺底 ← Setsuna {@code ACCENT_SOFT}。 */
+    public static final Color PRIMARY_CONTAINER = Color.of(SkijaTheme.ACCENT_SOFT);
+    /** 强调容器之上的文字 ← Setsuna {@code TEXT}。 */
+    public static final Color ON_PRIMARY_CONTAINER = Color.of(SkijaTheme.TEXT);
 
     // 次要色：弱强调表面（按钮等）
-    public static final Color SECONDARY = Color.hex("FFCCC2DC");
-    public static final Color SECONDARY_CONTAINER = Color.hex("EC4A4458");
-    public static final Color ON_SECONDARY_CONTAINER = Color.hex("FFE8DEF8");
+    /** 次要前景 ← Setsuna {@code TEXT_MUTED}。 */
+    public static final Color SECONDARY = Color.of(SkijaTheme.TEXT_MUTED);
+    /** 次要容器 ← Setsuna {@code CONTROL}。 */
+    public static final Color SECONDARY_CONTAINER = Color.of(SkijaTheme.CONTROL);
+    /** 次要容器之上的文字 ← Setsuna {@code TEXT}。 */
+    public static final Color ON_SECONDARY_CONTAINER = Color.of(SkijaTheme.TEXT);
 
     // 文本
-    public static final Color TEXT_PRIMARY = Color.hex("FFE6E0E9");
-    public static final Color TEXT_SECONDARY = Color.hex("FFCAC4D0");
-    public static final Color TEXT_MUTED = Color.hex("FF938F99");
-    public static final Color ERROR = Color.hex("FFF2B8B5");
+    /** 主文字 ← Setsuna {@code TEXT}。 */
+    public static final Color TEXT_PRIMARY = Color.of(SkijaTheme.TEXT);
+    /** 次级文字 ← Setsuna {@code TEXT_MUTED}。 */
+    public static final Color TEXT_SECONDARY = Color.of(SkijaTheme.TEXT_MUTED);
+    /** 弱文字 ← Setsuna {@code TEXT_FAINT}。 */
+    public static final Color TEXT_MUTED = Color.of(SkijaTheme.TEXT_FAINT);
+    /** 危险/错误 ← Setsuna {@code DANGER}。 */
+    public static final Color ERROR = Color.of(SkijaTheme.DANGER);
 
     /** 悬停状态层透明度（约 8%）：在底色上叠一层该 alpha 的强调色以表达悬停。 */
     public static final int STATE_LAYER_ALPHA = 20;
 
     // 圆角
-    /** 面板圆角；对应 Epsilon DropdownTheme.PANEL_RADIUS。 */
-    public static final float PANEL_RADIUS = 10f;
-    /** 控件圆角（按钮、滑块、开关等）。 */
-    public static final float CONTROL_RADIUS = 7f;
+    /** 面板圆角 ← Setsuna {@code RADIUS}（6，比 MD3 的 10 更方）。 */
+    public static final float PANEL_RADIUS = SkijaTheme.RADIUS;
+    /** 控件圆角（按钮、滑块、开关等） ← Setsuna {@code RADIUS_SMALL}（4）。 */
+    public static final float CONTROL_RADIUS = SkijaTheme.RADIUS_SMALL;
 
     // 间距与缩进
-    /** 标题栏文本左内缩；对应 Epsilon 标题的 {@code x + 10}。 */
+    /** 标题栏文本左内缩。 */
     public static final float PANEL_TITLE_INSET = 10f;
     /** 控件内文本与控件边缘的间距。 */
     public static final float ROW_CONTENT_INSET = 5f;
 
-    // ── dropdown 面板规格（逐值对齐 Epsilon DropdownTheme）──
+    // ── 面板规格（下拉式分类/设置面板的几何；三栏布局用 ClickGuiLayout，见阶段 B）──
     /** 面板宽度；分类面板与设置面板同宽。 */
     public static final float PANEL_WIDTH = 130f;
     /** 面板标题栏高度。 */
@@ -65,26 +95,26 @@ public final class Theme {
     /** 面板底部留白。 */
     public static final float PANEL_BOTTOM_PADDING = 8f;
 
-    // 模块行与文字：字号 = 14 × Epsilon 的缩放系数（其字体度量 textHeight(scale) ≈ 14·scale）
-    /** 模块行高度；对应 Epsilon MODULE_HEIGHT。 */
+    // 模块行与文字
+    /** 模块行高度。 */
     public static final float MODULE_HEIGHT = 19f;
-    /** 模块行文本左内缩；对应 Epsilon MODULE_PADDING_X。 */
+    /** 模块行文本左内缩。 */
     public static final float MODULE_PADDING_X = 7f;
-    /** 模块行文字号；对应 Epsilon MODULE_TEXT_SCALE = 0.7。 */
+    /** 模块行文字号。 */
     public static final float MODULE_TEXT_SIZE = 9.8f;
-    /** 标题栏文字号；对应 Epsilon HEADER_TEXT_SCALE = 0.82。 */
+    /** 标题栏文字号。 */
     public static final float HEADER_TEXT_SIZE = 11.5f;
-    /** 模块行底部分隔线的 alpha（叠在 OUTLINE 上）；对应 Epsilon moduleDivider。 */
+    /** 模块行底部分隔线的 alpha（叠在 OUTLINE 上）。 */
     public static final int MODULE_DIVIDER_ALPHA = 24;
 
     // 设置行
-    /** 设置行高度；对应 Epsilon SETTING_HEIGHT。 */
+    /** 设置行高度。 */
     public static final float SETTING_HEIGHT = 16f;
-    /** 设置行文字号；对应 Epsilon SETTING_TEXT_SCALE = 0.65。 */
+    /** 设置行文字号。 */
     public static final float SETTING_TEXT_SIZE = 9.1f;
-    /** 设置行之间的间距；对应 Epsilon SETTING_GAP。 */
+    /** 设置行之间的间距。 */
     public static final float SETTING_GAP = 3f;
-    /** 设置行左右内缩；对应 Epsilon SETTING_PADDING_X。 */
+    /** 设置行左右内缩。 */
     public static final float SETTING_PADDING_X = 6f;
 
     // 开关（26×16，滑块 off 8 / on 12，内缩 off 4 / on 2）
@@ -99,7 +129,7 @@ public final class Theme {
     public static final float FONT_SIZE = 14f;
     public static final float FONT_SIZE_SMALL = 12f;
 
-    // 动效：悬停 120ms、展开 180ms，与参照实现一致
+    // 动效：悬停 120ms、展开 180ms
     public static final long HOVER_MS = 120L;
     public static final long EXPAND_MS = 180L;
 

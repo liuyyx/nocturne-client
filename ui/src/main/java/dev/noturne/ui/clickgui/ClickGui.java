@@ -3,8 +3,11 @@ package dev.noturne.ui.clickgui;
 import dev.noturne.client.module.Category;
 import dev.noturne.client.module.ModuleRegistry;
 import dev.noturne.ui.component.Panel;
+import dev.noturne.ui.gl.OverlayGui;
 import dev.noturne.ui.render.Renderer;
 import dev.noturne.ui.theme.Theme;
+
+import io.github.humbleui.skija.Canvas;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,7 +19,7 @@ import java.util.List;
  * 交互约定：左键点模块行切换开关，左键按住标题栏拖动整列，右键点模块行唤出设置面板，
  * 滚轮整体上下滚动，Esc 关闭。
  */
-public final class ClickGui extends Panel {
+public final class ClickGui extends Panel implements OverlayGui {
 
     /** Esc 键码（AWT VK_ESCAPE）。两代 LWJGL 的数值都不同，统一由输入后端翻译。 */
     private static final int KEY_ESCAPE = 27;
@@ -127,11 +130,23 @@ public final class ClickGui extends Panel {
     }
 
     /**
+     * 叠加层的两通道渲染入口：本实现只用抽象绘制面，画布一律忽略。
+     *
+     * <p>（需要 Skija 画布的界面见 {@link dev.noturne.ui.skija.SetsunaClickGui}；两个实现都挂在
+     * {@link OverlayGui} 下，由 {@link dev.noturne.ui.gl.GuiOverlay} 按后端能力选择。）
+     */
+    @Override
+    public void render(Renderer renderer, Canvas canvas) {
+        render(renderer);
+    }
+
+    /**
      * 右键落在模块行上时唤出该模块的设置面板，落在别处则收起。
      *
      * <p>右键必须在 {@code super} 之前拦截：分类栏与模块行都会把「点在自身范围内」视为已消费，
      * 等它们处理完就再也轮不到设置面板了。
      */
+
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (!open) {

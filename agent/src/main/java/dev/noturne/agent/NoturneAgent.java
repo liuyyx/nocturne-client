@@ -58,7 +58,7 @@ public final class NoturneAgent {
     }
 
     /**
-     * 启动期代理入口（{@code -javaagent} 或 attach 加载 jar 时由 JVM 调用）。
+     * 启动期代理入口（仅由 {@code -javaagent} 启动参数触发；attach 走 {@link #agentmain}）。
      *
      * @param agentArgs 代理参数字符串（{@code -javaagent:...=args} 中 {@code =} 之后的部分），可能为 null
      * @param instrumentation JVM 注入的插桩句柄，用于类转换与重转换
@@ -89,15 +89,35 @@ public final class NoturneAgent {
      * @param instrumentation 插桩句柄，透传给各安装步骤
      */
     private static void start(String via, final String agentArgs, final Instrumentation instrumentation) {
-        // 幂等：premain + agentmain 或重复 attach 时，只有第一次真正安装（M-89）。
-        if (!STARTED.compareAndSet(false, true)) {
-            log("agent already started; ignoring duplicate entry via " + via);
-            return;
-        }
+        // 参数解析必须在幂等 CAS **之前**：否则后触发的入口（例如先用 CLI --pid= 注入、再用 GUI
+        // 带正确 mcVersion/guiKey 注入同一进程）携带的选项会被 early-return 丢弃。M-89 的幂等
+        // 保护的是「安装一次」，不是「配置一次」；配置允许后到者补齐缺失项。
+        final int newGuiKey = parseToggleKey(agentArgs);
+        final String newMcVersion = parseVersion(agentArgs);
         log("agent loaded via " + via
                 + (agentArgs == null || agentArgs.isEmpty() ? "" : " args=[" + agentArgs + "]"));
-        guiToggleKey = parseToggleKey(agentArgs);
-        mcVersion = parseVersion(agentArgs);
+        if (!STARTED.compareAndSet(false, true)) {
+            // 已装过：仅当旧值为默认且新入口带来了可用新值时才升级（覆盖默认键 / unknown 版本）。
+            boolean upgraded = false;
+            if (guiToggleKey == VK_RIGHT_SHIFT && newGuiKey != VK_RIGHT_SHIFT) {
+                guiToggleKey = newGuiKey;
+                upgraded = true;
+            }
+            if ("unknown".equals(mcVersion) && !"unknown".equals(newMcVersion)) {
+                mcVersion = newMcVersion;
+                selectMapping(instrumentation);   // 用新版本重选映射（selectMapping 内部已记住）
+                upgraded = true;
+            }
+            if (upgraded) {
+                log("agent options upgraded by " + via + ": guiKey=" + guiToggleKey
+                        + ", mcVersion=" + mcVersion);
+            } else {
+                log("agent already started; ignoring duplicate entry via " + via);
+            }
+            return;
+        }
+        guiToggleKey = newGuiKey;
+        mcVersion = newMcVersion;
         log("agent options: guiKey=" + guiToggleKey + ", mcVersion=" + mcVersion);
 
         // 在注册任何转换器之前打开首帧存活日志：钩子一旦被重新转换激活，游戏主线程可能立刻
@@ -109,13 +129,15 @@ public final class NoturneAgent {
             @Override
             public void run() {
                 try {
-                    NoturneClient.boot(instrumentation);
-                    // 映射表在这里选且**只选一次**：版本由注入器传入，下游（叠加层、游戏桥、模块）
-                    // 全部复用同一张表。放在最前面，后面任何环节拿到的都不会是「默认恒等映射」。
+                    // 映射表先选再 boot：下游（boot 内部、叠加层、游戏桥、模块）不应拿到
+                    // 兜底的恒等映射再被永久缓存（M-84 注释原意）。
                     selectMapping(instrumentation);
+                    NoturneClient.boot(instrumentation);
                     installFrameHook(instrumentation);
                     installOverlay(instrumentation);
                 } catch (Throwable t) {
+                    // 允许后续重复入口重试安装：只有真正完成才算 STARTED。
+                    STARTED.set(false);
                     log("client initialisation failed: " + t);
                     t.printStackTrace();
                 }

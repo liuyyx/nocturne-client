@@ -113,6 +113,14 @@ public final class GlRenderer implements UiBackend {
             reportMissingViewport(viewport);
         }
 
+        // 属性栈保存：beginFrame 会改 texture/depth/cull/blend 与混合函数，退出时必须原样归还。
+        // 不归还时游戏的状态缓存（1.8.9 的 GlStateManager 按布尔值缓存各项开关）会与实际 GL 状态
+        // 失配——它认为纹理仍然启用于是不再 glEnable，而实际已被关闭，主菜单背景会退化成无纹理的
+        // 纯色渐变。属性栈是固定管线专属能力，核心 profile 下自动跳过。
+        if (gl.hasAttribStack()) {
+            gl.pushAttrib(GlApi.GL_ALL_ATTRIB_BITS);
+        }
+
         gl.matrixMode(GlApi.GL_PROJECTION);
         gl.pushMatrix();
         gl.loadIdentity();
@@ -146,6 +154,10 @@ public final class GlRenderer implements UiBackend {
             gl.popMatrix();
             gl.matrixMode(GlApi.GL_MODELVIEW);
             gl.popMatrix();
+            // 与 beginFrame 的 pushAttrib 对称：归还 texture/depth/cull/blend 等状态位。
+            if (gl.hasAttribStack()) {
+                gl.popAttrib();
+            }
             statePushed = false;
         }
         // 裁剪清理不得被 statePushed 门控：beginFrame 可能因缺少矩阵句柄提前返回，

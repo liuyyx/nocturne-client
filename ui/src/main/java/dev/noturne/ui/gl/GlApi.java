@@ -49,6 +49,8 @@ public final class GlApi {
     public static final int GL_DEPTH_TEST = 2929;
     /** {@code glGetIntegerv} 的查询目标：当前视口，结果为 {@code {x, y, width, height}}。 */
     public static final int GL_VIEWPORT = 2978;
+    /** {@code glPushAttrib}/{@code glPopAttrib} 的掩码：全部属性位（固定管线专属）。 */
+    public static final int GL_ALL_ATTRIB_BITS = 0x000FFFFF;
     /** 裁剪测试开关，配合 {@code glScissor} 实现矩形裁剪。 */
     public static final int GL_SCISSOR_TEST = 3089;
 
@@ -70,6 +72,10 @@ public final class GlApi {
     private final Method pushMatrix;
     /** 已解析的 {@code glPopMatrix}，弹出变换矩阵栈。 */
     private final Method popMatrix;
+    /** 已解析的 {@code glPushAttrib}，压入 GL 属性位；核心 profile 下不存在，为 {@code null}。 */
+    private final Method pushAttrib;
+    /** 已解析的 {@code glPopAttrib}，弹出 GL 属性位。 */
+    private final Method popAttrib;
     /** 已解析的 {@code glTranslatef}，平移当前矩阵。 */
     private final Method translatef;
     /** 已解析的 {@code glScalef}，缩放当前矩阵。 */
@@ -115,6 +121,7 @@ public final class GlApi {
      */
     private GlApi(Method color4f, Method begin, Method end, Method vertex2f, Method enable,
                   Method disable, Method blendFunc, Method pushMatrix, Method popMatrix,
+                  Method pushAttrib, Method popAttrib,
                   Method translatef, Method scalef, Method lineWidth, Method texCoord2f,
                   Method bindTexture, Method matrixMode, Method loadIdentity, Method ortho,
                   Method getIntegerv, Method getIntegervBuffer, Method scissor) {
@@ -127,6 +134,8 @@ public final class GlApi {
         this.blendFunc = blendFunc;
         this.pushMatrix = pushMatrix;
         this.popMatrix = popMatrix;
+        this.pushAttrib = pushAttrib;
+        this.popAttrib = popAttrib;
         this.translatef = translatef;
         this.scalef = scalef;
         this.lineWidth = lineWidth;
@@ -176,6 +185,9 @@ public final class GlApi {
                 Reflect.method(gl, "glBlendFunc", int.class, int.class),
                 Reflect.method(gl, "glPushMatrix"),
                 Reflect.method(gl, "glPopMatrix"),
+                // 属性栈是固定管线专属（GL11）；核心 profile 下解析不到，句柄为 null 时调用被跳过。
+                Reflect.method(gl, "glPushAttrib", int.class),
+                Reflect.method(gl, "glPopAttrib"),
                 Reflect.method(gl, "glTranslatef", float.class, float.class, float.class),
                 Reflect.method(gl, "glScalef", float.class, float.class, float.class),
                 Reflect.method(gl, "glLineWidth", float.class),
@@ -244,6 +256,30 @@ public final class GlApi {
     /** 弹出模型视图矩阵栈（对应 {@code glPopMatrix}），必须与 {@link #pushMatrix()} 成对使用。 */
     public void popMatrix() {
         Reflect.call(popMatrix, null);
+    }
+
+    /**
+     * 是否支持属性栈（{@code glPushAttrib}/{@code glPopAttrib}）。
+     *
+     * <p>只有固定管线（1.8.9 / LWJGL2）提供这两个入口；核心 profile 已移除立即模式与属性栈，
+     * 那时的状态管理由调用方自行负责。
+     */
+    public boolean hasAttribStack() {
+        return pushAttrib != null && popAttrib != null;
+    }
+
+    /**
+     * 压入 GL 属性位（对应 {@code glPushAttrib}）。
+     *
+     * @param mask 属性位掩码，通常取 {@link #GL_ALL_ATTRIB_BITS}
+     */
+    public void pushAttrib(int mask) {
+        Reflect.call(pushAttrib, null, mask);
+    }
+
+    /** 弹出 GL 属性位（对应 {@code glPopAttrib}），必须与 {@link #pushAttrib(int)} 成对使用。 */
+    public void popAttrib() {
+        Reflect.call(popAttrib, null);
     }
 
     /** 平移当前矩阵（对应 {@code glTranslatef}）；UI 通常只在 z 传 0。 */

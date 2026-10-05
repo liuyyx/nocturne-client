@@ -43,7 +43,7 @@
 
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
-| 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 可切换；`tmp/mc189.log`） | ✅ | ✅ 已有表 | ⚠️ 部分：遮罩可见，面板/文字未渲染（见下） |
+| 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed`、`screen=ClickGui`） |
 | 1.12.2 | ⏳ | 未验 | ✅ 已产出 | ⏳ |
 | 1.16.5 / 1.20.1 / 1.21.4 | ⏳ | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ⏳ |
 | 1.21.10 / 1.21.11 | ⏳ | 字节码级已验证（GLFW 目标） | ❌ 未产出 | ⏳ |
@@ -60,11 +60,14 @@
 > 26.2/26.3 的界面需要先接入**不依赖 LWJGL 绑定**的绘制路径（例如经 SDL 自行 make current 后交给
 > Skia，或改用游戏自身的绘制 API）。
 
-> **1.8.9 真机观察（待修）**：用官方 1.8.9（Mojang 直链）+ LWJGL2 实测，注入与叠加层装载全部成功
-> （`GUI overlay attached; backend=gl-fixed; input=lwjgl2; toggle key=54; mapping=obfuscated 1.8.9 (60 classes)`），
-> 按右 Shift 能打开/关闭叠加层（全屏遮罩随开随关），但**面板与文字没有出现**。Skija 在该 JDK 上不可用
-> （`sun.misc.Cleaner`，非 Java 8 运行时的已知差异）因此回落到固定管线后端；问题定位在
-> `GlRenderer` 的投影/视口或 `ClickGui` 的布局尺寸这一层。
+> **1.8.9 真机结论**：官方 1.8.9（Mojang 直链）+ LWJGL2 上端到端可用——注入、帧钩子、叠加层装载、
+> 右 Shift 唤出、四个分类面板与模块名显示全部正常（`backend=gl-fixed; input=lwjgl2; toggle key=54;
+> mapping=obfuscated 1.8.9 (60 classes)`；`screen=ClickGui`）。Skija 在非 Java 8 运行时不可用
+> （`sun.misc.Cleaner`），按设计回落到固定管线后端。
+> 固定管线路径上有三处必须对齐游戏的状态管理，均已修好：① 绘制尺寸必须在 `beginFrame()` 之后同步
+> （否则按 0 尺寸布局）；② GL 状态位必须用 `glPushAttrib`/`glPopAttrib` 原样归还（否则游戏
+> `GlStateManager` 的布尔缓存与实际状态失配，主菜单背景会退化成无纹理纯色）；③ 绘制文字前要补一次
+> `glEnable(GL_TEXTURE_2D)`（同样的缓存失配会让字形采不到字体图集，退化成色块）。
 
 > **「注入」列指什么**：目前唯一跑通的是 LWJGL2 实验靶（`tmp/lab189/Fake189v5`：真实 Java 8 +
 > 真实 LWJGL2 + 真实 OpenGL 4.6，320×240 空白窗口，120 帧 `Display.update()`），**靶内没有 Minecraft**。

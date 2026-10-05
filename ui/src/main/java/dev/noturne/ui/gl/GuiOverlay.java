@@ -353,18 +353,19 @@ public final class GuiOverlay implements FrameListener {
             Canvas canvas = renderer instanceof SkijaBackend
                     ? ((SkijaBackend) renderer).canvas()
                     : null;
-            if (canvas != null) {
-                int width = renderer.width();
-                int height = renderer.height();
-                if (editorOpen) {
-                    editor.render(renderer, canvas);
-                } else {
-                    if (hud != null) {
-                        hud.render(canvas, width, height, fps);
-                    }
-                    if (guiOpen) {
-                        gui.render(renderer, canvas);
-                    }
+            int width = renderer.width();
+            int height = renderer.height();
+            if (editorOpen) {
+                // 编辑器只在前端为 Skija 时存在（见构造），此时 canvas 必然可用。
+                editor.render(renderer, canvas);
+            } else {
+                if (hud != null && canvas != null) {
+                    hud.render(canvas, width, height, fps);
+                }
+                if (guiOpen) {
+                    // 不能按 canvas 是否为空决定画不画界面：gl-fixed 后端下 canvas 恒为 null，而
+                    // ClickGui 只用抽象绘制面（忽略 canvas）——原写法会让整个 ClickGUI 永不渲染。
+                    gui.render(renderer, canvas);
                 }
             }
         } finally {

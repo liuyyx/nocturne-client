@@ -213,6 +213,11 @@ public final class MinecraftTextRenderer implements TextRenderer {
             return;
         }
         int rgb = color == null ? 0xFFFFFF : (color.argb & 0xFFFFFF);
+        // 字形要采样字体图集：本后端的填充绘制会把 GL_TEXTURE_2D 关掉，而游戏的 GlStateManager
+        // 仍缓存着「纹理已启用」，它自己便不再 glEnable——不在这里补一刀，字形就退化成色块。
+        if (gl != null) {
+            gl.enable(GlApi.GL_TEXTURE_2D);
+        }
         float scale = effectiveScale(size);
         if (scale != 1f) {
             // 固定管线路径：把整个字形按目标字号缩放后绘制，使实际字形尺寸与 width()/height() 一致。

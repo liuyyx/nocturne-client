@@ -130,23 +130,27 @@ public final class OverlayBootstrap implements FrameListener {
         if (client == null) {
             return;
         }
-        attempts++;
-
-        // SDL 栈（Minecraft 26.x）保护：这些版本改用 SDL 管理 GL 上下文，而 LWJGL 的 GL 绑定在其中
-        // **不可用**——在帧回调里调用任何 GL 函数（哪怕只是 glGetIntegerv 读视口）都会让 LWJGL
-        // FATAL ERROR 直接终止 JVM（native abort，Java 侧捕获不到）。实测就是这样崩的：
-        // SDL_GL_SwapWindow → 我们的钩子 → SkijaBackend.beginFrame → glGetIntegerv → JVM abort。
-        // 因此这里宁可**不安装**，也不能把游戏弄崩：绘制改由 GUI 绘制钩子（GL 上下文安全的时机）
-        // 驱动，见 CallbackHookTransformer。
-        ClassLoader probeLoader = gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader;
-        if (loadNoInit("org.lwjgl.sdl.SDLVideo", probeLoader) != null) {
+        // 只在 GUI 绘制路径（GL 上下文有效）里安装：SDL 栈下在帧回调里做 GL 会让 LWJGL 直接终止
+        // JVM（native abort，捕获不到）。放在计数之前，保证"等待安全时机"不消耗重试次数。
+        if (!GuiDrawHook.isSafeGlContext()) {
+            return;
+        }
+        // 实测：即便是 GUI 绘制路径，26.x 的 SDL 上下文对 LWJGL 的 GL 绑定同样不可用——在这里调用
+        // GL 仍会让 JVM abort。因此 SDL 栈下**不做 GL 初始化**（宁可没有界面，也不能崩游戏）；
+        // 待接入不依赖 LWJGL 绑定的绘制路径后再启用。
+        if (GuiDrawHook.isSdlStack()) {
             if (!sdlStackDetected) {
                 sdlStackDetected = true;
-                log("SDL GL stack detected: overlay install deferred (calling GL from the frame"
-                        + " callback aborts the JVM); waiting for the GUI draw hook");
+                log("SDL GL stack: overlay rendering unavailable via LWJGL bindings;"
+                        + " skipping GL initialisation (the game is left untouched)");
             }
             return;
         }
+        attempts++;
+
+        // 注：SDL 栈（Minecraft 26.x）下帧钩子**不再注册**（见 NoturneAgent.installFrameHook），
+        // 帧回调因此只由 GUI 绘制钩子驱动——那里 GL 上下文安全（见 GuiDrawHook）。所以这里不必再
+        // 拦截安装：它只会在安全时机发生。
 
         ClassLoader loader = gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader;
         GlApi gl = GlApi.bind(gl11);

@@ -279,9 +279,54 @@ public final class NoturneAgent {
         }
     }
 
+    /**
+     * @return 游戏类加载器（从已加载的游戏类取）；取不到返回 {@code null}
+     */
+    private static ClassLoader gameClassLoader(Instrumentation instrumentation) {
+        if (instrumentation == null) {
+            return null;
+        }
+        for (Class<?> type : instrumentation.getAllLoadedClasses()) {
+            String name = type.getName();
+            if ("net.minecraft.client.Minecraft".equals(name)
+                    || "net.minecraft.client.gui.Hud".equals(name)) {
+                return type.getClassLoader();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @return 是否 SDL 渲染栈（Minecraft 26.x 起）
+     *
+     * <p>SDL 栈下**不能**用帧钩子：LWJGL 的 GL 绑定在 SDL 管理的上下文里不可用，帧回调里任何一次
+     * GL 调用（哪怕只读视口）都会让 LWJGL {@code FATAL ERROR} 终止 JVM，且捕获不到。所以这些版本
+     * 改为把驱动点放在 GUI 绘制钩子上（那时 GL 上下文有效）。
+     */
+    private static boolean isSdlStack(Instrumentation instrumentation, ClassLoader gameLoader) {
+        if (gameLoader != null && loadNoInit("org.lwjgl.sdl.SDLVideo", gameLoader) != null) {
+            return true;
+        }
+        if (instrumentation != null) {
+            for (Class<?> type : instrumentation.getAllLoadedClasses()) {
+                if ("org.lwjgl.sdl.SDLVideo".equals(type.getName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static void installFrameHook(Instrumentation instrumentation) {
         if (instrumentation == null) {
             log("no Instrumentation: frame hook skipped");
+            return;
+        }
+        // GUI 绘制钩子先注册：SDL 栈下它是唯一的驱动点（见 isSdlStack 的说明）。
+        installGuiDrawHook(instrumentation);
+        if (isSdlStack(instrumentation, gameClassLoader(instrumentation))) {
+            log("SDL render stack detected: frame hook skipped (a GL call from the frame callback"
+                    + " aborts the JVM); the overlay is driven by the GUI draw hook instead");
             return;
         }
         EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
@@ -308,6 +353,60 @@ public final class NoturneAgent {
      * @param method 目标方法名
      * @param descriptor 目标方法描述符
      */
+    /** GUI 绘制钩子的目标类（点号形式）。签名取自 26.3 实际字节码：{@code javap net.minecraft.client.gui.Hud}。 */
+    private static final String GUI_DRAW_CLASS = "net.minecraft.client.gui.Hud";
+    /** 目标方法名。 */
+    private static final String GUI_DRAW_METHOD = "extractRenderState";
+    /** 目标方法描述符：首个引用形参即绘制上下文。 */
+    private static final String GUI_DRAW_DESCRIPTOR =
+            "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V";
+    /** 钩子类内部名（斜杠形式）。 */
+    private static final String GUI_HOOK_OWNER = "dev/noturne/agent/GuiDrawHook";
+    /** 钩子方法名（描述符固定 {@code (Ljava/lang/Object;)V}）。 */
+    private static final String GUI_HOOK_METHOD = "onDraw";
+
+    /**
+     * 注册 GUI 绘制钩子：把 {@code Hud.extractRenderState(GuiGraphicsExtractor, DeltaTracker)} 的首个
+     * 引用形参交给 {@link GuiDrawHook#onDraw(Object)}。
+     *
+     * <p>为什么是这里：Minecraft 26.x 用 SDL 管理 GL 上下文，帧回调里做任何 GL 调用都会让 LWJGL
+     * 直接终止 JVM（native abort，捕获不到）。而 GUI 绘制期的 GL 上下文是有效的——游戏自己正在画界面。
+     * 因此 SDL 栈上把"输入轮询 + 绘制"整体挪到这个钩子里，由它每帧驱动 {@code NoturneRuntime.onFrame()}。
+     *
+     * <p>钩子描述符必须是 {@code (Ljava/lang/Object;)V}：转换器只负责把首个引用形参原样传出来，
+     * 不关心它具体是什么类型（把具体类型写进描述符会让钩子在类加载顺序变化时失配）。
+     */
+    private static void installGuiDrawHook(Instrumentation instrumentation) {
+        EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
+        if (asmLoader == null) {
+            log("embedded ASM unavailable; gui draw hook skipped");
+            return;
+        }
+        ClassFileTransformer transformer = asmLoader.createCallbackTransformer(
+                GUI_DRAW_CLASS, GUI_DRAW_METHOD, GUI_DRAW_DESCRIPTOR, GUI_HOOK_OWNER, GUI_HOOK_METHOD);
+        if (transformer == null) {
+            return;
+        }
+        try {
+            instrumentation.addTransformer(transformer, true);
+        } catch (Throwable t) {
+            log("could not register gui draw hook: " + t);
+            return;
+        }
+        // 目标类可能已被加载：显式重转换一次，否则要等下一次加载（那时可能永远不重载）。
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            if (GUI_DRAW_CLASS.equals(loaded.getName())) {
+                try {
+                    instrumentation.retransformClasses(loaded);
+                } catch (Throwable t) {
+                    log("retransform " + GUI_DRAW_CLASS + " failed: " + t);
+                }
+                break;
+            }
+        }
+        log("gui draw hook registered on " + GUI_DRAW_CLASS + "." + GUI_DRAW_METHOD);
+    }
+
     private static void registerFrameHook(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                           String targetInternalName, String method, String descriptor) {
         ClassFileTransformer transformer =
@@ -355,6 +454,9 @@ public final class NoturneAgent {
                     : ClassLoader.getSystemClassLoader();
             // 交给 OverlayBootstrap：它在 GL 真正可用后才安装，模组路径复用同一套逻辑。
             // trace(true) 已在 start() 里、注册转换器之前打开（见 M-82），此处不再重复。
+            // GUI 绘制钩子需要 loader/instrumentation 才能发起安装：SDL 栈下只有它触发的时机
+            // GL 上下文有效，因此安装由它首次调用时发起（见 GuiDrawHook）。
+            GuiDrawHook.arm(loader, instrumentation, guiToggleKey);
             OverlayBootstrap.install(loader, instrumentation, guiToggleKey);
             log("overlay bootstrap registered; toggle key=" + guiToggleKey);
         } catch (Throwable t) {

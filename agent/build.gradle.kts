@@ -10,8 +10,10 @@ dependencies {
     // 客户端核心与 UI 会被 agent 一并带入目标 JVM。
     implementation(project(":client"))
     implementation(project(":ui"))
-    // ASM：帧钩子所需的字节码改写（用于对目标方法织入 hook）。
-    implementation("org.ow2.asm:asm:9.7.1")
+    // ASM：字节码改写（帧钩子 + GUI 绘制钩子）。版本必须跟得上目标游戏的 class 版本：
+    // 26.3 是 Java 25（class 69），9.7.1 只能读到 Java 24，会对 Hud.extractRenderState 直接抛
+    // 「Unsupported class file major version 69」，钩子静默失效。
+    implementation("org.ow2.asm:asm:9.8")
     // JUnit 5：单元测试编译期依赖。
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     // JUnit Platform 启动器：测试运行时依赖。

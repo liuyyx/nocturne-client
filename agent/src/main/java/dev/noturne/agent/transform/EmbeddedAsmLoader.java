@@ -46,6 +46,9 @@ public final class EmbeddedAsmLoader extends ClassLoader {
 
     /** 转换器类名与钩子目标，与 {@link FrameHookTransformer} 的契约一致。 */
     private static final String TRANSFORMER_CLASS = "dev.noturne.agent.transform.FrameHookTransformer";
+    /** 首参回调转换器类名（与 {@link CallbackHookTransformer} 的契约一致）。 */
+    private static final String CALLBACK_TRANSFORMER_CLASS =
+            "dev.noturne.agent.transform.CallbackHookTransformer";
     /** 钩子所在类内部名（斜杠形式）。 */
     private static final String HOOK_OWNER = "dev/noturne/client/runtime/NoturneRuntime";
     /** 钩子方法名。 */
@@ -95,6 +98,37 @@ public final class EmbeddedAsmLoader extends ClassLoader {
      * @param descriptor 目标方法描述符
      * @return 转换器实例；子加载器或类加载失败时返回 {@code null}（已打日志）
      */
+    /**
+     * 创建一个「首参回调」转换器：把目标方法的**首个引用形参**交给钩子。
+     *
+     * <p>与 {@link #createTransformer} 的唯一区别是转换器实现类——那一个注入**无参**调用（帧交换点），
+     * 这一个注入**带一个对象参数**的调用（绘制上下文就在形参里的那代 API）。两者都用同一套内嵌 ASM
+     * 与 child-first 加载策略。
+     *
+     * @param targetInternalName 目标类内部名（斜杠形式）
+     * @param method             目标方法名
+     * @param descriptor         目标方法描述符（必须含至少一个引用形参）
+     * @param hookOwner          钩子类内部名（斜杠形式）
+     * @param hookMethod         钩子方法名（描述符固定为 {@code (Ljava/lang/Object;)V}）
+     * @return 转换器；内嵌 ASM 缺失或类加载失败时返回 {@code null}
+     */
+    public ClassFileTransformer createCallbackTransformer(String targetInternalName, String method,
+                                                          String descriptor, String hookOwner,
+                                                          String hookMethod) {
+        try {
+            Class<?> transformerClass = loadClass(CALLBACK_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, String.class);
+            Object instance = constructor.newInstance(
+                    targetInternalName, method, descriptor, hookOwner, hookMethod);
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create callback hook transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; callback hook disabled");
+            return null;
+        }
+    }
+
     public ClassFileTransformer createTransformer(String targetInternalName, String method,
                                                   String descriptor) {
         try {

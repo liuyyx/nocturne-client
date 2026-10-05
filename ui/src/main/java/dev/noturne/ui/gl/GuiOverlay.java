@@ -345,6 +345,10 @@ public final class GuiOverlay implements FrameListener {
         }
         renderer.beginFrame();
         try {
+            // 视口尺寸只有在 beginFrame 之后才是本帧的真值（GlRenderer 在那一步才从 GL 读回视口）。
+            // 这里再同步一次：输入处理用上一帧尺寸可以接受，但绘制尺寸必须是当帧的——否则固定
+            // 管线后端会按 0 尺寸布局，整个界面等于空框。
+            active().setViewport(renderer.width(), renderer.height());
             // 画布必须在 beginFrame 之后取：Skija 后端在这一步才建立/复用原生表面
             Canvas canvas = renderer instanceof SkijaBackend
                     ? ((SkijaBackend) renderer).canvas()

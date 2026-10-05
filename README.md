@@ -61,7 +61,7 @@ java -jar dist/build/libs/noturne-<version>.jar --pid=<pid>     # 注入指定�
 
 | 项 | 状态 |
 |---|---|
-| 注入链路（attach → agentmain → 帧钩子生效 → 叠加层装载） | **在真实 Java 8 + LWJGL2 + OpenGL 栈上已验证**（`tmp/lab189/targetH.log`：帧钩子 live、叠加层 attach、`backend=gl-fixed`）。⚠️ 该验证跑在 LWJGL2 实验靶（`Fake189v5`，320×240 空白窗口、120 帧）上，**JVM 内没有 Minecraft**——Minecraft 相关的一切（FontRenderer、Gui.drawRect、Options、player/world）均未验证 |
+| 注入链路（attach → agentmain → 帧钩子生效 → 叠加层装载） | **已在两处实测**：① 官方 1.8.9 真机（见下两行）；② LWJGL2 实验靶（`tmp/lab189/targetH.log`：帧钩子 live、叠加层 attach、`backend=gl-fixed`）。真机之前先用实验靶验证了 Java 8 栈上的链路（靶内无 Minecraft） |
 | 26.3 真机（注入 + 稳定性） | **已实测**：真实 26.3 + Fabric 上 attach → `agentmain` → `client installed (modules=4)`，游戏存活、无崩溃（`tmp/mc263-*.log`）。SDL 栈下按设计**不注册帧钩子、不安装叠加层**（LWJGL 的 GL 绑定在 SDL 进程里不可用），原因与后续方案见 `docs/VERSION-MATRIX.md` |
 | 1.8.9 真机（注入 + 唤出） | **已实测**：官方 1.8.9 + LWJGL2 上 attach → `agentmain` → 帧钩子 live → 叠加层 attach，右 Shift 可开/关叠加层，游戏稳定不崩。**面板与文字尚未渲染**（Skija 在该 JDK 上不可用而回落固定管线后端，问题在 `GlRenderer` 投影/视口或 `ClickGui` 布局尺寸），见 `docs/VERSION-MATRIX.md` |
 | 映射表生成器（9 个版本） | 进行中（`tools/mapping/`） |

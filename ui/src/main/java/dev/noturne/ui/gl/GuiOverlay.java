@@ -251,10 +251,19 @@ public final class GuiOverlay implements FrameListener {
             return;
         }
 
+        // 视口与悬停必须先同步：滚轮、点击、拖动的夹取都依赖它。放在滚轮之前，是因为滚轮会走
+        // 平移夹取——视口还未知（0）时那套夹取会把整列推出屏幕。
+        OverlayGui current = active();
+        current.setViewport(renderer.width(), renderer.height());
+        if (editor != null) {
+            editor.setFps(fps);
+        }
+        current.update(System.currentTimeMillis(), mx, my);
+
         // 滚轮先于 Esc 派发：Esc 会在本帧关闭界面，若先处理 Esc，这一帧取出的滚轮增量就再也
         // 没有接收方，被静默丢弃——玩家看到的是「界面明明还开着，滚轮这一下没反应」。
         if (scroll != 0d) {
-            active().mouseScrolled(mx, my, scroll);
+            current.mouseScrolled(mx, my, scroll);
         }
 
         // 键盘：目前只需让 Esc 可达（关闭当前界面）。键码为 AWT VK，后端已翻译。
@@ -289,14 +298,6 @@ public final class GuiOverlay implements FrameListener {
                         + " input=" + input.describe() + "; backend=" + renderer.backendName());
             }
         }
-
-        // 先同步绘制区域尺寸，滚动范围与拖动/平移夹取才能正确计算
-        OverlayGui current = active();
-        current.setViewport(renderer.width(), renderer.height());
-        if (editor != null) {
-            editor.setFps(fps);
-        }
-        current.update(System.currentTimeMillis(), mx, my);
 
         boolean left = input.mouseDown(BUTTON_LEFT);
         boolean right = input.mouseDown(BUTTON_RIGHT);

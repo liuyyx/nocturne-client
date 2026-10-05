@@ -116,11 +116,26 @@ public final class JdkAttachStrategy implements AttachStrategy {
         if (message == null) {
             return false;
         }
-        // 响应本身就是裸返回码（JDK 8 格式），trim 后为纯数字即视为成功。
-        // 不能只接 "Failed to load agent library: 0"——那条前缀是 JDK 9 客户端
-        // `loadAgentLibrary` 的报错路径，不是 "return code: " 的裸数字形态。
+        // 返回码为 0 的三种实际形态（都表示目标侧真的加载成功了）：
+        //   1) 裸返回码            "0"
+        //   2) loadAgentLibrary 前缀 "Failed to load agent library: 0"
+        //      —— 这是 JDK 21 客户端 × 非 JDK 21 目标时的**实际抛出形态**（实测：目标侧
+        //         agentmain 已执行、返回码为 0，客户端仍把「读不懂的响应」判成 load 失败）。
+        //         曾经只接形态 1，把这条唯一的真实形态排除掉了，导致注入被误判为失败。
+        //   3) VirtualMachine 的响应解析失败 "Unexpected reply from target JVM: 0"
+        //      末尾也是返回码。
         String trimmed = message.trim();
-        return trimmed.matches("[0-9]+") && "0".equals(trimmed);
+        if (trimmed.matches("[0-9]+")) {
+            return "0".equals(trimmed);
+        }
+        String libraryPrefix = "Failed to load agent library: ";
+        if (trimmed.startsWith(libraryPrefix)) {
+            return "0".equals(trimmed.substring(libraryPrefix.length()).trim());
+        }
+        java.util.regex.Matcher reply =
+                java.util.regex.Pattern.compile("Unexpected reply from target JVM: (\\d+)")
+                        .matcher(trimmed);
+        return reply.find() && "0".equals(reply.group(1));
     }
 
     /**

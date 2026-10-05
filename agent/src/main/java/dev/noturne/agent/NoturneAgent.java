@@ -123,6 +123,13 @@ public final class NoturneAgent {
         // 在注册任何转换器之前打开首帧存活日志：钩子一旦被重新转换激活，游戏主线程可能立刻
         // 执行到补丁点。若此时 TRACE 仍为 false，那唯一一次「frame hook is live」就被白白吞掉
         // （M-82）。放在这里可把该竞态窗口压到零。
+        // 帧钩子注入的调用由**游戏的类加载器**解析，它看不到 agent jar：不先把最小类集推到
+        // bootstrap 层，钩子一触发就是 NoClassDefFoundError 崩游戏（26.3 实测如此）。
+        installBootstrapBridge(instrumentation);
+        // Fabric 的隔离加载器会**拦截**来自未"暴露" jar 的类加载请求（直接抛 NoClassDefFoundError，
+        // 而不是委托父加载器），因此还要把 agent jar 交给它——否则帧钩子一触发就崩游戏。
+        exposeAgentJarToGameLoader(instrumentation);
+
         dev.noturne.client.runtime.NoturneRuntime.trace(true);
 
         Thread init = new Thread(new Runnable() {
@@ -160,6 +167,118 @@ public final class NoturneAgent {
      *       {@code lwjgl-glfw}，只有 {@code org.lwjgl:lwjgl-sdl}，因此 GLFW 永不加载）。</li>
      * </ul>
      */
+    /**
+     * 把 agent jar 暴露给**游戏的隔离类加载器**。
+     *
+     * <p>问题：Fabric 的 {@code KnotClassLoader} 对「它认得、但没被暴露给它」的 jar 会直接抛
+     * {@code NoClassDefFoundError: ... as it hasn't been exposed to the game}，而不是按
+     * ClassLoader 契约委托父加载器。因此只把类推到 bootstrap 层还不够：帧钩子注入的调用
+     * （{@code SDLVideo.SDL_GL_SwapWindow} 里的 {@code NoturneRuntime.onFrame()}）由游戏的
+     * 类加载器解析，一触发就崩（26.3 实测）。
+     *
+     * <p>做法：反射调用 Knot 自己提供的 {@code addUrlFwd(URL)}——它把该 URL 加进"转发"列表，
+     * Knot 遇到其中的类时交给父加载器（即上面装了最小类集的 bootstrap 层），于是插桩引用与
+     * agent 自身解析到的是**同一份**类，静态状态（监听器列表）才是同一个。
+     *
+     * <p>非 Fabric 环境（原版 / Forge）没有这个方法，直接跳过：那些环境不需要这一步。
+     */
+    private static void exposeAgentJarToGameLoader(Instrumentation instrumentation) {
+        try {
+            java.security.CodeSource source =
+                    NoturneAgent.class.getProtectionDomain().getCodeSource();
+            if (source == null || source.getLocation() == null) {
+                return;
+            }
+            java.net.URL self = source.getLocation();
+            // 游戏类加载器：Fabric/Forge 下是隔离加载器，**不在 system 类加载器的视野里**——
+            // 按名字从 system loader 查必然失败（第一版就是这么静默退出的）。这里从已加载类里找。
+            ClassLoader gameLoader = null;
+            if (instrumentation != null) {
+                for (Class<?> type : instrumentation.getAllLoadedClasses()) {
+                    String name = type.getName();
+                    if ("net.minecraft.client.Minecraft".equals(name)
+                            || "net.minecraft.client.main.Main".equals(name)) {
+                        gameLoader = type.getClassLoader();
+                        if (gameLoader != null) {
+                            break;
+                        }
+                    }
+                }
+            }
+            if (gameLoader == null) {
+                log("game loader not found; skipping agent jar exposure");
+                return;
+            }
+            for (java.lang.reflect.Method method : gameLoader.getClass().getMethods()) {
+                if ("addUrlFwd".equals(method.getName())
+                        && method.getParameterCount() == 1
+                        && method.getParameterTypes()[0] == java.net.URL.class) {
+                    // 声明它的类不是 public（实测会抛 IllegalAccessException），必须显式放开。
+                    method.setAccessible(true);
+                    method.invoke(gameLoader, self);
+                    log("agent jar exposed to game loader: " + self);
+                    return;
+                }
+            }
+            log("game loader has no addUrlFwd; assuming a non-isolated launcher");
+        } catch (Throwable t) {
+            log("exposeAgentJarToGameLoader failed: " + t);
+        }
+    }
+
+    /**
+     * 让**插桩注入的调用**能被游戏的类加载器解析。
+     *
+     * <p>帧钩子把 {@code NoturneRuntime.onFrame()} 注入到 LWJGL 的缓冲交换函数里，而那条调用指令
+     * 由**定义该函数的类加载器**解析——在 Fabric/Forge 下是隔离的 KnotClassLoader，它看不到 agent
+     * jar。实测后果（26.3）：每次交换缓冲都抛 {@code NoClassDefFoundError}，游戏直接崩在启动阶段。
+     *
+     * <p>做法：把「无第三方依赖的最小类集」导出成临时 jar 并追加到 **bootstrap** 搜索路径。
+     * 选 bootstrap 而不是 system：它是所有加载器的父层，因此插桩引用与 agent 自身解析到的是
+     * **同一份**类，静态状态（监听器列表）才是同一个——否则帧回调会分发到另一个空的列表上。
+     *
+     * <p>只导出这两个类：它们不引用 Skija/ASM/gson 等第三方库，放进 bootstrap 不会与游戏的依赖
+     * 产生版本冲突（若把整个 agent jar 推上去，游戏自己的 gson 等会被我们的版本顶掉）。
+     */
+    private static void installBootstrapBridge(Instrumentation instrumentation) {
+        if (instrumentation == null) {
+            return;
+        }
+        String[] entries = {
+                "dev/noturne/client/runtime/FrameDispatcher.class",
+                "dev/noturne/client/runtime/FrameListener.class",
+        };
+        java.nio.file.Path jar = null;
+        try {
+            jar = java.nio.file.Files.createTempFile("noturne-bridge", ".jar");
+            jar.toFile().deleteOnExit();
+            try (java.util.zip.ZipOutputStream out =
+                         new java.util.zip.ZipOutputStream(java.nio.file.Files.newOutputStream(jar))) {
+                for (String entry : entries) {
+                    try (java.io.InputStream in =
+                                 NoturneAgent.class.getClassLoader().getResourceAsStream(entry)) {
+                        if (in == null) {
+                            log("bootstrap bridge: entry missing " + entry);
+                            continue;
+                        }
+                        out.putNextEntry(new java.util.zip.ZipEntry(entry));
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, read);
+                        }
+                        out.closeEntry();
+                    }
+                }
+            }
+            instrumentation.appendToBootstrapClassLoaderSearch(
+                    new java.util.jar.JarFile(jar.toFile()));
+            log("bootstrap bridge installed: " + entries.length + " classes from " + jar.getFileName());
+        } catch (Throwable t) {
+            log("bootstrap bridge failed: " + t);
+        }
+    }
+
     private static void installFrameHook(Instrumentation instrumentation) {
         if (instrumentation == null) {
             log("no Instrumentation: frame hook skipped");

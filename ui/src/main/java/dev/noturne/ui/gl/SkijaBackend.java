@@ -56,7 +56,17 @@ public final class SkijaBackend implements UiBackend {
             backend.beginFrame();
             boolean usable = backend.ready();
             backend.endFrame();
-            return usable ? backend : null;
+            if (usable) {
+                System.out.println("[noturne] skija probe: usable (viewport=" + backend.width() + "x"
+                        + backend.height() + ") mark=diag1");
+                return backend;
+            }
+            // 静默返回 null 会让「为什么没用 Skija」完全无从下手：日志里既没有成功行、也没有失败行
+            // （26.3 实机就撞上了这一点，只能靠代码推断）。这里把判定依据直接打出来。
+            System.out.println("[noturne] skija probe: unusable (viewport=" + backend.width() + "x"
+                    + backend.height() + ", canvas=" + (backend.canvas() != null)
+                    + ", gl=" + (gl != null) + ")");
+            return null;
         } catch (Throwable t) {
             System.out.println("[noturne] skija probe failed: " + t);
             return null;

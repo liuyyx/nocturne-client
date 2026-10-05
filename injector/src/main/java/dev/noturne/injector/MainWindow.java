@@ -260,7 +260,10 @@ public final class MainWindow extends JFrame {
                     source, value, selected, false, row, column);
             // PID 列用略小的字号拉开层次；原写法两个分支同为 PLAIN，等于没写。
             label.setFont(AppTheme.scaled(Font.PLAIN, column == 0 ? 0.93f : 1.0f));
-            label.setBorder(selected
+            // 选中指示器只画在**进程列**的左边缘，作为"整行选中"的视觉锚点。
+            // 此前每一列都画，一行会被切成一堆色块（右侧那条蓝边也是这么来的）。
+            boolean indicator = selected && column == 0;
+            label.setBorder(indicator
                     ? BorderFactory.createMatteBorder(0, 3, 0, 8, AppTheme.ACCENT)
                     : BorderFactory.createEmptyBorder(0, 11, 0, 8));
             label.setForeground(column == 2 ? AppTheme.TEXT_MUTED : AppTheme.TEXT);

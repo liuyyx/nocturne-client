@@ -79,9 +79,12 @@ public final class ProcessScanner {
                     || title.contains("minecraft");
         }
 
-        /** UI 用短标签：有窗口标题时用标题，否则用映像名。 */
+        /** UI 用短标签：有窗口标题时用标题（过长则截断），否则用映像名。 */
         public String displayName() {
-            return windowTitle.isEmpty() ? image : windowTitle;
+            String label = windowTitle.isEmpty() ? image : windowTitle;
+            // 游戏窗口标题常带长后缀（"X (HEAD - 6697bab)"），列表列宽有限；
+            // 截断到可读长度，完整值仍在 display()/toString() 里，便于粘贴到日志。
+            return label.length() > 34 ? label.substring(0, 33) + "\u2026" : label;
         }
 
         /** UI 用完整标签：有窗口标题时输出「标题 + 命令行」，否则只输出截断后的命令行。 */

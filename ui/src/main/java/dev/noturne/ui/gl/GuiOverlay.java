@@ -173,6 +173,17 @@ public final class GuiOverlay implements FrameListener {
 
     @Override
     public void onFrame() {
+        // 诊断（diag3）：GUI 叠加层是否每帧被驱动（用 lastFrameNanos==0 判首帧，避免额外字段）。
+        if (lastFrameNanos == 0L) {
+            try {
+                java.nio.file.Files.write(
+                        java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
+                        ("diag3 GuiOverlay.onFrame: open=" + gui.isOpen() + "\n").getBytes("UTF-8"),
+                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            } catch (Throwable ignored) {
+                // 诊断失败不影响叠加层
+            }
+        }
         // 指针位置只取一次：开关判定、悬停更新与事件派发必须基于同一份坐标，
         // 否则一帧内指针移动会造成命中测试与事件坐标不一致。
         double mx = input.mouseX();

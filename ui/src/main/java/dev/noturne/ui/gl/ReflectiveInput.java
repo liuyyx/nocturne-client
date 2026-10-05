@@ -229,12 +229,39 @@ public final class ReflectiveInput implements InputSource {
      * @return 可用的输入源；两代输入栈都找不到时返回一个恒为「无输入」的退化实现，绝不返回 null
      */
     public static InputSource create(ClassLoader loader, IntSupplier surfaceWidth, IntSupplier surfaceHeight) {
+        // 诊断（diag2）：写文件而不是只依赖 stdout——目标 JVM 里 stdout 可能只透出一部分行。
+        try {
+            java.nio.file.Files.write(
+                    java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
+                    ("diag2 input.create: lwjgl2-mouse="
+                            + (Reflect.loadWithoutInit("org.lwjgl.input.Mouse", loader) != null)
+                            + " glfw=" + (Reflect.loadWithoutInit("org.lwjgl.glfw.GLFW", loader) != null)
+                            + " sdl=" + (Reflect.loadWithoutInit("org.lwjgl.sdl.SDLMouse", loader) != null)
+                            + " self=" + ReflectiveInput.class + "\n").getBytes("UTF-8"),
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Throwable ignored) {
+            // 诊断失败绝不影响输入源创建
+        }
+        // 诊断（diag1）：三条输入栈各自"在不在"必须可见。否则只看到一句 input=none，
+        // 无法区分「目标 JVM 里真没有这些类」与「探测逻辑没跑到」（例如加载到了旧类）。
+        System.out.println("[noturne] input probe: lwjgl2-mouse="
+                + (Reflect.loadWithoutInit("org.lwjgl.input.Mouse", loader) != null)
+                + " glfw=" + (Reflect.loadWithoutInit("org.lwjgl.glfw.GLFW", loader) != null)
+                + " sdl=" + (Reflect.loadWithoutInit("org.lwjgl.sdl.SDLMouse", loader) != null)
+                + " mark=diag1");
         ReflectiveInput input = new ReflectiveInput(loader, surfaceWidth, surfaceHeight);
         if ("none".equals(input.backend)) {
-            // 两代输入栈都没解析出来时，把探测结果打出来——否则日志里只有一句 input=none，无从下手。
+            // 第三代输入栈：Minecraft 26.x 起改用 SDL3（org.lwjgl.sdl），既不是 LWJGL2 也不是 GLFW。
+            // 不试它的话，26.3 上 input=none、开关键没有输入源，界面永远打不开。
+            InputSource sdl = SdlInput.create(loader, surfaceWidth, surfaceHeight);
+            if (sdl != null) {
+                return sdl;
+            }
+            // 三代都解析不出来时，把探测结果打出来——否则日志里只有一句 input=none，无从下手。
             System.out.println("[noturne] no input backend; lwjgl2-mouse="
                     + (Reflect.loadWithoutInit("org.lwjgl.input.Mouse", loader) != null)
                     + " glfw=" + (Reflect.loadWithoutInit("org.lwjgl.glfw.GLFW", loader) != null)
+                    + " sdl=" + (Reflect.loadWithoutInit("org.lwjgl.sdl.SDLMouse", loader) != null)
                     + " loader=" + loader);
         }
         return "none".equals(input.backend) ? new NoInput() : input;

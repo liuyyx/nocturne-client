@@ -62,6 +62,8 @@ public final class OverlayBootstrap implements FrameListener {
     private boolean installed;
     /** 是否已记录过放弃日志，保证只打印一次。 */
     private boolean abandoned;
+    /** 是否已就 SDL 栈延迟安装打过一次说明日志。 */
+    private boolean sdlStackDetected;
 
     private OverlayBootstrap(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey) {
         this.gameLoader = gameLoader;
@@ -77,11 +79,34 @@ public final class OverlayBootstrap implements FrameListener {
      * @param toggleKey     GUI 开关按键键码（AWT VK 码）
      */
     public static void install(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey) {
+        // 诊断（diag2）：stdout 在目标 JVM 里可能被日志框架吞掉（只看得到部分行），文件不会。
+        try {
+            java.nio.file.Files.write(
+                    java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
+                    ("diag2 install: loader=" + gameLoader + " self=" + OverlayBootstrap.class
+                            + " from=" + codeSourceOf(OverlayBootstrap.class) + "\n").getBytes("UTF-8"),
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Throwable ignored) {
+            // 诊断失败绝不影响安装
+        }
         NoturneRuntime.addListener(new OverlayBootstrap(gameLoader, instrumentation, toggleKey));
     }
 
     @Override
     public void onFrame() {
+        // 诊断（diag2）：用 attempts==0 作为条件——它在「真正尝试安装」时才自增，因此
+        // GL 未就绪的帧也仍是 0，能保证进入 onFrame 就一定会记录一次。
+        if (attempts == 0) {
+            try {
+                java.nio.file.Files.write(
+                        java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
+                        ("diag2 onFrame: installed=" + installed + " attempts=" + attempts + "\n")
+                                .getBytes("UTF-8"),
+                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            } catch (Throwable ignored) {
+                // 诊断失败不影响安装
+            }
+        }
         if (installed) {
             return;
         }
@@ -107,6 +132,22 @@ public final class OverlayBootstrap implements FrameListener {
         }
         attempts++;
 
+        // SDL 栈（Minecraft 26.x）保护：这些版本改用 SDL 管理 GL 上下文，而 LWJGL 的 GL 绑定在其中
+        // **不可用**——在帧回调里调用任何 GL 函数（哪怕只是 glGetIntegerv 读视口）都会让 LWJGL
+        // FATAL ERROR 直接终止 JVM（native abort，Java 侧捕获不到）。实测就是这样崩的：
+        // SDL_GL_SwapWindow → 我们的钩子 → SkijaBackend.beginFrame → glGetIntegerv → JVM abort。
+        // 因此这里宁可**不安装**，也不能把游戏弄崩：绘制改由 GUI 绘制钩子（GL 上下文安全的时机）
+        // 驱动，见 CallbackHookTransformer。
+        ClassLoader probeLoader = gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader;
+        if (loadNoInit("org.lwjgl.sdl.SDLVideo", probeLoader) != null) {
+            if (!sdlStackDetected) {
+                sdlStackDetected = true;
+                log("SDL GL stack detected: overlay install deferred (calling GL from the frame"
+                        + " callback aborts the JVM); waiting for the GUI draw hook");
+            }
+            return;
+        }
+
         ClassLoader loader = gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader;
         GlApi gl = GlApi.bind(gl11);
         if (gl == null) {
@@ -119,6 +160,12 @@ public final class OverlayBootstrap implements FrameListener {
 
         UiBackend backend = selectBackend(gl, gl11, font);
         InputSource input = ReflectiveInput.create(loader, backend::width, backend::height);
+        // 诊断（diag1）：把输入源的真实类与它的类来源打出来。"input=none" 这类现象必须能区分
+        // 「探测失败」与「运行时加载到了别处的旧类」——否则只在日志里猜，无法定位。
+        System.out.println("[noturne] overlay diag: input=" + input.getClass().getName()
+                + " from=" + codeSourceOf(input.getClass())
+                + " backendClass=" + backend.getClass().getName()
+                + " from=" + codeSourceOf(backend.getClass()) + " mark=diag1");
         // HUD 行汇：模块只面向 HudSink 发布文本行，接住它们的实现必须由 UI 侧提供。此前没有任何
         // 实现，模块的发布全部落到空处——HUD 上永远看不到模块文本，而模块自身毫无察觉。
         SkijaHudSink hudSink = backend instanceof SkijaBackend ? new SkijaHudSink() : null;
@@ -222,6 +269,22 @@ public final class OverlayBootstrap implements FrameListener {
         ClassLoader loader = gl11.getClassLoader();
         return loadNoInit("org.lwjgl.glfw.GLFW", loader) != null
                 || loadNoInit("org.lwjgl.sdl.SDLVideo", loader) != null;
+    }
+
+    /**
+     * 诊断用：取类的来源（jar 路径或目录），取不到时返回 {@code "?"}。
+     *
+     * <p>定位「运行时到底加载了哪一份类」时，这是唯一直接的办法：类名相同、来源不同（agent jar /
+     * 模组加载器 / 别的副本）会表现成完全不同的行为，而日志里只看到类名是看不出来的。
+     */
+    private static String codeSourceOf(Class<?> type) {
+        try {
+            java.security.CodeSource source = type.getProtectionDomain().getCodeSource();
+            return source == null || source.getLocation() == null
+                    ? "?" : source.getLocation().toString();
+        } catch (Throwable t) {
+            return "?(" + t + ")";
+        }
     }
 
     /**

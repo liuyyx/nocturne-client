@@ -44,8 +44,8 @@
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed`、`screen=ClickGui`） |
-| 1.12.2 | ⏳ | 未验 | ✅ 已产出 | ⏳ |
-| 1.16.5 / 1.20.1 / 1.21.4 | ⏳ | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ⏳ |
+| 1.12.2 | ✅ **真机已实测可用**（官方 1.12.2 + LWJGL2，与 1.8.9 同代际：`backend=gl-fixed`、`screen=ClickGui`、四个分类面板与模块名正常显示；`tmp/mc1122.log`） | ✅ | ✅ 已产出 | ✅ 可见 |
+| 1.16.5 | ✅ 注入已实测（官方 1.16.5：`backend=gl-core; input=glfw`、帧钩子 live、`overlay active; screen=ClickGui`，渲染异常已清零） | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ⚠️ 核心 profile 后端尚未把界面画出来（见下） |
 | 1.21.10 / 1.21.11 | ⏳ | 字节码级已验证（GLFW 目标） | ❌ 未产出 | ⏳ |
 | 26.2 | ⏳ | 未验 | ❌ 未产出 | ⏳ |
 | 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩；`tmp/mc263-*.log`） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册） | ❌ 未产出 | ❌ 不可用（见下） |
@@ -68,6 +68,11 @@
 > （否则按 0 尺寸布局）；② GL 状态位必须用 `glPushAttrib`/`glPopAttrib` 原样归还（否则游戏
 > `GlStateManager` 的布尔缓存与实际状态失配，主菜单背景会退化成无纹理纯色）；③ 绘制文字前要补一次
 > `glEnable(GL_TEXTURE_2D)`（同样的缓存失配会让字形采不到字体图集，退化成色块）。
+
+> **1.16.5（代际 B）现状**：注入、帧钩子、输入层与叠加层装载全部正常（`backend=gl-core; input=glfw`、
+> `screen=ClickGui`）；顺带修掉了每帧刷屏的 `BufferUnderflowException`——`ModernGlApi.getInteger` 在
+> `flip()` 后没校验 `remaining()`，GL 未写入时 `get()` 直接抛，把整条帧回调打挂。但核心 profile
+> 后端（`ModernRenderer`）尚未把界面画到屏幕上，需继续排查投影/视口与绘制时机。
 
 > **「注入」列指什么**：目前唯一跑通的是 LWJGL2 实验靶（`tmp/lab189/Fake189v5`：真实 Java 8 +
 > 真实 LWJGL2 + 真实 OpenGL 4.6，320×240 空白窗口，120 帧 `Display.update()`），**靶内没有 Minecraft**。

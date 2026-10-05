@@ -253,6 +253,12 @@ public final class ModernGlApi {
             }
             int[] out = new int[count];
             viewportStaging.flip();
+            if (viewportStaging.remaining() < count) {
+                // GL 调用没有写入任何值（句柄不可用，或被驱动拒绝）：此时再 get 会抛
+                // BufferUnderflowException，并让整条帧回调失败、每帧刷一条「frame action failed」。
+                // 缺视口是可以由调用方回退处理的情形，不该升级成异常。
+                return null;
+            }
             viewportStaging.get(out, 0, count);
             return out;
         }

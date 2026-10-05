@@ -76,6 +76,9 @@ public final class SkijaCanvas {
             return surface.getCanvas();
         } catch (Throwable t) {
             fail("skija beginFrame failed: " + t);
+            // 只打异常消息会丢掉「到底是谁引用了缺失的类」这一关键信息（实测：JDK 9+ 没有
+            // sun.misc.Cleaner，但仅凭消息无法判断引用方），因此这里补一次完整堆栈。
+            t.printStackTrace();
             return null;
         }
     }

@@ -3,3 +3,8 @@ diag3 GuiOverlay.onFrame: open=false
 diag3 GuiOverlay.onFrame: open=false
 diag2 input.create: lwjgl2-mouse=true glfw=false sdl=false self=class dev.noturne.ui.gl.ReflectiveInput
 diag2 input.create: lwjgl2-mouse=true glfw=false sdl=false self=class dev.noturne.ui.gl.ReflectiveInput
+diag3 GuiOverlay.onFrame: open=false
+diag3 GuiOverlay.onFrame: open=false
+diag3 GuiOverlay.onFrame: open=false
+diag2 input.create: lwjgl2-mouse=true glfw=false sdl=false self=class dev.noturne.ui.gl.ReflectiveInput
+diag2 input.create: lwjgl2-mouse=true glfw=false sdl=false self=class dev.noturne.ui.gl.ReflectiveInput

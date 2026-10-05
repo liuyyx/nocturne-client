@@ -373,6 +373,13 @@ public final class ProcessScanner {
         Process process = null;
         try {
             process = new ProcessBuilder("cmd", "/c", "chcp").redirectErrorStream(true).start();
+            // 必须先等进程退出、再读输出：chcp 只写几十字节，远小于管道缓冲，先等不会死锁；反过来
+            // 先读的话，一旦这个进程不退出，读循环就永久阻塞，把 run() 的超时保护一起拖死——实测
+            // 注入器从启动起就再也没扫出过结果（cachedConsoleCharset 始终为 null，每次 run 都重试并卡住）。
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return null;
+            }
             // chcp 的输出只含 ASCII 文案与数字，用 US-ASCII 读取即可，不会与 consoleCharset 递归。
             InputStream in = process.getInputStream();
             byte[] buffer = new byte[256];
@@ -380,9 +387,6 @@ public final class ProcessScanner {
             int read;
             while (total < buffer.length && (read = in.read(buffer, total, buffer.length - total)) != -1) {
                 total += read;
-            }
-            if (!process.waitFor(5, TimeUnit.SECONDS)) {
-                return null;
             }
             String text = new String(buffer, 0, total, StandardCharsets.US_ASCII);
             Matcher matcher = CODE_PAGE.matcher(text);

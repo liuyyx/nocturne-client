@@ -130,21 +130,21 @@ public final class OverlayBootstrap implements FrameListener {
         if (client == null) {
             return;
         }
-        // 只在 GUI 绘制路径（GL 上下文有效）里安装：SDL 栈下在帧回调里做 GL 会让 LWJGL 直接终止
-        // JVM（native abort，捕获不到）。放在计数之前，保证"等待安全时机"不消耗重试次数。
-        if (!GuiDrawHook.isSafeGlContext()) {
-            return;
-        }
-        // 实测：即便是 GUI 绘制路径，26.x 的 SDL 上下文对 LWJGL 的 GL 绑定同样不可用——在这里调用
-        // GL 仍会让 JVM abort。因此 SDL 栈下**不做 GL 初始化**（宁可没有界面，也不能崩游戏）；
-        // 待接入不依赖 LWJGL 绑定的绘制路径后再启用。
-        if (GuiDrawHook.isSdlStack()) {
-            if (!sdlStackDetected) {
-                sdlStackDetected = true;
-                log("SDL GL stack: overlay rendering unavailable via LWJGL bindings;"
-                        + " skipping GL initialisation (the game is left untouched)");
+        // SDL 栈（26.x）保护：那里 LWJGL 的 GL 绑定不可用——实测帧回调（缓冲交换点）、GUI 绘制路径
+        // 与游戏自己的呈现入口三处调用 GL 都会让 LWJGL FATAL ERROR 终止 JVM（native abort，捕获不到）。
+        // 判定必须用 Instrumentation 的**已加载类现查**：启动早期游戏类还没加载，按名字探会漏判，
+        // 而漏判的代价正是"注册了帧钩子 → 帧回调里做 GL → 崩游戏"（实测如此）。
+        if (instrumentation != null) {
+            for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+                if ("org.lwjgl.sdl.SDLVideo".equals(loaded.getName())) {
+                    if (!sdlStackDetected) {
+                        sdlStackDetected = true;
+                        log("SDL GL stack: overlay disabled (LWJGL GL bindings unusable);"
+                                + " the game is left untouched");
+                    }
+                    return;
+                }
             }
-            return;
         }
         attempts++;
 

@@ -81,14 +81,19 @@ public final class GuiDrawHook {
         safeGlContext = true;
         if (!sdlDetected) {
             sdlDetected = true;
-            // 只判一次：此刻游戏类已全部加载，判定才可靠（启动早期判会漏掉 SDL，实测就因此让
-            // 帧钩子被注册、随后在帧回调里做 GL 把 JVM 弄崩）。
-            try {
-                ClassLoader loader = gameLoader;
-                sdlStack = loader != null
-                        && Class.forName("org.lwjgl.sdl.SDLVideo", false, loader) != null;
-            } catch (Throwable ignored) {
-                sdlStack = false;
+            // 用 Instrumentation 的已加载类判定：SDLVideo 此刻必然已加载（游戏正在用它渲染），
+            // 而按名字从游戏加载器查并不可靠（隔离加载器不一定愿意把 LWJGL 暴露给 by-name 查询）。
+            Instrumentation inst = instrumentation;
+            if (inst != null) {
+                for (Class<?> type : inst.getAllLoadedClasses()) {
+                    if ("org.lwjgl.sdl.SDLVideo".equals(type.getName())) {
+                        sdlStack = true;
+                        break;
+                    }
+                }
+            } else {
+                // 没有插桩句柄就无法可靠判定：按 SDL 处理（保守——不安装总比崩游戏好）。
+                sdlStack = true;
             }
         }
         try {

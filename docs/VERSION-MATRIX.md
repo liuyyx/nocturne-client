@@ -48,9 +48,17 @@
 | 1.16.5 / 1.20.1 / 1.21.4 | ⏳ | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ⏳ |
 | 1.21.10 / 1.21.11 | ⏳ | 字节码级已验证（GLFW 目标） | ❌ 未产出 | ⏳ |
 | 26.2 | ⏳ | 未验 | ❌ 未产出 | ⏳ |
-| 26.3 | ⏳ | 字节码级已验证（SDL 目标） | ❌ 未产出 | ⏳ |
+| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩；`tmp/mc263-*.log`） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册） | ❌ 未产出 | ❌ 不可用（见下） |
 
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
+
+> **26.x 的界面限制（实测）**：26.1 起渲染后端改为 SDL（`org.lwjgl.sdl.*`），**LWJGL 的 GL 绑定在整个
+> 进程里都不可用**——实测三处时机（帧回调的 `SDL_GL_SwapWindow`、GUI 绘制路径 `Hud.extractRenderState`、
+> 游戏自己的呈现入口 `GlSurface.present`）调用 GL 都会让 LWJGL `FATAL ERROR` 终止 JVM（native abort，
+> Java 侧捕获不到）。因此 agent 在 SDL 栈下**不注册帧钩子、也不安装叠加层**（`OverlayBootstrap` 用
+> `Instrumentation` 的已加载类判定 SDL），只保留注入本身（模块框架、映射表、事件总线）。
+> 26.2/26.3 的界面需要先接入**不依赖 LWJGL 绑定**的绘制路径（例如经 SDL 自行 make current 后交给
+> Skia，或改用游戏自身的绘制 API）。
 
 > **「注入」列指什么**：目前唯一跑通的是 LWJGL2 实验靶（`tmp/lab189/Fake189v5`：真实 Java 8 +
 > 真实 LWJGL2 + 真实 OpenGL 4.6，320×240 空白窗口，120 帧 `Display.update()`），**靶内没有 Minecraft**。

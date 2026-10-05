@@ -322,14 +322,20 @@ public final class NoturneAgent {
             log("no Instrumentation: frame hook skipped");
             return;
         }
-        // GUI 绘制钩子先注册：SDL 栈下它是唯一的驱动点（见 isSdlStack 的说明）。
+        // GUI 绘制钩子先注册（26.x 的 GUI 入口；其时机未必有有效 GL，但成本很低）。
         installGuiDrawHook(instrumentation);
+        EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
         if (isSdlStack(instrumentation, gameClassLoader(instrumentation))) {
-            log("SDL render stack detected: frame hook skipped (a GL call from the frame callback"
-                    + " aborts the JVM); the overlay is driven by the GUI draw hook instead");
+            // SDL 栈（26.x）：**LWJGL 的 GL 绑定在整个进程里都不可用**——实测三处时机（帧回调的缓冲
+            // 交换点、GUI 绘制路径 Hud.extractRenderState、游戏自己的呈现入口 GlSurface.present）
+            // 调用 GL 都会让 LWJGL FATAL ERROR 终止 JVM，且是 native abort，Java 侧捕获不到。
+            // 因此这里不注册任何钩子，让游戏保持干净：注入本身仍然成立（模块框架、映射表、事件都在），
+            // 只是叠加层暂不绘制——待接入不依赖 LWJGL 绑定的绘制路径（例如经 SDL 自行 make current
+            // 后交给 Skia，或改用游戏自身的绘制 API）。
+            log("SDL render stack detected: no frame hook registered (LWJGL GL bindings unusable"
+                    + " under SDL; overlay disabled to keep the game stable)");
             return;
         }
-        EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
         if (asmLoader == null) {
             // 内嵌 ASM 缺失/损坏：不打钩子，但客户端引导与叠加层照常，其余功能不受影响。
             log("embedded ASM unavailable; frame hook skipped (overlay listener will idle)");

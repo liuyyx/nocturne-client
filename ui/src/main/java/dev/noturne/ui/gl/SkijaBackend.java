@@ -29,6 +29,13 @@ public final class SkijaBackend implements UiBackend {
     /** 最近一帧是否真的拿到了画布（Skija 可用）。 */
     private boolean lastFrameUsable;
     /**
+     * 本帧是否已 {@code beginFrame} 且尚未 {@code endFrame}。
+     *
+     * <p>用于残留自愈：绘制中途抛异常被上层吞掉时，{@code endFrame} 不会执行；没有这个标志，
+     * 下一帧会在同一张**未提交**的表面上继续画，两帧内容叠在一起。
+     */
+    private boolean frameOpen;
+    /**
      * 本帧的画布；未开始绘制或 Skija 不可用时为 {@code null}。
      *
      * <p>供**Canvas 直绘界面**（如 {@code SetsunaClickGui}）取用：那类界面直接用 Skija 画
@@ -75,6 +82,10 @@ public final class SkijaBackend implements UiBackend {
 
     @Override
     public void beginFrame() {
+        if (frameOpen) {
+            // 上一帧没有走到 endFrame：先把它收尾，与 GlRenderer/ModernRenderer 的残留自愈守卫对齐。
+            endFrame();
+        }
         int[] viewport = gl == null ? null : gl.viewport();
         if (viewport != null && viewport[2] > 0 && viewport[3] > 0) {
             viewportWidth = viewport[2];
@@ -84,6 +95,7 @@ public final class SkijaBackend implements UiBackend {
         lastFrameUsable = canvas != null;
         frameCanvas = canvas;
         renderer.bind(canvas);
+        frameOpen = true;
     }
 
     @Override
@@ -91,6 +103,7 @@ public final class SkijaBackend implements UiBackend {
         skija.endFrame();
         renderer.bind(null);
         frameCanvas = null;
+        frameOpen = false;
     }
 
     /**

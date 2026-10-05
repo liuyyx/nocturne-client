@@ -251,6 +251,12 @@ public final class GuiOverlay implements FrameListener {
             return;
         }
 
+        // 滚轮先于 Esc 派发：Esc 会在本帧关闭界面，若先处理 Esc，这一帧取出的滚轮增量就再也
+        // 没有接收方，被静默丢弃——玩家看到的是「界面明明还开着，滚轮这一下没反应」。
+        if (scroll != 0d) {
+            active().mouseScrolled(mx, my, scroll);
+        }
+
         // 键盘：目前只需让 Esc 可达（关闭当前界面）。键码为 AWT VK，后端已翻译。
         boolean escapeDown = input.keyDown(KEY_ESCAPE);
         if (escapeDown && !escapeWasDown) {
@@ -313,10 +319,6 @@ public final class GuiOverlay implements FrameListener {
         }
         if (!right && rightWasDown) {
             current.mouseReleased(mx, my, BUTTON_RIGHT);
-        }
-
-        if (scroll != 0d) {
-            current.mouseScrolled(mx, my, scroll);
         }
 
         lastX = mx;

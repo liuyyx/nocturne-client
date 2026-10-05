@@ -31,7 +31,7 @@ public final class HudManager {
             return;
         }
         for (int i = 0; i < elements.size(); i++) {
-            if (elements.get(i).id().equals(element.id())) {
+            if (java.util.Objects.equals(elements.get(i).id(), element.id())) {
                 elements.set(i, element);
                 return;
             }
@@ -45,7 +45,13 @@ public final class HudManager {
      * @param element 待移除元素；未注册时无副作用
      */
     public void remove(HudElement element) {
-        elements.remove(element);
+        if (element == null) {
+            return;
+        }
+        // 按 id 移除，与 add 的「同 id 替换」同基准。add 会用新实例顶掉旧实例，而调用方手里
+        // 往往还持有旧实例——按身份比会静默 no-op，元素实际仍留在列表里继续绘制。
+        Object id = element.id();
+        elements.removeIf(e -> java.util.Objects.equals(id, e.id()));
     }
 
     /**
@@ -68,7 +74,7 @@ public final class HudManager {
      */
     public HudElement byId(String id) {
         for (HudElement element : elements) {
-            if (element.id().equals(id)) {
+            if (java.util.Objects.equals(element.id(), id)) {
                 return element;
             }
         }

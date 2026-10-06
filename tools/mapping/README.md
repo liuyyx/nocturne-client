@@ -37,11 +37,9 @@ obfuscated JNI descriptor). Anything that does **not** resolve in a given
 version is written as `"absent": true` and listed by `--report` — that list is
 the to-do list for adding an alias or a requirement.
 
-> Note for the parent session: `ObfuscatedMapping` currently only reads the
-> `absent` flag at the *class* level. Member-level `"absent": true` is written
-> into the JSON (Gson ignores the extra field, no parse breakage) but the
-> runtime still falls back to the canonical name for an absent member; it does
-> not yet log a member-level diagnostic.
+> Note: `ObfuscatedMapping` reads the `absent` flag at both class and member
+> level (`reportAbsent` / `reportAbsentMember`): a missing member logs a
+> version+class+member diagnostic and falls back to the canonical name.
 
 ## Per-version sources
 

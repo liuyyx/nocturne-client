@@ -11,10 +11,10 @@
 | 1.16.5 | 混淆 | 官方 ProGuard `client.txt`（一步） | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 45 / 85 / 68） |
 | 1.20.1 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 47 / 85 / 68） |
 | 1.21.4 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 47 / 85 / 68） |
-| 1.21.10 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ❌ 未产出（`client-1.21.10.jar.part`，下载未完成） |
-| 1.21.11 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ❌ 未产出 |
-| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ❌ 未产出 |
-| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ❌ 未产出 |
+| 1.21.10 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出 |
+| 1.21.11 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出（已抽查确认为真实内容） |
+| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出 |
+| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（已抽查确认为真实内容） |
 
 > 表的规模固定为 48 个类（客户端实际解析的规范面），因此各版本行数一致；差异在 `name` 为 `null`
 > 的条目数（表示该版本运行时**没有**对应类，标注为 absent）。
@@ -46,9 +46,9 @@
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed`、`screen=ClickGui`） |
 | 1.12.2 | ✅ **真机已实测可用**（官方 1.12.2 + LWJGL2，与 1.8.9 同代际：`backend=gl-fixed`、`screen=ClickGui`、四个分类面板与模块名正常显示；`tmp/mc1122.log`） | ✅ | ✅ 已产出 | ✅ 可见 |
 | 1.16.5 | ✅ 注入已实测（官方 1.16.5：`backend=gl-core; input=glfw`、帧钩子 live、`overlay active; screen=ClickGui`，渲染异常已清零） | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ⚠️ 核心 profile 后端尚未把界面画出来（见下） |
-| 1.21.10 / 1.21.11 | ⏳ | 字节码级已验证（GLFW 目标） | ❌ 未产出 | ⏳ |
-| 26.2 | ⏳ | 未验 | ❌ 未产出 | ⏳ |
-| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩；`tmp/mc263-*.log`） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册） | ❌ 未产出 | ❌ 不可用（见下） |
+| 1.21.10 / 1.21.11 | ⏳ | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ⏳ |
+| 26.2 | ⏳ | 未验 | ✅ 已产出 | ⏳ |
+| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩；`tmp/mc263-*.log`） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册） | ✅ 已产出 | ❌ 不可用（见下） |
 
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
 

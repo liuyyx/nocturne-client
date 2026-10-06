@@ -134,8 +134,10 @@ Blink / Backtrack / InvWalk / Phase …）、功能 20（AutoArmor / AutoTool / 
   投递 `load`，再经本次命令专用的服务端命名管道读回结果；全程不碰 `jdk.attach`/`tools.jar`。
 - **实测**：官方 1.8.9 真机（`tmp/mc189-native.log`）与 JDK 8 靶（`tmp/selftest-target.log`）均
   attach → `agentmain` → `client installed` → 帧钩子 live → 叠加层 attach，游戏稳定不崩。
-- 待做：Linux/macOS 域套接字通道；`PayloadPack` 接入生产（现在零调用）；裁剪 JRE 验收。
-- 验收：在没有 `jdk.attach` 的裁剪 JRE 里注入成功；commit + push。
+- 待做：Linux/macOS 域套接字通道；`PayloadPack` 接入生产（现在零调用）。
+- 验收（已通过，Windows）：在无 `tools.jar` / 无 `jdk.attach` 的裁剪 JRE 上，`java -cp <dist jar>
+  dev.nocturne.core.Nocturne --pid=<n>` 打印 `attach strategy: windows-native` 并完成注入
+  （`tmp/selftest-trimmed.log`）。Linux/macOS 的同类验收待实现域套接字通道后进行。
 
 ### P8 模组式（三加载器：Fabric + NeoForge + Forge）
 

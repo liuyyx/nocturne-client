@@ -54,9 +54,10 @@ public final class Attacher {
      * @param pid       目标进程 id
      * @param agentJar  agent jar 路径
      * @param options   传给 {@code agentmain} 的参数字串，可为 {@code null}
+     * @return 实际成功的那条策略名（调用方可据此判断走的是 JDK API 还是自实现原生通道）
      * @throws AttachException 所有策略都失败时抛出，携带已尝试的策略名与最后一个失败原因
      */
-    public static void attach(int pid, File agentJar, String options) throws AttachException {
+    public static String attach(int pid, File agentJar, String options) throws AttachException {
         List<String> attempted = new ArrayList<String>();
         Throwable last = null;
         for (AttachStrategy strategy : STRATEGIES) {
@@ -65,7 +66,7 @@ public final class Attacher {
             // 但 Error（OOM、LinkageError 等）与中断必须向上传播，不能被吞成「普通失败」。
             try {
                 strategy.attach(pid, agentJar, options);
-                return;
+                return strategy.name();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 last = e;

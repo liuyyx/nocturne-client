@@ -103,23 +103,28 @@ public final class Nocturne {
         String options = AgentOptions.composeVersion(
                 AgentOptions.familyFromCommandLine(
                         ProcessScanner.javaProcessCommandLines().get(Integer.valueOf(pid))));
+        String strategy;
         try {
-            Attacher.attach(pid, self, options);
+            strategy = Attacher.attach(pid, self, options);
         } catch (AttachException e) {
             System.err.println("[nocturne] attach failed: " + e.getMessage());
             // 针对最常见的失败（attach API 不在 classpath 上）给出可操作的提示。
             Throwable cause = e.getCause();
             if (cause instanceof ClassNotFoundException
                     && String.valueOf(cause.getMessage()).contains("com.sun.tools.attach")) {
-                System.err.println("[nocturne] the JDK attach API is not on this JVM's classpath.");
+                System.err.println("[nocturne] neither the JDK attach API nor the native channel worked:");
                 System.err.println("[nocturne]   - JDK 8: run with tools.jar on the classpath (JDK, not JRE),");
                 System.err.println("[nocturne]   - JDK 9+: the jdk.attach module must be present,");
-                System.err.println("[nocturne]   - or use the native attach strategy (Phase 7).");
+                System.err.println("[nocturne]   - native channel: needs an x64 HotSpot target this process can open.");
             } else if (cause != null) {
                 System.err.println("[nocturne] cause: " + cause);
             }
             System.exit(EXIT_FAILURE);
+            // System.exit 不会返回，但 javac 不把它当作 noreturn：
+            // 没有这条 return，下面的 strategy 会被判为「可能尚未初始化」。
+            return;
         }
+        System.out.println("[nocturne] attach strategy: " + strategy);
         System.out.println("[nocturne] agent loaded");
     }
 

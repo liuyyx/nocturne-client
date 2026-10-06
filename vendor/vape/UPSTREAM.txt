@@ -53,3 +53,33 @@ Vape 的 Java 层是为它自己的 native DLL 写的薄壳，运行期硬依赖
 `value` → 本项目 `Value`、`event` → 本项目 `EventBus`）。
 
 本目录当前状态：**源码归档 + 可编译**，尚未接入运行时。
+
+B 路线已实测：上游本体可完整构建（2026-10-07）
+---------------------------------------------
+在 `OpenVape4.21` 目录用上游 Gradle 链构建成功（4m53s）：
+
+```
+gradlew.bat prepareInjectionBundle -PtargetRelease=8 ^
+  -PnativeJavaHome="C:\Program Files\Eclipse Adoptium\jdk-8.0.492.9-hotspot"
+```
+
+产物：
+
+| 产物 | 大小 | 说明 |
+|---|---|---|
+| `build/native/dist/Vape-v4.21.36.exe` | 35.4 MB | 单文件注入器（内嵌 DLL） |
+| `build/native/dist/Vape-v4.21Native.dll` | 35.1 MB | 内嵌 Java payload 的 JNI/JVMTI 桥 |
+| `build/libs/vape421-product-recovery-4.21.36-injection.jar` | 35.0 MB | `--release 8` 的 payload |
+| `build/native/Release/Vape421BootstrapTest.exe` | 19 KB | native 侧测试 |
+
+**构建前置（踩过的坑）**：上游 `settings.gradle` 设了
+`repositoriesMode = FAIL_ON_PROJECT_REPOS`，而本机全局 `~/.gradle/init.d/mirror.gradle`
+用 `allprojects { repositories { ... } }` 往**项目级**塞仓库 → Gradle 8.8 直接判失败
+（"repository 'maven' was added by initialization script"）。
+规避：用独立 `GRADLE_USER_HOME`，并在其中放一个**只在 settings 层**加镜像的 init 脚本
+（`tmp/gradle-home-vape/init.d/aliyun-settings.gradle`）。另外 CMake 用的是 VS BuildTools
+自带的 `Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe`（不在 PATH 里），
+生成器 `Visual Studio 17 2022`、平台 x64。
+
+即：从照抄的源码出发，**不改一行**就能重建出可运行的 Vape 产品（注入器 + DLL + payload）。
+

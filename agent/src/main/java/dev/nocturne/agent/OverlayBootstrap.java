@@ -161,17 +161,18 @@ public final class OverlayBootstrap implements FrameListener {
         if (!gameReady && attempts <= GAME_WAIT_ATTEMPTS) {
             return;
         }
-        TextRenderer font = gameReady ? MinecraftTextRenderer.bind(bridge) : null;
+        TextRenderer font = MinecraftTextRenderer.bind(bridge);
+        // bind 不再因"字体晚到"返回 null（改为绘制时晚绑定），所以这里只需报告是否已就绪。
         if (!gameReady) {
             log("game instance still unreachable after " + attempts
-                    + " attempts; installing overlay WITHOUT text renderer");
-            log("resolution diagnostics: " + bridge.describeResolution());
+                    + " attempts; resolution diagnostics: " + bridge.describeResolution());
         }
-        // 字体绑定结果必须可见：绑定失败时界面能开但**一个字都不显示**，而日志里此前没有任何线索。
-        // 绑定失败最常见的根因是映射表与目标版本不匹配（例如把混淆版本当成了恒等映射）。
+        // 字体状态必须可见：字体没就绪时界面能开但**一个字都不显示**，而日志里此前没有任何线索。
+        // 最常见的根因是映射表与目标版本/重映射环境不匹配（例如 Forge 用 SRG 名）。
+        // 这里只报"是否已就绪"；真正的绑定结果由 MinecraftTextRenderer 打（含 font/gl/widthHandle）。
         System.out.println("[nocturne] text renderer: "
-                + (font == null ? "UNAVAILABLE — GUI will render without text (mapping mismatch?)"
-                                : font.getClass().getSimpleName())
+                + (font == null ? "bridge unavailable" : font.getClass().getSimpleName()
+                        + " (font may bind late; see text renderer bound/pending lines)")
                 + "; mapping=" + mapping.describe());
         client.setGameBridge(bridge);
 

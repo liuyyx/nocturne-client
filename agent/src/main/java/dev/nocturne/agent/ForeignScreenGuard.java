@@ -72,11 +72,23 @@ final class ForeignScreenGuard implements FrameListener {
             if (!guiOpen.getAsBoolean()) {
                 return;
             }
+            // 只在**游戏内**顶替外部界面。主菜单/加载界面也是外部客户端自己的 screen，
+            // 但在那里把它关掉会让 MC 无界面可渲染（没有世界 → 直接白屏），
+            // 而玩家的诉求只是"开了我们的界面时别看到对方的 ClickGUI"——那发生在游戏内。
+            if (!bridge.inWorld()) {
+                return;
+            }
             Object minecraft = bridge.minecraft();
             if (minecraft == null) {
                 return;
             }
             Object screen = bridge.readField(minecraft, ClassType.MINECRAFT, "currentScreen");
+            if (screen == null) {
+                // 形状兜底：Forge 等环境把字段名重映射成 SRG（currentScreen → field_71462_r），
+                // 映射表里的原版混淆名（m）在那里不存在，按名字读永远是 null，
+                // 于是这个守护什么都不做、外部客户端的面板照样盖在我们上面。
+                screen = readScreenByShape(minecraft);
+            }
             if (screen == null) {
                 return;
             }
@@ -84,8 +96,9 @@ final class ForeignScreenGuard implements FrameListener {
             if (!isForeignScreen(screenClass.getName())) {
                 return;
             }
-            bridge.callMapped(minecraft, ClassType.MINECRAFT, "displayGuiScreen",
-                    new Object[]{null});
+            if (!closeScreen(minecraft)) {
+                return;
+            }
             if (!loggedOnce) {
                 loggedOnce = true;
                 System.out.println("[nocturne] suppressed foreign screen while our GUI is open: "
@@ -94,5 +107,51 @@ final class ForeignScreenGuard implements FrameListener {
         } catch (Throwable ignored) {
             // 每帧回调：这里的任何问题都不该影响游戏。
         }
+    }
+
+    /**
+     * 按形状读当前 screen：非 static、类型名以 {@code Screen} 结尾的字段（1.8.9 的
+     * {@code GuiScreen}、26.x 的 {@code Screen} 都命中）。
+     */
+    private static Object readScreenByShape(Object minecraft) {
+        for (java.lang.reflect.Field field : minecraft.getClass().getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+                    || !field.getType().getSimpleName().endsWith("Screen")) {
+                continue;
+            }
+            try {
+                field.setAccessible(true);
+                return field.get(minecraft);
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 关闭当前 screen。
+     *
+     * <p>只按签名找 {@code (…Screen)V}——不用映射名：{@code displayGuiScreen} 在 Forge 下是
+     * {@code func_71411_a}、在 26.x 是 {@code setScreen}，按名字查表只覆盖一种；而这个形状
+     * （单参、参数是 Screen、返回 void）在各代都唯一。
+     */
+    private static boolean closeScreen(Object minecraft) {
+        for (java.lang.reflect.Method method : minecraft.getClass().getMethods()) {
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length != 1
+                    || !parameters[0].getSimpleName().endsWith("Screen")
+                    || method.getReturnType() != void.class) {
+                continue;
+            }
+            try {
+                method.setAccessible(true);
+                method.invoke(minecraft, new Object[]{null});
+                return true;
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+        return false;
     }
 }

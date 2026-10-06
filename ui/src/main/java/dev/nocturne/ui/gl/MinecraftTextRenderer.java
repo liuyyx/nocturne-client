@@ -38,14 +38,21 @@ public final class MinecraftTextRenderer implements TextRenderer {
 
     /** 与游戏交互的桥，负责按映射名反射调用。 */
     private final GameBridge bridge;
-    /** 字体实例（{@code FontRenderer} 或 {@code Font}），非 {@code null}。 */
-    private final Object fontRenderer;
+    /** 字体实例（{@code FontRenderer} 或 {@code Font}）；**晚绑定**，见 {@link #ensureFont()}。 */
+    private volatile Object fontRenderer;
     /** 固定管线 GL 绑定；解析不到或只有核心 profile 时为 {@code null}（不做缩放）。 */
-    private final GlApi gl;
+    private volatile GlApi gl;
     /** 规范名宽度度量 {@code width(String)} / {@code getStringWidth(String)}；为 {@code null} 时走映射桥。 */
-    private final Method fontWidth;
+    private volatile Method fontWidth;
     /** 字体原生行高（像素）：26.x 取 {@code lineHeight}，其余保持 9。 */
-    private final int nativeHeight;
+    private volatile int nativeHeight = (int) BASE_HEIGHT;
+    /** 上次尝试解析字体的纳秒时间戳（用于重试退避）。 */
+    private volatile long lastFontAttemptNanos;
+    /** 是否已经打过一次"字体尚未就绪"的日志。 */
+    private volatile boolean loggedPending;
+
+    /** 字体重试间隔（纳秒）：500ms。游戏构造早期 GameBridge 能拿到实例，但字体字段可能还没赋值。 */
+    private static final long FONT_RETRY_INTERVAL_NANOS = 500_000_000L;
     /** 「现代字体不再提供 drawString」是否已提示过，保证只打印一次。 */
     private boolean loggedNoDrawString;
     /**
@@ -61,52 +68,92 @@ public final class MinecraftTextRenderer implements TextRenderer {
     /** fontWidth 句柄连续失败次数；到 3 次就只走映射桥（P12）。 */
     private int fontWidthFailures;
 
-    /** 仅由 {@link #bind} 创建——必须先在游戏里定位到字体实例。 */
-    private MinecraftTextRenderer(GameBridge bridge, Object fontRenderer, GlApi gl,
-                                  Method fontWidth, int nativeHeight) {
+    /** 仅由 {@link #bind} 创建——字体实例可能**稍后**才就绪，见 {@link #ensureFont()}。 */
+    private MinecraftTextRenderer(GameBridge bridge) {
         this.bridge = bridge;
-        this.fontRenderer = fontRenderer;
-        this.gl = gl;
-        this.fontWidth = fontWidth;
-        this.nativeHeight = nativeHeight;
     }
 
     /**
-     * 绑定到游戏正在使用的字体。
+     * 创建一个文字渲染器。
      *
-     * <p>字体实例优先取 26.x 的可读字段 {@code Minecraft.font}，其次走映射表的
-     * {@code fontRenderer}（1.8.9 混淆名），最后按字段类型兜底；三者都取不到才放弃。
+     * <p><b>晚绑定</b>：构造时不强制要求字体已就绪。游戏构造早期 {@code GameBridge} 已经能拿到
+     * Minecraft 实例，但它的字体字段可能还没赋值（Forge/launchwrapper 下尤其明显，实测同一实例
+     * 两次注入一次有字一次没有），而绑定失败的后果是"界面能开、一个字都没有"。
+     * 因此这里总是返回实例，真正的解析交给 {@link #ensureFont()} 在首次绘制时做，并按
+     * {@link #FONT_RETRY_INTERVAL_NANOS} 退避重试，直到拿到字体。
      *
-     * @param bridge 与游戏的桥
-     * @return 绑定结果；游戏不可达、映射缺失或任何反射异常时返回 {@code null}
+     * @param bridge 与游戏的桥；为 {@code null} 时返回 {@code null}（无桥可用，调用方也没法继续）
+     * @return 渲染器（字体可能尚未就绪）
      */
     public static MinecraftTextRenderer bind(GameBridge bridge) {
         if (bridge == null) {
             return null;
         }
+        MinecraftTextRenderer renderer = new MinecraftTextRenderer(bridge);
+        renderer.resolveFontNow(true);
+        return renderer;
+    }
+
+    /**
+     * 若尚未拿到字体，按退避间隔重试解析一次。
+     *
+     * @param force 忽略退避（构造后的首次尝试用）
+     * @return 字体是否已就绪
+     */
+    private boolean ensureFont() {
+        if (fontRenderer != null) {
+            return true;
+        }
+        long now = System.nanoTime();
+        if (!forcedNextAttempt && now - lastFontAttemptNanos < FONT_RETRY_INTERVAL_NANOS) {
+            return false;
+        }
+        forcedNextAttempt = false;
+        lastFontAttemptNanos = now;
+        return resolveFontNow(false);
+    }
+
+    /** 是否忽略下一次退避（构造后首次尝试）。 */
+    private volatile boolean forcedNextAttempt;
+
+    /**
+     * 真正解析字体及其配套句柄。
+     *
+     * @param initial 是否为构造后的首次尝试（决定日志措辞）
+     * @return 是否拿到字体
+     */
+    private boolean resolveFontNow(boolean initial) {
+        lastFontAttemptNanos = System.nanoTime();
         Object font;
         try {
             Object minecraft = bridge.minecraft();
             if (minecraft == null) {
-                System.err.println("[nocturne] text renderer: game not reachable yet");
-                return null;
+                if (initial) {
+                    System.err.println("[nocturne] text renderer: game not reachable yet;"
+                            + " font binding deferred");
+                }
+                return false;
             }
             font = resolveFont(bridge, minecraft);
         } catch (Throwable t) {
             System.err.println("[nocturne] text renderer: cannot locate game font: " + t);
-            return null;
+            return false;
         }
         if (font == null) {
-            System.err.println("[nocturne] text renderer: game font instance not found (mapping="
-                    + bridge.mapping().describe() + ") — the GUI would render without text");
-            return null;
+            if (!loggedPending) {
+                loggedPending = true;
+                System.err.println("[nocturne] text renderer: font not available yet"
+                        + " (mapping=" + bridge.mapping().describe()
+                        + "); will retry every 500ms");
+            }
+            return false;
         }
         // 以下三步各自容错：拿不到 GL 缩放句柄只意味着"字按原生行高画"，拿不到宽度句柄还有
         // 映射桥兜底。曾经这里任何一步抛异常都会被外层 catch 吞掉，结果是整个文字渲染失效
         // （界面能开、一个字都没有），而日志里没有任何线索——正是"所有版本都没字"的成因。
-        GlApi gl = null;
+        GlApi newGl = null;
         try {
-            gl = resolveFixedPipeline(font);
+            newGl = resolveFixedPipeline(font);
         } catch (Throwable t) {
             System.err.println("[nocturne] text renderer: fixed-pipeline GL unavailable: " + t);
         }
@@ -122,11 +169,15 @@ public final class MinecraftTextRenderer implements TextRenderer {
         } catch (Throwable t) {
             System.err.println("[nocturne] text renderer: line height unavailable: " + t);
         }
+        this.fontWidth = width;
+        this.nativeHeight = height;
+        this.gl = newGl;
+        this.fontRenderer = font;   // 最后赋值：其它字段先就位，绘制路径才看到"已就绪"
         System.err.println("[nocturne] text renderer bound: font=" + font.getClass().getName()
-                + ", gl=" + (gl == null ? "none (no scaling)" : "fixed pipeline")
+                + ", gl=" + (newGl == null ? "none (no scaling)" : "fixed pipeline")
                 + ", widthHandle=" + (width == null ? "mapped" : width.getName())
                 + ", lineHeight=" + height);
-        return new MinecraftTextRenderer(bridge, font, gl, width, height);
+        return true;
     }
 
     /**
@@ -305,6 +356,9 @@ public final class MinecraftTextRenderer implements TextRenderer {
         if (text == null || text.isEmpty()) {
             return;
         }
+        if (!ensureFont()) {
+            return;   // 字体还没就绪：不画，但下面每帧都会再试（见 ensureFont 的退避）
+        }
         if (drawUnsupported()) {
             return;
         }
@@ -380,6 +434,7 @@ public final class MinecraftTextRenderer implements TextRenderer {
         if (text == null || text.isEmpty()) {
             return 0f;
         }
+        ensureFont();   // 字体可能还没就绪：退回按字符数估算，下一帧再试（布局不至于塌陷）
         if (fontWidth != null && fontWidthFailures < 3) {
             // P12：句柄失效时 Reflect.call 静默返 null，每字都走两条路径；
             // 连续失败 3 次就只走映射桥，不再试它。
@@ -397,6 +452,7 @@ public final class MinecraftTextRenderer implements TextRenderer {
 
     @Override
     public float height(float size) {
+        ensureFont();
         // 与 draw() 同基准：固定管线可用时按目标字号，否则字形恒为原生行高。
         return nativeHeight * effectiveScale(size);
     }

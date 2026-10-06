@@ -57,6 +57,12 @@ public final class SkijaCanvas {
                     fail("DirectContext.makeGL() returned null");
                     return null;
                 }
+            } else {
+                // 游戏每帧都会改 Skia 依赖的 GL 状态（纹理单元、解包对齐等），而 Skia
+                // 只在首帧同步一次：不重置的话，HUD 的几何与文字会丢失（GUI 恰好因后画、
+                // 状态被游戏下一轮改回而幸免）。每次绘制前强制重置，让 Skia 按当前
+                // 实际 GL 状态重建管线——这是 HUD 白字/几何丢失的根因修复。
+                context.resetGLAll();
             }
             if (surface == null || surfaceWidth != width || surfaceHeight != height) {
                 closeSurface();

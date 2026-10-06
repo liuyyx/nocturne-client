@@ -10,6 +10,9 @@ dependencies {
     // 客户端核心与 UI 会被 agent 一并带入目标 JVM。
     implementation(project(":client"))
     implementation(project(":ui"))
+    // core：载荷容器（PayloadPack/PayloadLoader）与密钥派生——内嵌 ASM 以加密载荷形式分发，
+    // agent 侧解包后再内存加载，因此 agent 与 core 共用同一份实现（不允许两边各写一遍加解密）。
+    implementation(project(":core"))
     // ASM：字节码改写（帧钩子 + GUI 绘制钩子）。版本必须跟得上目标游戏的 class 版本：
     // 26.3 是 Java 25（class 69），9.7.1 只能读到 Java 24，会对 Hud.extractRenderState 直接抛
     // 「Unsupported class file major version 69」，钩子静默失效。

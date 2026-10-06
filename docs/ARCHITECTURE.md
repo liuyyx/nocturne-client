@@ -53,9 +53,10 @@ dist ────→ 全部
 |---|---|
 | `Nocturne` | `main`：工具 jar 自举 → 解析 `--pid`/`--list-json` → 扫描 → `Attacher.attach` |
 | `attach.ProcessScanner` | 跨平台枚举 JVM 进程并识别 Minecraft（Windows `tasklist /V` + PowerShell CIM；Unix `ps -e -o pid=,comm=,args=`） |
-| `attach.Attacher` | attach 策略链：先 `JdkAttachStrategy`（JDK 自带 API，存在即最快），失败后再试 `WindowsAttachStrategy`（自举原生通道，免 `jdk.attach`） |
+| `attach.Attacher` | attach 策略链：`JdkAttachStrategy` 打头（JDK 自带 API，存在即最快），失败后按平台再试 `WindowsAttachStrategy`（Windows）或 `PosixAttachStrategy`（Linux/macOS）；`attach` 返回胜出策略名，CLI 据此打印 `attach strategy: <name>` |
 | `attach.JdkAttachStrategy` | 反射 `com.sun.tools.attach.VirtualMachine`；容忍 JDK 9+ 客户端对 JDK 8 目标的响应格式误报 |
-| `attach.WindowsAttachStrategy` / `attach.WindowsAttachNative` / `attach.NativeLibraryLoader` | 自实现 attach（Windows x64）：从 jar 资源解出 `native/windows-x64/nocturne-attach.dll`，用 Toolhelp 枚举目标模块、读其 `jvm.dll` 的 PE32+ 导出表解析 `JVM_EnqueueOperation`，按 Win64 ABI 用远线程桩投递 `load`，再经服务端命名管道读回结果。**已在官方 1.8.9 真机实测通过**，全程不触碰 `jdk.attach`/`tools.jar`；Linux/macOS 待走域套接字 |
+| `attach.WindowsAttachStrategy` / `attach.WindowsAttachNative` / `attach.NativeLibraryLoader` | 自实现 attach（Windows x64）：从 jar 资源解出 `native/windows-x64/nocturne-attach.dll`，用 Toolhelp 枚举目标模块、读其 `jvm.dll` 的 PE32+ 导出表解析 `JVM_EnqueueOperation`，按 Win64 ABI 用远线程桩投递 `load`，再经服务端命名管道读回结果。**已在官方 1.8.9 真机 + 裁剪 JRE 上实测通过**，全程不触碰 `jdk.attach`/`tools.jar` |
+| `attach.PosixAttachStrategy` / `attach.PosixAttachNative` | 自实现 attach（Linux/macOS）：直连目标在 `<tmpdir>/.java_pid<pid>` 的 attach 监听域套接字（连接前校验该套接字属本用户），写入 `AttachProtocol` 线字节并读回结果；`native/{linux,macos}-<arch>/nocturne-attach.{so,dylib}` 由 `cc` 现地编译。**仅完成编译级校验（WSL gcc `-Werror`）与单测，尚未实机验证** |
 | `attach.ToolsJarBootstrap` | JDK 8 下用带 `tools.jar` 的 classpath 重启自身 |
 | `attach.AgentOptions` | 组装 `guiKey=<AWT VK>,mcVersion=<版本族>`；版本从目标命令行归一化 |
 | `pack.PayloadPack` / `load.MemoryClassLoader` | AES-256-GCM + deflate 的载荷容器与内存类加载器。**已实现且有测试，但生产零调用** |
@@ -70,8 +71,9 @@ dist ────→ 全部
    `org/lwjgl/opengl/Display.update()V` / `org/lwjgl/glfw/GLFW.glfwSwapBuffers(J)V` /
    `org/lwjgl/sdl/SDLVideo.SDL_GL_SwapWindow(J)Z`。
    未命中或解析失败一律返回 `null`，JVM 沿用原字节码——**绝不让插桩导致类加载失败**。
-5. `EmbeddedAsmLoader` 用 child-first 子加载器从内嵌的 `dev/nocturne/agent/asm.jar`
-   供出 ASM（同时覆盖转换器自身的类，否则它 import 的 ASM 解析不到内嵌副本）。
+5. `EmbeddedAsmLoader` 用 child-first 子加载器从内嵌的加密载荷
+   `dev/nocturne/agent/asm.pack`（`PayloadPack`：deflate + AES-256-GCM）解包出 ASM
+   （同时覆盖转换器自身的类，否则它 import 的 ASM 解析不到内嵌副本）。
 6. `OverlayBootstrap` 是**延迟安装器**（自身实现 `FrameListener`）：每帧重解析游戏类加载器
    里的 `GL11`，等第一帧真到来再装叠加层，成功后自摘。上限 600 次。
 

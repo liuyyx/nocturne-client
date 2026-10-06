@@ -23,6 +23,36 @@ dependencies {
     implementation(project(":injector"))
 }
 
+// ---------------------------------------------------------------------------
+// 内嵌 ASM 的加密载荷（P7-3）。
+//
+// ASM 不再以「原 jar 资源」内嵌，而是先用 core 的 PayloadPack 加密成 asm.pack，再由 agent 的
+// EmbeddedAsmLoader 在内存里解包加载。打包必须走与运行期同一份实现，因此这里直接调用
+// dev.nocturne.core.pack.PayloadTool，而不是在构建脚本里另写一套加解密。
+// ---------------------------------------------------------------------------
+val distAsmJar = configurations.runtimeClasspath.map { files ->
+    files.firstOrNull { it.name.startsWith("asm-") && it.name.endsWith(".jar") }
+        ?: throw GradleException("ASM jar not found on the dist runtime classpath")
+}
+val packedAsmDir = layout.buildDirectory.dir("packed-asm")
+val packedAsm = packedAsmDir.map { it.file("asm.pack") }
+
+val packAsmPayload = tasks.register<JavaExec>("packAsmPayload") {
+    group = "build"
+    description = "Packs the ASM jar into an encrypted payload resource for the agent."
+    // 用 dist 自己的运行期 classpath：它已经含 :core（PayloadTool/PayloadPack/PayloadKey 都在这）。
+    // 不能去解析 :core 的 configuration——Gradle 9 明确禁止跨项目做非独占锁的配置解析；
+    // 这里用 files(...) 保持惰性，避免在配置阶段就把依赖图钉死。
+    classpath = files(configurations.runtimeClasspath)
+    mainClass.set("dev.nocturne.core.pack.PayloadTool")
+    inputs.files(distAsmJar)
+    outputs.file(packedAsm)
+    doFirst {
+        packedAsmDir.get().asFile.mkdirs()
+        args("asm-pack", distAsmJar.get().absolutePath, packedAsm.get().asFile.absolutePath)
+    }
+}
+
 /**
  * 最终交付物：一个同时具备两种身份的 jar：
  *   - 注入器 GUI（双击启动：清单中的 Main-Class）
@@ -71,16 +101,19 @@ val distJar = tasks.register<Jar>("distJar") {
             .filter { it.name.endsWith(".jar") }
             .map { zipTree(it) }) {
         // 这里排除的是「zipTree 展开出来的类文件」：CopySpec 的 exclude 会沿 spec 树继承，
-        // 因此对解包内容同样生效。ASM 的类不进 jar 根，改以原 jar 形式作为资源内嵌（见下方）。
+        // 因此对解包内容同样生效。ASM 的类不进 jar 根，改以加密载荷作为资源内嵌（见下方）。
         exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
+        // 目录条目也得排：zipTree 会把 "org/objectweb/" 这样的目录带进来，在 jar 里留下一个
+        // 空的 org/objectweb/（无意义，而且看起来像「ASM 被展开了」的误导信号）。
+        exclude("org/objectweb/")
     }
 
-    // ASM 依赖 jar 的「原文件」作为资源内嵌，路径固定为 dev/nocturne/agent/asm.jar。
-    // agent 运行时用子加载器（child-first 于 org.objectweb.asm.）从该资源在内存中加载类，
-    // 从而既能拿到 ASM，又不让展开的 org/objectweb/asm/** 出现在 jar 根被模组加载器抢先加载。
-    from(configurations.runtimeClasspath.get().filter { it.name.startsWith("asm") }) {
+    // ASM 以「加密载荷」形式内嵌，路径固定为 dev/nocturne/agent/asm.pack：agent 运行时用子加载器
+    // （child-first 于 org.objectweb.asm.）在内存中解包加载，从而既能拿到 ASM，又不让展开的
+    // org/objectweb/asm/** 出现在 jar 根被游戏自己的加载器抢先加载。
+    dependsOn(packAsmPayload)
+    from(packedAsmDir) {
         into("dev/nocturne/agent")
-        rename { "asm.jar" }
     }
 
     // 逐个并入各业务模块的 main 输出，并显式 dependsOn 其 classes 任务以保证构建顺序。
@@ -103,21 +136,21 @@ val distJar = tasks.register<Jar>("distJar") {
     // 字节码操作库在 jar 根必须排除展开的类：加载器自己也带这些库，
     // 而 Fabric 的 KnotClassLoader 会先在 mods jar 里找类——于是同一个 org.objectweb.asm.MethodVisitor
     // 被两个加载器各加载一次，MixinExtras 与 sponge-mixin 拿到的类型对不上，直接 VerifyError 崩溃。
-    // 排除后：模组路径用加载器自带的版本；agent 路径改从内嵌资源 dev/nocturne/agent/asm.jar
-    // 以子加载器加载 ASM，帧钩子因此不再依赖目标 JVM 是否自带 ASM。
+    // 排除后：模组路径用加载器自带的版本；agent 路径改从内嵌资源 dev/nocturne/agent/asm.pack
+    // 以子加载器解包加载 ASM，帧钩子因此不再依赖目标 JVM 是否自带 ASM，也不在 jar 里留下明文 ASM。
     exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
 
-    // 产物自检：必须内嵌 dev/nocturne/agent/asm.jar，且 jar 根不得出现展开的 ASM 类。
-    // 这两个不变式一旦被破坏（例如依赖改名或 exclude 失效），帧钩子会静默失效，故在此硬失败。
+    // 产物自检：必须内嵌 dev/nocturne/agent/asm.pack，且 jar 根不得出现展开的 ASM 类。
+    // 这两个不变式一旦被破坏（例如打包任务被跳过或 exclude 失效），帧钩子会静默失效，故在此硬失败。
     // 另：Skija 的 MR9 修补版 Cleanable（META-INF/versions/9/...）必须保留，
     // 且清单必须有 Multi-Release: true——缺任一，Skija 在 JDK 17/21/25 上必不可用（静默回退）。
     doLast {
         val jarFile = archiveFile.get().asFile
         ZipFile(jarFile).use { zip ->
-            if (zip.getEntry("dev/nocturne/agent/asm.jar") == null) {
+            if (zip.getEntry("dev/nocturne/agent/asm.pack") == null) {
                 throw GradleException(
-                    "dist jar ${jarFile.name} is missing the embedded ASM resource " +
-                        "'dev/nocturne/agent/asm.jar'; the frame hook would silently fail."
+                    "dist jar ${jarFile.name} is missing the embedded ASM payload " +
+                        "'dev/nocturne/agent/asm.pack'; the frame hook would silently fail."
                 )
             }
             var stray: String? = null
@@ -132,7 +165,8 @@ val distJar = tasks.register<Jar>("distJar") {
             if (stray != null) {
                 throw GradleException(
                     "dist jar ${jarFile.name} leaked an expanded ASM class '$stray'; " +
-                        "ASM must only be embedded as 'dev/nocturne/agent/asm.jar'."
+                        "ASM must only be embedded as the encrypted payload " +
+                        "'dev/nocturne/agent/asm.pack'."
                 )
             }
             if (zip.getEntry("META-INF/versions/9/io/github/humbleui/skija/impl/Cleanable.class") == null) {

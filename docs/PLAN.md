@@ -134,7 +134,15 @@ Blink / Backtrack / InvWalk / Phase …）、功能 20（AutoArmor / AutoTool / 
   投递 `load`，再经本次命令专用的服务端命名管道读回结果；全程不碰 `jdk.attach`/`tools.jar`。
 - **实测**：官方 1.8.9 真机（`tmp/mc189-native.log`）与 JDK 8 靶（`tmp/selftest-target.log`）均
   attach → `agentmain` → `client installed` → 帧钩子 live → 叠加层 attach，游戏稳定不崩。
-- 待做：Linux/macOS 域套接字通道；`PayloadPack` 接入生产（现在零调用）。
+- **Linux/macOS 已实现**：`PosixAttachStrategy` + `attach_unix.c`——直连目标在
+  `<tmpdir>/.java_pid<pid>` 的 attach 监听域套接字（连接前校验该套接字属本用户），
+  写 `AttachProtocol` 线字节并读回结果；`native/{linux,macos}-<arch>/` 由 `cc` 现地编译。
+  验证程度：WSL `gcc -Wall -Wextra -Werror` 编译通过 + 单测（路径/平台映射/errno 文本）；
+  **未在 Linux/macOS 实机注入验证**。
+- **`PayloadPack` 已接入生产**：内嵌 ASM 不再以明文 jar 资源分发，改为构建期由
+  `PayloadTool asm-pack` 加密成 `dev/nocturne/agent/asm.pack`，agent 侧 `EmbeddedAsmLoader`
+  用同一密钥在内存解包加载（`PayloadKey` 的种子写在代码里，只提高零成本静态扫描门槛，
+  不构成对定向逆向的防护）。
 - 验收（已通过，Windows）：在无 `tools.jar` / 无 `jdk.attach` 的裁剪 JRE 上，`java -cp <dist jar>
   dev.nocturne.core.Nocturne --pid=<n>` 打印 `attach strategy: windows-native` 并完成注入
   （`tmp/selftest-trimmed.log`）。Linux/macOS 的同类验收待实现域套接字通道后进行。

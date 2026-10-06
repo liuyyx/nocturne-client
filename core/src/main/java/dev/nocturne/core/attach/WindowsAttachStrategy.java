@@ -3,8 +3,6 @@ package dev.nocturne.core.attach;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.RandomAccessFile;
 import java.util.Random;
 
 /**
@@ -211,34 +209,5 @@ public final class WindowsAttachStrategy implements AttachStrategy {
 
         @Override
         void close() throws IOException;
-    }
-
-    /** 生产 PipeServer 占位：P7-1 原生层落地前显式失败，不伪装成功。 */
-    static final class UnimplementedPipeServer implements PipeServer {
-        @Override
-        public void awaitConnection(long timeoutMs) throws IOException {
-            throw new IOException("windows attach native layer not yet implemented");
-        }
-
-        @Override
-        public InputStream input() {
-            return new InputStream() {
-                @Override
-                public int read() throws IOException {
-                    throw new IOException("windows attach native layer not yet implemented");
-                }
-            };
-        }
-
-        @Override
-        public void close() throws IOException {
-            // 无资源可释放。
-        }
-    }
-
-    /** 生产输出占位（当前未使用，保留给后续告警通道）。 */
-    @SuppressWarnings("unused")
-    private static OutputStream unusedOutput(RandomAccessFile file) throws IOException {
-        return new java.io.FileOutputStream(file.getFD());
     }
 }

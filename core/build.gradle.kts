@@ -66,11 +66,75 @@ val compileAttachNative = tasks.register<Exec>("compileAttachNative") {
     outputs.file(nativeDll)
 }
 
-// 原生 dll 打进 jar 资源位（Java 侧 NativeLibraryLoader 按此路径加载）。
+// ---------------------------------------------------------------------------
+// Unix attach 原生库（P7-2）：Linux/macOS 上用 cc 现地编译。
+//
+// 源码：src/main/native/unix/attach_unix.c；产物：build/native/<os>-<arch>/
+//   nocturne-attach.so（Linux）或 .dylib（macOS），打进 core jar 的对应资源位。
+// 非 Linux/macOS 跳过（不中断构建，Java 侧按“本平台无原生通道”处理）。
+// ---------------------------------------------------------------------------
+val unixSrcDir = layout.projectDirectory.dir("src/main/native/unix")
+
+/** 当前 Unix 平台的资源目录名与库后缀；非 Linux/macOS（或 32 位）返回 null。 */
+fun detectUnixPlatform(): Pair<String, String>? {
+    val os = System.getProperty("os.name", "").lowercase()
+    val arch = System.getProperty("os.arch", "").lowercase()
+    val archName = when {
+        arch.contains("aarch64") || arch.contains("arm64") -> "aarch64"
+        arch.contains("64") -> "x64"
+        else -> return null
+    }
+    return when {
+        os.contains("mac") || os.contains("darwin") -> "macos-$archName" to ".dylib"
+        os.contains("linux") -> "linux-$archName" to ".so"
+        else -> null
+    }
+}
+
+// 在配置期判定平台：不是 Linux/macOS 就干脆不注册该任务（否则 Windows 上必须为
+// 「不存在的产物路径」构造 Provider，很容易在配置阶段解引用空值）。
+val unixPlatform = detectUnixPlatform()
+val unixOutDir = unixPlatform?.let { (dir, _) -> layout.buildDirectory.dir("native/$dir") }
+val unixLib = unixPlatform?.let { (dir, suffix) ->
+    layout.buildDirectory.file("native/$dir/nocturne-attach$suffix")
+}
+
+val compileAttachUnix: TaskProvider<Exec>? = unixPlatform?.let { platform ->
+    tasks.register<Exec>("compileAttachUnix") {
+        group = "build"
+        description = "Compiles the Unix attach native library with cc (Linux/macOS only)."
+        val dirName = platform.first
+        val suffix = platform.second
+        val jdkHome = System.getenv("JAVA_HOME") ?: System.getProperty("java.home")
+        // jni_md.h 的平台子目录：Linux 是 include/linux，macOS 是 include/darwin。
+        val mdDir = if (dirName.startsWith("macos")) "darwin" else "linux"
+        val outLib = layout.buildDirectory.file("native/$dirName/nocturne-attach$suffix")
+            .get().asFile.absolutePath
+        commandLine("cc", "-shared", "-fPIC", "-O2", "-Wall", "-Wextra",
+            "-I$jdkHome/include", "-I$jdkHome/include/$mdDir",
+            unixSrcDir.file("attach_unix.c").asFile.absolutePath, "-o", outLib)
+        // cc 的中间产物同样钉在 build 下，源码树保持干净。
+        workingDir = layout.buildDirectory.get().asFile
+        doFirst {
+            file(outLib).parentFile.mkdirs()
+            layout.buildDirectory.get().asFile.mkdirs()
+        }
+        inputs.file(unixSrcDir.file("attach_unix.c"))
+        outputs.file(layout.buildDirectory.file("native/$dirName/nocturne-attach$suffix"))
+    }
+}
+
+// 原生库打进 jar 资源位（Java 侧 NativeLibraryLoader 按 /native/<os>-<arch>/ 解析）。
 tasks.named<ProcessResources>("processResources") {
     dependsOn(compileAttachNative)
     from(nativeOutDir) {
         into("native/windows-x64")
+    }
+    if (compileAttachUnix != null) {
+        dependsOn(compileAttachUnix)
+        from(unixOutDir!!) {
+            into("native/" + unixPlatform!!.first)
+        }
     }
 }
 

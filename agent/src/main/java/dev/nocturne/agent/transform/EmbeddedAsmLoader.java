@@ -7,15 +7,20 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+
+import dev.nocturne.core.load.PayloadLoader;
+import dev.nocturne.core.pack.PayloadKey;
 
 /**
  * 从自身资源加载 ASM 与帧钩子转换器的隔离类加载器。
  *
  * <p>目标 JVM（原版 / Forge 1.8.9 等）的类路径上没有 ASM，而 dist 产物又刻意不在 jar 根展开
- * {@code org/objectweb/asm/**}（避免与 Fabric/Forge 自带的 ASM 冲突）。因此 ASM 以原文件形式内嵌为
- * 资源 {@code dev/nocturne/agent/asm.jar}，运行时在内存里解出并加载——不落任何临时文件（K4）。
+ * {@code org/objectweb/asm/**}（避免与 Fabric/Forge 自带的 ASM 冲突）。因此 ASM 以
+ * <b>加密载荷</b>形式内嵌为资源 {@code dev/nocturne/agent/asm.pack}（{@code PayloadPack} 格式：
+ * deflate + AES-256-GCM），运行时在内存里解密并加载——不落任何临时文件（K4）。
+ *
+ * <p>载荷密钥来自 {@link PayloadKey#asmPayload()}：种子写在代码里，因此它只提高零成本静态扫描的
+ * 门槛，不构成对定向逆向的防护（详见该类 javadoc 的威胁模型）。
  *
  * <p>父加载器可见性上做 child-first 的有两组名前缀：
  * <ul>
@@ -25,8 +30,8 @@ import java.util.zip.ZipInputStream;
  * </ul>
  * 其余类（{@code java.lang.instrument.*} 等）一律委派给父加载器。
  *
- * <p>加载失败（资源缺失、jar 损坏、ASM 版本不兼容）时 {@link #create()} 返回 {@code null} 并打日志，
- * 调用方据此跳过帧钩子安装，其余功能（客户端引导、叠加层）不受影响。
+ * <p>加载失败（资源缺失、载荷损坏、密钥不符、ASM 版本不兼容）时 {@link #create()} 返回
+ * {@code null} 并打日志，调用方据此跳过帧钩子安装，其余功能（客户端引导、叠加层）不受影响。
  */
 public final class EmbeddedAsmLoader extends ClassLoader {
     /** 与 MemoryClassLoader 同源：声明「按类名并行可加载」，否则所有类加载串行在 loader 监视器上。 */
@@ -35,8 +40,8 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     }
 
 
-    /** 内嵌 ASM jar 的资源路径，由 dist 打包任务固定写入（K3）。 */
-    private static final String ASM_JAR_RESOURCE = "dev/nocturne/agent/asm.jar";
+    /** 内嵌 ASM 加密载荷的资源路径，由 dist 打包任务固定写入（K3）。 */
+    private static final String ASM_PACK_RESOURCE = "dev/nocturne/agent/asm.pack";
 
     /** 需要 child-first 的 ASM 包前缀。 */
     private static final String ASM_PACKAGE_PREFIX = "org.objectweb.asm.";
@@ -76,14 +81,14 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         ClassLoader parent = EmbeddedAsmLoader.class.getClassLoader();
         Map<String, byte[]> asm;
         try {
-            asm = readAsmJar(parent);
+            asm = readAsmPayload(parent);
         } catch (Throwable t) {
-            log("embedded ASM resource unusable (" + ASM_JAR_RESOURCE + "): " + t
+            log("embedded ASM payload unusable (" + ASM_PACK_RESOURCE + "): " + t
                     + "; frame hook disabled");
             return null;
         }
         if (asm.isEmpty()) {
-            log("embedded ASM resource missing or empty: " + ASM_JAR_RESOURCE
+            log("embedded ASM payload missing or empty: " + ASM_PACK_RESOURCE
                     + "; frame hook disabled");
             return null;
         }
@@ -194,28 +199,28 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     }
 
     /**
-     * 从内嵌 {@code asm.jar} 资源读出全部 {@code org/objectweb/asm/} 类。
+     * 从内嵌加密载荷资源解出全部 {@code org/objectweb/asm/} 类。
+     *
+     * <p>解包用的密钥与构建期 {@code PayloadTool asm-pack} 完全一致（{@link PayloadKey}），
+     * 因此密钥/格式一旦不同步，这里会抛异常 → 帧钩子被禁用并打日志，不会静默错用别的类。
      *
      * @return 类名（点号）→ 字节码；资源缺失时返回空表
      */
-    private static Map<String, byte[]> readAsmJar(ClassLoader parent) throws IOException {
+    private static Map<String, byte[]> readAsmPayload(ClassLoader parent) throws IOException {
         Map<String, byte[]> classes = new HashMap<String, byte[]>();
-        InputStream raw = parent.getResourceAsStream(ASM_JAR_RESOURCE);
+        InputStream raw = parent.getResourceAsStream(ASM_PACK_RESOURCE);
         if (raw == null) {
             return classes;
         }
-        try (ZipInputStream zip = new ZipInputStream(raw)) {
-            ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                String entryName = entry.getName();
-                if (entry.isDirectory()
-                        || !entryName.startsWith("org/objectweb/asm/")
-                        || !entryName.endsWith(".class")) {
-                    continue;
-                }
-                String className = entryName.substring(0, entryName.length() - ".class".length())
-                        .replace('/', '.');
-                classes.put(className, readAll(zip));
+        Map<String, byte[]> unpacked;
+        try {
+            unpacked = PayloadLoader.read(raw, PayloadKey.asmPayload());
+        } finally {
+            raw.close();
+        }
+        for (Map.Entry<String, byte[]> entry : unpacked.entrySet()) {
+            if (entry.getKey().startsWith(ASM_PACKAGE_PREFIX)) {
+                classes.put(entry.getKey(), entry.getValue());
             }
         }
         return classes;

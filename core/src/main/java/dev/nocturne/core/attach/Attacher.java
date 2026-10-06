@@ -23,16 +23,25 @@ public final class Attacher {
     private Attacher() {
     }
 
-    /** 构造默认策略链（当前只有 JDK attach API 一条）。 */
+    /** 构造默认策略链：JDK attach API 打头，自实现通道按平台挂在后面。 */
     private static List<AttachStrategy> defaultStrategies() {
         List<AttachStrategy> strategies = new ArrayList<AttachStrategy>();
         strategies.add(new JdkAttachStrategy());
-        // 自实现 Windows 原生策略：jdk.attach 缺失的裁剪 JRE 走这里；
-        // 原生库未落地前它会显式失败，链条自动落回“无可用策略”的 AttachException。
-        strategies.add(new WindowsAttachStrategy());
-        // 后续阶段会追加：影子化的 sun.tools.attach.* 字节码（无需 tools.jar / jdk.attach），
-        // 再是为精简 JRE 准备的原生 attach 助手。
+        // 自实现通道：Windows 是「命名管道 + 远线程桩投递」，Linux/macOS 是「直连目标的
+        // 域套接字监听器」。两条实现都只在对应平台有原生库，因此按平台只挂一条，
+        // 避免在错平台上产生一次必然失败的尝试。
+        if (isWindows()) {
+            strategies.add(new WindowsAttachStrategy());
+        } else {
+            strategies.add(new PosixAttachStrategy());
+        }
         return Collections.unmodifiableList(strategies);
+    }
+
+    /** 当前是否 Windows（决定挂哪条自实现通道）。 */
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "")
+                .toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
     /**

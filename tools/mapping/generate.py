@@ -41,13 +41,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 TOOLS = os.path.join(ROOT, "tools", "mapping")
 CACHE = os.path.join(TOOLS, "cache")
 CLIENT_SRC = os.path.join(ROOT, "client", "src", "main", "java")
-CLASS_TYPE = os.path.join(CLIENT_SRC, "dev", "noturne", "client", "mapping", "ClassType.java")
+CLASS_TYPE = os.path.join(CLIENT_SRC, "dev", "nocturne", "client", "mapping", "ClassType.java")
 REQUIREMENTS = os.path.join(TOOLS, "requirements.txt")
 RESOURCES = os.path.join(ROOT, "client", "src", "main", "resources")
 VANILLA_ROOT = os.path.join(ROOT, "..", "OpenVape4.21", "src", "main", "resources", "mappings")
 
 DEFAULT_JAVAP = os.environ.get(
-    "NOTURNE_JAVAP",
+    "NOCTURNE_JAVAP",
     r"C:\Program Files\Eclipse Adoptium\jdk-25.0.4.7-hotspot\bin\javap.exe",
 )
 

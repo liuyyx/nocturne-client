@@ -1,7 +1,7 @@
 import org.gradle.api.tasks.SourceSetContainer
 import java.util.zip.ZipFile
 
-// dist 模块构建脚本：把各模块与第三方依赖合并为单个多入口 noturne jar。
+// dist 模块构建脚本：把各模块与第三方依赖合并为单个多入口 nocturne jar。
 // 该 jar 同时充当注入器 GUI、Java agent 与模组，无需按加载器拆分发包。
 
 plugins {
@@ -34,9 +34,9 @@ val distJar = tasks.register<Jar>("distJar") {
     // 归入 build 分组，便于与普通 jar 区分。
     group = "build"
     // 任务说明：用于 `./gradlew :dist:distJar` 的输出提示。
-    description = "Assembles the single multi-entry noturne jar."
+    description = "Assembles the single multi-entry nocturne jar."
     // 产物名带版本号，启动器据此按「取最新 jar」的策略选择客户端。
-    archiveFileName.set("noturne-${project.version}.jar")
+    archiveFileName.set("nocturne-${project.version}.jar")
     // 各模块资源可能重名（如同一 mixin 配置），保留先遇到的一份即可，避免打包失败。
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
@@ -45,9 +45,9 @@ val distJar = tasks.register<Jar>("distJar") {
         attributes(
             // Main-Class：双击启动的 GUI 入口。
             // Premain-Class / Agent-Class：agent 注入入口。
-            "Main-Class" to "dev.noturne.injector.InjectorApp",
-            "Premain-Class" to "dev.noturne.agent.NoturneAgent",
-            "Agent-Class" to "dev.noturne.agent.NoturneAgent",
+            "Main-Class" to "dev.nocturne.injector.InjectorApp",
+            "Premain-Class" to "dev.nocturne.agent.NocturneAgent",
+            "Agent-Class" to "dev.nocturne.agent.NocturneAgent",
             "Can-Retransform-Classes" to "true",
             "Can-Redefine-Classes" to "true",
             // Multi-Release：Skija 的 META-INF/versions/9 条目（JDK 9+ 用的 Cleanable 修补版，
@@ -56,7 +56,7 @@ val distJar = tasks.register<Jar>("distJar") {
             // 而基线版引用 JDK 9+ 已移除的 sun.misc.Cleaner，Skija 必不可用。
             "Multi-Release" to "true",
             // 实现元信息，便于排查产物版本对应关系。
-            "Implementation-Title" to "noturne-client",
+            "Implementation-Title" to "nocturne-client",
             "Implementation-Version" to project.version.toString(),
         )
     }
@@ -75,11 +75,11 @@ val distJar = tasks.register<Jar>("distJar") {
         exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
     }
 
-    // ASM 依赖 jar 的「原文件」作为资源内嵌，路径固定为 dev/noturne/agent/asm.jar。
+    // ASM 依赖 jar 的「原文件」作为资源内嵌，路径固定为 dev/nocturne/agent/asm.jar。
     // agent 运行时用子加载器（child-first 于 org.objectweb.asm.）从该资源在内存中加载类，
     // 从而既能拿到 ASM，又不让展开的 org/objectweb/asm/** 出现在 jar 根被模组加载器抢先加载。
     from(configurations.runtimeClasspath.get().filter { it.name.startsWith("asm") }) {
-        into("dev/noturne/agent")
+        into("dev/nocturne/agent")
         rename { "asm.jar" }
     }
 
@@ -103,21 +103,21 @@ val distJar = tasks.register<Jar>("distJar") {
     // 字节码操作库在 jar 根必须排除展开的类：加载器自己也带这些库，
     // 而 Fabric 的 KnotClassLoader 会先在 mods jar 里找类——于是同一个 org.objectweb.asm.MethodVisitor
     // 被两个加载器各加载一次，MixinExtras 与 sponge-mixin 拿到的类型对不上，直接 VerifyError 崩溃。
-    // 排除后：模组路径用加载器自带的版本；agent 路径改从内嵌资源 dev/noturne/agent/asm.jar
+    // 排除后：模组路径用加载器自带的版本；agent 路径改从内嵌资源 dev/nocturne/agent/asm.jar
     // 以子加载器加载 ASM，帧钩子因此不再依赖目标 JVM 是否自带 ASM。
     exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
 
-    // 产物自检：必须内嵌 dev/noturne/agent/asm.jar，且 jar 根不得出现展开的 ASM 类。
+    // 产物自检：必须内嵌 dev/nocturne/agent/asm.jar，且 jar 根不得出现展开的 ASM 类。
     // 这两个不变式一旦被破坏（例如依赖改名或 exclude 失效），帧钩子会静默失效，故在此硬失败。
     // 另：Skija 的 MR9 修补版 Cleanable（META-INF/versions/9/...）必须保留，
     // 且清单必须有 Multi-Release: true——缺任一，Skija 在 JDK 17/21/25 上必不可用（静默回退）。
     doLast {
         val jarFile = archiveFile.get().asFile
         ZipFile(jarFile).use { zip ->
-            if (zip.getEntry("dev/noturne/agent/asm.jar") == null) {
+            if (zip.getEntry("dev/nocturne/agent/asm.jar") == null) {
                 throw GradleException(
                     "dist jar ${jarFile.name} is missing the embedded ASM resource " +
-                        "'dev/noturne/agent/asm.jar'; the frame hook would silently fail."
+                        "'dev/nocturne/agent/asm.jar'; the frame hook would silently fail."
                 )
             }
             var stray: String? = null
@@ -132,7 +132,7 @@ val distJar = tasks.register<Jar>("distJar") {
             if (stray != null) {
                 throw GradleException(
                     "dist jar ${jarFile.name} leaked an expanded ASM class '$stray'; " +
-                        "ASM must only be embedded as 'dev/noturne/agent/asm.jar'."
+                        "ASM must only be embedded as 'dev/nocturne/agent/asm.jar'."
                 )
             }
             if (zip.getEntry("META-INF/versions/9/io/github/humbleui/skija/impl/Cleanable.class") == null) {

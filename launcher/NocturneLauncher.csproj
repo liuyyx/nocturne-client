@@ -1,0 +1,41 @@
+<!--
+  启动器（WPF 壳）的项目文件。
+  职责边界：它只是把 nocturne jar 当子进程驱动，因此不引用任何 Minecraft / Java 类型，
+  客户端 jar 升级时无需重新编译本项目。
+-->
+
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    构建产物与框架约定：
+    WinExe         —— 生成无控制台窗口的 Windows 可执行文件（WinExe 而非 Exe，避免双击时弹出黑框）。
+    net8.0-windows —— 需要 WinForms/WPF 及 Windows 专有 API，故带 -windows 平台标识。
+    UseWPF         —— 启用 WPF，使 LauncherWindow : Window 可用。
+    Nullable       —— 开启可空引用类型检查，编译期暴露潜在 null 解引用。
+    ImplicitUsings —— 隐式引入常用 System 命名空间（配合 SDK 风格项目使用）。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 程序集名：决定输出 exe 文件名，与启动器图标的文件名需一致。 -->
+    <AssemblyName>NocturneLauncher</AssemblyName>
+    <!-- 根命名空间：对应源码中的 namespace NocturneLauncher。 -->
+    <RootNamespace>NocturneLauncher</RootNamespace>
+    <!-- 嵌入 app.manifest，使 DPI 感知等设置作用于生成的 exe。 -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 关闭 SDK 自动生成的 App.xaml：入口由 LauncherApp.Main 显式创建，避免两套入口冲突。 -->
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+
+  <!-- 壳只驱动 jar，绝不链接 jar 内的任何类型。 -->
+  <ItemGroup>
+    <!-- 把 launcher 目录下的交付 jar（dist 产物名为 nocturne-<version>.jar）复制到输出目录，
+         使启动器开箱即用。通配符匹配不到任何文件时 MSBuild 既不报错也不产生项，
+         因此无需（也不应使用）检查拼错的 nocturne.jar 的 Condition。 -->
+    <None Include="nocturne-*.jar" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

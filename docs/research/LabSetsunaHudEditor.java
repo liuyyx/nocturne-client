@@ -1,10 +1,10 @@
-import dev.noturne.client.NoturneClient;
-import dev.noturne.client.module.Module;
-import dev.noturne.client.module.ModuleRegistry;
-import dev.noturne.ui.skija.HudLayout;
-import dev.noturne.ui.skija.SetsunaHud;
-import dev.noturne.ui.skija.SetsunaHudEditor;
-import dev.noturne.ui.skija.SkijaHudSink;
+import dev.nocturne.client.NocturneClient;
+import dev.nocturne.client.module.Module;
+import dev.nocturne.client.module.ModuleRegistry;
+import dev.nocturne.ui.skija.HudLayout;
+import dev.nocturne.ui.skija.SetsunaHud;
+import dev.nocturne.ui.skija.SetsunaHudEditor;
+import dev.nocturne.ui.skija.SkijaHudSink;
 
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Data;
@@ -30,7 +30,7 @@ public class LabSetsunaHudEditor {
         int width = 854;
         int height = 480;
 
-        NoturneClient client = NoturneClient.boot(null);
+        NocturneClient client = NocturneClient.boot(null);
         ModuleRegistry registry = client.modules();
         SkijaHudSink sink = new SkijaHudSink();
         client.setHudSink(sink);

@@ -69,7 +69,7 @@
 > `glEnable(GL_TEXTURE_2D)`（同样的缓存失配会让字形采不到字体图集，退化成色块）。
 
 > **1.16.5（代际 B）现状（2026-10-06 真机已关闭）**：注入、帧钩子、输入层与叠加层装载全部正常，
-> `backend=skija; input=glfw`、`screen=SetsunaClickGui`，右 Shift 开 GUI 后 NOTURNE 面板可见、
+> `backend=skija; input=glfw`、`screen=SetsunaClickGui`，右 Shift 开 GUI 后 NOCTURNE 面板可见、
 > 字号正常（Skija 不分代，gl-core 画不出的问题被绕过）。`ModernGlApi.getInteger` 的余量校验
 > （`flip()` 后查 `remaining()`）已修，不再有每帧 `BufferUnderflowException`。
 

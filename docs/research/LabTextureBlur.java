@@ -1,5 +1,5 @@
-import dev.noturne.ui.skija.SkijaHudPrimitives;
-import dev.noturne.ui.skija.SkijaTextureBridge;
+import dev.nocturne.ui.skija.SkijaHudPrimitives;
+import dev.nocturne.ui.skija.SkijaTextureBridge;
 
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Data;

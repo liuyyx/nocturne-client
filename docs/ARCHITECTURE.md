@@ -1,4 +1,4 @@
-# noturne-client 架构设计
+# nocturne-client 架构设计
 
 ## 1. 总体目标
 
@@ -26,7 +26,7 @@
 ## 3. 模块划分与依赖
 
 ```
-noturne-client/
+nocturne-client/
 ├── core/      注入侧：进程发现、attach、载荷容器、CLI 入口
 ├── injector/  注入器 GUI（Swing + FlatLaf + MigLayout）
 ├── agent/     被注入侧：premain/agentmain 接线、帧钩子、叠加层装配
@@ -51,10 +51,11 @@ dist ────→ 全部
 
 | 组件 | 职责 |
 |---|---|
-| `Noturne` | `main`：工具 jar 自举 → 解析 `--pid`/`--list-json` → 扫描 → `Attacher.attach` |
+| `Nocturne` | `main`：工具 jar 自举 → 解析 `--pid`/`--list-json` → 扫描 → `Attacher.attach` |
 | `attach.ProcessScanner` | 跨平台枚举 JVM 进程并识别 Minecraft（Windows `tasklist /V` + PowerShell CIM；Unix `ps -e -o pid=,comm=,args=`） |
-| `attach.Attacher` | attach 策略链。当前**只有 `JdkAttachStrategy` 一条**；自实现 attach 与原生 attach 是注释里的后续阶段 |
+| `attach.Attacher` | attach 策略链：先 `JdkAttachStrategy`（JDK 自带 API，存在即最快），失败后再试 `WindowsAttachStrategy`（自举原生通道，免 `jdk.attach`） |
 | `attach.JdkAttachStrategy` | 反射 `com.sun.tools.attach.VirtualMachine`；容忍 JDK 9+ 客户端对 JDK 8 目标的响应格式误报 |
+| `attach.WindowsAttachStrategy` / `attach.WindowsAttachNative` / `attach.NativeLibraryLoader` | 自实现 attach（Windows x64）：从 jar 资源解出 `native/windows-x64/nocturne-attach.dll`，用 Toolhelp 枚举目标模块、读其 `jvm.dll` 的 PE32+ 导出表解析 `JVM_EnqueueOperation`，按 Win64 ABI 用远线程桩投递 `load`，再经服务端命名管道读回结果。**已在官方 1.8.9 真机实测通过**，全程不触碰 `jdk.attach`/`tools.jar`；Linux/macOS 待走域套接字 |
 | `attach.ToolsJarBootstrap` | JDK 8 下用带 `tools.jar` 的 classpath 重启自身 |
 | `attach.AgentOptions` | 组装 `guiKey=<AWT VK>,mcVersion=<版本族>`；版本从目标命令行归一化 |
 | `pack.PayloadPack` / `load.MemoryClassLoader` | AES-256-GCM + deflate 的载荷容器与内存类加载器。**已实现且有测试，但生产零调用** |
@@ -63,13 +64,13 @@ dist ────→ 全部
 
 1. `premain` / `agentmain` → 同一个 `start()`，`AtomicBoolean` CAS 保证幂等。
 2. 解析 agent 参数 `guiKey=`（畸形输入一律回退 `VK_RIGHT_SHIFT`）。
-3. 在**守护线程** `noturne-init` 上依次 `boot → installFrameHook → installOverlay`
+3. 在**守护线程** `nocturne-init` 上依次 `boot → installFrameHook → installOverlay`
    （在 `premain` 里同步初始化会拖死待插桩 JVM 的类加载）。
-4. `FrameHookTransformer`（ASM9）在三个帧交换点织入 `NoturneRuntime.onFrame()`：
+4. `FrameHookTransformer`（ASM9）在三个帧交换点织入 `NocturneRuntime.onFrame()`：
    `org/lwjgl/opengl/Display.update()V` / `org/lwjgl/glfw/GLFW.glfwSwapBuffers(J)V` /
    `org/lwjgl/sdl/SDLVideo.SDL_GL_SwapWindow(J)Z`。
    未命中或解析失败一律返回 `null`，JVM 沿用原字节码——**绝不让插桩导致类加载失败**。
-5. `EmbeddedAsmLoader` 用 child-first 子加载器从内嵌的 `dev/noturne/agent/asm.jar`
+5. `EmbeddedAsmLoader` 用 child-first 子加载器从内嵌的 `dev/nocturne/agent/asm.jar`
    供出 ASM（同时覆盖转换器自身的类，否则它 import 的 ASM 解析不到内嵌副本）。
 6. `OverlayBootstrap` 是**延迟安装器**（自身实现 `FrameListener`）：每帧重解析游戏类加载器
    里的 `GL11`，等第一帧真到来再装叠加层，成功后自摘。上限 600 次。
@@ -88,7 +89,7 @@ dist ────→ 全部
 - **反射桥**：`GameBridge` 提供类解析（含限流重试）、映射字段读写、映射方法调用
   （描述符消歧 / 恒等映射下按实参推导重载）与成功缓存。**没有有类型的 wrapper 对象**——
   `player()` 返回裸 `Object`。
-- **运行时**：`NoturneRuntime.onFrame()` 是帧广播器，四层防御：
+- **运行时**：`NocturneRuntime.onFrame()` 是帧广播器，四层防御：
   ThreadLocal 重入 → `tryLock` 非阻塞 → 逐监听器 `catch(Throwable)` → 最外层兜底。
   按 50ms 折算成 20Hz 驱动 `ModuleRegistry.tick()`。
 - **HUD 接缝**：`HudSink`（`add`/`remove`/`has`）。
@@ -119,12 +120,12 @@ sequenceDiagram
     G->>C: ProcessScanner 找 Minecraft
     C->>C: 从命令行解析 mcVersion
     C->>A: Attacher.attach(pid, self.jar, "guiKey=54,mcVersion=1.8.9")
-    Note over A: agentmain 被调用 → 守护线程 noturne-init
-    A->>R: NoturneClient.boot(Instrumentation)
+    Note over A: agentmain 被调用 → 守护线程 nocturne-init
+    A->>R: NocturneClient.boot(Instrumentation)
     A->>A: 注册 FrameHookTransformer，retransform 三个帧交换点
     A->>R: OverlayBootstrap.install(loader, inst, guiKey)
     loop 每帧（Display.update 等）
-        A->>R: NoturneRuntime.onFrame()
+        A->>R: NocturneRuntime.onFrame()
         R->>R: 20Hz 驱动 ModuleRegistry.tick() + GuiOverlay 绘制
     end
     U->>R: 右 Shift 唤出 GUI
@@ -149,8 +150,8 @@ MAGIC 'NTPK'(4) | VERSION(1) | nonce(12) | AES-256-GCM 密文 + 16B 标签
 
 | 环境 | 入口 | 行为 |
 |---|---|---|
-| `-javaagent` / attach | `MANIFEST.MF: Premain-Class`, `Agent-Class` = `dev.noturne.agent.NoturneAgent` | 直接进入 agent 路径 |
-| 双击 / `java -jar` | `Main-Class: dev.noturne.injector.InjectorApp` | 双击出 GUI；参数含 `--list-json` 或 `--pid=<n>` 时**在启动 GUI 之前**转发给 `dev.noturne.core.Noturne` 走命令行 |
+| `-javaagent` / attach | `MANIFEST.MF: Premain-Class`, `Agent-Class` = `dev.nocturne.agent.NocturneAgent` | 直接进入 agent 路径 |
+| 双击 / `java -jar` | `Main-Class: dev.nocturne.injector.InjectorApp` | 双击出 GUI；参数含 `--list-json` 或 `--pid=<n>` 时**在启动 GUI 之前**转发给 `dev.nocturne.core.Nocturne` 走命令行 |
 | WinUI/WPF 套壳 | `launcher/`（独立 C# 进程） | 靠 `--list-json` / `--pid=` 子进程协议驱动 jar，**不链接 jar 内任何类型** |
 
 ## 7. 跨版本策略

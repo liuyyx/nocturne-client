@@ -24,8 +24,8 @@ dependencies {
 tasks.jar {
     manifest {
         attributes(
-            "Premain-Class" to "dev.noturne.agent.NoturneAgent",
-            "Agent-Class" to "dev.noturne.agent.NoturneAgent",
+            "Premain-Class" to "dev.nocturne.agent.NocturneAgent",
+            "Agent-Class" to "dev.nocturne.agent.NocturneAgent",
             // 允许重转换/重定义类，是 attach 之后还能二次挂钩的前提。
             "Can-Retransform-Classes" to "true",
             "Can-Redefine-Classes" to "true",

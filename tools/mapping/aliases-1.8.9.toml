@@ -554,7 +554,7 @@ name = "EAST"
 reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
 
 # ==========================================================================
-# noturne-client additions
+# nocturne-client additions
 # --------------------------------------------------------------------------
 # The surface below comes from the shipped mappings-1.8.9.json (the client's
 # curated runtime surface).  DarkClient's table already resolves almost all of

@@ -1,4 +1,4 @@
-# 照抄 Setsuna GUI 到 noturne-client：可行性与最小集（实测）
+# 照抄 Setsuna GUI 到 nocturne-client：可行性与最小集（实测）
 
 对象：`vendor/setsuna/`（Setsuna 客户端源码快照，GPL-3.0，330 个 `.java`）
 方法：静态依赖闭包 + 真实客户端 jar 编译（隔离工程 `vendor/setsuna-gui/`）+ 字节码版本核对。
@@ -139,7 +139,7 @@ Java 8 的 JVM 加载根目录的 52 版本类、忽略 `versions/9`，因此 **
 ## 4. 许可与风险
 
 - `vendor/setsuna` 与 `SetsunaClient/` 为 **GPL-3.0**，且上游含"禁止转售/改名"类条款。
-- 照抄进 `noturne-client` ⇒ 整个项目按 GPL-3.0 分发（我们的注入器+agent 会被一并传染）。
+- 照抄进 `nocturne-client` ⇒ 整个项目按 GPL-3.0 分发（我们的注入器+agent 会被一并传染）。
 - 建议：`vendor/` 仅作**研究与编译基线**，正式实现只借鉴视觉/结构（配色、圆角、动画曲线、
   控件布局），代码独立实现；`render/**` 里的 Skija 绘制思路可以重写，不复制源码。
 
@@ -151,7 +151,7 @@ Java 8 的 JVM 加载根目录的 52 版本类、忽略 `versions/9`，因此 **
 # 1) 闭包统计：起点 ui.*/render.*，沿 import 传递闭包 → 265 类 / 58,782 行（见 §1）
 # 2) 隔离编译（JDK 25 + release 8 + 真实 26.1.2 客户端 jar）
 JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-25.0.4.7-hotspot" \
-  gradle -p noturne-client/vendor/setsuna-gui compileJava --console=plain --no-daemon
+  gradle -p nocturne-client/vendor/setsuna-gui compileJava --console=plain --no-daemon
 #    修好 build.gradle.kts 里 mcClientJar 的相对路径（../../../analysis/client-26.1.2.jar）后：
 #    BUILD FAILED，64 个错误，全部落在 MusicScreen / MusicLyricsHUD / KillAura / FeatureRuntime
 # 3) Skija 字节码版本（注意：要看根目录类，不是 META-INF/versions/9/module-info.class）
@@ -188,12 +188,12 @@ MC API（`GuiGraphicsExtractor`/`DeltaTracker`/`ClientLevel`）。要让同一�
 
 ### 包与命名对照
 
-全部落在 `ui/src/main/java/dev/noturne/ui/skija/`（新包），与既有 `ui/gl`、`ui/theme`、`ui/clickgui`
+全部落在 `ui/src/main/java/dev/nocturne/ui/skija/`（新包），与既有 `ui/gl`、`ui/theme`、`ui/clickgui`
 （本项目自研、Epsilon 风格）并存，互不覆盖。
 
 | 上游 | 本项目 | 主要改动 |
 |---|---|---|
-| `render/SkijaUi` | `SkijaUi` | 去 `Setsuna` 依赖、Java 8 降级、字体资源改 `/assets/noturne/fonts/` |
+| `render/SkijaUi` | `SkijaUi` | 去 `Setsuna` 依赖、Java 8 降级、字体资源改 `/assets/nocturne/fonts/` |
 | `ui/UiTheme` | `SkijaTheme` | `accent()` 改为可注入静态值 |
 | `ui/SkijaScreen` | `SkijaScreen` | 仅包名 |
 | `ui/screen/PageTransition` | `PageTransition` | 可见性 public |
@@ -208,8 +208,8 @@ MC API（`GuiGraphicsExtractor`/`DeltaTracker`/`ClientLevel`）。要让同一�
 | 上游用法 | 本项目做法 |
 |---|---|
 | `Setsuna.mc().gameDirectory` | `System.getProperty("user.dir")`（MC 的工作目录即此） |
-| `Setsuna.MOD_ID` | 字面量 `"noturne"` |
-| `Setsuna.LOGGER.warn(...)` | `System.out.println("[noturne] ...")`（与项目其它处一致） |
+| `Setsuna.MOD_ID` | 字面量 `"nocturne"` |
+| `Setsuna.LOGGER.warn(...)` | `System.out.println("[nocturne] ...")`（与项目其它处一致） |
 | MC 输入事件类（`KeyEvent`/`CharacterEvent`、GLFW 键码） | 原始 `char` / `int` + `java.awt.event.KeyEvent.VK_*`（跨版本，不依赖 LWJGL3） |
 | MC 剪贴板 | 可注入接口（`SkijaControls.Clipboard`） |
 | MC 纹理（`Identifier` → Skia `Image`） | 待建"纹理桥"（本项目映射层 + `SkijaCanvas`），此部分方法暂不搬 |
@@ -241,7 +241,7 @@ MC API（`GuiGraphicsExtractor`/`DeltaTracker`/`ClientLevel`）。要让同一�
    用 `dist` 产出的单 jar 跑 `LabSkijaGui`：
    ```
    LAB java=1.8.0_492 GL=4.6.0 NVIDIA 610.74
-   [noturne] skija surface 854x480 ready
+   [nocturne] skija surface 854x480 ready
    LAB skija backend -> skija
    LAB frames=10 distinctColors=24 glGetError=0 wrote=…/skija-gui-ported.png viewport=854x480
    LAB PASS（Skija 画出了真实 GUI）
@@ -268,7 +268,7 @@ MC API（`GuiGraphicsExtractor`/`DeltaTracker`/`ClientLevel`）。要让同一�
 
 验证（Java 8 + LWJGL2 + Skija，真实 GL 上下文，`dist` 单 jar）：
 ```
-[noturne] click GUI opened; input=lab-fake; backend=skija; screen=SetsunaClickGui
+[nocturne] click GUI opened; input=lab-fake; backend=skija; screen=SetsunaClickGui
 LAB frames=10 distinctColors=56 glGetError=0 viewport=854x480
 LAB PASS（Skija 画出了真实 GUI）
 ```
@@ -310,7 +310,7 @@ LAB 颜色滑块 ✓ 命中于 y=329（相对 settingsY +122），tint ff3ed6b4 
 ### HUD（阶段 E）
 
 - 新增 `SkijaHudSink`（`HudSink` 的 Skija 侧实现）：模块发布的文本行按注册顺序保存、每帧拉取；
-  单个供给器抛异常只跳过该行，不打断整帧。**此前没有任何 `HudSink` 实现**——`NoturneClient.setHudSink`
+  单个供给器抛异常只跳过该行，不打断整帧。**此前没有任何 `HudSink` 实现**——`NocturneClient.setHudSink`
   从未被调用，模块的发布全部落到空处（优雅降级，但 HUD 上永远看不到模块文本，而模块毫无察觉）。
 - 新增 `SetsunaHud`（Canvas 直绘、**不铺背板**）：左上品牌卡（强调色圆点 + 字距排版）、其下是模块
   文本行、右上帧率卡、右侧已启用模块列表（每行小卡片 + 强调色侧条）。数据全部来自现有抽象
@@ -324,10 +324,10 @@ LAB 颜色滑块 ✓ 命中于 y=329（相对 settingsY +122），tint ff3ed6b4 
 验证（离屏光栅；`docs/research/LabSetsunaHud.java`）：
 ```
 LAB sink 行数=3（Watermark + LabInfo 的两行，其中一行故意抛异常）
-[noturne] hud row 'lab.broken' failed: java.lang.IllegalStateException: boom   ← 坏行只跳过自己
+[nocturne] hud row 'lab.broken' failed: java.lang.IllegalStateException: boom   ← 坏行只跳过自己
 LAB 已启用模块数=4
 ```
-截图：`docs/research/setsuna-gui-hud.png`（品牌卡 / `noturne` 与 `XYZ 128 64 -512` 两行模块文本 /
+截图：`docs/research/setsuna-gui-hud.png`（品牌卡 / `nocturne` 与 `XYZ 128 64 -512` 两行模块文本 /
 `240 FPS` / 右侧四个启用模块卡与强调色侧条）。
 
 ### 纹理桥与背景模糊（阶段 F）

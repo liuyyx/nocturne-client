@@ -1,7 +1,7 @@
-import dev.noturne.client.NoturneClient;
-import dev.noturne.client.module.ModuleRegistry;
-import dev.noturne.ui.skija.ClickGuiLayout;
-import dev.noturne.ui.skija.SetsunaClickGui;
+import dev.nocturne.client.NocturneClient;
+import dev.nocturne.client.module.ModuleRegistry;
+import dev.nocturne.ui.skija.ClickGuiLayout;
+import dev.nocturne.ui.skija.SetsunaClickGui;
 
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Data;
@@ -26,7 +26,7 @@ public class LabSetsunaInteract {
         int width = 854;
         int height = 480;
 
-        NoturneClient client = NoturneClient.boot(null);
+        NocturneClient client = NocturneClient.boot(null);
         ModuleRegistry registry = client.modules();
         SetsunaClickGui gui = new SetsunaClickGui(registry);
         gui.setOpen(true);
@@ -51,7 +51,7 @@ public class LabSetsunaInteract {
         gui.update(System.currentTimeMillis(), enableX, enableY);
 
         boolean anyEnabled = false;
-        for (dev.noturne.client.module.Module module : registry.all()) {
+        for (dev.nocturne.client.module.Module module : registry.all()) {
             anyEnabled |= module.isEnabled();
         }
         System.out.println("LAB 有模块处于启用状态 = " + anyEnabled);

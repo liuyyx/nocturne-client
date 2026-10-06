@@ -25,7 +25,7 @@ dependencyResolutionManagement {
 }
 
 // 根项目名，决定构建产物名与 IDE 中的工程显示名。
-rootProject.name = "noturne-client"
+rootProject.name = "nocturne-client"
 // 下方各行为模块职责速览（实现细节见各自模块内的文件）：
 
 // core   —— 注入器/加载器（自实现 attach、载荷解密与装载、单 jar 多入口）
@@ -33,7 +33,7 @@ rootProject.name = "noturne-client"
 // client —— 客户端核心（事件总线、模块/值框架、映射与跨版本适配）
 // ui     —— ClickGUI / HUD（Epsilon 风格）
 // injector —— 注入器 GUI（Swing 前端，提供 Main-Class）
-// dist    —— 把上述模块合并为单个多入口 noturne jar
+// dist    —— 把上述模块合并为单个多入口 nocturne jar
 include(
     "core",
     "agent",

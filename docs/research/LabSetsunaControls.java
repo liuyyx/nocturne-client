@@ -1,13 +1,13 @@
-import dev.noturne.client.NoturneClient;
-import dev.noturne.client.module.Category;
-import dev.noturne.client.module.Module;
-import dev.noturne.client.module.ModuleRegistry;
-import dev.noturne.client.value.BooleanValue;
-import dev.noturne.client.value.ColorValue;
-import dev.noturne.client.value.ModeValue;
-import dev.noturne.client.value.NumberValue;
-import dev.noturne.ui.skija.ClickGuiLayout;
-import dev.noturne.ui.skija.SetsunaClickGui;
+import dev.nocturne.client.NocturneClient;
+import dev.nocturne.client.module.Category;
+import dev.nocturne.client.module.Module;
+import dev.nocturne.client.module.ModuleRegistry;
+import dev.nocturne.client.value.BooleanValue;
+import dev.nocturne.client.value.ColorValue;
+import dev.nocturne.client.value.ModeValue;
+import dev.nocturne.client.value.NumberValue;
+import dev.nocturne.ui.skija.ClickGuiLayout;
+import dev.nocturne.ui.skija.SetsunaClickGui;
 
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Data;
@@ -53,7 +53,7 @@ public class LabSetsunaControls {
         int width = 854;
         int height = 480;
 
-        NoturneClient client = NoturneClient.boot(null);
+        NocturneClient client = NocturneClient.boot(null);
         ModuleRegistry registry = client.modules();
         LabModule lab = new LabModule();
         registry.register(lab);

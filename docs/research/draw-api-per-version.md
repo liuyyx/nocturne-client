@@ -1,6 +1,6 @@
 # 各版本绘制入口 / 字体 / 输入状态 事实清单
 
-> **交付状态：报告文件未能落盘。** 本环境的 `write` 工具仅接受 `xd://` 设备路径（`local://` 沙盒草稿需 plan mode），文件系统写入不可用。已用 `glob` 确认 `C:/Users/liuyyx/Desktop/nocturne-client/draw-api-per-version.md` 不存在。以下为完整报告正文，需由具备写权限的一方原样落盘到该路径。未修改 `noturne-client/` 下任何文件。
+> **交付状态：报告文件未能落盘。** 本环境的 `write` 工具仅接受 `xd://` 设备路径（`local://` 沙盒草稿需 plan mode），文件系统写入不可用。已用 `glob` 确认 `C:/Users/liuyyx/Desktop/nocturne-client/draw-api-per-version.md` 不存在。以下为完整报告正文，需由具备写权限的一方原样落盘到该路径。未修改 `nocturne-client/` 下任何文件。
 
 > **验证方式说明（重要）**：本轮执行环境**没有 shell / javap 工具**，无法现场跑 `javap` 或 `unzip`。所有"实测"结论的证据来自两类**已落盘的可信产物**：
 > 1. `analysis/` 下已有的 `javap -p -c` 文本转储（26.1.2 / 26.2 / 26.3 的 Minecraft、Gui、GameRenderer、KeyMapping、MouseHandler、KeyboardHandler、InputConstants、Window），以及三个 jar 的条目清单；
@@ -61,7 +61,7 @@ ave.class
 
 ```
 grep '"net/minecraft/client/Minecraft"|"net/minecraft/client/gui/FontRenderer"|"net/minecraft/client/gui/Gui"' \
-     noturne-client/client/src/main/resources/mappings-1.8.9.json
+     nocturne-client/client/src/main/resources/mappings-1.8.9.json
   4|        "net/minecraft/client/Minecraft": {
   5|            "name": "ave",
  75|        "net/minecraft/client/gui/Gui": {
@@ -163,8 +163,8 @@ public final class com.mojang.blaze3d.platform.Window implements java.lang.AutoC
 ```
 
 **结论**：26.2 / 26.3 的映射表 = **恒等（identity）**，与仓库
-`NoturneAgent.selectMapping` 的「canonical `net.minecraft.client.Minecraft` 已加载 → `IdentityMapping`」
-策略一致（`NoturneAgent.java` 313–328 行）。
+`NocturneAgent.selectMapping` 的「canonical `net.minecraft.client.Minecraft` 已加载 → `IdentityMapping`」
+策略一致（`NocturneAgent.java` 313–328 行）。
 
 ---
 
@@ -243,7 +243,7 @@ ui/.../ModernGlApi.java:529-531  enableCap(GL_SCISSOR_TEST);
 1.8.9 帧循环：`Minecraft.runGameLoop()`（每 tick）→ `Minecraft.runTick()`（private）→
 `EntityRenderer` 渲染 → **`Gui.renderGameOverlay(DeltaTracker)` / `Gui.drawScreen(DeltaTracker)`**。
 
-注入实践（仓库现状，**不钩游戏方法，而是钩「换缓冲」**，`NoturneAgent.java` 131–135 行）：
+注入实践（仓库现状，**不钩游戏方法，而是钩「换缓冲」**，`NocturneAgent.java` 131–135 行）：
 
 - LWJGL2 `org.lwjgl.opengl.Display.update()V`（Minecraft ≤ 1.12）
 - LWJGL3 `GLFW.glfwSwapBuffers(J)V`（1.13 – 26.2）
@@ -575,7 +575,7 @@ protected com.mojang.blaze3d.platform.InputConstants$Key key;   // ← 可改的
 （`onMove(long,double,double,double,double)`、`onButton(long,MouseButtonInfo,int)`、
 `onScroll(long,double,double)`），并新增 `net.minecraft.client.input.KeyEvent` /
 `MouseButtonEvent` / `MouseButtonInfo`（`26.3-classlist.txt:1733-1737`，26.2 同样有）。
-仓库 `NoturneAgent` 注释亦印证：26.3 的 libraries 里**没有 `lwjgl-glfw`**，只有 `org.lwjgl:lwjgl-sdl`，
+仓库 `NocturneAgent` 注释亦印证：26.3 的 libraries 里**没有 `lwjgl-glfw`**，只有 `org.lwjgl:lwjgl-sdl`，
 故 GLFW 永不加载，只能钩 `SDL_GL_SwapWindow`。
 
 ⚠️ 但**输入读取侧仍然稳定**：`KeyMapping.isDown()`、`InputConstants.isKeyDown(int)`、
@@ -594,7 +594,7 @@ protected com.mojang.blaze3d.platform.InputConstants$Key key;   // ← 可改的
 
 每个后端的**成员名一律从映射表取**，不硬编码混淆名（沿用仓库既有原则：
 `ClassType` 枚举只存 **Mojmap 规范名**，见
-`client/src/main/java/dev/noturne/client/mapping/ClassType.java` 12–36 行）。
+`client/src/main/java/dev/nocturne/client/mapping/ClassType.java` 12–36 行）。
 
 字体统一走 `MinecraftTextRenderer` 抽象（`TextRenderer` 接口），已实现
 `width(String)` / 高度 / 可选 GL 缩放；**26.x 分支必须只做度量，画字交给后端**。
@@ -649,10 +649,10 @@ protected com.mojang.blaze3d.platform.InputConstants$Key key;   // ← 可改的
 | `analysis/1.8.9-classlist.txt` | 1.8.9 混淆证明（`ave`/`avn`/`avo`） |
 | piston-meta 版本 json ×8 | 各版本 `client_mappings` 有无（1.12.2 无；1.16.5/1.20.1/1.21.4/1.21.11 有；26.2 无） |
 | 官方 `client.txt`（1.21.4） | `enableScissor(int,int,int,int)` / `disableScissor()` 签名 |
-| `noturne-client/client/src/main/resources/mappings-1.8.9.json` | 1.8.9 类/字段/方法混淆名 + descriptor |
-| `noturne-client/ui/.../MinecraftTextRenderer.java` | 26.x 字体只度量不绘制；`width`/`getStringWidth` 双探测 |
-| `noturne-client/agent/.../NoturneAgent.java` | 帧钩子分版本策略（LWJGL2/GLFW/SDL） |
-| `noturne-client/client/.../ClassType.java` | 「只存 Mojmap 规范名」的既有约定 |
+| `nocturne-client/client/src/main/resources/mappings-1.8.9.json` | 1.8.9 类/字段/方法混淆名 + descriptor |
+| `nocturne-client/ui/.../MinecraftTextRenderer.java` | 26.x 字体只度量不绘制；`width`/`getStringWidth` 双探测 |
+| `nocturne-client/agent/.../NocturneAgent.java` | 帧钩子分版本策略（LWJGL2/GLFW/SDL） |
+| `nocturne-client/client/.../ClassType.java` | 「只存 Mojmap 规范名」的既有约定 |
 
 ---
 

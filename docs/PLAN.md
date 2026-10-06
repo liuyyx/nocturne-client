@@ -22,7 +22,7 @@
 | P4 绘制后端 | A（1.8.9/1.12.2 固定管线）✅ 真机可用；B（1.16.5 gl-core）✅ 真机可用（linkProgram 缺失 + 视口回退 Window 已修，界面可见可点）；C（26.x SDL 栈）❌ 按设计不装叠加层，游戏原生绘制 spike 通过，正式实现待做 | 部分，P4-B 已关闭，见 P4-C |
 | P5 输入 | 右 Shift 唤出 / Esc 关闭 / 鼠标在 A 代际可用；滚轮：LWJGL2 轮询 `getDWheel`、GLFW 回调 `setScrollCallback`，派发链走读无断点（合成事件进不了游戏队列，待真人验收）；26.3 输入栈未实现 | 部分，见 P5 |
 | P6 模块 | 4 个模块入库；Tick/Packet/Render/Input 四事件已立类型并接生产（Tick 广播+直调、Render 每帧广播）；FullBright 对齐 OpenVape（Mode/Fade/夜视，1.8.9 真机启用+设置面板已验）；B1 剩余 8 模块待世界绘制挂钩 | 部分，见 P6 |
-| P7 自实现 attach | 只有 `JdkAttachStrategy`；`PayloadPack` 已实现有测试、生产零调用 | 未开始，见 P7 |
+| P7 自实现 attach | Windows 原生通道已落地并实测（官方 1.8.9 真机 + JDK 8 靶：attach → `agentmain` → 帧钩子 live → 叠加层，全程不碰 `jdk.attach`）；Linux/macOS 域套接字、`PayloadPack` 接入生产、裁剪 JRE 验收待做 | 部分，见 P7 |
 
 ## 工作纪律（每次开工前读一遍）
 
@@ -129,19 +129,24 @@ Blink / Backtrack / InvWalk / Phase …）、功能 20（AutoArmor / AutoTool / 
 
 ### P7 自实现 attach
 
-- 内嵌 `sun.tools.attach.*` + 原生通道，摆脱 `jdk.attach` / `tools.jar`，`PayloadPack` 接入生产（现在零调用）。
+- **Windows 已落地**：`WindowsAttachStrategy` + `nocturne-attach.dll`——Toolhelp 枚举目标进程找 `jvm.dll`，
+  读其 PE32+ 导出表解析 `JVM_EnqueueOperation`，按 Win64 ABI 用远线程桩（rcx/rdx/r8/r9 + 第 5 参压栈）
+  投递 `load`，再经本次命令专用的服务端命名管道读回结果；全程不碰 `jdk.attach`/`tools.jar`。
+- **实测**：官方 1.8.9 真机（`tmp/mc189-native.log`）与 JDK 8 靶（`tmp/selftest-target.log`）均
+  attach → `agentmain` → `client installed` → 帧钩子 live → 叠加层 attach，游戏稳定不崩。
+- 待做：Linux/macOS 域套接字通道；`PayloadPack` 接入生产（现在零调用）；裁剪 JRE 验收。
 - 验收：在没有 `jdk.attach` 的裁剪 JRE 里注入成功；commit + push。
 
 ### P8 模组式（三加载器：Fabric + NeoForge + Forge）
 
-背景：`824c897` 曾删过模组入口（`NoturneFabric/Forge/NeoForge` + `ModFrameDriver` +
+背景：`824c897` 曾删过模组入口（`NocturneFabric/Forge/NeoForge` + `ModFrameDriver` +
 三份元数据），理由是"模组路径拿不到 Instrumentation 就没有帧钩子"。这个理由 half true——
 `ModFrameDriver` 当时已用反射挂 `HudRenderCallback` 解决了驱动，真正砍掉的是三份元数据的
 版本地狱 + `DrawContextBackend`（478 行，1.21.9+ RenderPipeline 下 GL 直发无效时的答案）。
 所以 P8 的前置是 P4-B/P4-C：绘制结论出来了，恢复模组只是"三个入口类 + 三份元数据 + 复用绘制后端"。
 
-- 入口：`NoturneFabric`（`ModInitializer.onInitialize`）/ `NoturneForge`（`@Mod`）/
-  `NoturneNeoForge`（`@Mod`），全反射，不引加载器构件（当时 `modStubs` 那套编译期 stub 思路继续用）。
+- 入口：`NocturneFabric`（`ModInitializer.onInitialize`）/ `NocturneForge`（`@Mod`）/
+  `NocturneNeoForge`（`@Mod`），全反射，不引加载器构件（当时 `modStubs` 那套编译期 stub 思路继续用）。
 - 驱动：复活 `ModFrameDriver` 思路——Fabric 挂 `ClientTickEvents`/`HudRenderCallback`，Forge/NeoForge
   挂 `ClientTickEvent`，全反射，注册失败静默降级（模组路径下没 GUI 也要能进游戏）。
 - 绘制：复用 P4 结论——1.21.9+ 走游戏自己提交绘制（当时 `DrawContextBackend` 的思路），老版本走 GL 后端。

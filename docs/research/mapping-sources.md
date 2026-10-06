@@ -1,6 +1,6 @@
 # Nocturne-Client 映射数据源与反查路径调研
 
-调研日期：2026-10-04 · 只读调研，未修改 `noturne-client/` 下任何文件。
+调研日期：2026-10-04 · 只读调研，未修改 `nocturne-client/` 下任何文件。
 
 > ⚠️ **落盘说明**：本子代理会话的 `write` 工具被限制为仅 `xd://` 设备（已确认 `xd://` 挂载的 102 个设备里无文件系统写工具），**报告未能写入 `C:/Users/liuyyx/Desktop/nocturne-client/mapping-sources.md`**。以下为完整 markdown 内容，需落盘。
 

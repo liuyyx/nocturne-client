@@ -9,12 +9,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
-namespace NoturneLauncher;
+namespace NocturneLauncher;
 
 /// <summary>
-/// noturne 注入器的深色卡片式图形前端。
+/// nocturne 注入器的深色卡片式图形前端。
 /// <para>
-/// 该窗口是“壳”而非内核：它不引用 jar 中的任何类型，只把 <c>noturne-*.jar</c> 当作
+/// 该窗口是“壳”而非内核：它不引用 jar 中的任何类型，只把 <c>nocturne-*.jar</c> 当作
 /// 外部进程驱动（<c>--list-json</c> 枚举目标进程、<c>--pid=</c> 执行注入），因此客户端升级
 /// 后无需重新编译本启动器。窗口本身负责扫描/展示 Minecraft 进程、选择目标并触发注入，
 /// 并把子进程输出回显到日志区。
@@ -49,7 +49,7 @@ public sealed class LauncherWindow : Window
     /// <param name="args">命令行参数（当前保留，未使用）。</param>
     public LauncherWindow(string[] args)
     {
-        Title = "noturne \u2014 launcher";
+        Title = "nocturne \u2014 launcher";
         Width = 980;
         Height = 680;
         MinWidth = 780;
@@ -85,7 +85,7 @@ public sealed class LauncherWindow : Window
             Child = root,
         };
         Loaded += (_, _) => RefreshProcesses();
-        Log("noturne launcher ready.");
+        Log("nocturne launcher ready.");
     }
 
     // ------------------------------------------------------------------ layout
@@ -115,7 +115,7 @@ public sealed class LauncherWindow : Window
 
         var brand = new TextBlock
         {
-            Text = "noturne",
+            Text = "nocturne",
             FontSize = 12.5,
             Foreground = MutedBrush,
             VerticalAlignment = VerticalAlignment.Center,
@@ -153,7 +153,7 @@ public sealed class LauncherWindow : Window
 
         panel.Children.Add(new TextBlock
         {
-            Text = "noturne",
+            Text = "nocturne",
             FontSize = 30,
             FontWeight = FontWeights.Bold,
             Foreground = TextBrush,
@@ -336,7 +336,7 @@ public sealed class LauncherWindow : Window
             {
                 Dispatcher.Invoke(() =>
                 {
-                    SetStatus("noturne jar or java not found", ErrorBrush);
+                    SetStatus("nocturne jar or java not found", ErrorBrush);
                     Log(jar == null ? "jar not found next to the launcher." : "java not found (set JAVA_HOME).");
                     _refreshButton.IsEnabled = true;
                 });
@@ -393,7 +393,7 @@ public sealed class LauncherWindow : Window
                 Dispatcher.Invoke(() =>
                 {
                     // 环境缺失时不做模态弹窗，只记录日志并恢复按钮（不再静默返回）。
-                    SetStatus("noturne jar or java not found", ErrorBrush);
+                    SetStatus("nocturne jar or java not found", ErrorBrush);
                     Log(jar == null ? "jar not found next to the launcher." : "java not found (set JAVA_HOME).");
                     _injectButton.IsEnabled = true;
                 });
@@ -737,7 +737,7 @@ public sealed class LauncherWindow : Window
     }
 
     /// <summary>
-    /// 在启动器所在目录查找 <c>noturne*.jar</c>，取最后修改时间最新者。
+    /// 在启动器所在目录查找 <c>nocturne*.jar</c>，取最后修改时间最新者。
     /// 取最新是为了让多版本 jar 并存时优先使用刚更新的客户端。
     /// </summary>
     /// <returns>jar 路径；未找到时为 null。</returns>
@@ -746,7 +746,7 @@ public sealed class LauncherWindow : Window
         string baseDir = AppContext.BaseDirectory;
         // 防御性分支：程序目录理论上总存在，但卸载竞态下可能被移除。
         string[] candidates = Directory.Exists(baseDir)
-            ? Directory.GetFiles(baseDir, "noturne*.jar")
+            ? Directory.GetFiles(baseDir, "nocturne*.jar")
             : Array.Empty<string>();
         if (candidates.Length > 0)
         {

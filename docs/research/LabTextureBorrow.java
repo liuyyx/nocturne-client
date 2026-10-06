@@ -1,4 +1,4 @@
-import dev.noturne.ui.skija.SkijaTextureBridge;
+import dev.nocturne.ui.skija.SkijaTextureBridge;
 
 import io.github.humbleui.skija.BackendRenderTarget;
 import io.github.humbleui.skija.Canvas;

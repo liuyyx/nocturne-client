@@ -7,7 +7,7 @@
 
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <!-- 程序集标识：name 为逻辑名，version 固定 1.0.0.0 以满足 Windows 装载要求。 -->
-  <assemblyIdentity version="1.0.0.0" name="NoturneLauncher.app"/>
+  <assemblyIdentity version="1.0.0.0" name="NocturneLauncher.app"/>
   <!-- application/windowsSettings 段：承载 Vista 及之后的应用级设置。 -->
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <!-- DPI 设置。 -->

@@ -1,7 +1,7 @@
 using System;
 using System.Windows;
 
-namespace NoturneLauncher;
+namespace NocturneLauncher;
 
 /// <summary>
 /// 启动器进程入口。这里刻意保持极薄：既不链接 jar 中的任何类型，也不做任何业务逻辑，

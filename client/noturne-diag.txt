@@ -1,4 +1,0 @@
-diag3 dispatch: listeners=0 frame=1 from=(file:/C:/Users/liuyyx/Desktop/nocturne-client/noturne-client/client/build/classes/java/main/ <no signer certificates>)
-diag3 dispatch: listeners=0 frame=2 from=(file:/C:/Users/liuyyx/Desktop/nocturne-client/noturne-client/client/build/classes/java/main/ <no signer certificates>)
-diag3 dispatch: listeners=0 frame=1 from=(file:/C:/Users/liuyyx/Desktop/nocturne-client/noturne-client/client/build/classes/java/main/ <no signer certificates>)
-diag3 dispatch: listeners=0 frame=2 from=(file:/C:/Users/liuyyx/Desktop/nocturne-client/noturne-client/client/build/classes/java/main/ <no signer certificates>)

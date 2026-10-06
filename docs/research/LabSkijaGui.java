@@ -1,9 +1,9 @@
-import dev.noturne.client.NoturneClient;
-import dev.noturne.ui.gl.GlApi;
-import dev.noturne.ui.gl.GuiOverlay;
-import dev.noturne.ui.gl.InputSource;
-import dev.noturne.ui.gl.SkijaBackend;
-import dev.noturne.ui.gl.UiBackend;
+import dev.nocturne.client.NocturneClient;
+import dev.nocturne.ui.gl.GlApi;
+import dev.nocturne.ui.gl.GuiOverlay;
+import dev.nocturne.ui.gl.InputSource;
+import dev.nocturne.ui.gl.SkijaBackend;
+import dev.nocturne.ui.gl.UiBackend;
 
 import java.nio.ByteBuffer;
 
@@ -56,7 +56,7 @@ public class LabSkijaGui {
             return;
         }
 
-        NoturneClient client = NoturneClient.boot(null);
+        NocturneClient client = NocturneClient.boot(null);
         GuiOverlay overlay = new GuiOverlay(client.modules(), backend, new FakeInput(), 54);
         overlay.gui().setOpen(true);
 

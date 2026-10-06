@@ -18,6 +18,11 @@ vendor/setsuna-gui/.gradle/
 launcher/bin/
 launcher/obj/
 
+# MSVC 原生编译中间产物（cl 的默认输出：对象/导入库/导出表）
+*.obj
+*.lib
+*.exp
+
 # IDE
 .idea/
 *.iml

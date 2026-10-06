@@ -7,7 +7,7 @@ plugins {
 
     // 全局坐标：group 决定 Maven 坐标前缀，version 参与所有子模块产物版本号。
 allprojects {
-    group = "dev.noturne"
+    group = "dev.nocturne"
     version = "0.1.0-SNAPSHOT"
 }
 
@@ -56,7 +56,7 @@ val copyDistJar = tasks.register<Copy>("copyDistJar") {
     group = "build"
     description = "Copies the dist delivery jar into the root build/libs."
     dependsOn(":dist:distJar")
-    from(project(":dist").layout.buildDirectory.file("libs/noturne-${version}.jar"))
+    from(project(":dist").layout.buildDirectory.file("libs/nocturne-${version}.jar"))
     into(layout.buildDirectory.dir("libs"))
 }
 

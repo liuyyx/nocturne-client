@@ -914,7 +914,9 @@ public final class SetsunaClickGui implements OverlayGui {
         }
         mx /= UI_SCALE;
         my /= UI_SCALE;
-        float step = (float) -amount * 18f;
+        // 上滚（amount > 0）内容下移 = 偏移向 0 回弹；下滚（amount < 0）内容上移 = 偏移变负。
+        // detailScroll 被夹在 [visible - content, 0]，所以步进与 amount 同号。
+        float step = (float) amount * 18f;
         if (detailContains(mx, my)) {
             detailScroll = clampScroll(detailScroll + step, detailContentHeight(),
                     layout.settingsHeight());

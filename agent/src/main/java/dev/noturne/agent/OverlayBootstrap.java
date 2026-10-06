@@ -218,6 +218,14 @@ public final class OverlayBootstrap implements FrameListener {
      * @return 绘制后端，永不为 null
      */
     private static UiBackend selectBackend(GlApi fixed, Class<?> gl11, TextRenderer font) {
+        // LWJGL2（≤1.12）直接走固定管线，不 probe Skija：Skia 包 fb0 直写会盖黑游戏
+        // （wrap/make、samples、flush/submit、colorspace 已逐项排除，机制层面不兼容），
+        // 正确修法是纹理中转（另开任务）。固定管线在 1.8.9 已验证游戏 + overlay 全正常。
+        if (!isModernRenderStack(gl11)) {
+            System.out.println("[noturne] backend: fixed pipeline (LWJGL2; skija disabled:"
+                    + " direct fb0 writes black out the game)");
+            return new dev.noturne.ui.gl.GlRenderer(fixed, font);
+        }
         // 首选 Skija：它与游戏用哪代 OpenGL、哪个绘制 API 都无关（一份 GUI 代码管所有版本），
         // 字体也自带。安装时探测一次（真正走一帧），失败才回落到按代际的 GL 后端。
         SkijaBackend skija = SkijaBackend.probe(fixed);

@@ -68,11 +68,13 @@ public final class SkijaCanvas {
                 closeSurface();
                 // framebuffer 0 = 当前绑定的帧缓冲（游戏自己画完就是要翻页的那张），
                 // 因此我们画上去的东西会直接被交换到屏幕上。
+                // 必须用 wrap 而不是 make：make 会让 Skia 接管该 RT 并 discard 原有像素
+                // （游戏画好的内容被丢掉 → 游戏全黑）；wrap 只包装已有内容，原像素保留。
                 BackendRenderTarget fresh = BackendRenderTarget.makeGL(
                         width, height, 0, 8, 0, FramebufferFormat.GR_GL_RGBA8);
-                surface = Surface.makeFromBackendRenderTarget(
+                surface = Surface.wrapBackendRenderTarget(
                         context, fresh, SurfaceOrigin.BOTTOM_LEFT, ColorType.RGBA_8888,
-                        ColorSpace.getSRGB(), null);
+                        ColorSpace.getSRGB());
                 if (surface == null) {
                     fail("Surface.makeFromBackendRenderTarget() returned null");
                     return null;
@@ -120,9 +122,33 @@ public final class SkijaCanvas {
             return;
         }
         try {
-            context.flushAndSubmit(false);
+            // 只 flush 不 submit：submit 会触发 Skia 对外部帧缓冲的呈现动作（discard/resolve），
+            // 把游戏画好的内容盖黑；flush 只提交绘制命令，overlay 照常上屏。
+            context.flush();
         } catch (Throwable t) {
             fail("skija endFrame failed: " + t);
+        } finally {
+            // 帧缓冲绑定归还（Skia 可能切到中间目标）；1.8.9 默认目标恒为 0。
+            restoreDefaultFramebuffer();
+        }
+    }
+
+    /** 把帧缓冲绑定归还给 0（游戏默认目标）；反射走 LWJGL，失败静默（下帧游戏自会重绑）。 */
+    private static void restoreDefaultFramebuffer() {
+        try {
+            try {
+                Class<?> gl30 = Class.forName("org.lwjgl.opengl.GL30");
+                gl30.getMethod("glBindFramebuffer", int.class, int.class)
+                        .invoke(null, Integer.valueOf(0x8D40), Integer.valueOf(0));
+                return;
+            } catch (Throwable ignored) {
+                // 无 GL30（老上下文）时回退 EXT 分支。
+            }
+            Class<?> ext = Class.forName("org.lwjgl.opengl.EXTFramebufferObject");
+            ext.getMethod("glBindFramebufferEXT", int.class, int.class)
+                    .invoke(null, Integer.valueOf(0x8D40), Integer.valueOf(0));
+        } catch (Throwable ignored) {
+            // 两种入口都没有：不动，让游戏自己恢复。
         }
     }
 

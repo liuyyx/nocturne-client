@@ -193,14 +193,12 @@ net/minecraft/world/entity/Mob#setPos()
 net/minecraft/world/entity/Mob#setSprinting()
 net/minecraft/world/entity/Mob#swing()
 
-net/minecraft/world/entity/player/Abilities
-net/minecraft/world/entity/player/Abilities#flying
-net/minecraft/world/entity/player/Abilities#mayfly
-net/minecraft/world/entity/player/Abilities#setFlyingSpeed()
-
 net/minecraft/world/entity/player/Inventory
 net/minecraft/world/entity/player/Inventory#getItem()
 
+net/minecraft/world/effect/MobEffect
+net/minecraft/world/effect/MobEffect#NIGHT_VISION
+net/minecraft/world/effect/MobEffectInstance
 net/minecraft/world/entity/player/Player
 net/minecraft/world/entity/player/Player#containerMenu
 net/minecraft/world/entity/player/Player#fallDistance

@@ -5,6 +5,8 @@ import dev.noturne.client.game.GameBridge;
 import dev.noturne.client.mapping.ClassType;
 import dev.noturne.client.module.Category;
 import dev.noturne.client.module.Module;
+import dev.noturne.client.value.BooleanValue;
+import dev.noturne.client.value.ModeValue;
 import dev.noturne.client.value.NumberValue;
 
 import java.lang.reflect.Method;
@@ -27,11 +29,18 @@ public final class FullBrightModule extends Module {
 
     /** 用户可调的亮度设置项，取值范围 1.0–15.0，步进 0.5。 */
     private final NumberValue gamma = add(new NumberValue("Gamma", 10.0, 1.0, 15.0, 0.5));
-
+    /** 模式：Gamma 写亮度 / Night Vision 上夜视药水（对齐 OpenVape Fullbright 行为）。 */
+    private final ModeValue mode = add(new ModeValue("Mode", "Gamma", "Gamma", "Night Vision"));
+    /** Gamma 模式下亮度渐变过渡；Night Vision 模式下无意义。 */
+    private final BooleanValue fade = add(new BooleanValue("Fade", false));
     /** 启用前 gamma 的数值快照；未记录（客户端未就绪/字段缺失）时为 {@code null}。 */
     private Object savedGamma;
     /** 写入失败是否已打过日志，避免每 tick 刷屏；成功一次后重新武装。 */
     private boolean writeFailureLogged;
+    /** Fade 渐变当前值（Gamma 模式 + Fade 开启时用）；负数表示尚未初始化。 */
+    private double fadeCurrent = -1.0;
+    /** 夜视药水不可用是否已打过日志（表驱动门：缺成员版本只报一次）。 */
+    private boolean nightVisionLogged;
 
     /** 模块名，注册表内唯一，也是 GUI 中的显示名。 */
     @Override
@@ -48,6 +57,11 @@ public final class FullBrightModule extends Module {
     /** 启用瞬间记录原值并立即写入一次亮度，避免首个 tick 出现闪烁。 */
     @Override
     protected void onEnable() {
+        nightVisionLogged = false;
+        if (isNightVision()) {
+            return;
+        }
+        fadeCurrent = -1.0;
         captureOriginal();
         apply(gamma.get());
     }
@@ -55,23 +69,199 @@ public final class FullBrightModule extends Module {
     /** 禁用时把亮度精确还原为启用前的原值（而非硬编码 1.0），避免覆盖玩家自己的亮度设置。 */
     @Override
     protected void onDisable() {
+        if (isNightVision()) {
+            return;
+        }
         restoreOriginal();
     }
 
     /**
-     * 每 tick 重新写入亮度。
+     * 每 tick 按模式驱动：Gamma 写亮度（Fade 开启时渐变），Night Vision 续药水。
      *
      * <p>必须重复应用：游戏在载入世界时会用存档中的 options 覆盖当前值，若只在启用时
-     * 设置一次，切图后亮度就会失效。
+     * 设置一次，切图后亮度就会失效；药水同理（时长耗尽前续杯）。
      */
     @Override
     public void onTick() {
-        apply(gamma.get());
+        if (isNightVision()) {
+            applyNightVision();
+            return;
+        }
+        double target = gamma.get();
+        if (!fade.get()) {
+            fadeCurrent = target;
+            apply(target);
+            return;
+        }
+        if (fadeCurrent < 0) {
+            fadeCurrent = currentGamma();
+            if (fadeCurrent < 0) {
+                fadeCurrent = target;
+            }
+        }
+        double step = 0.4;
+        if (fadeCurrent < target) {
+            fadeCurrent = Math.min(target, fadeCurrent + step);
+        } else if (fadeCurrent > target) {
+            fadeCurrent = Math.max(target, fadeCurrent - step);
+        }
+        apply(fadeCurrent);
+    }
+
+    /** @return 当前是否为 Night Vision 模式 */
+    private boolean isNightVision() {
+        return mode.is("Night Vision");
     }
 
     /**
-     * 读取 {@code Minecraft.options} 并写入其 {@code gamma} 字段，按字段实际运行时类型分派。
+     * 读当前 gamma 数值（Fade 起点用）；读不到返回负数，调用方回退到目标值。
+     */
+    private double currentGamma() {
+        GameBridge bridge = bridge();
+        Object options = bridge == null ? null : options(bridge);
+        Object field = options == null ? null : bridge.readField(options, ClassType.OPTIONS, "gamma");
+        if (field instanceof Number) {
+            return ((Number) field).doubleValue();
+        }
+        if (field != null) {
+            Object inner = readOptionValue(field);
+            if (inner instanceof Number) {
+                return ((Number) inner).doubleValue();
+            }
+        }
+        return -1.0;
+    }
+
+    /**
+     * Night Vision 模式：给本地玩家续夜视药水。
      *
+     * <p>表驱动门：addEffect / NIGHT_VISION 任一缺成员（映射表 absent）就只打一次日志
+     * 并跳过——错版本上干净禁用，不断 tick 刷屏也不抛异常。
+     */
+    private void applyNightVision() {
+        GameBridge bridge = bridge();
+        if (bridge == null) {
+            return;
+        }
+        Object player = bridge.player();
+        if (player == null) {
+            return;
+        }
+        Object effectType = readStaticField(bridge, ClassType.MOB_EFFECT, "NIGHT_VISION");
+        if (effectType == null) {
+            logGateOnce("夜视药水类型缺失（版本无该成员），Night Vision 模式已禁用");
+            return;
+        }
+        Object instance = newEffectInstance(bridge, effectType);
+        if (instance == null) {
+            logGateOnce("夜视药水实例构造失败，Night Vision 模式已禁用");
+            return;
+        }
+        Object result = bridge.callMapped(player, ClassType.LIVING_ENTITY, "addEffect", instance);
+        if (result == null) {
+            logGateOnce("addEffect 调用失败，Night Vision 模式已禁用");
+        }
+    }
+
+    /**
+     * 读映射类的静态字段（如 MobEffect.NIGHT_VISION）。
+     *
+     * <p>表驱动门的第一道：类或字段 absent 时返回 null，调用方打一次日志并跳过。
+     */
+    private static Object readStaticField(GameBridge bridge, ClassType owner, String canonicalField) {
+        String mappedClass = bridge.mapping().className(owner);
+        if (mappedClass == null) {
+            return null;
+        }
+        ClassLoader loader = playerLoader(bridge);
+        Class<?> type;
+        try {
+            type = Class.forName(mappedClass, false, loader);
+        } catch (Throwable t) {
+            return null;
+        }
+        String mappedField = bridge.mapping().fieldName(owner, canonicalField);
+        if (mappedField == null) {
+            return null;
+        }
+        try {
+            java.lang.reflect.Field field = type.getDeclaredField(mappedField);
+            field.setAccessible(true);
+            return field.get(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 构造药水效果实例：按 (效果类型, 时长 tick, 等级) 形参匹配构造器。
+     *
+     * <p>不经过映射表（表无构造器档）：类名从表里取，构造器按形参数量与首参类型匹配。
+     * 1.8.9 PotionEffect(int, int, int)，现代 MobEffectInstance(Holder,int,int)。
+     */
+    private static Object newEffectInstance(GameBridge bridge, Object effectType) {
+        String mappedClass = bridge.mapping().className(ClassType.MOB_EFFECT_INSTANCE);
+        if (mappedClass == null) {
+            return null;
+        }
+        ClassLoader loader = playerLoader(bridge);
+        Class<?> type;
+        try {
+            type = Class.forName(mappedClass, false, loader);
+        } catch (Throwable t) {
+            return null;
+        }
+        for (java.lang.reflect.Constructor<?> ctor : type.getDeclaredConstructors()) {
+            Class<?>[] params = ctor.getParameterTypes();
+            if (params.length != 3 || !params[0].isInstance(effectType)) {
+                continue;
+            }
+            if (!params[1].isPrimitive() || !params[2].isPrimitive()) {
+                continue;
+            }
+            try {
+                ctor.setAccessible(true);
+                return ctor.newInstance(effectType, coerceInt(params[1], 5220), coerceInt(params[2], 0));
+            } catch (Throwable t) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /** 按形参类型把 int 常量装箱（int/long/short/byte 均可）。 */
+    private static Object coerceInt(Class<?> param, int value) {
+        if (param == long.class) {
+            return Long.valueOf(value);
+        }
+        if (param == short.class) {
+            return Short.valueOf((short) value);
+        }
+        if (param == byte.class) {
+            return Byte.valueOf((byte) value);
+        }
+        return Integer.valueOf(value);
+    }
+
+    /** 取玩家实例的类加载器（游戏类加载器）；取不到退回本类加载器。 */
+    private static ClassLoader playerLoader(GameBridge bridge) {
+        Object player = bridge.player();
+        if (player != null && player.getClass().getClassLoader() != null) {
+            return player.getClass().getClassLoader();
+        }
+        return FullBrightModule.class.getClassLoader();
+    }
+
+    /** 表驱动门日志：缺成员版本只报一次。 */
+    private void logGateOnce(String reason) {
+        if (nightVisionLogged) {
+            return;
+        }
+        nightVisionLogged = true;
+        System.out.println("[noturne] FullBright: " + reason);
+    }
+    /**
+     * 读取 {@code Minecraft.options} 并写入其 {@code gamma} 字段，按字段实际运行时类型分派。
      * <p>逐级 null 检查覆盖了客户端未启动、未进入世界、options 尚未初始化、映射字段缺失四种情况；
      * 此时跳过，下一 tick 会重试。
      */

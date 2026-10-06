@@ -469,6 +469,16 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/effect/MobEffect": {
+            "absent": true,
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffectInstance": {
+            "absent": true,
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/Entity": {
             "name": "vg",
             "methods": {
@@ -533,6 +543,9 @@
         "net/minecraft/world/entity/LivingEntity": {
             "name": "vp",
             "methods": {
+                "addEffect": {
+                    "absent": true
+                },
                 "distanceToSqr": {
                     "name": "d",
                     "signature": "(DDD)D"
@@ -691,23 +704,6 @@
                 },
                 "zza": {
                     "name": "bg"
-                }
-            }
-        },
-        "net/minecraft/world/entity/player/Abilities": {
-            "name": "aeb",
-            "methods": {
-                "setFlyingSpeed": {
-                    "name": "a",
-                    "signature": "(F)V"
-                }
-            },
-            "fields": {
-                "flying": {
-                    "name": "b"
-                },
-                "mayfly": {
-                    "name": "c"
                 }
             }
         },

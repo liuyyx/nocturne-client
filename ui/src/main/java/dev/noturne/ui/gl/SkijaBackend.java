@@ -93,6 +93,7 @@ public final class SkijaBackend implements UiBackend {
             // 上一帧没有走到 endFrame：先把它收尾，与 GlRenderer/ModernRenderer 的残留自愈守卫对齐。
             endFrame();
         }
+        saveGameGlState();
         int[] viewport = gl == null ? null : gl.viewport();
         if (viewport != null && viewport[2] > 0 && viewport[3] > 0) {
             viewportWidth = viewport[2];
@@ -111,6 +112,43 @@ public final class SkijaBackend implements UiBackend {
         renderer.bind(null);
         frameCanvas = null;
         frameOpen = false;
+        restoreGameGlState();
+    }
+
+    /**
+     * 寄生绘制的本分：Skia 会改 GL 状态（混合/纹理/矩阵/帧缓冲绑定等），游戏下一帧默认
+     * 状态还在——不保存的话游戏画进错的地方，现象是游戏全黑、只有叠加层可见。
+     * 固定管线用属性栈 + 双矩阵栈；帧缓冲绑定不属属性位，由 SkijaCanvas 归还 0。
+     */
+    private void saveGameGlState() {
+        if (gl == null) {
+            return;
+        }
+        if (gl.hasAttribStack()) {
+            gl.pushAttrib(GlApi.GL_ALL_ATTRIB_BITS);
+        }
+        if (gl.hasMatrixControl()) {
+            gl.matrixMode(GlApi.GL_PROJECTION);
+            gl.pushMatrix();
+            gl.matrixMode(GlApi.GL_MODELVIEW);
+            gl.pushMatrix();
+        }
+    }
+
+    /** 与 {@link #saveGameGlState()} 对称归还；入栈了才出栈，避免栈失衡。 */
+    private void restoreGameGlState() {
+        if (gl == null) {
+            return;
+        }
+        if (gl.hasMatrixControl()) {
+            gl.matrixMode(GlApi.GL_PROJECTION);
+            gl.popMatrix();
+            gl.matrixMode(GlApi.GL_MODELVIEW);
+            gl.popMatrix();
+        }
+        if (gl.hasAttribStack()) {
+            gl.popAttrib();
+        }
     }
 
     /**

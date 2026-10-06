@@ -510,6 +510,20 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/effect/MobEffect": {
+            "name": "aps",
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/world/effect/MobEffectInstance": {
+            "name": "apu",
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/Entity": {
             "name": "aqa",
             "methods": {
@@ -574,6 +588,10 @@
         "net/minecraft/world/entity/LivingEntity": {
             "name": "aqm",
             "methods": {
+                "addEffect": {
+                    "name": "c",
+                    "signature": "(Lapu;)Z"
+                },
                 "distanceToSqr": {
                     "name": "h",
                     "signature": "(DDD)D"
@@ -734,23 +752,6 @@
                 },
                 "zza": {
                     "name": "aT"
-                }
-            }
-        },
-        "net/minecraft/world/entity/player/Abilities": {
-            "name": "bft",
-            "methods": {
-                "setFlyingSpeed": {
-                    "name": "a",
-                    "signature": "(F)V"
-                }
-            },
-            "fields": {
-                "flying": {
-                    "name": "b"
-                },
-                "mayfly": {
-                    "name": "c"
                 }
             }
         },

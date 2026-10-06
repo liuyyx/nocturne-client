@@ -487,6 +487,20 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/effect/MobEffect": {
+            "name": "net.minecraft.world.effect.MobEffect",
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/world/effect/MobEffectInstance": {
+            "name": "net.minecraft.world.effect.MobEffectInstance",
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/Entity": {
             "name": "net.minecraft.world.entity.Entity",
             "methods": {
@@ -542,6 +556,9 @@
         "net/minecraft/world/entity/LivingEntity": {
             "name": "net.minecraft.world.entity.LivingEntity",
             "methods": {
+                "addEffect": {
+                    "name": "addEffect"
+                },
                 "distanceToSqr": {
                     "name": "distanceToSqr"
                 },
@@ -676,22 +693,6 @@
                 },
                 "zza": {
                     "name": "zza"
-                }
-            }
-        },
-        "net/minecraft/world/entity/player/Abilities": {
-            "name": "net.minecraft.world.entity.player.Abilities",
-            "methods": {
-                "setFlyingSpeed": {
-                    "name": "setFlyingSpeed"
-                }
-            },
-            "fields": {
-                "flying": {
-                    "name": "flying"
-                },
-                "mayfly": {
-                    "name": "mayfly"
                 }
             }
         },

@@ -46,6 +46,8 @@ version = "1.8.9"
 "net/minecraft/client/renderer/GameRenderer" = "net/minecraft/client/renderer/EntityRenderer"
 "net/minecraft/client/gui/Gui" = "net/minecraft/client/gui/GuiIngame"
 "net/minecraft/world/entity/LivingEntity" = "net/minecraft/entity/EntityLivingBase"
+"net/minecraft/world/effect/MobEffect" = "net/minecraft/potion/Potion"
+"net/minecraft/world/effect/MobEffectInstance" = "net/minecraft/potion/PotionEffect"
 "net/minecraft/network/chat/Component" = "net/minecraft/util/IChatComponent"
 "net/minecraft/world/level/LevelReader" = "net/minecraft/world/IBlockAccess"
 "net/minecraft/world/level/chunk/LevelChunk" = "net/minecraft/world/chunk/Chunk"
@@ -209,6 +211,11 @@ note = "语义差：1.8.9 是 AI 移动速度（由 AI 设置），1.21 getSpeed
 mcp = "swingItem"
 scope = "net/minecraft/entity/EntityLivingBase"
 note = "1.8.9 swingItem() 无参；Rust 侧 swing(InteractionHand...) 需要 1.8.9 分支"
+
+[methods.addEffect]
+mcp = "addPotionEffect"
+scope = "net/minecraft/entity/EntityLivingBase"
+note = "1.8.9 人名 addPotionEffect(PotionEffect)；Mojmap addEffect(MobEffectInstance)"
 
 [methods.entitiesForRendering]
 mcp = "getLoadedEntityList"
@@ -444,6 +451,10 @@ unsupported = "SwingAnimation 不存在于 1.8.9"
 [fields.TOTEM_OF_UNDYING]
 unsupported = "不死图腾是 1.11 加入的；1.8.9 Items 无该字段（且 1.8.9 字段名是 snake_case）"
 
+[fields.NIGHT_VISION]
+mcp = "nightVision"
+scope = "net/minecraft/potion/Potion"
+note = "1.8.9 Potion.nightVision 静态字段；Mojmap MobEffects.NIGHT_VISION"
 # --------------------------------------------------------------------------
 # Per-class overrides: the same canonical member name resolves differently
 # (or not at all) per class.

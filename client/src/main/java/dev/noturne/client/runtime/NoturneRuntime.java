@@ -31,7 +31,6 @@ public final class NoturneRuntime {
     private static final long TICK_INTERVAL_NANOS = 50_000_000L;
     /** 上次驱动模块 tick 的时间戳（纳秒）；0 表示尚未驱动过。 */
     private static volatile long lastTickNanos;
-    /** 上次驱动模块 tick 的时间戳；同 {@link #lastTickNanos}，保留名字以对齐既有语义。 */
 
     /** 监听器 → 注册到 bootstrap 的包装动作：注销时需要同一个对象，故按身份缓存。 */
     private static final Map<FrameListener, Runnable> WRAPPERS = new HashMap<FrameListener, Runnable>();
@@ -191,9 +190,11 @@ public final class NoturneRuntime {
         if (inWorld != wasInWorld) {
             registry.setActive(inWorld);
         }
+        // P6-1：tick 先走总线广播（跨模块协作挂这里），再走直调（存量模块的 onTick）。
+        // 广播异常由 EventBus 限流隔离，不会打断直调。
+        client.events().post(dev.noturne.client.event.TickEvent.INSTANCE);
         client.modules().tick();
     }
-
     /** 把监听器适配成 {@link Runnable}：注册与注销必须用同一个对象，故由 {@link #WRAPPERS} 缓存。 */
     private static final class ListenerAction implements Runnable {
 

@@ -49,7 +49,6 @@ public final class SetsunaHud {
     private final ModuleRegistry registry;
     private final SkijaHudSink sink;
     private final HudLayout layout;
-
     /**
      * @param registry 模块注册表（取「已启用」列表）
      * @param sink     模块文本行的汇；为 {@code null} 时不画文本行
@@ -186,7 +185,6 @@ public final class SetsunaHud {
     private void drawBrand(Canvas canvas, int width, int height) {
         float[] box = bounds(ID_BRAND, width, height, 0f);
         String name = "NOTURNE";
-        card(canvas, box, SkijaControls.STROKE_STRONG);
         SkijaControls.disc(canvas, box[0] + CARD_PADDING, box[1] + BRAND_HEIGHT * 0.5f - 3f, 6f,
                 SkijaTheme.accent());
         SkijaControls.brand(canvas, name, box[0] + CARD_PADDING + 10f, box[1], BRAND_HEIGHT,

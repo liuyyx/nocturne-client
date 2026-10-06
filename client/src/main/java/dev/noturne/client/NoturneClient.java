@@ -158,8 +158,15 @@ public final class NoturneClient {
         modules.register(new dev.noturne.client.module.modules.FullBrightModule());
         modules.register(new dev.noturne.client.module.modules.SprintModule());
         modules.register(new dev.noturne.client.module.modules.AutoRespawnModule());
+        modules.register(new dev.noturne.client.module.modules.StorageEspModule());
         modules.register(new dev.noturne.client.module.modules.EspModule());
         modules.register(new dev.noturne.client.module.modules.TracersModule());
+        modules.register(new dev.noturne.client.module.modules.NameTagsModule());
+        modules.register(new dev.noturne.client.module.modules.ItemEspModule());
+        modules.register(new dev.noturne.client.module.modules.TrajectoriesModule());
+        modules.register(new dev.noturne.client.module.modules.ChamsModule());
+        modules.register(new dev.noturne.client.module.modules.XrayModule());
+        modules.register(new dev.noturne.client.module.modules.SearchModule());
     }
 
     /** 全局事件总线。 */

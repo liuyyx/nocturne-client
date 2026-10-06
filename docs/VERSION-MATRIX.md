@@ -52,13 +52,14 @@
 
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
 
-> **26.x 的界面限制（实测）**：26.1 起渲染后端改为 SDL（`org.lwjgl.sdl.*`），**LWJGL 的 GL 绑定在整个
-> 进程里都不可用**——实测三处时机（帧回调的 `SDL_GL_SwapWindow`、GUI 绘制路径 `Hud.extractRenderState`、
-> 游戏自己的呈现入口 `GlSurface.present`）调用 GL 都会让 LWJGL `FATAL ERROR` 终止 JVM（native abort，
-> Java 侧捕获不到）。因此 agent 在 SDL 栈下**不注册帧钩子、也不安装叠加层**（`OverlayBootstrap` 用
-> `Instrumentation` 的已加载类判定 SDL），只保留注入本身（模块框架、映射表、事件总线）。
-> 26.2/26.3 的界面需要先接入**不依赖 LWJGL 绑定**的绘制路径（例如经 SDL 自行 make current 后交给
-> Skia，或改用游戏自身的绘制 API）。
+> **P4-C spike 结论（2026-10-06，真机 26.3 通过）**：SDL 栈下**游戏自己的绘制 API 可用**——
+> `Screen.extractRenderState(GuiGraphicsExtractor,int,int,float)` 每帧调用（主菜单/世界内都调），
+> 在其内调 `extractor.fill(10,10,140,50,0x80FF0000)` 成功在屏幕左上角画出红色半透明矩形，
+> 游戏不崩、HUD/世界正常渲染（截图见证）。LWJGL GL 绑定依然全进程不可用（三处时机 native abort），
+> 所以路线定为**改用游戏自身的绘制 API**（`fill`/`fillGradient`/`drawString` 走 RenderPearl 管线），
+> 「经 SDL 自行 make current 后交 Skia」不再考虑。spike 代码已从生产代码移除（只留结论）。
+> 下一步：把叠加层的绘制后端接到 `GuiGraphicsExtractor` 上（P4-C 正式实现），输入栈随后跟进。
+> 在此之前 agent 在 SDL 栈下仍**不注册帧钩子、不安装叠加层**（`OverlayBootstrap` 已有判定保持不动）。
 
 > **1.8.9 真机结论**：官方 1.8.9（Mojang 直链）+ LWJGL2 上端到端可用——注入、帧钩子、叠加层装载、
 > 右 Shift 唤出、四个分类面板与模块名显示全部正常（`backend=gl-fixed; input=lwjgl2; toggle key=54;
@@ -69,10 +70,10 @@
 > `GlStateManager` 的布尔缓存与实际状态失配，主菜单背景会退化成无纹理纯色）；③ 绘制文字前要补一次
 > `glEnable(GL_TEXTURE_2D)`（同样的缓存失配会让字形采不到字体图集，退化成色块）。
 
-> **1.16.5（代际 B）现状**：注入、帧钩子、输入层与叠加层装载全部正常（`backend=gl-core; input=glfw`、
-> `screen=ClickGui`）；顺带修掉了每帧刷屏的 `BufferUnderflowException`——`ModernGlApi.getInteger` 在
-> `flip()` 后没校验 `remaining()`，GL 未写入时 `get()` 直接抛，把整条帧回调打挂。但核心 profile
-> 后端（`ModernRenderer`）尚未把界面画到屏幕上，需继续排查投影/视口与绘制时机。
+> **1.16.5（代际 B）现状（2026-10-06 真机已关闭）**：注入、帧钩子、输入层与叠加层装载全部正常，
+> `backend=skija; input=glfw`、`screen=SetsunaClickGui`，右 Shift 开 GUI 后 NOTURNE 面板可见、
+> 字号正常（Skija 不分代，gl-core 画不出的问题被绕过）。`ModernGlApi.getInteger` 的余量校验
+> （`flip()` 后查 `remaining()`）已修，不再有每帧 `BufferUnderflowException`。
 
 > **「注入」列指什么**：目前唯一跑通的是 LWJGL2 实验靶（`tmp/lab189/Fake189v5`：真实 Java 8 +
 > 真实 LWJGL2 + 真实 OpenGL 4.6，320×240 空白窗口，120 帧 `Display.update()`），**靶内没有 Minecraft**。

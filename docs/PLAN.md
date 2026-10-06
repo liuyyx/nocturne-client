@@ -170,3 +170,21 @@ Blink / Backtrack / InvWalk / Phase …）、功能 20（AutoArmor / AutoTool / 
 - **滚轮**：见 P5。若 transformer 扩展后滚轮仍为 0，记得现在是「打一次日志说明」而不是静默。
 - **26.1 与 26.2/26.3 的 HUD 入口不兼容**（形参 vs 字段），属绘制代际 C 内部的两个子形态——
   按表里的入口描述分别处理，织入代码不能共用。P4-C spike 时一并确认。
+
+## Vape 照抄与移植评估（2026-10-07）
+
+用户要求"移植 Vape 的所有模块，照抄、不要自由发挥"。执行结果：
+
+- **照抄已完成**：上游 `OpenVape 4.21.36`（**CC0-1.0**，无许可冲突）原样照抄进
+  `vendor/vape/`——**2985 文件 / 287,137 行** + 265 资源 + native 源码，零改动；
+  隔离探针 `compileJava` **BUILD SUCCESSFUL**（Java 17）；模块清单见
+  `vendor/vape/MODULE-INVENTORY.md`（`ModManager` 注册的 78 个模块）。
+- **本体可重建（已实测）**：`gradlew prepareInjectionBundle -PtargetRelease=8` 从照抄的源码
+  构建出 `Vape-v4.21.36.exe`(35.4MB) / `Vape-v4.21Native.dll`(35.1MB) / payload jar(35MB)；
+  native 自测三模式通过。命令与环境坑见 `vendor/vape/BUILD-NATIVE.md`。
+- **不能直接接入我们**：Vape 的 Java 层是它自己 native DLL 的薄壳——`NativeBridge` 16 个 native
+  / 全源码 139 处调用；模块依赖自研包装层 `gg.vape.wrapper`（**401 类 / 约 1813 个方法**，
+  模块直接引用其中 150 类）。我方对应物是 `GameBridge` 15 个方法 + `ClassType` 18 项。
+  完整量化与三路线对比见 `docs/research/vape-port-assessment.md`。
+- **待定**：是否用重建出的本体对游戏做一次实际注入验证（B 路线）；现有 13 个自研模块
+  （与 Vape 同名的 8 个）的去留；C 路线（改写进我方框架）是否立项。

@@ -5,8 +5,9 @@ import dev.noturne.ui.render.Renderer;
 /**
  * 可绘制后端：在 {@link Renderer} 绘制表面之上补上每帧的准备与收尾。
  *
- * <p>目前有两个实现——面向固定管线（Minecraft ≤ 1.12、LWJGL2）的 {@link GlRenderer}，
- * 以及面向 OpenGL 3.2 核心 profile（1.13+ / 26.x、LWJGL3）的 {@link ModernRenderer}。
+ * <p>目前有三个实现——面向固定管线（Minecraft ≤ 1.12、LWJGL2）的 {@link GlRenderer}、
+ * 面向 OpenGL 3.2 核心 profile（1.13+ / 26.x、LWJGL3）的 {@link ModernRenderer}、
+ * 以及不分代的 Skija 实现 {@link SkijaBackend}。
  * 将来接入游戏的 Vulkan 设备时，Vulkan 后端可以直接挂在同一接口下，
  * 这也是覆盖层面向本类型而非某个具体渲染器的原因。
  */

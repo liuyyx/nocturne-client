@@ -115,16 +115,20 @@ public final class ModernGlApi {
     private Method isEnabled;
     /** {@code glBlendFunc}（可选）。 */
     private Method blendFunc;
+    /** {@code glBlendFuncSeparate}（可选；缺失时 ALPHA 对按 RGB 对还原）。 */
+    private Method blendFuncSeparate;
     /** {@code glScissor}（可选）。 */
     private Method scissor;
     /** {@code BufferUtils.createFloatBuffer}（可选，缺失时无法上传顶点）。 */
     private Method newFloatBuffer;
-    /** {@code glGetIntegerv}（可选，缺失时 {@link #getInteger} 返回 {@code null}）。 */
-    private Method getIntegerv;
+    /** {@code glGetIntegerv(int, IntBuffer)}（LWJGL3 真实形态，优先）。 */
+    private Method getIntegervBuffer;
+    /** {@code glGetIntegerv(int, int[])}（老版本兜底形态）。 */
+    private Method getIntegervArray;
 
     /** 复用的直接缓冲区，避免每次上传都 {@code memAlloc}；不足时按需扩容。 */
     private FloatBuffer staging;
-    /** 复用的直接 IntBuffer，供 {@link #getIntegerv} 读取 GL 参数（如视口）。 */
+    /** 复用的直接 IntBuffer，供 {@link #getInteger} 读取 GL 参数（如视口）。 */
     private java.nio.IntBuffer viewportStaging;
     /** 句柄在 {@link #bind} 中逐项解析后写入；未解析到的保持 {@code null}。 */
     private ModernGlApi() {
@@ -211,18 +215,22 @@ public final class ModernGlApi {
         api.enable = find(loader, "glEnable", int.class);
         api.disable = find(loader, "glDisable", int.class);
         api.isEnabled = find(loader, "glIsEnabled", int.class);
+        api.blendFuncSeparate = find(loader, "glBlendFuncSeparate",
+                int.class, int.class, int.class, int.class);
         api.blendFunc = find(loader, "glBlendFunc", int.class, int.class);
         api.scissor = find(loader, "glScissor", int.class, int.class, int.class, int.class);
         api.newFloatBuffer = findBufferUtils(loader);
         // LWJGL3 只暴露 glGetIntegerv(int, IntBuffer)；没有 (int, int[]) 重载。
         // 修复前试图查找 (int, int[]) 结果必然 null → 视口读不出来 → 26.x 上 GUI 一个像素都画不出。
         // LWJGL 的 checkBuffer 需要 buffer 有余量，所以容量给 32 元素（大于视口实际 4）。
-        api.getIntegerv = find(loader, "glGetIntegerv", int.class, java.nio.IntBuffer.class);
-        if (api.getIntegerv == null) {
+        // 注意：两个形态分开记录。H05-B3 指出旧代码无条件分配 viewportStaging，
+        // 导致数组形态命中时仍走 IntBuffer 路径 → invoke 签名错配抛错被吞 → 视口永读不出。
+        api.getIntegervBuffer = find(loader, "glGetIntegerv", int.class, java.nio.IntBuffer.class);
+        if (api.getIntegervBuffer == null) {
             // 兜底：老版本 LWJGL3 可能有 legacy (int, int[]) 形态，继续尝试
-            api.getIntegerv = find(loader, "glGetIntegerv", int.class, int[].class);
+            api.getIntegervArray = find(loader, "glGetIntegerv", int.class, int[].class);
         }
-        if (api.getIntegerv != null) {
+        if (api.getIntegervBuffer != null) {
             api.viewportStaging = java.nio.ByteBuffer
                     .allocateDirect(32 * 4)
                     .order(java.nio.ByteOrder.nativeOrder())
@@ -239,15 +247,13 @@ public final class ModernGlApi {
      * @return 读到的值；{@code glGetIntegerv} 不可用或调用失败时返回 {@code null}
      */
     public int[] getInteger(int name, int count) {
-        if (getIntegerv == null) {
-            return null;
-        }
-        // IntBuffer 形态优先（LWJGL3 是 (int, IntBuffer)）
-        if (viewportStaging != null) {
+        // 按实际命中的签名形态分派（H05-B3）：旧代码用 viewportStaging != null 判定，
+        // 而 staging 无条件分配 → 数组形态命中时仍走 IntBuffer 路径，invoke 签名错配抛错被吞。
+        if (getIntegervBuffer != null && viewportStaging != null) {
             viewportStaging.clear();
             viewportStaging.limit(count);
             try {
-                getIntegerv.invoke(null, name, viewportStaging);
+                getIntegervBuffer.invoke(null, name, viewportStaging);
             } catch (Throwable t) {
                 return null;
             }
@@ -262,16 +268,19 @@ public final class ModernGlApi {
             viewportStaging.get(out, 0, count);
             return out;
         }
-        // 数组形态兜底（老版本 LWJGL3）
-        int[] out = new int[count];
-        try {
-            // 不走 Reflect.call：后者把失败一律变成 null，而 void 方法成功时也是 null，
-            // 结果就是「句柄存在但调用抛异常」被伪装成 {0,0,0,0}。
-            getIntegerv.invoke(null, name, (Object) out);
-        } catch (Throwable t) {
-            return null;
+        if (getIntegervArray != null) {
+            // 数组形态（老版本 LWJGL3）
+            int[] out = new int[count];
+            try {
+                // 不走 Reflect.call：后者把失败一律变成 null，而 void 方法成功时也是 null，
+                // 结果就是「句柄存在但调用抛异常」被伪装成 {0,0,0,0}。
+                getIntegervArray.invoke(null, name, (Object) out);
+            } catch (Throwable t) {
+                return null;
+            }
+            return out;
         }
-        return out;
+        return null;
     }
 
     /** 便捷方法：以三角形列表绘制一段顶点，假定所需 program 与 VAO 已处于启用状态。 */
@@ -443,10 +452,17 @@ public final class ModernGlApi {
      * 在链接前为程序绑定顶点属性位置。
      *
      * <p>不绑定的话，驱动可以把 {@code aPos} 分配到 0 以外的位置，而顶点布局却按索引 0 描述，
-     * 结果是属性未被描述、绘制出随机三角形。{@code glBindAttribLocation} 缺失时为空操作。
+     * 结果是属性未被描述、绘制出随机三角形。
+     *
+     * @return 下发成功返回 true；句柄缺失返回 false（P5：调用方必须按失败处理，
+     *         不能带着错乱的位置继续）。
      */
-    public void bindAttribLocation(int program, int index, String name) {
+    public boolean bindAttribLocation(int program, int index, String name) {
+        if (bindAttribLocation == null) {
+            return false;
+        }
         Reflect.call(bindAttribLocation, null, program, index, name);
+        return true;
     }
 
     /** 链接着色器程序；结果需用 {@link #linkOk} 检查。 */
@@ -490,7 +506,8 @@ public final class ModernGlApi {
      * 每帧都会产生一次 {@code GL_INVALID_VALUE}，而颜色/变换本就无法生效。
      */
     public void uniform4f(int location, float r, float g, float b, float a) {
-        if (location < 0) {
+        // P6：句柄缺失时 Reflect.call 空转，uniform 保持旧值画错；直接跳过。
+        if (location < 0 || uniform4f == null) {
             return;
         }
         Reflect.call(uniform4f, null, location, r, g, b, a);
@@ -502,7 +519,7 @@ public final class ModernGlApi {
      * @param matrix 列主序的 16 个元素（GL 的默认布局）
      */
     public void uniformMatrix4fv(int location, float[] matrix) {
-        if (location < 0) {
+        if (location < 0 || uniformMatrix4fv == null) {
             return;
         }
         Reflect.call(uniformMatrix4fv, null, location, false, matrix);
@@ -547,7 +564,7 @@ public final class ModernGlApi {
     /** 开启混合并使用常规的 src-alpha 混合因子，同时返回下发前的因子对（还原时用）。 */
     public int[] enableBlendAndReadPrevious() {
         int[] previous = null;
-        if (getIntegerv != null && viewportStaging != null) {
+        if (getIntegervBuffer != null && viewportStaging != null) {
             // GL_BLEND_SRC_RGB / GL_BLEND_DST_RGB / GL_BLEND_SRC_ALPHA / GL_BLEND_DST_ALPHA
             // 一次 getIntegerv 只能查一个平面；这里用四个单独查询（视口以内）。查不到就返回 null。
             int[][] queries = {{0x0C30, 0x0C31}, {0x0C32, 0x0C33}};
@@ -560,19 +577,29 @@ public final class ModernGlApi {
                 }
                 prev[i] = read[0];
             }
-            if (prev != null && prev[0] > 0 && prev[2] > 0) {
-                // GL 常量 GL_ONE==1；值 >0 说明读到了真实因子
-                previous = prev;
-            }
+            // P7：GL_ZERO==0 是合法因子，不能拿 ">0" 判成功——四个查询都返回非 null 即读到了真实值。
+            previous = prev;
         }
         enableCap(GL_BLEND);
         Reflect.call(blendFunc, null, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         return previous;
     }
 
-    /** 还原 enableBlendAndReadPrevious 读到的混合因子对；读不到时不做（读本后端自己每帧下发）。 */
+    /**
+     * 还原 enableBlendAndReadPrevious 读到的混合因子。
+     *
+     * <p>读到 4 因子就用 glBlendFuncSeparate 全还（只还 RGB 对会让 ALPHA 对永久残留）；
+     * separate 不可用时退化为 RGB 对。
+     */
     public void restoreBlendFunc(int[] previous) {
-        if (previous != null && blendFunc != null) {
+        if (previous == null) {
+            return;
+        }
+        if (previous.length >= 4 && blendFuncSeparate != null) {
+            Reflect.call(blendFuncSeparate, null, previous[0], previous[1], previous[2], previous[3]);
+            return;
+        }
+        if (blendFunc != null) {
             Reflect.call(blendFunc, null, previous[0], previous[1]);
         }
     }

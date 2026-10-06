@@ -73,6 +73,24 @@ public class Panel extends Component {
         }
     }
 
+    /**
+     * 递归刷新整棵子树的悬停态（P4）。
+     *
+     * <p>{@link #update(long)} 没有指针坐标，通用 Panel 下的 Button 等控件 hover 永不可达；
+     * 有指针的调用方调本方法一次，悬停高亮即生效。
+     */
+    public void updateHoverTree(double mx, double my) {
+        updateHover(mx, my);
+        for (int i = 0; i < children.size(); i++) {
+            Component child = children.get(i);
+            if (child instanceof Panel) {
+                ((Panel) child).updateHoverTree(mx, my);
+            } else {
+                child.updateHover(mx, my);
+            }
+        }
+    }
+
     @Override
     public void cancelInteractions() {
         super.cancelInteractions();
@@ -123,9 +141,33 @@ public class Panel extends Component {
 
     @Override
     public boolean keyPressed(int keyCode, int modifiers) {
-        // 键盘无坐标，逆序广播，首个消费的子控件即终止传播
+        if (!visible) {
+            return false;
+        }
+        // 键盘无坐标，逆序广播，首个消费的子控件即终止传播；
+        // 不可见的子控件不参与（D24），否则隐藏面板会吞掉按键。
         for (int i = children.size() - 1; i >= 0; i--) {
-            if (children.get(i).keyPressed(keyCode, modifiers)) {
+            Component child = children.get(i);
+            if (child.isVisible() && child.keyPressed(keyCode, modifiers)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 转发字符输入给可见子控件；首个消费即终止。
+     *
+     * <p>基类有钩子但本类从未转发（D24），文本编辑类控件永远收不到字符。
+     */
+    @Override
+    public boolean charTyped(char character) {
+        if (!visible) {
+            return false;
+        }
+        for (int i = children.size() - 1; i >= 0; i--) {
+            Component child = children.get(i);
+            if (child.isVisible() && child.charTyped(character)) {
                 return true;
             }
         }

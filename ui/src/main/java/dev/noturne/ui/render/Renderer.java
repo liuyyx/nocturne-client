@@ -25,20 +25,37 @@ public interface Renderer {
     /**
      * 绘制一个圆角矩形。
      *
+     * @param x 左上角 x（屏幕坐标）
+     * @param y 左上角 y（屏幕坐标）
+     * @param width 宽度；小于等于 0 时实现应跳过绘制
+     * @param height 高度；小于等于 0 时实现应跳过绘制
      * @param radius 圆角半径，实现应自行夹取到不超过宽高的一半；小于等于 0.5 时退化为普通矩形
+     * @param color 填充色；为 {@code null} 时应跳过绘制
      */
     void roundedRect(float x, float y, float width, float height, float radius, Color color);
 
 
-    /** 绘制矩形描边；{@code lineWidth} 为线宽（像素）。 */
+    /**
+     * 绘制矩形描边。
+     *
+     * @param x 左上角 x（屏幕坐标）
+     * @param y 左上角 y（屏幕坐标）
+     * @param width 宽度；小于等于 0 时实现应跳过绘制
+     * @param height 高度；小于等于 0 时实现应跳过绘制
+     * @param lineWidth 线宽（像素）
+     * @param color 描边色；为 {@code null} 时应跳过绘制
+     */
     void outline(float x, float y, float width, float height, float lineWidth, Color color);
 
 
     /**
      * 绘制一行文本。
      *
-     * @param value 文本内容；为 {@code null} 或空串时应跳过绘制
-     * @param size   字号（像素高度）
+     * @param text 文本内容；为 {@code null} 或空串时应跳过绘制
+     * @param x 左上角 x（屏幕坐标）
+     * @param y 左上角 y（屏幕坐标）
+     * @param size 字号（像素高度）
+     * @param color 填充色；为 {@code null} 时应跳过绘制
      */
     void text(String text, float x, float y, float size, Color color);
 

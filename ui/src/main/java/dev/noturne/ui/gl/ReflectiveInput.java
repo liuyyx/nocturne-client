@@ -162,6 +162,10 @@ public final class ReflectiveInput implements InputSource {
                 : Reflect.method(glfw, "glfwSetInputMode", long.class, int.class, int.class);
         Method gGetWindowAttrib = glfw == null ? null
                 : Reflect.method(glfw, "glfwGetWindowAttrib", long.class, int.class);
+        // D20：glfwGetInputMode 从未解析，isPointerGrabbed 的真查询是死代码，
+        // 关 GUI 后读到的永远是缓存值——视角转不动还查不出原因。签名 (long, int)。
+        Method gGetInputMode = glfw == null ? null
+                : Reflect.method(glfw, "glfwGetInputMode", long.class, int.class);
         // 接口探测也用 loadWithoutInit：它可能没有被加载过，加载了也不会 <clinit>
         Class<?> callback = glfw == null ? null
                 : Reflect.loadWithoutInit("org.lwjgl.glfw.GLFWScrollCallbackI", loader);
@@ -208,6 +212,7 @@ public final class ReflectiveInput implements InputSource {
         this.glfwGetCurrentContext = gContext;
         this.glfwGetWindowSize = gWindowSize;
         this.glfwSetInputMode = gSetInputMode;
+        this.glfwGetInputMode = gGetInputMode;
         this.glfwGetWindowAttrib = gGetWindowAttrib;
         this.glfwSetScrollCallback = gSetScroll;
         this.scrollCallbackType = callback;
@@ -229,19 +234,8 @@ public final class ReflectiveInput implements InputSource {
      * @return 可用的输入源；两代输入栈都找不到时返回一个恒为「无输入」的退化实现，绝不返回 null
      */
     public static InputSource create(ClassLoader loader, IntSupplier surfaceWidth, IntSupplier surfaceHeight) {
-        // 诊断（diag2）：写文件而不是只依赖 stdout——目标 JVM 里 stdout 可能只透出一部分行。
-        try {
-            java.nio.file.Files.write(
-                    java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
-                    ("diag2 input.create: lwjgl2-mouse="
-                            + (Reflect.loadWithoutInit("org.lwjgl.input.Mouse", loader) != null)
-                            + " glfw=" + (Reflect.loadWithoutInit("org.lwjgl.glfw.GLFW", loader) != null)
-                            + " sdl=" + (Reflect.loadWithoutInit("org.lwjgl.sdl.SDLMouse", loader) != null)
-                            + " self=" + ReflectiveInput.class + "\n").getBytes("UTF-8"),
-                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-        } catch (Throwable ignored) {
-            // 诊断失败绝不影响输入源创建
-        }
+        // 文件诊断（diag2）已删除：生产环境写 noturne-diag.txt 是残留 IO；
+        // 输入栈状态由下面的 input probe 日志行覆盖。
         // 诊断（diag1）：三条输入栈各自"在不在"必须可见。否则只看到一句 input=none，
         // 无法区分「目标 JVM 里真没有这些类」与「探测逻辑没跑到」（例如加载到了旧类）。
         System.out.println("[noturne] input probe: lwjgl2-mouse="
@@ -397,21 +391,31 @@ public final class ReflectiveInput implements InputSource {
         return pointerGrabApplied && pointerGrabLast;
     }
 
-    /** 把捕获状态下发到后端；成功后才记录，窗口未就绪时留待下一帧重试。 */
-    private void applyPointerGrab(boolean grabbed) {
+    /**
+     * 把捕获状态下发到后端。
+     *
+     * @return 下发是否成功；失败不记幂等缓存（P14），否则后续同值调用直接跳过、再无重试机会
+     */
+    private boolean applyPointerGrab(boolean grabbed) {
+        // void 方法成功时 Reflect.call 同样返 null，无法区分成败（P14 修正）：
+        // 句柄存在即视为已下发并记录；句柄缺失（必然空转）才记失败、留待重试。
         if ("lwjgl2".equals(backend)) {
+            if (mouseSetGrabbed == null) {
+                return false;
+            }
             Reflect.call(mouseSetGrabbed, null, grabbed);
         } else if ("glfw".equals(backend)) {
-            if (!ensureGlfwWindow()) {
-                return;
+            if (!ensureGlfwWindow() || glfwSetInputMode == null) {
+                return false;
             }
             Reflect.call(glfwSetInputMode, null, glfwWindow, GLFW_CURSOR,
                     grabbed ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
         } else {
-            return;
+            return false;
         }
         pointerGrabApplied = true;
         pointerGrabLast = grabbed;
+        return true;
     }
 
     /**

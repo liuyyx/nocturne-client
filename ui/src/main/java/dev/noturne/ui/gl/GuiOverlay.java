@@ -173,17 +173,8 @@ public final class GuiOverlay implements FrameListener {
 
     @Override
     public void onFrame() {
-        // 诊断（diag3）：GUI 叠加层是否每帧被驱动（用 lastFrameNanos==0 判首帧，避免额外字段）。
-        if (lastFrameNanos == 0L) {
-            try {
-                java.nio.file.Files.write(
-                        java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
-                        ("diag3 GuiOverlay.onFrame: open=" + gui.isOpen() + "\n").getBytes("UTF-8"),
-                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-            } catch (Throwable ignored) {
-                // 诊断失败不影响叠加层
-            }
-        }
+        // 首帧文件诊断（diag3）已删除：生产环境每会话 APPEND 写 noturne-diag.txt
+        // 是残留 IO；首帧状态由下面的 overlay first frame 日志行覆盖。
         // 指针位置只取一次：开关判定、悬停更新与事件派发必须基于同一份坐标，
         // 否则一帧内指针移动会造成命中测试与事件坐标不一致。
         double mx = input.mouseX();
@@ -283,6 +274,11 @@ public final class GuiOverlay implements FrameListener {
             drawFrame();
             return;
         }
+        // Esc 可能把编辑器切回 GUI（D16）：后续鼠标派发必须用切后的界面，
+        // 否则本帧沿会派给已关闭的编辑器而丢掉。视口/悬停给新界面补一次同步。
+        current = active();
+        current.setViewport(renderer.width(), renderer.height());
+        current.update(System.currentTimeMillis(), mx, my);
 
         if (!loggedFirstDraw) {
             loggedFirstDraw = true;

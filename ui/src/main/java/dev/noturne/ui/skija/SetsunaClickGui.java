@@ -73,6 +73,15 @@ public final class SetsunaClickGui implements OverlayGui {
     private boolean open;
     private int viewportWidth;
     private int viewportHeight;
+    /**
+     * 界面缩放：绘制时把画布整体放大该倍数，输入坐标反向除——一处改，全界面同比例放大。
+     *
+     * <p>为什么不是逐个改字号：字号散落在各绘制点（8.5f/9f/11f…），逐个改必漏；画布级缩放
+     * 让几何与字形同乘，命中测试与视觉天然对齐。为什么默认 1.5：游戏内 Display 只有 854×480
+     *（实测），按 1.0 排出的面板约 478×298、字号 8.5–11，在 480p 逻辑分辨率下就是小；
+     * 1.5 档让面板约 717×447，字号等效 12.75–16.5，仍在 854×480 内放得下。
+     */
+    public static final float UI_SCALE = 1.5f;
     /** 当前选中的分类；{@code null} 表示还没有可选分类。 */
     private Category activeCategory;
     /** 当前选中的模块；{@code null} 表示详情栏显示占位提示。 */
@@ -169,8 +178,10 @@ public final class SetsunaClickGui implements OverlayGui {
 
     @Override
     public void update(long nowMs, double mouseX, double mouseY) {
-        this.mouseX = mouseX;
-        this.mouseY = mouseY;
+        // 输入是绘制坐标系的 UI_SCALE 倍（绘制时画布被放大），先除回来再存——
+        // 存的就是布局坐标，命中测试与绘制天然对齐。
+        this.mouseX = mouseX / UI_SCALE;
+        this.mouseY = mouseY / UI_SCALE;
         if (!open) {
             return;
         }
@@ -179,11 +190,16 @@ public final class SetsunaClickGui implements OverlayGui {
         layout = currentLayout();
     }
 
-    /** 按当前视口算布局；视口未知时用 854×480 兜底，避免首帧出现零尺寸面板。 */
+    /**
+     * 按当前视口算布局；视口未知时用 854×480 兜底，避免首帧出现零尺寸面板。
+     *
+     * <p>布局按虚拟尺寸算（真实视口除以 UI_SCALE）：draw 里画布会被放大 UI_SCALE 倍，
+     * 布局坐标乘上放大正好铺满真实视口。直接按真实视口排再整体放大，会把面板推出屏幕。
+     */
     private ClickGuiLayout currentLayout() {
         int width = viewportWidth > 0 ? viewportWidth : 854;
         int height = viewportHeight > 0 ? viewportHeight : 480;
-        return ClickGuiLayout.of(width, height, 1.0f);
+        return ClickGuiLayout.of(Math.round(width / UI_SCALE), Math.round(height / UI_SCALE), 1.0f);
     }
 
     // ------------------------------------------------------------------ 绘制
@@ -201,17 +217,25 @@ public final class SetsunaClickGui implements OverlayGui {
 
     /** 一帧的完整绘制：背板 → 面板 → 三栏 → 内容。 */
     private void draw(Canvas canvas) {
+        // 布局按虚拟尺寸（真实/UI_SCALE）排，这里把画布放大 UI_SCALE 倍再按布局坐标画——
+        // 几何与字形同乘铺满真实视口。背板用真实尺寸先铺底（不参与缩放），避免放大后边缘露底。
         int width = Math.round(viewportWidth > 0 ? viewportWidth : 854);
         int height = Math.round(viewportHeight > 0 ? viewportHeight : 480);
         // 背板：SkijaBackdrop 的动画背景（渐变 + 网格或自定义图 + 扫描线 + 视差 + 边缘压暗），
         // shadeAlpha 用 180 ≈ 原来那层背板的不透明度。上游独立屏幕同样是「背景 + 压暗」两段。
         SkijaBackdrop.draw(canvas, width, height, 180);
-        SkijaControls.panel(canvas, panelBox());
-        drawHeader(canvas);
-        drawSeparators(canvas);
-        drawRail(canvas);
-        drawModuleList(canvas);
-        drawDetail(canvas);
+        int saved = canvas.save();
+        try {
+            canvas.scale(UI_SCALE, UI_SCALE);
+            SkijaControls.panel(canvas, panelBox());
+            drawHeader(canvas);
+            drawSeparators(canvas);
+            drawRail(canvas);
+            drawModuleList(canvas);
+            drawDetail(canvas);
+        } finally {
+            canvas.restoreToCount(saved);
+        }
     }
 
     private SkijaControls.Box panelBox() {
@@ -628,6 +652,9 @@ public final class SetsunaClickGui implements OverlayGui {
         if (layout == null) {
             layout = currentLayout();
         }
+        // 绘制被放大 UI_SCALE 倍，输入先除回来——与 update 存的布局坐标同一坐标系。
+        mx /= UI_SCALE;
+        my /= UI_SCALE;
         if (button == BUTTON_RIGHT) {
             // 右键：设置项恢复默认（不改选中状态，也不影响其它区域）
             return detailContains(mx, my) && detailRightClicked(mx, my);
@@ -863,7 +890,8 @@ public final class SetsunaClickGui implements OverlayGui {
         if (!open || dragKind == DragKind.NONE) {
             return false;
         }
-        applyDrag(mx);
+        // 拖动起点（draggingTrackX）是布局坐标，这里的 mx 先除回同一坐标系再算比例。
+        applyDrag(mx / UI_SCALE);
         return true;
     }
 
@@ -884,6 +912,8 @@ public final class SetsunaClickGui implements OverlayGui {
         if (layout == null) {
             layout = currentLayout();
         }
+        mx /= UI_SCALE;
+        my /= UI_SCALE;
         float step = (float) -amount * 18f;
         if (detailContains(mx, my)) {
             detailScroll = clampScroll(detailScroll + step, detailContentHeight(),

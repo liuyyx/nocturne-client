@@ -52,17 +52,28 @@ public final class TextElement extends HudElement {
     /**
      * 读取当前文本。
      *
-     * @return supplier 提供的最新值；supplier 为 null 或返回 null 时为空串，绝不返回 null
+     * <p>supplier 抛异常时返回空串（P13）：渲染帧不能被业务回调打掉整帧。
+     *
+     * @return supplier 提供的最新值；supplier 为 null、返回 null 或抛异常时为空串，绝不返回 null
      */
     public String currentText() {
-        String value = text == null ? null : text.get();
-        return value == null ? "" : value;
+        if (text == null) {
+            return "";
+        }
+        try {
+            String value = text.get();
+            return value == null ? "" : value;
+        } catch (Throwable t) {
+            return "";
+        }
     }
 
     /**
      * 绘制文本及可选阴影。
      *
      * <p>空文本直接跳过，避免产生无意义的绘制调用。
+     * 阴影偏移按字号缩放（P13：固定 1px 在大字号下几乎看不见）；
+     * 正文半透明时不画阴影——游戏字体路径会剥掉 alpha，不透明黑影比没影更丑。
      */
     @Override
     public void render(Renderer renderer) {
@@ -70,10 +81,22 @@ public final class TextElement extends HudElement {
         if (value.isEmpty()) {
             return;
         }
-        // 阴影先画且偏移 1px，正文后画覆盖其上形成描边感
-        if (shadow) {
-            renderer.text(value, x + 1f, y + 1f, size, Theme.SHADOW);
+        if (shadow && color.a() == 255) {
+            float offset = Math.max(1f, size / 12f);
+            renderer.text(value, x + offset, y + offset, size, Theme.SHADOW);
         }
         renderer.text(value, x, y, size, color);
+    }
+
+    /**
+     * @return 本元素在当前位置的包围盒 {x, y, width, height}（P13：外部需要尺寸做避让/对齐时用）；
+     *         文本为空时宽高为 0
+     */
+    public float[] bounds(Renderer renderer) {
+        String value = currentText();
+        if (value.isEmpty()) {
+            return new float[]{x, y, 0f, 0f};
+        }
+        return new float[]{x, y, renderer.textWidth(value, size), renderer.textHeight(size)};
     }
 }

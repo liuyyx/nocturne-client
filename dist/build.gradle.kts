@@ -50,6 +50,11 @@ val distJar = tasks.register<Jar>("distJar") {
             "Agent-Class" to "dev.noturne.agent.NoturneAgent",
             "Can-Retransform-Classes" to "true",
             "Can-Redefine-Classes" to "true",
+            // Multi-Release：Skija 的 META-INF/versions/9 条目（JDK 9+ 用的 Cleanable 修补版，
+            // 走 java.lang.ref.Cleaner）在 JDK 9+ 运行时生效的前提。没有这一行，
+            // JDK 9+ 会忽略整个 versions/ 目录，永远只读基线版 Cleanable，
+            // 而基线版引用 JDK 9+ 已移除的 sun.misc.Cleaner，Skija 必不可用。
+            "Multi-Release" to "true",
             // 实现元信息，便于排查产物版本对应关系。
             "Implementation-Title" to "noturne-client",
             "Implementation-Version" to project.version.toString(),
@@ -85,9 +90,15 @@ val distJar = tasks.register<Jar>("distJar") {
         from(output)
     }
 
-    // 依赖 jar 里的模块描述符与多版本目录必须排除：它们会让 javac 把这个 jar 当成模块处理，
+    // 依赖 jar 里的模块描述符必须排除：它会让 javac 把这个 jar 当成模块处理，
     // 于是任何「以本 jar 为 classpath」的编译都会报「程序包 xxx 不存在」。
-    exclude("module-info.class", "META-INF/versions/**")
+    exclude("module-info.class", "META-INF/versions/**/module-info.class")
+
+    // 但 META-INF/versions/9 下的类条目必须保留：Skija 的 MR9 修补版 Cleanable
+    //（走 java.lang.ref.Cleaner，JDK 9+ 唯一可用的版本）就在这里。之前这里写的是
+    // exclude("META-INF/versions/**")，连类带描述符一起删，导致 JDK 9+ 永远读到
+    // 引用已移除的 sun.misc.Cleaner 的基线版 Cleanable，Skija 在 17/21/25 上必不可用。
+    // 注意：上面只排除了 versions 下的 module-info.class，类条目不受影响。
 
     // 字节码操作库在 jar 根必须排除展开的类：加载器自己也带这些库，
     // 而 Fabric 的 KnotClassLoader 会先在 mods jar 里找类——于是同一个 org.objectweb.asm.MethodVisitor
@@ -98,6 +109,8 @@ val distJar = tasks.register<Jar>("distJar") {
 
     // 产物自检：必须内嵌 dev/noturne/agent/asm.jar，且 jar 根不得出现展开的 ASM 类。
     // 这两个不变式一旦被破坏（例如依赖改名或 exclude 失效），帧钩子会静默失效，故在此硬失败。
+    // 另：Skija 的 MR9 修补版 Cleanable（META-INF/versions/9/...）必须保留，
+    // 且清单必须有 Multi-Release: true——缺任一，Skija 在 JDK 17/21/25 上必不可用（静默回退）。
     doLast {
         val jarFile = archiveFile.get().asFile
         ZipFile(jarFile).use { zip ->
@@ -120,6 +133,13 @@ val distJar = tasks.register<Jar>("distJar") {
                 throw GradleException(
                     "dist jar ${jarFile.name} leaked an expanded ASM class '$stray'; " +
                         "ASM must only be embedded as 'dev/noturne/agent/asm.jar'."
+                )
+            }
+            if (zip.getEntry("META-INF/versions/9/io/github/humbleui/skija/impl/Cleanable.class") == null) {
+                throw GradleException(
+                    "dist jar ${jarFile.name} lost Skija's MR9 Cleanable " +
+                        "'META-INF/versions/9/io/github/humbleui/skija/impl/Cleanable.class'; " +
+                        "Skija would fall back to the sun.misc.Cleaner baseline and fail on JDK 17/21/25."
                 )
             }
         }

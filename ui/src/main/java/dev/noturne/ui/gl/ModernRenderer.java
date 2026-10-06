@@ -12,7 +12,8 @@ import dev.noturne.ui.render.Renderer;
  * 颜色走 uniform 而非逐顶点，是因为 UI 画的都是平涂——在这个规模上，
  * 为渐变去做批处理的成本大于收益。
  *
- * <p>它是两个可互换后端之一，另见 {@code RenderBackends}。
+ * <p>它是三个可互换后端之一（另见 {@link GlRenderer} 与 {@link SkijaBackend}，
+ * 由 {@code OverlayBootstrap} 按运行环境选择）。
  */
 public final class ModernRenderer implements UiBackend {
 
@@ -116,8 +117,8 @@ public final class ModernRenderer implements UiBackend {
     /**
      * 编译着色器并创建缓冲对象。必须已有当前 GL 上下文时调用，且只需调用一次。
      *
-     * <p>任一步失败都会删除已创建的 GL 对象并把 {@link #initFailed} 置位，
-     * 之后不再重试——否则 beginFrame 每帧新建 1~2 个着色器且永不删除，长期挂机会累积数千个 GL 对象。
+     * <p>任一步失败都会删除已创建的 GL 对象并累加初始化失败计数，达到上限后永久放弃——
+     * 否则 beginFrame 每帧新建 1~2 个着色器且永不删除，长期挂机会累积数千个 GL 对象。
      *
      * @return 是否初始化成功
      */
@@ -162,9 +163,17 @@ public final class ModernRenderer implements UiBackend {
         gl.attachShader(program, vertex);
         gl.attachShader(program, fragment);
         // 顶点属性位置必须在链接前绑定：驱动默认可以把它分配到 0 以外的位置，
-        // 而下面的 glVertexAttribPointer 固定按索引 0 描述布局。
-        gl.bindAttribLocation(program, ATTRIB_POSITION, "aPos");
-        gl.linkProgram(program);
+        // 而下面的 glVertexAttribPointer 固定按索引 0 描述布局。绑定句柄缺失
+        // 即按初始化失败处理（P5），不能带着错乱的位置继续。
+        if (!gl.bindAttribLocation(program, ATTRIB_POSITION, "aPos")) {
+            System.err.println("[noturne] glBindAttribLocation unavailable; attribute layout uncertain");
+            gl.deleteProgram(program);
+            program = 0;
+            gl.deleteShader(vertex);
+            gl.deleteShader(fragment);
+            recordInitFailure();
+            return false;
+        }
         // 链接完成后着色器对象即可删除，程序会保留各自的副本。
         gl.deleteShader(vertex);
         gl.deleteShader(fragment);
@@ -420,7 +429,9 @@ public final class ModernRenderer implements UiBackend {
         if (width <= 0f || height <= 0f || color == null || !ready) {
             return;
         }
-        float t = Math.max(1f, lineWidth);
+        // P9：线宽超过半高时上下两条在中部重叠，重叠区被画两遍（双混变实）；
+        // 先夹到半高，退化成实心条而非重叠描边。
+        float t = Math.max(1f, Math.min(lineWidth, Math.min(width, height) / 2f));
         rect(x, y, width, t, color);
         rect(x, y + height - t, width, t, color);
         rect(x, y + t, t, height - 2f * t, color);

@@ -50,6 +50,13 @@ public final class MinecraftTextRenderer implements TextRenderer {
     private boolean loggedMissing;
     /** 「现代字体不再提供 drawString」是否已提示过，保证只打印一次。 */
     private boolean loggedNoDrawString;
+    /**
+     * 字体是否提供 drawString：null=尚未探测。getMethods 全量扫描每 draw 做一次太贵（D12），
+     * 字体类运行期不变，查一次缓存。
+     */
+    private Boolean hasDrawString;
+    /** fontWidth 句柄连续失败次数；到 3 次就只走映射桥（P12）。 */
+    private int fontWidthFailures;
 
     /** 仅由 {@link #bind} 创建——必须先在游戏里定位到字体实例。 */
     private MinecraftTextRenderer(GameBridge bridge, Object fontRenderer, GlApi gl,
@@ -213,28 +220,34 @@ public final class MinecraftTextRenderer implements TextRenderer {
             return;
         }
         int rgb = color == null ? 0xFFFFFF : (color.argb & 0xFFFFFF);
+        // P11：矩阵操作必须过 hasMatrixControl 门禁——gl 非空不代表有矩阵句柄，
+        // 无句柄时 pushMatrix 空转，字形画在游戏投影下错位。
+        boolean matrix = gl != null && gl.hasMatrixControl();
         // 字形要采样字体图集：本后端的填充绘制会把 GL_TEXTURE_2D 关掉，而游戏的 GlStateManager
         // 仍缓存着「纹理已启用」，它自己便不再 glEnable——不在这里补一刀，字形就退化成色块。
         if (gl != null) {
             gl.enable(GlApi.GL_TEXTURE_2D);
         }
-        float scale = effectiveScale(size);
+        float scale = matrix ? effectiveScale(size) : 1f;
         if (scale != 1f) {
             // 固定管线路径：把整个字形按目标字号缩放后绘制，使实际字形尺寸与 width()/height() 一致。
             gl.pushMatrix();
-            gl.translate(x, y, 0f);
-            gl.scale(scale, scale, 1f);
-            Object result = bridge.callMapped(fontRenderer, ClassType.FONT_RENDERER, "drawString",
-                    text, 0, 0, rgb);
-            gl.popMatrix();
-            logIfMissing(result);
+            try {
+                gl.translate(x, y, 0f);
+                gl.scale(scale, scale, 1f);
+                Object result = bridge.callMapped(fontRenderer, ClassType.FONT_RENDERER, "drawString",
+                        text, 0, 0, rgb);
+                logIfMissing(result);
+            } finally {
+                // P10：绘制抛异常也必须弹栈，否则矩阵栈每错一帧泄漏一层。
+                gl.popMatrix();
+            }
             return;
         }
         Object result = bridge.callMapped(fontRenderer, ClassType.FONT_RENDERER, "drawString",
-                text, (int) x, (int) y, rgb);
+                text, Math.round(x), Math.round(y), rgb);
         logIfMissing(result);
     }
-
     /**
      * 判断当前字体是否已经不负责绘制（26.x 的 {@code Font} 没有 {@code drawString}）。
      *
@@ -245,10 +258,18 @@ public final class MinecraftTextRenderer implements TextRenderer {
         if (fontWidth == null) {
             return false;
         }
-        for (Method method : fontRenderer.getClass().getMethods()) {
-            if ("drawString".equals(method.getName())) {
-                return false;
+        if (hasDrawString == null) {
+            boolean found = false;
+            for (Method method : fontRenderer.getClass().getMethods()) {
+                if ("drawString".equals(method.getName())) {
+                    found = true;
+                    break;
+                }
             }
+            hasDrawString = found ? Boolean.TRUE : Boolean.FALSE;
+        }
+        if (hasDrawString.booleanValue()) {
+            return false;
         }
         if (!loggedNoDrawString) {
             loggedNoDrawString = true;
@@ -272,11 +293,15 @@ public final class MinecraftTextRenderer implements TextRenderer {
         if (text == null || text.isEmpty()) {
             return 0f;
         }
-        if (fontWidth != null) {
+        if (fontWidth != null && fontWidthFailures < 3) {
+            // P12：句柄失效时 Reflect.call 静默返 null，每字都走两条路径；
+            // 连续失败 3 次就只走映射桥，不再试它。
             Object measured = Reflect.call(fontWidth, fontRenderer, text);
             if (measured instanceof Number) {
+                fontWidthFailures = 0;
                 return ((Number) measured).floatValue() * effectiveScale(size);
             }
+            fontWidthFailures++;
         }
         Object result = bridge.callMapped(fontRenderer, ClassType.FONT_RENDERER, "getStringWidth", text);
         float base = result instanceof Number ? ((Number) result).floatValue() : text.length() * 6f;

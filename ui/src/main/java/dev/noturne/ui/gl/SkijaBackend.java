@@ -61,6 +61,9 @@ public final class SkijaBackend implements UiBackend {
         SkijaBackend backend = new SkijaBackend(gl);
         try {
             backend.beginFrame();
+            // 画布状态必须在 endFrame 之前读（D19）：endFrame 会把 frameCanvas 置 null，
+            // 之后再读 canvas 字段恒为 false，失败日志失去区分度。
+            boolean hadCanvas = backend.canvas() != null;
             boolean usable = backend.ready();
             backend.endFrame();
             if (usable) {
@@ -71,11 +74,15 @@ public final class SkijaBackend implements UiBackend {
             // 静默返回 null 会让「为什么没用 Skija」完全无从下手：日志里既没有成功行、也没有失败行
             // （26.3 实机就撞上了这一点，只能靠代码推断）。这里把判定依据直接打出来。
             System.out.println("[noturne] skija probe: unusable (viewport=" + backend.width() + "x"
-                    + backend.height() + ", canvas=" + (backend.canvas() != null)
+                    + backend.height() + ", canvas=" + hadCanvas
                     + ", gl=" + (gl != null) + ")");
+            // 探测失败必须释放已建的原生资源（D18）：beginFrame 可能已建好 DirectContext/Surface，
+            // 只是尺寸/画布判定没过；不关就泄漏 GPU 资源。
+            backend.skija.close();
             return null;
         } catch (Throwable t) {
             System.out.println("[noturne] skija probe failed: " + t);
+            backend.skija.close();
             return null;
         }
     }

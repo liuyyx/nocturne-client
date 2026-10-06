@@ -29,6 +29,10 @@ public final class SkijaRenderer implements Renderer {
     /**
      * 绑定本帧画布。
      *
+     * <p>只把计数清零、不 unwind 原生 save 栈（P3）：画布随 surface 每帧重建，
+     * 旧 save 栈跟着旧 surface 释放，不会带到新帧；同画布跨 bind 的残留由 endFrame 的
+     * bind(null) 语义覆盖——unwind 一个已无引用的栈反而可能 restore 到错误状态。
+     *
      * @param canvas Skija 画布；为 {@code null} 表示本帧不可绘制（所有调用退化为空操作）
      */
     public void bind(Canvas canvas) {

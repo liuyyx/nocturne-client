@@ -79,9 +79,10 @@ public abstract class Component {
         return hovered;
     }
 
-    /** 判断点 {@code (mx, my)} 是否落在本控件矩形内（含边界）。 */
+    /** 判断点 {@code (mx, my)} 是否落在本控件矩形内（含边界）；零尺寸不命中任何点。 */
     public boolean contains(double mx, double my) {
-        return mx >= x && mx <= x + width && my >= y && my <= y + height;
+        return width > 0f && height > 0f
+                && mx >= x && mx <= x + width && my >= y && my <= y + height;
     }
 
     /** 更新悬停状态；返回 true 表示指针位于控件内。 */

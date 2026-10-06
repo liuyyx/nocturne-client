@@ -40,9 +40,9 @@ public final class HudManager {
     }
 
     /**
-     * 移除首个与给定实例相等的元素。
+     * 按 id 移除元素（P1）：与 {@link #add} 的「同 id 替换」同基准。
      *
-     * @param element 待移除元素；未注册时无副作用
+     * @param element 待移除元素；未注册或为 null 时无副作用
      */
     public void remove(HudElement element) {
         if (element == null) {
@@ -110,7 +110,8 @@ public final class HudManager {
         // 直接遍历底层列表会抛 ConcurrentModificationException 打断整帧 HUD
         HudElement[] snapshot = elements.toArray(new HudElement[0]);
         for (HudElement element : snapshot) {
-            if (element.isEnabled()) {
+            // 未显式定位的不画（D14）：默认 (0,0) 堆在左上角与刻意放那里的无法区分。
+            if (element.isEnabled() && element.isPositioned()) {
                 element.render(renderer);
             }
         }

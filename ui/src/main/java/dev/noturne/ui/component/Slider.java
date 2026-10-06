@@ -189,9 +189,9 @@ public class Slider extends Component {
     }
 
 
-    /** 将 {@code v} 夹紧到 {@code [min, max]}。 */
+    /** 将 {@code v} 夹紧到 {@code [min, max]}；NaN 按 min 处理，避免毒化配置值（D21）。 */
     private float clamp(float v) {
-        return v < min ? min : (v > max ? max : v);
+        return Float.isNaN(v) ? min : (v < min ? min : (v > max ? max : v));
     }
 
     /**
@@ -205,7 +205,10 @@ public class Slider extends Component {
      */
     protected String format(float v) {
         if (v == Math.rint(v)) {
-            return Integer.toString((int) v);
+            // P16：(int) 强转在 |v| 超 2^31 时溢出；超限用 long 展示。
+            double d = v;
+            return (d >= Integer.MIN_VALUE && d <= Integer.MAX_VALUE)
+                    ? Integer.toString((int) v) : Long.toString((long) d);
         }
         return String.format(java.util.Locale.ROOT, "%.2f", v);
     }

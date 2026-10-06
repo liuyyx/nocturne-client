@@ -18,6 +18,11 @@ public abstract class HudElement {
     protected float x;
     /** 绘制锚点 y，屏幕像素；由 {@link #setPosition(float, float)} 写入 */
     protected float y;
+    /**
+     * 是否被显式定位过（D14）：默认 (0,0) 与刻意放在 (0,0) 不可区分，
+     * 未定位的元素由 HudManager 跳过，而不是堆在左上角。
+     */
+    private boolean positioned;
 
     /**
      * 构造元素。
@@ -25,6 +30,10 @@ public abstract class HudElement {
      * @param id 元素标识，全局唯一，注册后不应再改变
      */
     protected HudElement(String id) {
+        // P13：id 为 null 时 byId/add/remove 的 equals 全错位，构造期直接拒掉。
+        if (id == null) {
+            throw new NullPointerException("id");
+        }
         this.id = id;
     }
 
@@ -66,6 +75,12 @@ public abstract class HudElement {
     public final void setPosition(float x, float y) {
         this.x = x;
         this.y = y;
+        this.positioned = true;
+    }
+
+    /** @return 是否被显式定位过；未定位的元素不会被绘制 */
+    public final boolean isPositioned() {
+        return positioned;
     }
 
     /**

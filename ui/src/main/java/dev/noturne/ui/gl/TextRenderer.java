@@ -38,12 +38,33 @@ public interface TextRenderer {
 
         @Override
         public float width(String text, float size) {
-            return text == null ? 0f : text.length() * size * 0.5f;
+            // 非正字号按 0 处理（D13）：否则负宽会让居中/省略号算出反向坐标。
+            // §格式码不占宽（P17）：游戏内 "§aHi" 显示 2 字符，按 4 字符估算布局全错位。
+            return text == null || size <= 0f ? 0f : stripCodes(text).length() * size * 0.5f;
         }
 
         @Override
         public float height(float size) {
-            return size;
+            return size <= 0f ? 0f : size;
         }
     };
+
+    /**
+     * 剥掉 Minecraft 格式码（§ + 1 字符）：它们只改颜色/样式，不占显示宽度。
+     */
+    static String stripCodes(String text) {
+        if (text == null || text.indexOf('§') < 0) {
+            return text == null ? "" : text;
+        }
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '§' && i + 1 < text.length()) {
+                i++;
+                continue;
+            }
+            out.append(c);
+        }
+        return out.toString();
+    }
 }

@@ -27,6 +27,8 @@ class HudTest {
 
         TextElement first = new TextElement("fps", () -> "fps: 120", 14f, Color.WHITE, false);
         TextElement second = new TextElement("coords", () -> "xyz: 1 2 3", 14f, Color.WHITE, false);
+        first.setPosition(0f, 0f);
+        second.setPosition(0f, 20f);
         hud.add(first);
         hud.add(second);
 
@@ -97,6 +99,7 @@ class HudTest {
         HudManager hud = new HudManager();
         hud.add(new TextElement("fps", () -> "old", 14f, Color.WHITE, false));
         TextElement replacement = new TextElement("fps", () -> "new", 14f, Color.WHITE, false);
+        replacement.setPosition(0f, 0f);
         hud.add(replacement);
 
         assertEquals(1, hud.elements().size());
@@ -120,10 +123,13 @@ class HudTest {
         TextElement mutator = new TextElement("a", () -> {
             if (!added[0]) {
                 added[0] = true;
-                hud.add(new TextElement("b", () -> "b-text", 14f, Color.WHITE, false));
+                TextElement late = new TextElement("b", () -> "b-text", 14f, Color.WHITE, false);
+                late.setPosition(0f, 20f);
+                hud.add(late);
             }
             return "a-text";
         }, 14f, Color.WHITE, false);
+        mutator.setPosition(0f, 0f);
         hud.add(mutator);
 
         hud.render(renderer);   // 不得抛异常
@@ -134,5 +140,24 @@ class HudTest {
         hud.render(renderer);
         assertEquals(1, renderer.count("text:a-text"));
         assertEquals(1, renderer.count("text:b-text"));
+    }
+
+    /**
+     * D14 回归：未显式定位的元素不得绘制（默认 0,0 与刻意放 0,0 不可区分，
+     * 前者堆在左上角是 bug）；setPosition 后恢复绘制。
+     */
+    @Test
+    void unpositionedElementsAreSkipped() {
+        RecordingRenderer renderer = new RecordingRenderer();
+        HudManager hud = new HudManager();
+        TextElement element = new TextElement("x", () -> "hi", 12f, Color.WHITE, false);
+        hud.add(element);
+
+        hud.render(renderer);
+        assertEquals(0, renderer.count("text:hi"));
+
+        element.setPosition(10f, 10f);
+        hud.render(renderer);
+        assertEquals(1, renderer.count("text:hi"));
     }
 }

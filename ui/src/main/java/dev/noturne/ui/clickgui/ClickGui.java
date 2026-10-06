@@ -38,6 +38,8 @@ public final class ClickGui extends Panel implements OverlayGui {
     private final ModuleRegistry registry;
     /** 分类栏列表，顺序即从左到右的排列顺序。 */
     private final List<CategoryPanel> panels = new ArrayList<CategoryPanel>();
+    /** 已建成面板的内容版本号；与 {@link ModuleRegistry#revision()} 对不上就重建。 */
+    private long builtRevision = -1L;
     /** 模块设置面板；仅在被唤出时可见，始终绘制在分类栏之上。 */
     private final ModuleConfigPanel configPanel = new ModuleConfigPanel();
     private boolean open;
@@ -50,18 +52,38 @@ public final class ClickGui extends Panel implements OverlayGui {
 
     public ClickGui(ModuleRegistry registry) {
         this.registry = registry;
+        buildPanels();
+        // 最后添加 = 视觉最上层，也是输入派发的第一顺位
+        add(configPanel);
+    }
 
+    /**
+     * 按注册表现状重建分类栏：跳过空分类，并记录版本号。
+     *
+     * <p>空分类不得建列：空列只有标题栏占位，还会把靠右的列挤出屏幕。
+     * 运行期新注册的模块靠 {@link #update} 里比对版本号发现，构造期只建一次不够。
+     */
+    private void buildPanels() {
+        for (CategoryPanel panel : panels) {
+            remove(panel);
+        }
+        panels.clear();
         float cursorX = MARGIN;
         float top = MARGIN;
         for (Category category : Category.values()) {
+            if (registry.byCategory(category).isEmpty()) {
+                continue;
+            }
             CategoryPanel panel =
                     new CategoryPanel(category, registry.byCategory(category), cursorX, top);
             panels.add(panel);
             add(panel);
             cursorX += Theme.PANEL_WIDTH + COLUMN_GAP;
         }
-        // 最后添加 = 视觉最上层，也是输入派发的第一顺位
+        // 设置面板保持视觉最上层：重建把它被新列压住的顺序恢复。
+        remove(configPanel);
         add(configPanel);
+        builtRevision = registry.revision();
     }
 
     /** @return 界面当前是否打开；关闭时不绘制也不消费输入 */
@@ -88,9 +110,20 @@ public final class ClickGui extends Panel implements OverlayGui {
         setOpen(!open);
     }
 
-    /** @return 各分类栏，顺序与显示顺序一致 */
+    /**
+     * @return 各分类栏，顺序与显示顺序一致；只读视图——外部持有后重建不会撕裂渲染与命中
+     */
     public List<CategoryPanel> panels() {
-        return panels;
+        return java.util.Collections.unmodifiableList(panels);
+    }
+
+    /**
+     * 按注册表现状立即重建分类栏（跳过空分类）。
+     *
+     * <p>运行期批量注册后调一次即可；{@link #update} 里也会按版本号自动发现。
+     */
+    public void refresh() {
+        buildPanels();
     }
 
     public ModuleRegistry registry() {
@@ -106,6 +139,9 @@ public final class ClickGui extends Panel implements OverlayGui {
     public void update(long nowMs, double mouseX, double mouseY) {
         if (!open) {
             return;
+        }
+        if (registry.revision() != builtRevision) {
+            buildPanels();
         }
         for (CategoryPanel panel : panels) {
             // 先更新悬停、再推进动画：否则动画使用上一帧的 hovered，高亮总是慢一帧
@@ -227,6 +263,8 @@ public final class ClickGui extends Panel implements OverlayGui {
         for (CategoryPanel panel : panels) {
             panel.moveTo(panel.x(), panel.y() + delta);
         }
+        // 设置面板按唤出行锚定：列整体滚动后行已移位，不跟进就与锚定行脱钩（D9）。
+        reanchorConfigPanel();
     }
 
     /**
@@ -278,6 +316,37 @@ public final class ClickGui extends Panel implements OverlayGui {
         for (CategoryPanel panel : panels) {
             panel.moveTo(panel.x() + shift, panel.y());
         }
+        // 横向平移同样会让锚定行移位，设置面板跟进（D9）。
+        reanchorConfigPanel();
+    }
+
+    /**
+     * 设置面板可见时，按其绑定模块的当前行位置重锚定。
+     *
+     * <p>面板用唤出时的行坐标定位；滚动/平移/列拖动后行已移位，不跟进就飘在原地与行脱钩。
+     * 找不到行（模块被卸载/列被重建）时保持原位，不强行收起——收起会丢掉用户正在调的值。
+     */
+    private void reanchorConfigPanel() {
+        if (!configPanel.isVisible() || configPanel.module() == null) {
+            return;
+        }
+        ModuleRow row = rowFor(configPanel.module());
+        if (row == null) {
+            return;
+        }
+        configPanel.show(configPanel.module(), row.x() + row.width() + Theme.SETTING_GAP, row.y());
+    }
+
+    /** @return 绑定该模块的行；找不到返回 null */
+    private ModuleRow rowFor(dev.noturne.client.module.Module module) {
+        for (CategoryPanel panel : panels) {
+            for (ModuleRow row : panel.rows()) {
+                if (row.module() == module) {
+                    return row;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -307,10 +376,27 @@ public final class ClickGui extends Panel implements OverlayGui {
         return null;
     }
 
-    /** 关闭时不消费输入，让事件继续下传（例如交给游戏处理）。 */
+    @Override
+    public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        // 平移手势：空白起手才整体平移，否则交给列拖动；列拖动后锚定行已移位，面板跟进（D9）。
+        if (open && panning && button == 0) {
+            panBy((float) dx);
+        }
+        boolean consumed = super.mouseDragged(mx, my, button, dx, dy);
+        reanchorConfigPanel();
+        return consumed;
+    }
+
+    /**
+     * 关闭时不消费输入，让事件继续下传（例如交给游戏处理）。
+     *
+     * <p>只有左键释放才清平移态（D10）：右键释放（收起面板那类操作）不得中断正在进行的左键平移。
+     */
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
-        panning = false;
+        if (button == 0) {
+            panning = false;
+        }
         return open && super.mouseReleased(mx, my, button);
     }
 
@@ -319,20 +405,6 @@ public final class ClickGui extends Panel implements OverlayGui {
         super.cancelInteractions();
         panning = false;
     }
-
-    /** 关闭时不消费输入；打开时下发给分类栏（拖动标题栏）与设置面板（拖动滑块）。 */
-    @Override
-    public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
-        if (!open) {
-            return false;
-        }
-        if (panning && button == 0) {
-            panBy((float) dx);
-            return true;
-        }
-        return super.mouseDragged(mx, my, button, dx, dy);
-    }
-
     /** 目前只处理 Esc（关闭界面）；其余按键交给子控件。 */
     @Override
     public boolean keyPressed(int keyCode, int modifiers) {

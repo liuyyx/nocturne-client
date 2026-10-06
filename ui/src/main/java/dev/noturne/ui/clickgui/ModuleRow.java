@@ -39,6 +39,14 @@ public final class ModuleRow extends Component {
     }
 
     @Override
+    public void cancelInteractions() {
+        super.cancelInteractions();
+        // P19：hovered 已由基类清零，但动画值还在 1 的路上；直接 snap 到 0，
+        // 否则重开首帧仍是高亮态（一帧残影）。
+        highlight.set(0f);
+    }
+
+    @Override
     public void render(Renderer renderer) {
         if (!visible) {
             return;

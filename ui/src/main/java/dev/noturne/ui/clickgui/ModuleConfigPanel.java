@@ -91,8 +91,9 @@ public final class ModuleConfigPanel extends Panel {
                     continue;
                 }
                 editors.add(editor);
-                // 开关与滑块自身不画设置名（滑块右侧画的是当前值），在行首补标签
-                labels.add(value instanceof BooleanValue || value instanceof NumberValue
+                // 开关/颜色自身不画设置名，在行首补标签；滑块自己整行画不透明轨道，
+                // 行首标签会被盖住，且滑块右侧已画当前值，不再补。
+                labels.add(value instanceof BooleanValue || value instanceof ColorValue
                         ? value.name() : null);
                 editorBaseY.add(cursor);
                 add(editor);
@@ -172,12 +173,12 @@ public final class ModuleConfigPanel extends Panel {
         return Math.max(0f, content - visible);
     }
 
-    /** 按当前滚动偏移重新布置编辑器（绝对坐标布局，需显式平移）。 */
+    /** 按当前滚动偏移重新布置编辑器。只平移位置、不动尺寸：开关是右对齐窄控件，改宽会拉长轨道整行误触。 */
     private void applyScroll() {
         for (int i = 0; i < editors.size(); i++) {
             Component editor = editors.get(i);
-            editor.setBounds(x + Theme.SETTING_PADDING_X, y + editorBaseY.get(i) - scrollOffset,
-                    WIDTH - Theme.SETTING_PADDING_X * 2f, editor.height());
+            editor.setBounds(editor.x(), y + editorBaseY.get(i) - scrollOffset,
+                    editor.width(), editor.height());
         }
     }
 

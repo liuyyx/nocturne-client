@@ -33,6 +33,8 @@ public final class SkijaCanvas {
     private DirectContext context;
     /** 当前帧缓冲对应的绘制表面。 */
     private Surface surface;
+    /** 建 surface 用的后端目标（P2：原生资源，随 surface 一起释放，否则泄漏）。 */
+    private BackendRenderTarget target;
     /** 表面尺寸；与请求尺寸不一致时重建。 */
     private int surfaceWidth;
     private int surfaceHeight;
@@ -60,15 +62,16 @@ public final class SkijaCanvas {
                 closeSurface();
                 // framebuffer 0 = 当前绑定的帧缓冲（游戏自己画完就是要翻页的那张），
                 // 因此我们画上去的东西会直接被交换到屏幕上。
-                BackendRenderTarget target = BackendRenderTarget.makeGL(
+                BackendRenderTarget fresh = BackendRenderTarget.makeGL(
                         width, height, 0, 8, 0, FramebufferFormat.GR_GL_RGBA8);
                 surface = Surface.makeFromBackendRenderTarget(
-                        context, target, SurfaceOrigin.BOTTOM_LEFT, ColorType.RGBA_8888,
+                        context, fresh, SurfaceOrigin.BOTTOM_LEFT, ColorType.RGBA_8888,
                         ColorSpace.getSRGB(), null);
                 if (surface == null) {
                     fail("Surface.makeFromBackendRenderTarget() returned null");
                     return null;
                 }
+                target = fresh;
                 surfaceWidth = width;
                 surfaceHeight = height;
                 report("skija surface " + width + "x" + height + " ready");
@@ -117,7 +120,7 @@ public final class SkijaCanvas {
         }
     }
 
-    /** 尺寸变化或收回时释放表面（上下文保留，重建很便宜）。 */
+    /** 尺寸变化或收回时释放表面与后端目标（上下文保留，重建很便宜）。 */
     private void closeSurface() {
         if (surface != null) {
             try {
@@ -127,6 +130,35 @@ public final class SkijaCanvas {
             }
             surface = null;
         }
+        if (target != null) {
+            try {
+                target.close();
+            } catch (Throwable ignored) {
+                // 释放失败不影响后续重建
+            }
+            target = null;
+        }
+        surfaceWidth = 0;
+        surfaceHeight = 0;
+    }
+
+    /**
+     * 释放全部原生资源（表面 + 上下文），并标记为不可用。
+     *
+     * <p>探测失败（D18）时调用：DirectContext 与 Surface 持有 GPU 资源，不关就泄漏；
+     * 全仓之前没有任何 close 入口。
+     */
+    public void close() {
+        closeSurface();
+        if (context != null) {
+            try {
+                context.close();
+            } catch (Throwable ignored) {
+                // 释放失败不影响标记不可用
+            }
+            context = null;
+        }
+        broken = true;
     }
 
     /** 当前是否可用（未因原生库/上下文问题被标记为损坏）。 */

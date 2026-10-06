@@ -38,6 +38,9 @@ public final class GlRenderer implements UiBackend {
     /** 视口读取失败的诊断是否已打印过；保证只打印一次。 */
     private final java.util.concurrent.atomic.AtomicBoolean viewportLogged =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** 首帧布局诊断是否已打印过（两条路径各打一次就够，避免每帧刷屏）。 */
+    private final java.util.concurrent.atomic.AtomicBoolean frameDiag =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /**
      * 构造渲染器。
@@ -97,20 +100,33 @@ public final class GlRenderer implements UiBackend {
             // 先把残留状态还原，避免矩阵栈每帧净泄漏两层、约 16 帧后永久损坏游戏投影。
             endFrame();
         }
-        if (!gl.hasMatrixControl()) {
-            // 没有矩阵控制能力时无法接管坐标系，只能维持原状；日志里会显示 backend 可用但画面异常。
+        // 诊断必须在 hasMatrixControl 检查之前：检查失败会提前返回，若诊断在其后就永远看不到输出，
+        // 而「改了尺寸却完全不可见」正是这种情形——必须先能区分两条路径。
+        boolean matrixControl = gl.hasMatrixControl();
+        if (!matrixControl) {
+            if (frameDiag.compareAndSet(false, true)) {
+                System.out.println("[noturne] gl renderer: hasMatrixControl=false"
+                        + " (matrixMode/loadIdentity/ortho handle missing); layout stays "
+                        + viewportWidth + "x" + viewportHeight);
+            }
             return;
         }
-        int[] viewport = gl.viewport();
-        if (viewport != null && viewport[2] > 0 && viewport[3] > 0) {
-            viewportWidth = viewport[2];
-            viewportHeight = viewport[3];
+        int[] rawViewport = gl.viewport();
+        if (rawViewport != null && rawViewport[2] > 0 && rawViewport[3] > 0) {
+            // 恢复物理视口写法：逻辑尺寸折算（raw/240 取整）曾让叠加层完全不可见，
+            // 根因未定位前不做折算。诊断保留 raw 与 layout，供后续排查 GUI Scale 适配使用。
+            viewportWidth = rawViewport[2];
+            viewportHeight = rawViewport[3];
+        }
+        if (frameDiag.compareAndSet(false, true)) {
+            System.out.println("[noturne] gl renderer: raw=" + java.util.Arrays.toString(rawViewport)
+                    + " layout=" + viewportWidth + "x" + viewportHeight);
         }
         // 视口未知或退化时不能调用 glOrtho：左右相等 / 上下相等在 GL 里是非法的（GL_INVALID_VALUE），
         // 该调用会被丢弃、矩阵保持原样，GUI 于是永久画在裁剪空间之外——必须留痕而不是静默。
         boolean haveViewport = viewportWidth > 0 && viewportHeight > 0;
         if (!haveViewport) {
-            reportMissingViewport(viewport);
+            reportMissingViewport(rawViewport);
         }
 
         // 属性栈保存：beginFrame 会改 texture/depth/cull/blend 与混合函数，退出时必须原样归还。

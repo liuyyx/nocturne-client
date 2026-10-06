@@ -9,8 +9,8 @@ package dev.noturne.ui.skija;
 /**
  * Setsuna 视觉语言的共享设计令牌：全部界面与 HUD 表面的颜色与圆角都取自这里。
  *
- * <p>与 {@code dev.noturne.ui.theme.Theme}（MD3 深色 + 淡紫强调）并存：两套令牌各自服务一套
- * 视觉，互不覆盖。本类对应"青绿强调 + 近黑分层表面"这一套。
+ * <p>与 {@code dev.noturne.ui.theme.Theme} 同源：两套令牌都是"青绿强调 + 近黑分层表面"这一套视觉，
+ * 互不覆盖。本类是 Skija 侧的 int 色值版本（0xAARRGGBB，与 Paint#setColor 一致）。
  *
  * <p>色值一律 0xAARRGGBB，与 Skija 的 {@code Paint#setColor} 一致，避免每帧再做格式转换。
  */

@@ -79,34 +79,13 @@ public final class OverlayBootstrap implements FrameListener {
      * @param toggleKey     GUI 开关按键键码（AWT VK 码）
      */
     public static void install(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey) {
-        // 诊断（diag2）：stdout 在目标 JVM 里可能被日志框架吞掉（只看得到部分行），文件不会。
-        try {
-            java.nio.file.Files.write(
-                    java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
-                    ("diag2 install: loader=" + gameLoader + " self=" + OverlayBootstrap.class
-                            + " from=" + codeSourceOf(OverlayBootstrap.class) + "\n").getBytes("UTF-8"),
-                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-        } catch (Throwable ignored) {
-            // 诊断失败绝不影响安装
-        }
+        // 文件诊断（diag2）已删除：生产环境写 noturne-diag.txt 是残留 IO；
+        // 安装状态由 tryInstall 成功后的 overlay diag 日志行覆盖。
         NoturneRuntime.addListener(new OverlayBootstrap(gameLoader, instrumentation, toggleKey));
     }
 
     @Override
     public void onFrame() {
-        // 诊断（diag2）：用 attempts==0 作为条件——它在「真正尝试安装」时才自增，因此
-        // GL 未就绪的帧也仍是 0，能保证进入 onFrame 就一定会记录一次。
-        if (attempts == 0) {
-            try {
-                java.nio.file.Files.write(
-                        java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
-                        ("diag2 onFrame: installed=" + installed + " attempts=" + attempts + "\n")
-                                .getBytes("UTF-8"),
-                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-            } catch (Throwable ignored) {
-                // 诊断失败不影响安装
-            }
-        }
         if (installed) {
             return;
         }

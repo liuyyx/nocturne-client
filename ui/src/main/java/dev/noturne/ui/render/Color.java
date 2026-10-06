@@ -147,7 +147,9 @@ public final class Color {
      * @return 插值得到的颜色
      */
     public Color mix(Color other, float t) {
-        float clamped = t < 0f ? 0f : (t > 1f ? 1f : t);
+        // NaN 按 0 处理（D26）：否则比较全 false 导致 clamped=NaN，
+        // Math.round(NaN)=0 让整色穿透成透明黑。
+        float clamped = Float.isNaN(t) ? 0f : (t < 0f ? 0f : (t > 1f ? 1f : t));
         return argb(
                 Math.round(a() + (other.a() - a()) * clamped),
                 Math.round(r() + (other.r() - r()) * clamped),

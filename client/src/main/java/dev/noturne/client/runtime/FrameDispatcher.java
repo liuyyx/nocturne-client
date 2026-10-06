@@ -86,20 +86,8 @@ public final class FrameDispatcher {
      * 一个逃逸的异常会把游戏崩在任意位置。
      */
     public static void dispatch() {
-        // 诊断（diag3）：确认"单份状态 + 动作已送达"。只记前 3 帧，避免每帧写盘。
-        if (DIAG_FRAMES.getAndIncrement() < 3) {
-            try {
-                java.nio.file.Files.write(
-                        java.nio.file.Paths.get(System.getProperty("user.dir", "."), "noturne-diag.txt"),
-                        ("diag3 dispatch: listeners=" + LISTENERS.size() + " frame=" + DIAG_FRAMES.get()
-                                + " from=" + FrameDispatcher.class.getProtectionDomain().getCodeSource()
-                                + "\n").getBytes("UTF-8"),
-                        java.nio.file.StandardOpenOption.CREATE,
-                        java.nio.file.StandardOpenOption.APPEND);
-            } catch (Throwable ignored) {
-                // 诊断失败不影响分发
-            }
-        }
+        // 文件诊断（diag3）已删除：生产环境每会话前 3 帧写 noturne-diag.txt 是残留 IO；
+        // 首帧状态由 TRACE 日志与叠加层的 overlay first frame 行覆盖。
         if (Boolean.TRUE.equals(IN_FRAME.get())) {
             report("re-entrant dispatch ignored");
             return;

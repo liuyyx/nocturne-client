@@ -185,6 +185,10 @@ public class ColorPicker extends Component {
 
     /** 由指针横坐标更新当前拖动目标对应的分量；允许越界，由 clamp01 收敛。 */
     private void applyFromMouse(double mx) {
+        if (width <= 0f) {
+            // 宽度为 0 时 (mx - x) / width 得到 ±Infinity/NaN，会永久污染 hue/brightness（D11）。
+            return;
+        }
         float fraction = clamp01((float) ((mx - x) / width));
         if (dragging == DRAG_HUE) {
             hue = fraction;
@@ -273,8 +277,8 @@ public class ColorPicker extends Component {
         return strips;
     }
 
-    /** 将 {@code v} 夹紧到 {@code [0, 1]}。 */
+    /** 将 {@code v} 夹紧到 {@code [0, 1]}；NaN 按 0 处理，避免毒化 hue/brightness。 */
     private static float clamp01(float v) {
-        return v < 0f ? 0f : (v > 1f ? 1f : v);
+        return Float.isNaN(v) ? 0f : (v < 0f ? 0f : (v > 1f ? 1f : v));
     }
 }

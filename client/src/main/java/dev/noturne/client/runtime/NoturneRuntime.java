@@ -159,7 +159,23 @@ public final class NoturneRuntime {
                 System.out.println("[noturne] dispatch failed: " + t);
             }
         }
+        // P6-2：每帧广播一次渲染事件（ESP/Tracers 这类世界叠加绘制的触发点）。
+        // 广播异常由 EventBus 限流隔离，不会打断 tick；客户端尚未 boot 时静默跳过。
+        postRenderEvent();
         driveModules();
+    }
+
+    /** 广播 {@link dev.noturne.client.event.RenderEvent}；客户端未就绪时无副作用。 */
+    private static void postRenderEvent() {
+        try {
+            NoturneClient client = NoturneClient.get();
+            if (client == null) {
+                return;
+            }
+            client.events().post(new dev.noturne.client.event.RenderEvent(System.nanoTime()));
+        } catch (Throwable ignored) {
+            // 事件系统自身异常不能带回游戏帧；EventBus 内部已有隔离，这里是最后一道门。
+        }
     }
 
     /**

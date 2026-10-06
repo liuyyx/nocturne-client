@@ -43,9 +43,7 @@
 
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
-| 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed`、`screen=ClickGui`） |
-| 1.12.2 | ✅ **真机已实测可用**（官方 1.12.2 + LWJGL2，与 1.8.9 同代际：`backend=gl-fixed`、`screen=ClickGui`、四个分类面板与模块名正常显示；`tmp/mc1122.log`） | ✅ | ✅ 已产出 | ✅ 可见 |
-| 1.16.5 | ✅ 注入已实测（官方 1.16.5：`backend=skija; input=glfw`、帧钩子 live、`overlay active; screen=SetsunaClickGui`） | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ✅ 可见（Skija 直绘，不走 gl-core；854x480，UI_SCALE=1.5 字号正常） |
+| 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=skija`、`screen=SetsunaClickGui`；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅（`eaten=true`，详情展开截图见证）/ 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
 | 1.21.10 / 1.21.11 | ⏳ | 字节码级已验证（GLFW 目标） | ✅ 已产出 | ⏳ |
 | 26.2 | ⏳ | 未验 | ✅ 已产出 | ⏳ |
 | 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩；`tmp/mc263-*.log`） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册） | ✅ 已产出 | ❌ 不可用（见下） |

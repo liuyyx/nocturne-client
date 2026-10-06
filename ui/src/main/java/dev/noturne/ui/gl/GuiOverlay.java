@@ -299,8 +299,6 @@ public final class GuiOverlay implements FrameListener {
         boolean right = input.mouseDown(BUTTON_RIGHT);
         double dx = mx - lastX;
         double dy = my - lastY;
-
-        // 左键：按下沿 → 点击；按住且有位移 → 拖拽；松开沿 → 释放
         if (left && !leftWasDown) {
             current.mouseClicked(mx, my, BUTTON_LEFT);
         } else if (left && (dx != 0d || dy != 0d)) {

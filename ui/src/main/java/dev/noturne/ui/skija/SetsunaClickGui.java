@@ -965,10 +965,6 @@ public final class SetsunaClickGui implements OverlayGui {
 
     /** 命中的模块行：模块对象 + 该行的右边界（右端是启用开关的热区）。 */
     private ModuleRowHit moduleRowAt(double mx, double my) {
-        if (mx < layout.moduleX() || mx > layout.moduleX() + layout.moduleWidth()
-                || my < layout.bodyY() || my > layout.bodyY() + layout.bodyHeight()) {
-            return null;
-        }
         float rowY = layout.moduleListY() + listScroll;
         for (Module module : modulesOfActive()) {
             SkijaControls.Box row = new SkijaControls.Box(layout.moduleX() + 6f, rowY,

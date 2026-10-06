@@ -33,7 +33,16 @@
         },
         "com/mojang/blaze3d/platform/Window": {
             "name": "ftb",
-            "methods": {},
+            "methods": {
+                "getHeight": {
+                    "name": "l",
+                    "signature": "()I"
+                },
+                "getWidth": {
+                    "name": "k",
+                    "signature": "()I"
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/KeyMapping": {
@@ -55,6 +64,10 @@
                 "getInstance": {
                     "name": "W",
                     "signature": "()Lfzz;"
+                },
+                "getWindow": {
+                    "name": "aR",
+                    "signature": "()Lftb;"
                 },
                 "renderFrame": {
                     "absent": true

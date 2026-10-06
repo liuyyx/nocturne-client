@@ -141,7 +141,7 @@ public final class OverlayBootstrap implements FrameListener {
         TextRenderer font = MinecraftTextRenderer.bind(bridge);
         client.setGameBridge(bridge);
 
-        UiBackend backend = selectBackend(gl, gl11, font);
+        UiBackend backend = selectBackend(gl, gl11, font, bridge);
         InputSource input = ReflectiveInput.create(loader, backend::width, backend::height);
         // 诊断（diag1）：把输入源的真实类与它的类来源打出来。"input=none" 这类现象必须能区分
         // 「探测失败」与「运行时加载到了别处的旧类」——否则只在日志里猜，无法定位。
@@ -215,9 +215,11 @@ public final class OverlayBootstrap implements FrameListener {
      * @param fixed 固定管线绑定
      * @param gl11  游戏实际加载的 GL11 类，用于取得正确的类加载器
      * @param font  文本渲染器，可为 null
+     * @param bridge 游戏桥（ModernRenderer 取 Window 尺寸用）
      * @return 绘制后端，永不为 null
      */
-    private static UiBackend selectBackend(GlApi fixed, Class<?> gl11, TextRenderer font) {
+    private static UiBackend selectBackend(GlApi fixed, Class<?> gl11, TextRenderer font,
+                                          GameBridge bridge) {
         // LWJGL2（≤1.12）直接走固定管线，不 probe Skija：Skia 包 fb0 直写会盖黑游戏
         // （wrap/make、samples、flush/submit、colorspace 已逐项排除，机制层面不兼容），
         // 正确修法是纹理中转（另开任务）。固定管线在 1.8.9 已验证游戏 + overlay 全正常。
@@ -226,16 +228,13 @@ public final class OverlayBootstrap implements FrameListener {
                     + " direct fb0 writes black out the game)");
             return new dev.noturne.ui.gl.GlRenderer(fixed, font);
         }
-        // 首选 Skija：它与游戏用哪代 OpenGL、哪个绘制 API 都无关（一份 GUI 代码管所有版本），
-        // 字体也自带。安装时探测一次（真正走一帧），失败才回落到按代际的 GL 后端。
-        SkijaBackend skija = SkijaBackend.probe(fixed);
-        if (skija != null) {
-            System.out.println("[noturne] backend: skija (version independent, self-hosted fonts)");
-            return skija;
-        }
+        // 1.13+（core profile）暂时直接走 ModernRenderer，不 probe Skija：Skia 包外部帧缓冲
+        // 直写会盖黑游戏（1.8.9 与 1.16.5 真机均已实锤；make/wrap、samples、flush/submit、
+        // colorspace、reset 逐项排除无解），正确修法是纹理中转（另开任务）。ModernRenderer 若
+        // 绑定失败再按原逻辑回落（1.13+ 上固定管线画不出，会告警）。
         ModernGlApi modern = ModernGlApi.bind(gl11.getClassLoader());
         if (modern != null) {
-            return new ModernRenderer(modern, font);
+            return new ModernRenderer(modern, font, bridge);
         }
         // 1.12 及更早（LWJGL2）本该走固定管线，回退是预期行为；只有 1.13+（LWJGL3）本应具备核心
         // profile 却绑定失败时才告警——那时固定管线确实什么都画不出来。上面 ModernGlApi 的

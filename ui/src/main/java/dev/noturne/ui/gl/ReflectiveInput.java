@@ -66,13 +66,14 @@ public final class ReflectiveInput implements InputSource {
     private final Method glfwGetCurrentContext;
     private final Method glfwGetWindowSize;
     private final Method glfwSetInputMode;
+    /** GLFW 的 {@code glfwGetInputMode(long, int)}；不可用时为 {@code null}。 */
+    private final Method glfwGetInputMode;
     private final Method glfwGetWindowAttrib;
     private final Method glfwSetScrollCallback;
     /** GLFW 滚轮回调接口类型，供 {@link Proxy} 实现；缺失时为 null。 */
     private final Class<?> scrollCallbackType;
     /** {@code GLFWScrollCallbackI.invoke(long, double, double)} 句柄，用于转发给被顶掉的旧回调。 */
     private final Method scrollCallbackInvoke;
-
     /** 累积的滚轮增量（按 double 位模式存于 {@link AtomicLong}），回调线程写入、帧线程取出后清零。 */
     private final AtomicLong pendingScrollBits = new AtomicLong(Double.doubleToRawLongBits(0d));
     /** 复用的光标坐标暂存，避免逐帧分配。 */
@@ -101,8 +102,6 @@ public final class ReflectiveInput implements InputSource {
     private boolean pointerGrabLast;
     /** LWJGL2 的 {@code Mouse.isGrabbed()}；不可用时为 {@code null}。 */
     private Method mouseIsGrabbed;
-    /** GLFW 的 {@code glfwGetInputMode(long, int)}；不可用时为 {@code null}。 */
-    private Method glfwGetInputMode;
     /** 上一帧窗口是否获得焦点；用于在焦点重新获得时重发光标模式（失焦会被 GLFW 重置）。 */
     private boolean lastFocused;
 
@@ -140,6 +139,7 @@ public final class ReflectiveInput implements InputSource {
             this.glfwGetCurrentContext = null;
             this.glfwGetWindowSize = null;
             this.glfwSetInputMode = null;
+            this.glfwGetInputMode = null;
             this.glfwGetWindowAttrib = null;
             this.glfwSetScrollCallback = null;
             this.scrollCallbackType = null;

@@ -48,6 +48,8 @@ public final class ModernRenderer implements UiBackend {
     private final ModernGlApi gl;
     /** 文本渲染器；构造时 {@code null} 会被替换为 {@link TextRenderer#NONE}。 */
     private final TextRenderer text;
+    /** 游戏桥（取 Window 帧缓冲尺寸用）；{@code null} 时只用 GL 视口。 */
+    private final dev.noturne.client.game.GameBridge bridge;
 
     /** 着色器程序 id。 */
     private int program;
@@ -105,8 +107,21 @@ public final class ModernRenderer implements UiBackend {
      * @param text 文本渲染器，传 {@code null} 时退化为空实现
      */
     public ModernRenderer(ModernGlApi gl, TextRenderer text) {
+        this(gl, text, null);
+    }
+
+    /**
+     * 构造渲染器。
+     *
+     * @param gl     核心 profile 绑定
+     * @param text   文本渲染器，传 {@code null} 时退化为空实现
+     * @param bridge 游戏桥（取 Window 帧缓冲尺寸用，可为 {@code null}）
+     */
+    public ModernRenderer(ModernGlApi gl, TextRenderer text,
+                          dev.noturne.client.game.GameBridge bridge) {
         this.gl = gl;
         this.text = text == null ? TextRenderer.NONE : text;
+        this.bridge = bridge;
     }
 
     /** @return 底层 GL 绑定，供调用方做低层设置或诊断 */
@@ -177,7 +192,7 @@ public final class ModernRenderer implements UiBackend {
         // 链接完成后着色器对象即可删除，程序会保留各自的副本。
         gl.deleteShader(vertex);
         gl.deleteShader(fragment);
-
+        gl.linkProgram(program);
         if (!gl.linkOk(program)) {
             System.err.println("[noturne] program link failed: " + gl.programLog(program));
             gl.deleteProgram(program);
@@ -322,6 +337,11 @@ public final class ModernRenderer implements UiBackend {
      */
     private void syncViewport() {
         int[] viewport = gl.getInteger(ModernGlApi.GL_VIEWPORT, 4);
+        if (viewport == null || viewport[2] <= 0 || viewport[3] <= 0) {
+            // GL 查询在该线程/上下文不可用（如 1.16.5 的 Render thread 上 glGetIntegerv
+            // 调了不写值）：改走游戏自己的 Window 对象读帧缓冲尺寸（查表，无版本分支）。
+            viewport = windowFramebuffer();
+        }
         if (viewport == null) {
             return;
         }
@@ -329,6 +349,43 @@ public final class ModernRenderer implements UiBackend {
                 && (viewport[0] != screenX || viewport[1] != screenY
                 || viewport[2] != screenWidth || viewport[3] != screenHeight)) {
             setViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        }
+    }
+
+    /**
+     * 经游戏桥读 {@code Minecraft.getWindow()} 的帧缓冲宽高。
+     *
+     * <p>GL 视口查询不可用时的回退：1.13+ 的窗口尺寸游戏自己存了一份（每帧经
+     * {@code glfwGetFramebufferSize} 刷新），走映射表读它，不写版本分支。
+     * 1.8.9 等 LWJGL2 版本没有 Window 类（表里 absent），此时返回 {@code null}。
+     *
+     * @return {@code {0, 0, 宽, 高}}；读不到时为 {@code null}
+     */
+    private int[] windowFramebuffer() {
+        if (bridge == null) {
+            return null;
+        }
+        try {
+            Object minecraft = bridge.minecraft();
+            if (minecraft == null) {
+                return null;
+            }
+            Object window = bridge.callMapped(minecraft,
+                    dev.noturne.client.mapping.ClassType.MINECRAFT, "getWindow");
+            if (window == null) {
+                return null;
+            }
+            Object w = bridge.callMapped(window,
+                    dev.noturne.client.mapping.ClassType.WINDOW, "getWidth");
+            Object h = bridge.callMapped(window,
+                    dev.noturne.client.mapping.ClassType.WINDOW, "getHeight");
+            if (w instanceof Number && h instanceof Number
+                    && ((Number) w).intValue() > 0 && ((Number) h).intValue() > 0) {
+                return new int[]{0, 0, ((Number) w).intValue(), ((Number) h).intValue()};
+            }
+            return null;
+        } catch (Throwable t) {
+            return null;
         }
     }
 

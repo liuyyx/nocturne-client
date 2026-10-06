@@ -37,6 +37,9 @@
                     "name": "z",
                     "signature": "()Lbib;"
                 },
+                "getWindow": {
+                    "absent": true
+                },
                 "renderFrame": {
                     "absent": true
                 },

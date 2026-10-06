@@ -30,7 +30,14 @@
         },
         "com/mojang/blaze3d/platform/Window": {
             "name": "com.mojang.blaze3d.platform.Window",
-            "methods": {},
+            "methods": {
+                "getHeight": {
+                    "name": "getHeight"
+                },
+                "getWidth": {
+                    "name": "getWidth"
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/KeyMapping": {
@@ -50,6 +57,9 @@
                 },
                 "getInstance": {
                     "name": "getInstance"
+                },
+                "getWindow": {
+                    "name": "getWindow"
                 },
                 "renderFrame": {
                     "name": "renderFrame"

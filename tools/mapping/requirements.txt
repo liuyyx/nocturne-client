@@ -10,6 +10,8 @@
 # Keep names in canonical Mojmap form (slash-separated, $ for nested classes).
 
 com/mojang/blaze3d/platform/Window
+com/mojang/blaze3d/platform/Window#getWidth()
+com/mojang/blaze3d/platform/Window#getHeight()
 
 net/minecraft/client/Minecraft
 net/minecraft/client/Minecraft#currentScreen
@@ -25,6 +27,7 @@ net/minecraft/client/Minecraft#player
 net/minecraft/client/Minecraft#screen
 net/minecraft/client/Minecraft#displayGuiScreen()
 net/minecraft/client/Minecraft#getInstance()
+net/minecraft/client/Minecraft#getWindow()
 net/minecraft/client/Minecraft#runGameLoop()
 net/minecraft/client/Minecraft#runTick()
 

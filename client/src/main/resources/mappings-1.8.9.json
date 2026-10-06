@@ -37,6 +37,9 @@
                     "name": "A",
                     "signature": "()Lave;"
                 },
+                "getWindow": {
+                    "absent": true
+                },
                 "renderFrame": {
                     "absent": true
                 },

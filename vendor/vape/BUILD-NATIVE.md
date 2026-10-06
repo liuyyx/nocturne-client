@@ -73,6 +73,33 @@ settingsEvaluated { settings ->
 
 （已下载的 `gradle-8.8-bin` dists 可直接从原 home 复制过来，省一次下载。）
 
+## 使用（注入）
+
+1. 先启动目标游戏实例（64 位 JVM；支持 1.7.10 / 1.8.9 / 1.12.2 / 1.21.11 / 26.2 的
+   Forge/Vanilla/Fabric，含 Forge-enabled Lunar Client）。
+2. 运行 `build/native/dist/Vape-v4.21.36.exe`。它是 **WIN32 图形注入器**，会每 750 ms 刷新一次
+   可见的 `java.exe` / `javaw.exe` 窗口列表并显示窗口标题；用 ↑/↓ 选择目标、**Enter** 注入、
+   **Esc** 退出。非交互形式（需 standalone 注入器）：`Vape-v4.21Injector.exe <pid> Vape-v4.21Native.dll`。
+3. 注入结果看注入器旁边的日志：`<bundle>\.vapeclient\log\vape421-native-<pid>-<timestamp>.log`。
+
+**必须提权**：注入器清单要求管理员权限，普通权限启动会直接 `WinError 740`（请求的操作需要提升）。
+在资源管理器里右键"以管理员身份运行"，或用
+`Start-Process -Verb RunAs .\Vape-v4.21.36.exe`。
+
+注入器只做 `LoadLibraryW`；DLL 加载后等待 JVM 与 Minecraft `Client thread`，把内嵌的 Java payload
+落到进程临时目录并用 context ClassLoader 加载（Fabric 上经 Fabric Launcher API 加入 Knot target
+ClassLoader），注册 9 个权威 native 方法 + `Product gat()`，然后自动调用 `NativeBridge.start()`——
+不需要第二条命令。
+
+## 说明
+
+* `Vape-v4.21.36.exe` 与 `Vape-v4.21Native.dll` **必须同名版本配套**；把 DLL 放在别处时，
+  单文件版可接受 DLL 路径作为唯一参数。
+* 本目录（`vendor/vape`）只做**源码归档 + 可编译**；上面这份构建与使用流程针对上游工程
+  `OpenVape4.21`（本目录是它的照抄副本）。把本目录变成完整可构建工程需要把上游
+  `build.gradle` / `settings.gradle` / `gradlew*` / `gradle/` 一并照抄过来——但那会与本目录
+  现有的探针 `build.gradle.kts`（仅用于 `compileJava` 验证）冲突，故暂不合并。
+
 ## 其它环境要点
 
 - **CMake 不在 PATH**：用 VS BuildTools 自带的

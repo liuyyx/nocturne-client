@@ -37,7 +37,13 @@ public enum ClassType {
     /** 药水效果实例；1.8.9 名 PotionEffect。 */
     MOB_EFFECT_INSTANCE("net.minecraft.world.effect.MobEffectInstance"),
     /** 窗口句柄（来自 Blaze3D 平台层，非 Minecraft 命名空间）。 */
-    WINDOW("com.mojang.blaze3d.platform.Window");
+    WINDOW("com.mojang.blaze3d.platform.Window"),
+    /** 方块实体基类；StorageESP 遍历容器用。 */
+    BLOCK_ENTITY("net.minecraft.world.level.block.entity.BlockEntity"),
+    /** 箱子方块实体（含陷阱箱判定与开盖计数）。 */
+    CHEST_BLOCK_ENTITY("net.minecraft.world.level.block.entity.ChestBlockEntity"),
+    /** 末影箱方块实体。 */
+    ENDER_CHEST_BLOCK_ENTITY("net.minecraft.world.level.block.entity.EnderChestBlockEntity");
 
     /** Mojang 映射下的全限定类名。 */
     private final String canonicalName;

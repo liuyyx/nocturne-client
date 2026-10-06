@@ -158,6 +158,7 @@ public final class NoturneClient {
         modules.register(new dev.noturne.client.module.modules.FullBrightModule());
         modules.register(new dev.noturne.client.module.modules.SprintModule());
         modules.register(new dev.noturne.client.module.modules.AutoRespawnModule());
+        modules.register(new dev.noturne.client.module.modules.StorageEspModule());
     }
 
     /** 全局事件总线。 */

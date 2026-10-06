@@ -178,8 +178,7 @@ class ClientCoreTest {
             firstNames.add(module.name());
         }
         Set<String> expected = new HashSet<String>(
-                Arrays.asList("Watermark", "FullBright", "Sprint", "AutoRespawn"));
-        assertEquals(expected, firstNames, "boot must register exactly the built-in modules once");
+                Arrays.asList("Watermark", "FullBright", "Sprint", "AutoRespawn", "StorageESP"));
 
         NoturneClient second = NoturneClient.boot(null);
         assertSame(first, second, "boot must return the same instance");

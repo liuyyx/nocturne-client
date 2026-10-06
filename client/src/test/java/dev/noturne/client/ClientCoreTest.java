@@ -178,8 +178,8 @@ class ClientCoreTest {
             firstNames.add(module.name());
         }
         Set<String> expected = new HashSet<String>(
-                Arrays.asList("Watermark", "FullBright", "Sprint", "AutoRespawn", "StorageESP"));
-
+                Arrays.asList("Watermark", "FullBright", "Sprint", "AutoRespawn",
+                        "StorageESP", "ESP", "Tracers"));
         NoturneClient second = NoturneClient.boot(null);
         assertSame(first, second, "boot must return the same instance");
         assertSame(first.modules(), second.modules(), "boot must reuse the same registry");

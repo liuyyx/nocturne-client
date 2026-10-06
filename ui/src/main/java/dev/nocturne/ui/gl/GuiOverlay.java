@@ -171,6 +171,31 @@ public final class GuiOverlay implements FrameListener {
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
     private boolean pointerGrabbedBeforeGui;
 
+    /** @return 我们的界面当前是否打开（供需要避让/顶替外部界面的组件判断） */
+    public boolean isOpen() {
+        return active().isOpen();
+    }
+
+    /**
+     * 不经按键直接置开/关。
+     *
+     * <p>给验收用（agent 选项 {@code openGui=true}）：1.8.9 的 LWJGL2 走 DirectInput，
+     * 合成按键事件到不了游戏，自动化没法"按一下开关键"。
+     *
+     * @param open 目标状态
+     */
+    public void setOpen(boolean open) {
+        active().setOpen(open);
+        if (open) {
+            // 与按键打开同一套基准重置：否则上一帧的按下/位置会被当成新事件（见 onFrame）。
+            lastX = input.mouseX();
+            lastY = input.mouseY();
+            leftWasDown = input.mouseDown(BUTTON_LEFT);
+            rightWasDown = input.mouseDown(BUTTON_RIGHT);
+            escapeWasDown = input.keyDown(KEY_ESCAPE);
+        }
+    }
+
     @Override
     public void onFrame() {
         // 首帧文件诊断（diag3）已删除：生产环境每会话 APPEND 写 nocturne-diag.txt

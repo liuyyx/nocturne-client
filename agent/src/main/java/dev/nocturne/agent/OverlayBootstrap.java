@@ -46,6 +46,14 @@ public final class OverlayBootstrap implements FrameListener {
      */
     private static final int MAX_ATTEMPTS = 600;
 
+    /**
+     * 等"游戏主类实例可用"的尝试上限（按 60fps 约 2 秒）。
+     *
+     * <p>GL 可用**早于** Minecraft 实例构造（Forge/launchwrapper 下尤其明显），而字体绑定必须
+     * 拿到实例才能做。窗口内仍拿不到实例就按"无字"安装，绝不因为字体问题让界面装不上。
+     */
+    private static final int GAME_WAIT_ATTEMPTS = 120;
+
     /** GL11 全限定名；每帧用它去已加载类里重新解析游戏类加载器。 */
     private static final String GL11_CLASS = "org.lwjgl.opengl.GL11";
 
@@ -56,6 +64,9 @@ public final class OverlayBootstrap implements FrameListener {
     /** GUI 开关按键键码（AWT VK 码）。 */
     private final int toggleKey;
 
+    /** 装好后是否直接打开界面（验收用；见 {@code NocturneAgent} 的 {@code openGui=true}）。 */
+    private final boolean openGuiOnInstall;
+
     /** 已尝试安装的次数；仅覆盖「前置就绪但安装失败」的帧。 */
     private int attempts;
     /** 是否已安装成功；成功后本监听器退场。 */
@@ -65,10 +76,12 @@ public final class OverlayBootstrap implements FrameListener {
     /** 是否已就 SDL 栈延迟安装打过一次说明日志。 */
     private boolean sdlStackDetected;
 
-    private OverlayBootstrap(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey) {
+    private OverlayBootstrap(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey,
+                             boolean openGuiOnInstall) {
         this.gameLoader = gameLoader;
         this.instrumentation = instrumentation;
         this.toggleKey = toggleKey;
+        this.openGuiOnInstall = openGuiOnInstall;
     }
 
     /**
@@ -78,10 +91,12 @@ public final class OverlayBootstrap implements FrameListener {
      * @param instrumentation 插桩句柄，模组路径传 {@code null}
      * @param toggleKey     GUI 开关按键键码（AWT VK 码）
      */
-    public static void install(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey) {
+    public static void install(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey,
+                               boolean openGuiOnInstall) {
         // 文件诊断（diag2）已删除：生产环境写 nocturne-diag.txt 是残留 IO；
         // 安装状态由 tryInstall 成功后的 overlay diag 日志行覆盖。
-        NocturneRuntime.addListener(new OverlayBootstrap(gameLoader, instrumentation, toggleKey));
+        NocturneRuntime.addListener(new OverlayBootstrap(gameLoader, instrumentation, toggleKey,
+                openGuiOnInstall));
     }
 
     @Override
@@ -138,7 +153,26 @@ public final class OverlayBootstrap implements FrameListener {
         }
         Mapping mapping = currentMapping();
         GameBridge bridge = new GameBridge(instrumentation, mapping);
-        TextRenderer font = MinecraftTextRenderer.bind(bridge);
+        // 等游戏主类实例就绪再绑定字体：GL 可用**早于** Minecraft 实例构造（Forge/launchwrapper 下
+        // 尤其明显），此时 bridge.minecraft() 还是 null，字体必然绑不上——界面照样能装出来，
+        // 但一个字都不显示。等就绪的窗口内直接返回，下一帧再试（与等 GL 同一套策略）；
+        // 窗口耗尽仍不可用就按"无字"安装，绝不因为字体问题让整个界面装不上。
+        boolean gameReady = bridge.minecraft() != null;
+        if (!gameReady && attempts <= GAME_WAIT_ATTEMPTS) {
+            return;
+        }
+        TextRenderer font = gameReady ? MinecraftTextRenderer.bind(bridge) : null;
+        if (!gameReady) {
+            log("game instance still unreachable after " + attempts
+                    + " attempts; installing overlay WITHOUT text renderer");
+            log("resolution diagnostics: " + bridge.describeResolution());
+        }
+        // 字体绑定结果必须可见：绑定失败时界面能开但**一个字都不显示**，而日志里此前没有任何线索。
+        // 绑定失败最常见的根因是映射表与目标版本不匹配（例如把混淆版本当成了恒等映射）。
+        System.out.println("[nocturne] text renderer: "
+                + (font == null ? "UNAVAILABLE — GUI will render without text (mapping mismatch?)"
+                                : font.getClass().getSimpleName())
+                + "; mapping=" + mapping.describe());
         client.setGameBridge(bridge);
 
         UiBackend backend = selectBackend(gl, gl11, font, bridge);
@@ -157,6 +191,13 @@ public final class OverlayBootstrap implements FrameListener {
         }
         GuiOverlay overlay = new GuiOverlay(client.modules(), backend, input, toggleKey, hudSink);
         NocturneRuntime.addListener(overlay);
+        if (openGuiOnInstall) {
+            overlay.setOpen(true);
+            log("GUI opened on install (openGui=true)");
+        }
+        // 我们界面打开时，顶掉已知外部客户端（FPSMaster 等）用 MC screen 机制弹出的界面：
+        // 它们是真正的 currentScreen，会盖住并吃掉输入，看起来像我们没生效。
+        NocturneRuntime.addListener(new ForeignScreenGuard(bridge, overlay::isOpen));
 
         installed = true;
         // 安装完成即退场：之后每帧的开销全部留给真正的叠加层。

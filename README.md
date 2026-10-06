@@ -37,7 +37,7 @@
 | 关注点 | 做法 |
 |---|---|
 | 类/字段/方法名 | 映射表（每版本一份 JSON，打进 jar 资源） |
-| 目标版本 | 注入器传入 `mcVersion`，运行时**不探测** |
+| 目标版本 | 注入器传入 `mcVersion`，运行时**不探测**。实例名里没有版本号时（`fpsmaster`、`TLauncher` 这类自定义实例），读该实例 json 的 `clientVersion`/`inheritsFrom`——这是启动器自己写的权威字段；两者都拿不到才退化为未知（恒等映射 + 日志） |
 | 界面绘制与字体 | **Skija 直绘**：对着当前 GL 上下文把界面画进游戏帧缓冲，自带字体栈（含中文回退），完全不依赖游戏的绘制 API——一份代码管所有版本。Skija 不可用时回落到按代际的自绘 GL 后端（成员名查表） |
 | 输入 | 用游戏自己的键鼠状态（成员名查表） |
 | 帧信号 | LWJGL 的交换函数（3 个签名，属于 LWJGL 而非 MC，MC 改版不影响） |
@@ -56,6 +56,11 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>     # 注入指定�
 ```
 
 游戏里按**右 Shift** 唤出界面（`guiKey` 由注入器传入，AWT VK 码）。
+
+> **已知按键冲突**：FPSMaster Edge（Forge 1.8.9）的 ClickGUI 默认也绑在右 Shift 上
+> （其 `ClientSettings.keyBind`）。目标装了它时，按右 Shift 会同时唤起它的面板——看起来像我们
+> 没生效。注入器检测到这种情况会在日志里提示，请在设置里把我们的 GUI 键改成别的
+> （例如 `INSERT`、右 Ctrl）。
 
 ## 状态（诚实版）
 

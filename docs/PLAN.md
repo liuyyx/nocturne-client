@@ -16,13 +16,13 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | P0 清理 | 删模组路径 / 启动动画 / 版本适配分支；修指针捕获语义 | ✅ 已完成 |
-| P1 版本传递 | `AgentOptions`（组装 + 版本族归一化）；注入器 GUI 与命令行两条路径；agent 解析并按表名取表 | ✅ 已完成 |
+| P1 版本传递 | `AgentOptions`（组装 + 版本族归一化）；注入器 GUI 与命令行两条路径共用同一份判定；agent 解析并按表名取表。自定义实例（`fpsmaster` 这类名字里没有版本号的）改读实例 json 的 `clientVersion`/`inheritsFrom`——**已在 fpsmaster（Forge 1.8.9）实机验证** `mapping=obfuscated 1.8.9` | ✅ 已完成 |
 | P2 注入点 | 帧交换钩子 + **绘制上下文钩子**（含行为测试） | ✅ 已完成 |
 | P3 映射表生成器 | `tools/mapping/` 三档流水线；9 个版本的表**已全部入库**（`client/src/main/resources/mappings-*.json`，1.21.11 与 26.3 已抽查确认为真实内容） | ✅ 完成，收尾见 P3-R |
 | P4 绘制后端 | A（1.8.9/1.12.2 固定管线）✅ 真机可用；B（1.16.5 gl-core）✅ 真机可用（linkProgram 缺失 + 视口回退 Window 已修，界面可见可点）；C（26.x SDL 栈）❌ 按设计不装叠加层，游戏原生绘制 spike 通过，正式实现待做 | 部分，P4-B 已关闭，见 P4-C |
 | P5 输入 | 右 Shift 唤出 / Esc 关闭 / 鼠标在 A 代际可用；滚轮：LWJGL2 轮询 `getDWheel`、GLFW 回调 `setScrollCallback`，派发链走读无断点（合成事件进不了游戏队列，待真人验收）；26.3 输入栈未实现 | 部分，见 P5 |
 | P6 模块 | 4 个模块入库；Tick/Packet/Render/Input 四事件已立类型并接生产（Tick 广播+直调、Render 每帧广播）；FullBright 对齐 OpenVape（Mode/Fade/夜视，1.8.9 真机启用+设置面板已验）；B1 剩余 8 模块待世界绘制挂钩 | 部分，见 P6 |
-| P7 自实现 attach | Windows 原生通道已落地并实测（官方 1.8.9 真机 + JDK 8 靶：attach → `agentmain` → 帧钩子 live → 叠加层，全程不碰 `jdk.attach`）；Linux/macOS 域套接字、`PayloadPack` 接入生产、裁剪 JRE 验收待做 | 部分，见 P7 |
+| P7 自实现 attach | **已收尾**：Windows 原生通道实测（官方 1.8.9 真机 / JDK 8 靶 / 裁剪 JRE 注入成功，全程不碰 `jdk.attach`）；Linux/macOS 域套接字通道已实现（WSL `gcc -Werror` 编译校验 + 单测，未实机）；`PayloadPack` 已接入生产（内嵌 ASM 改为加密载荷，1.8.9 真机帧钩子 live 证明解包生效） | ✅ 已完成 |
 
 ## 工作纪律（每次开工前读一遍）
 

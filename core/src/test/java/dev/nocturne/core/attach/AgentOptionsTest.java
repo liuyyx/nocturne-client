@@ -1,6 +1,11 @@
 package dev.nocturne.core.attach;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -56,6 +61,46 @@ class AgentOptionsTest {
         assertEquals(AgentOptions.UNKNOWN_VERSION, AgentOptions.familyFromCommandLine(null));
         assertEquals(AgentOptions.UNKNOWN_VERSION, AgentOptions.familyFromCommandLine(""));
         assertEquals(AgentOptions.UNKNOWN_VERSION, AgentOptions.familyFromCommandLine("java -jar launcher.jar"));
+    }
+
+    /**
+     * 自定义实例名（{@code fpsmaster} 这类不含版本号的）必须能从实例 json 的
+     * {@code clientVersion} / {@code inheritsFrom} 读出真实版本。
+     *
+     * <p>这是 PCL/Forge 自定义实例的实际形态：{@code --version fpsmaster} + classpath 里的
+     * {@code versions\fpsmaster\fpsmaster.jar}，光看字符串永远取不到版本号，只能读 json。
+     */
+    @Test
+    void familyFromCommandLineFallsBackToTheInstanceJson(@TempDir Path temp) throws Exception {
+        Path instance = temp.resolve("versions").resolve("fpsmaster");
+        Files.createDirectories(instance);
+        Files.write(instance.resolve("fpsmaster.json"),
+                "{\"id\":\"fpsmaster\",\"clientVersion\":\"1.8.9\"}".getBytes(StandardCharsets.UTF_8));
+        String commandLine = "javaw -cp \"" + instance.resolve("fpsmaster.jar")
+                + "\" net.minecraft.launchwrapper.Launch --version fpsmaster --gameDir \""
+                + instance + "\" --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker";
+        assertEquals("1.8.9", AgentOptions.familyFromCommandLine(commandLine));
+    }
+
+    /** {@code inheritsFrom} 是 Forge 派生实例的常见字段，同样算权威来源。 */
+    @Test
+    void inheritsFromIsAccepted(@TempDir Path temp) throws Exception {
+        Path instance = temp.resolve("versions").resolve("1.16.5-forge");
+        Files.createDirectories(instance);
+        Files.write(instance.resolve("1.16.5-forge.json"),
+                "{\"inheritsFrom\":\"1.16.5\"}".getBytes(StandardCharsets.UTF_8));
+        String commandLine = "java -cp " + instance.resolve("1.16.5-forge.jar")
+                + " net.minecraft.launchwrapper.Launch --version 1.16.5-forge --gameDir " + instance;
+        assertEquals("1.16.5", AgentOptions.familyFromCommandLine(commandLine));
+    }
+
+    /** 目录名/标签都没有数字、json 也不存在时仍然是 unknown，绝不瞎猜。 */
+    @Test
+    void unknownStaysUnknownWhenNoInstanceJson(@TempDir Path temp) {
+        Path instance = temp.resolve("versions").resolve("TLauncher");
+        String commandLine = "java -cp " + instance.resolve("TLauncher.jar")
+                + " net.minecraft.launchwrapper.Launch --version TLauncher --gameDir " + instance;
+        assertEquals(AgentOptions.UNKNOWN_VERSION, AgentOptions.familyFromCommandLine(commandLine));
     }
 
     /** 选项串组装：版本未知时省略该项，agent 侧退回默认开关键。 */

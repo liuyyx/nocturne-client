@@ -1,0 +1,55 @@
+Vape 4.21（OpenVape 4.21 recovered）
+==================================
+
+来源
+----
+上游工作区：`C:/Users/liuyyx/Desktop/nocturne-client/OpenVape4.21`
+来源项目：OpenVape 4.21.36（`group = gg.vape.recovery`，recovered 源码）
+本目录内容：**原样照抄**，未修改任何一个字节（含 resources 与 native 目录）。
+
+照抄方式
+--------
+```
+cp -r OpenVape4.21/src            -> vendor/vape/src
+cp -r OpenVape4.21/native         -> vendor/vape/native
+cp    OpenVape4.21/LICENSE        -> vendor/vape/LICENSE-CC0.txt
+```
+规模：`src/main/java` **2985 文件 / 287,137 行**（`gg` 287,019 + `func` 118），
+`src/main/resources` 265 个文件。
+
+许可
+----
+上游 `LICENSE` = **Creative Commons CC0 1.0 Universal**（公共领域奉献；明确允许任意用途，
+含商业用途，无附加限制）。全文见 `LICENSE-CC0.txt`。
+因此把它照抄进本项目（GPL-3.0-or-later）不构成许可冲突。
+
+隔离编译探针
+------------
+本目录自带一个独立 Gradle 工程（`settings.gradle.kts` + `build.gradle.kts`），
+**不被主项目 settings include**，只用于验证「照抄的源码能否编译」：
+
+```
+set JAVA_HOME=<JDK 17>
+<gradle 9.2.1> -p vendor/vape compileJava probeReport --console=plain --no-daemon
+```
+
+当前结果：**BUILD SUCCESSFUL**，2985 文件 / 287,137 行、18 条 classpath、零错误。
+依赖清单照搬上游 `OpenVape4.21/build.gradle`（javassist / ASM 全家桶 / guava 17 / gson /
+netty-all / commons-io / lwjgl 2.9.3 / jetbrains annotations），编译目标 Java 17。
+
+**重要：能编译 ≠ 能运行**
+------------------------
+Vape 的 Java 层是为它自己的 native DLL 写的薄壳，运行期硬依赖：
+
+* `gg/vape/runtime/NativeBridge.java`：16 个 `native` 方法，全源码 **139 次调用 / 34 个文件**
+  —— 日志、资源读取、环境探测、**映射数据加载**都从 native 取；
+* 129 个模块类对 `gg.vape.wrapper`（自研 Minecraft 包装层）的 import 达 **1479 次**；
+* 自带的 `gg/vape/mapping/**`（532 文件 / 64,182 行）与 `gg/vape/reflect/*Mappings` 各版本映射；
+* 它自己的注入链路：native DLL + `injectionJar`（payload）+ 多版本 classloader 处理。
+
+也就是说：**这是另一个完整客户端，不是可被复用的模块库**。把它"接进"本项目的 agent
+需要替换 NativeBridge（Java 等价实现）、补齐映射数据、并对接它的初始化时序——属于重写
+而非照抄；把 129 个模块真正接到本项目的框架上，则要逐行改写调用点（`wrapper` → `GameBridge`、
+`value` → 本项目 `Value`、`event` → 本项目 `EventBus`）。
+
+本目录当前状态：**源码归档 + 可编译**，尚未接入运行时。

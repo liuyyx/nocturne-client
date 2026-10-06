@@ -6,6 +6,7 @@ import dev.nocturne.core.attach.Attacher;
 import dev.nocturne.core.attach.CodeSources;
 import dev.nocturne.core.attach.CurrentProcess;
 import dev.nocturne.core.attach.ProcessScanner;
+import dev.nocturne.core.attach.TargetHints;
 import dev.nocturne.core.attach.ToolsJarBootstrap;
 
 import java.io.File;
@@ -100,9 +101,14 @@ public final class Nocturne {
         System.out.println("[nocturne] attaching to pid " + pid + " with " + self.getName());
         // 版本由注入侧判定并随选项传给 agent（运行时零探测）：命令行里既有 --version 也有
         // versions/<实例>/ 路径。拿不到命令行（非 Windows / WMI 被禁用）时传空串，agent 侧按未知处理。
-        String options = AgentOptions.composeVersion(
-                AgentOptions.familyFromCommandLine(
-                        ProcessScanner.javaProcessCommandLines().get(Integer.valueOf(pid))));
+        String commandLine = ProcessScanner.javaProcessCommandLines().get(Integer.valueOf(pid));
+        String options = AgentOptions.composeVersion(AgentOptions.familyFromCommandLine(commandLine));
+        // CLI 路径不传 guiKey，agent 侧用默认键；已知目标客户端占用同一个键时提前说明，
+        // 否则玩家按下去看到的是对方的面板，会以为我们的注入没生效。
+        String keyHint = TargetHints.rightShiftConflict(commandLine, TargetHints.DEFAULT_GUI_KEY_VK);
+        if (keyHint != null) {
+            System.out.println("[nocturne] note: " + keyHint);
+        }
         String strategy;
         try {
             strategy = Attacher.attach(pid, self, options);

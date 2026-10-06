@@ -30,6 +30,8 @@ public final class GuiDrawHook {
     private static volatile Instrumentation instrumentation;
     /** GUI 开关键（AWT VK 码）。 */
     private static volatile int toggleKey;
+    /** 装好后是否直接打开界面（验收选项 {@code openGui=true}）。 */
+    private static volatile boolean openGuiOnInstall;
     /** 是否已发起过叠加层安装。 */
     private static volatile boolean armed;
 
@@ -61,10 +63,11 @@ public final class GuiDrawHook {
      * @param inst            插桩句柄
      * @param key             GUI 开关键（AWT VK 码）
      */
-    static void arm(ClassLoader loader, Instrumentation inst, int key) {
+    static void arm(ClassLoader loader, Instrumentation inst, int key, boolean openGui) {
         gameLoader = loader;
         instrumentation = inst;
         toggleKey = key;
+        openGuiOnInstall = openGui;
     }
 
     /**
@@ -100,7 +103,7 @@ public final class GuiDrawHook {
             if (!armed) {
                 armed = true;
                 System.out.println("[nocturne] gui draw hook: arming overlay (GL context is valid here)");
-                OverlayBootstrap.install(gameLoader, instrumentation, toggleKey);
+                OverlayBootstrap.install(gameLoader, instrumentation, toggleKey, openGuiOnInstall);
             }
             NocturneRuntime.onFrame();
         } catch (Throwable t) {

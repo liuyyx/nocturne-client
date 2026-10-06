@@ -113,11 +113,46 @@ public final class GameBridge {
         String methodName = mapping.methodName(ClassType.MINECRAFT, "getInstance", descriptor);
         Method accessor = findStaticAccessor(found, methodName, found);
         if (accessor == null) {
+            // 形状兜底：Forge 等环境在运行期把成员重映射成 SRG 名（1.8.9 的 getMinecraft 变成
+            // func_71410_x），映射表里记的原版混淆名（A）在那里根本不存在，于是单例永远拿不到——
+            // 后果是字体绑不上、界面一个字都不显示。
+            // 「静态、无参、返回自身类型」正是 getMinecraft 这类单例访问器的形状，且与命名方案无关。
+            accessor = findSelfFactory(found);
+            if (accessor != null) {
+                logThrottled("Minecraft singleton resolved by shape (remapped environment): "
+                        + found.getName() + "." + accessor.getName(), null);
+            }
+        }
+        if (accessor == null) {
             return false;
         }
         this.minecraftClass = found;
         this.getInstanceMethod = accessor;
         return true;
+    }
+
+    /**
+     * 按形状找出"单例访问器"：{@code static}、无参、返回该类型本身。
+     *
+     * <p>多个候选时按名字长度取最短（{@code getMinecraft} / {@code func_71410_x} 这类访问器
+     * 通常比同形状的工具方法更短），并保持确定性。
+     *
+     * @param type 已加载的游戏主类
+     * @return 访问器；不存在时返回 {@code null}
+     */
+    private static Method findSelfFactory(Class<?> type) {
+        Method best = null;
+        for (Method method : type.getDeclaredMethods()) {
+            if (!java.lang.reflect.Modifier.isStatic(method.getModifiers())
+                    || method.getParameterTypes().length != 0
+                    || method.getReturnType() != type) {
+                continue;
+            }
+            if (best == null || method.getName().length() < best.getName().length()) {
+                best = method;
+            }
+        }
+        return best == null ? null : Reflect.accessible(best);
     }
 
     /** @return 已解析的游戏主类引用；未解析时为 {@code null}，不应缓存该结果 */
@@ -330,6 +365,41 @@ public final class GameBridge {
         }
         fieldCache.putIfAbsent(key, accessible);
         return accessible;
+    }
+
+    /**
+     * 诊断：解析不到 Minecraft 时，把"我们找的名字"与"实际存在的近似名字"都列出来。
+     *
+     * <p>写它的原因很具体：Forge 运行期会把官方混淆名重映射（类名走 deobf、成员走 srg），
+     * 而我们的映射表记的是**原版混淆名**。在那种环境里 {@link #minecraft()} 会一直返回
+     * {@code null}，日志里却看不出"到底该叫什么"。这里把候选类的存在性，以及该类上
+     * 「返回自身类型、无参」的 static 方法名（那正是 {@code getMinecraft} 的形状）打印出来，
+     * 一眼就能定位真实命名。
+     *
+     * @return 一行可读诊断文本（不含换行）
+     */
+    public String describeResolution() {
+        StringBuilder out = new StringBuilder(256);
+        String[] candidates = minecraftClassCandidates();
+        out.append("candidates=").append(java.util.Arrays.toString(candidates));
+        for (String candidate : candidates) {
+            Class<?> type = findLoadedClass(candidate);
+            if (type == null) {
+                out.append("; ").append(candidate).append("=missing");
+                continue;
+            }
+            out.append("; ").append(candidate).append("=loaded[");
+            java.util.List<String> selfFactories = new java.util.ArrayList<String>();
+            for (java.lang.reflect.Method method : type.getDeclaredMethods()) {
+                if (java.lang.reflect.Modifier.isStatic(method.getModifiers())
+                        && method.getParameterTypes().length == 0
+                        && method.getReturnType() == type) {
+                    selfFactories.add(method.getName());
+                }
+            }
+            out.append("selfFactories=").append(selfFactories).append(']');
+        }
+        return out.toString();
     }
 
     /** 清除已解析状态，使下一次 {@link #resolve()} 重新查找。 */

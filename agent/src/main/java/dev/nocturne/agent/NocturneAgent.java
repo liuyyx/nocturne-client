@@ -45,6 +45,15 @@ public final class NocturneAgent {
     private static volatile int guiToggleKey = VK_RIGHT_SHIFT;
 
     /**
+     * 是否在叠加层装好后**直接打开界面**（agent 参数 {@code openGui=true}）。
+     *
+     * <p>存在的理由是真机验收：1.8.9 的 LWJGL2 走 DirectInput，合成按键（SendInput/PostMessage）
+     * 到不了游戏，自动化验收永远卡在"按一下开关键"这一步上。带上这个选项注入后，界面立刻可见，
+     * 文字/布局/与其它客户端的冲突都能直接看到——不需要人手按一下，也不需要录像回看。
+     */
+    private static volatile boolean openGuiOnInstall;
+
+    /**
      * 目标 Minecraft 版本族（如 {@code 1.8.9}），由注入器的 {@code mcVersion=} 选项传入。
      *
      * <p>运行时据此选择映射表 {@code /mappings-<版本族>.json}，**不做版本探测**。选项格式与注入侧
@@ -93,6 +102,7 @@ public final class NocturneAgent {
         // 带正确 mcVersion/guiKey 注入同一进程）携带的选项会被 early-return 丢弃。M-89 的幂等
         // 保护的是「安装一次」，不是「配置一次」；配置允许后到者补齐缺失项。
         final int newGuiKey = parseToggleKey(agentArgs);
+        final boolean newOpenGui = parseOpenGui(agentArgs);
         final String newMcVersion = parseVersion(agentArgs);
         log("agent loaded via " + via
                 + (agentArgs == null || agentArgs.isEmpty() ? "" : " args=[" + agentArgs + "]"));
@@ -117,6 +127,7 @@ public final class NocturneAgent {
             return;
         }
         guiToggleKey = newGuiKey;
+        openGuiOnInstall = newOpenGui;
         mcVersion = newMcVersion;
         log("agent options: guiKey=" + guiToggleKey + ", mcVersion=" + mcVersion);
 
@@ -462,8 +473,8 @@ public final class NocturneAgent {
             // trace(true) 已在 start() 里、注册转换器之前打开（见 M-82），此处不再重复。
             // GUI 绘制钩子需要 loader/instrumentation 才能发起安装：SDL 栈下只有它触发的时机
             // GL 上下文有效，因此安装由它首次调用时发起（见 GuiDrawHook）。
-            GuiDrawHook.arm(loader, instrumentation, guiToggleKey);
-            OverlayBootstrap.install(loader, instrumentation, guiToggleKey);
+            GuiDrawHook.arm(loader, instrumentation, guiToggleKey, openGuiOnInstall);
+            OverlayBootstrap.install(loader, instrumentation, guiToggleKey, openGuiOnInstall);
             log("overlay bootstrap registered; toggle key=" + guiToggleKey);
         } catch (Throwable t) {
             log("overlay attach failed: " + t);
@@ -703,6 +714,24 @@ public final class NocturneAgent {
             }
         }
         return VK_RIGHT_SHIFT;
+    }
+
+    /**
+     * 解析 {@code openGui=true} 选项。
+     *
+     * @param agentArgs agent 参数字串，可为 {@code null}
+     * @return 是否要在装好叠加层后直接打开界面
+     */
+    private static boolean parseOpenGui(String agentArgs) {
+        if (agentArgs == null || agentArgs.isEmpty()) {
+            return false;
+        }
+        for (String part : agentArgs.split(",")) {
+            if ("openGui=true".equals(part.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 统一的日志输出，统一加 {@code [nocturne]} 前缀，便于在游戏日志中检索。 */

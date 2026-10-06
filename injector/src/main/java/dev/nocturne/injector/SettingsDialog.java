@@ -57,20 +57,20 @@ public final class SettingsDialog extends JDialog {
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         // 依次堆叠：4 个分区 + 完成按钮，每个分区由标题与控件两行组成。
-        setLayout(new MigLayout("insets 22, fillx, wrap 1", "[grow,fill]", "[]12[]12[]12[]"));
+        setLayout(new MigLayout("insets 24 24 20 24, fillx, wrap 1", "[grow,fill]", "[]6[]16[]6[]16[]6[]16[]6[]"));
         setBackground(AppTheme.BACKGROUND);
 
-        add(sectionLabel("GUI 快捷键"));
+        add(sectionLabel("GUI 快捷键"), "growx");
         add(buildBindRow(), "growx");
 
-        add(sectionLabel("动画速度"));
+        add(sectionLabel("动画速度"), "growx");
         add(slider(0, 200, config.animationSpeed, value -> config.animationSpeed = value), "growx");
         // 动画速度与模糊强度目前只写入配置，供注入端读取；这里不改变界面表现。
 
-        add(sectionLabel("模糊强度"));
+        add(sectionLabel("模糊强度"), "growx");
         add(slider(0, 100, config.blurStrength, value -> config.blurStrength = value), "growx");
 
-        add(sectionLabel("界面缩放"));
+        add(sectionLabel("界面缩放"), "growx");
         add(slider(80, 150, config.uiScale, value -> {
         // 界面缩放立刻调用 setZoom，让用户拖动时就能看到字号变化。
             config.uiScale = value;
@@ -79,7 +79,11 @@ public final class SettingsDialog extends JDialog {
 
         JButton close = new JButton("完成");
         close.addActionListener(e -> dispose());
-        add(close, "right, gaptop 12");
+        // 唯一的收尾动作用主按钮样式，与主窗口的「注入」保持同一视觉权重。
+        close.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "background: #3D7BFF; foreground: #FFFFFF"
+                        + "; hoverBackground: #5A90FF; pressedBackground: #3D7BFF");
+        add(close, "right, gaptop 12, h 34!, w 108!");
 
         // pack() 让窗口贴合控件尺寸，避免固定尺寸在 150% 缩放下溢出。
         pack();
@@ -97,8 +101,12 @@ public final class SettingsDialog extends JDialog {
      */
     private JLabel sectionLabel(String text) {
         JLabel label = new JLabel(text);
-        AppTheme.bindFont(label, Font.PLAIN, 0.95f);
+        AppTheme.bindFont(label, Font.BOLD, AppTheme.TYPE_CAPTION);
         label.setForeground(AppTheme.TEXT_MUTED);
+        // 底部 1px 分隔线让分区边界清晰可见，而不用卡片把对话框切碎。
+        label.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+                javax.swing.BorderFactory.createMatteBorder(0, 0, 1, 0, AppTheme.BORDER_SOFT),
+                javax.swing.BorderFactory.createEmptyBorder(0, 0, 6, 0)));
         return label;
     }
 
@@ -115,12 +123,15 @@ public final class SettingsDialog extends JDialog {
         bindField.setEditable(false);
         bindField.setFocusable(true);
         bindField.setText(config.guiBind);
-        AppTheme.bindFont(bindField, Font.BOLD, 1.0f);
+        AppTheme.bindFont(bindField, Font.BOLD, AppTheme.TYPE_BODY);
         bindField.setToolTipText("点击后按下要绑定的按键");
+        // 抬升底色 + 强调色聚焦描边，让录制框看起来就是个「可点的控件」。
+        bindField.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "background: #151F36; borderColor: #1E2B45; focusedBorderColor: #3D7BFF");
 
         // 改键提示：快捷键由注入器在 attach 时写死，改完必须重新注入才会传到游戏。
-        bindHint.setForeground(AppTheme.ACCENT);
-        AppTheme.bindFont(bindHint, Font.PLAIN, 0.8f);
+        bindHint.setForeground(AppTheme.INFO);
+        AppTheme.bindFont(bindHint, Font.PLAIN, AppTheme.TYPE_CAPTION);
 
         bindField.addFocusListener(new FocusAdapter() {
             @Override
@@ -244,9 +255,10 @@ public final class SettingsDialog extends JDialog {
         JPanel wrapper = new JPanel(new MigLayout("insets 0", "[grow,fill]8[]", "[]"));
         wrapper.setOpaque(false);
 
-        JLabel value = new JLabel(initial + "%");
+        JLabel value = new JLabel(initial + "%", javax.swing.SwingConstants.RIGHT);
         value.setForeground(AppTheme.TEXT);
-        AppTheme.bindFont(value, Font.PLAIN, 1.0f);
+        // 数值用等宽字体：拖动时数字宽度不抖；右对齐贴住控件边缘。
+        AppTheme.bindMonospacedFont(value, AppTheme.TYPE_BODY);
 
         JSlider slider = new JSlider(min, max, initial);
         slider.setOpaque(false);

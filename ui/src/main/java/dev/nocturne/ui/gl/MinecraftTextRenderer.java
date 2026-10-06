@@ -46,15 +46,18 @@ public final class MinecraftTextRenderer implements TextRenderer {
     private final Method fontWidth;
     /** 字体原生行高（像素）：26.x 取 {@code lineHeight}，其余保持 9。 */
     private final int nativeHeight;
-    /** 「drawString 无可用重载」是否已提示过，保证只打印一次。 */
-    private boolean loggedMissing;
     /** 「现代字体不再提供 drawString」是否已提示过，保证只打印一次。 */
     private boolean loggedNoDrawString;
     /**
-     * 字体是否提供 drawString：null=尚未探测。getMethods 全量扫描每 draw 做一次太贵（D12），
-     * 字体类运行期不变，查一次缓存。
+     * 画字方法句柄，**按签名**解析（见 {@link #resolveDrawString}）：null 表示该字体不负责绘制
+     * （26.x 的 {@code Font}）。用签名而不是映射名，是因为这个名字在原版混淆/SRG/未混淆三种
+     * 环境下分别是 {@code a} / {@code func_78276_b} / {@code drawString}——按名字查表只覆盖一种。
      */
-    private Boolean hasDrawString;
+    private Method drawStringHandle;
+    /** 是否已探测过画字句柄（getMethods 全量扫描只做一次）。 */
+    private boolean drawStringProbed;
+    /** 句柄是否使用 float 坐标（第二、三参为 float 的旧重载）。 */
+    private boolean drawStringFloats;
     /** fontWidth 句柄连续失败次数；到 3 次就只走映射桥（P12）。 */
     private int fontWidthFailures;
 
@@ -81,20 +84,49 @@ public final class MinecraftTextRenderer implements TextRenderer {
         if (bridge == null) {
             return null;
         }
+        Object font;
         try {
             Object minecraft = bridge.minecraft();
             if (minecraft == null) {
+                System.err.println("[nocturne] text renderer: game not reachable yet");
                 return null;
             }
-            Object font = resolveFont(bridge, minecraft);
-            if (font == null) {
-                return null;
-            }
-            return new MinecraftTextRenderer(bridge, font, resolveFixedPipeline(font),
-                    resolveWidth(font), resolveNativeHeight(font));
+            font = resolveFont(bridge, minecraft);
         } catch (Throwable t) {
+            System.err.println("[nocturne] text renderer: cannot locate game font: " + t);
             return null;
         }
+        if (font == null) {
+            System.err.println("[nocturne] text renderer: game font instance not found (mapping="
+                    + bridge.mapping().describe() + ") — the GUI would render without text");
+            return null;
+        }
+        // 以下三步各自容错：拿不到 GL 缩放句柄只意味着"字按原生行高画"，拿不到宽度句柄还有
+        // 映射桥兜底。曾经这里任何一步抛异常都会被外层 catch 吞掉，结果是整个文字渲染失效
+        // （界面能开、一个字都没有），而日志里没有任何线索——正是"所有版本都没字"的成因。
+        GlApi gl = null;
+        try {
+            gl = resolveFixedPipeline(font);
+        } catch (Throwable t) {
+            System.err.println("[nocturne] text renderer: fixed-pipeline GL unavailable: " + t);
+        }
+        Method width = null;
+        try {
+            width = resolveWidth(font);
+        } catch (Throwable t) {
+            System.err.println("[nocturne] text renderer: width handle unavailable: " + t);
+        }
+        int height = (int) BASE_HEIGHT;
+        try {
+            height = resolveNativeHeight(font);
+        } catch (Throwable t) {
+            System.err.println("[nocturne] text renderer: line height unavailable: " + t);
+        }
+        System.err.println("[nocturne] text renderer bound: font=" + font.getClass().getName()
+                + ", gl=" + (gl == null ? "none (no scaling)" : "fixed pipeline")
+                + ", widthHandle=" + (width == null ? "mapped" : width.getName())
+                + ", lineHeight=" + height);
+        return new MinecraftTextRenderer(bridge, font, gl, width, height);
     }
 
     /**
@@ -160,11 +192,28 @@ public final class MinecraftTextRenderer implements TextRenderer {
     }
 
     /**
-     * 解析规范名宽度度量：26.x 的 {@code width(String)}，或 1.8.9–1.19 未混淆构建的
-     * {@code getStringWidth(String)}。
+     * 置为可访问。
      *
-     * <p>混淆构建上这两个名字都不存在（真实名是单字母），解析失败返回 {@code null}，
-     * 由 {@link #width} 继续走映射桥，从而不改变 1.8.9 的既有行为。
+     * <p>{@code accessible(Method)} 是 client 模块的包内方法，ui 模块用不了；这里按同一取舍
+     * 本地实现：{@code setAccessible} 失败但方法本身 public 时仍返回句柄（Java 9+ 对未 open 的包
+     * 会抛 {@code InaccessibleObjectException}，而 public 方法照样能 invoke）。
+     */
+    private static Method accessible(Method method) {
+        try {
+            method.setAccessible(true);
+            return method;
+        } catch (Throwable ignored) {
+            return java.lang.reflect.Modifier.isPublic(method.getModifiers()) ? method : null;
+        }
+    }
+
+    /**
+     * 解析规范名宽度度量：26.x 的 {@code width(String)}，或 1.8.9–1.19 未混淆构建的
+     * {@code getStringWidth(String)}，最后按签名 {@code (String)->int} 兜底。
+     *
+     * <p>签名兜底不是可有可无：Forge 等环境在运行期把成员重映射成 SRG 名
+     * （{@code getStringWidth} → {@code func_78256_a}），前两个名字都不存在。此时按名字找
+     * 必然失败，宽度会退化成 {@code 长度×6} 的估算，布局跟着错位。
      */
     private static Method resolveWidth(Object font) {
         Class<?> type = font.getClass();
@@ -172,7 +221,47 @@ public final class MinecraftTextRenderer implements TextRenderer {
         if (width == null) {
             width = Reflect.method(type, "getStringWidth", String.class);
         }
+        if (width == null) {
+            for (Method method : type.getMethods()) {
+                Class<?>[] parameters = method.getParameterTypes();
+                if (parameters.length == 1 && parameters[0] == String.class
+                        && method.getReturnType() == int.class) {
+                    width = accessible(method);
+                    break;
+                }
+            }
+        }
         return width != null && width.getReturnType() == int.class ? width : null;
+    }
+
+    /**
+     * 按签名解析「画一行字」的方法：{@code (String,int,int,int)->int}。
+     *
+     * <p>为什么不用映射名：这个方法在各代的名字完全不同——原版混淆是单字母（{@code a}）、
+     * SRG 环境是 {@code func_78276_b}、未混淆构建是 {@code drawString}。按名字查表只覆盖其中
+     * 一种，换环境就"界面能开、一个字都没有"。签名在所有命名方案下都一样。
+     *
+     * <p>1.8.9–1.21.x 的 {@code FontRenderer} 都有这个形状；26.x 的 {@code Font} 不负责绘制
+     * （没有该方法），返回 {@code null} 让调用方按"现代字体"处理。
+     */
+    private static Method resolveDrawString(Object font) {
+        Method floats = null;
+        for (Method method : font.getClass().getMethods()) {
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length != 4 || parameters[0] != String.class
+                    || method.getReturnType() != int.class) {
+                continue;
+            }
+            if (parameters[1] == int.class && parameters[2] == int.class
+                    && parameters[3] == int.class) {
+                return accessible(method);
+            }
+            if (parameters[1] == float.class && parameters[2] == float.class
+                    && parameters[3] == int.class) {
+                floats = method;
+            }
+        }
+        return floats == null ? null : accessible(floats);
     }
 
     /** 读取字体原生行高（26.x 的 {@code public final int lineHeight}）；不可用时保持 9px。 */
@@ -235,57 +324,55 @@ public final class MinecraftTextRenderer implements TextRenderer {
             try {
                 gl.translate(x, y, 0f);
                 gl.scale(scale, scale, 1f);
-                Object result = bridge.callMapped(fontRenderer, ClassType.FONT_RENDERER, "drawString",
-                        text, 0, 0, rgb);
-                logIfMissing(result);
+                drawWithHandle(text, 0, 0, rgb);
             } finally {
                 // P10：绘制抛异常也必须弹栈，否则矩阵栈每错一帧泄漏一层。
                 gl.popMatrix();
             }
             return;
         }
-        Object result = bridge.callMapped(fontRenderer, ClassType.FONT_RENDERER, "drawString",
-                text, Math.round(x), Math.round(y), rgb);
-        logIfMissing(result);
+        drawWithHandle(text, Math.round(x), Math.round(y), rgb);
     }
+
+    /** 用按签名解析出的句柄画一行字（句柄已由 {@link #drawUnsupported} 保证非空）。 */
+    private void drawWithHandle(String text, int x, int y, int rgb) {
+        if (drawStringFloats) {
+            Reflect.call(drawStringHandle, fontRenderer, text, (float) x, (float) y,
+                    Integer.valueOf(rgb));
+        } else {
+            Reflect.call(drawStringHandle, fontRenderer, text, Integer.valueOf(x),
+                    Integer.valueOf(y), Integer.valueOf(rgb));
+        }
+    }
+
     /**
-     * 判断当前字体是否已经不负责绘制（26.x 的 {@code Font} 没有 {@code drawString}）。
+     * 判断当前字体是否已经不负责绘制（26.x 的 {@code Font} 没有画字方法）。
      *
-     * <p>此时无论怎么调用都不会有文字出现，直接跳过并提示一次，指向正确的绘制路径
-     * （{@code GuiGraphicsExtractor} / {@code DrawContext}），而不是每帧空转映射桥。
+     * <p>判据是**签名**（{@code (String,int,int,int)->int}）而非名字：同一个方法在三种环境下分别叫
+     * {@code a}（原版混淆）、{@code func_78276_b}（SRG/Forge）、{@code drawString}（未混淆）。
+     * 曾经按名字扫 {@code getMethods()}，于是 Forge 环境下被判成"没有 drawString"、
+     * 官方混淆环境下又被映射桥的名字挡住——两种环境都表现为"界面能开、一个字都没有"。
+     *
+     * <p>确实没有该签名的字体（26.x）直接跳过并提示一次，指向正确的绘制路径
+     * （{@code GuiGraphicsExtractor} / {@code DrawContext}），而不是每帧空转。
      */
     private boolean drawUnsupported() {
-        if (fontWidth == null) {
-            return false;
-        }
-        if (hasDrawString == null) {
-            boolean found = false;
-            for (Method method : fontRenderer.getClass().getMethods()) {
-                if ("drawString".equals(method.getName())) {
-                    found = true;
-                    break;
-                }
+        if (!drawStringProbed) {
+            drawStringProbed = true;
+            drawStringHandle = resolveDrawString(fontRenderer);
+            if (drawStringHandle != null) {
+                drawStringFloats = drawStringHandle.getParameterTypes()[1] == float.class;
             }
-            hasDrawString = found ? Boolean.TRUE : Boolean.FALSE;
         }
-        if (hasDrawString.booleanValue()) {
+        if (drawStringHandle != null) {
             return false;
         }
         if (!loggedNoDrawString) {
             loggedNoDrawString = true;
-            System.err.println("[nocturne] game font exposes no drawString (modern MC);"
-                    + " text must be drawn through the game's draw context/extractor");
+            System.err.println("[nocturne] game font exposes no (String,int,int,int) draw method"
+                    + " (modern MC); text must be drawn through the game's draw context/extractor");
         }
         return true;
-    }
-
-    /** 只在 drawString 完全找不到重载时提示一次（避免每帧刷屏），便于定位文字缺失。 */
-    private void logIfMissing(Object result) {
-        if (result == null && !loggedMissing) {
-            loggedMissing = true;
-            System.err.println("[nocturne] drawString bridge call returned null;"
-                    + " text will be missing (mapping=" + bridge.mapping().describe() + ")");
-        }
     }
 
     @Override

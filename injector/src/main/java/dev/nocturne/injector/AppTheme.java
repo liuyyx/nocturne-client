@@ -48,6 +48,58 @@ public final class AppTheme {
     /** 成功语义色。 */
     public static final Color SUCCESS = new Color(0x3F, 0xD0, 0x8A);
 
+    /** 信息/进行中语义色，比 {@link #ACCENT} 略亮以便在深底上可读。 */
+    public static final Color INFO = new Color(0x6E, 0xA8, 0xFF);
+
+    /** 抬升面板底色（输入框、表头等），介于 {@link #PANEL} 与 {@link #PANEL_HOVER} 之间。 */
+    public static final Color PANEL_RAISED = new Color(0x15, 0x1F, 0x36);
+
+    /** 弱文字色（占位符、未知值、禁用态）。 */
+    public static final Color TEXT_FAINT = new Color(0x55, 0x67, 0x8A);
+
+    /** 选中态底色：{@link #ACCENT} 以约 18% 叠在 {@link #PANEL} 上预混合出的不透明色。 */
+    public static final Color ACCENT_SOFT = new Color(0x1A, 0x27, 0x44);
+
+    /** 常规描边色。 */
+    public static final Color BORDER = new Color(0x1E, 0x2B, 0x45);
+
+    /** 弱描边/分隔线色。 */
+    public static final Color BORDER_SOFT = new Color(0x18, 0x24, 0x3C);
+
+    // ---- 间距刻度（逻辑像素；所有 insets/gap 一律从这里取值，杜绝随手写数字） ----
+
+    /** 4px：行内最小间隔。 */
+    public static final int SPACE_XS = 4;
+    /** 8px：紧凑间隔。 */
+    public static final int SPACE_S = 8;
+    /** 12px：控件间常规间隔。 */
+    public static final int SPACE_M = 12;
+    /** 16px：分区间隔。 */
+    public static final int SPACE_L = 16;
+    /** 24px：面板内边距。 */
+    public static final int SPACE_XL = 24;
+    /** 32px：大区块间隔。 */
+    public static final int SPACE_XXL = 32;
+
+    // ---- 圆角 ----
+
+    /** 卡片/面板圆角。 */
+    public static final int RADIUS_CARD = 12;
+    /** 控件（按钮、输入框）圆角。 */
+    public static final int RADIUS_CONTROL = 10;
+
+    // ---- 字体层级（相对基础字号的倍数，配合 bindFont/scaled 使用；绝不写绝对磅值） ----
+
+    /** 品牌标题。 */
+    public static final float TYPE_HERO = 1.35f;
+    /** 区块标题。 */
+    public static final float TYPE_TITLE = 1.1f;
+    /** 正文。 */
+    public static final float TYPE_BODY = 1.0f;
+    /** 次要说明/表头/状态栏。 */
+    public static final float TYPE_CAPTION = 0.85f;
+    /** 等宽日志。 */
+    public static final float TYPE_MONO = 0.95f;
     /** 工具类，不允许实例化。 */
     private AppTheme() {
     }
@@ -81,6 +133,24 @@ public final class AppTheme {
         UIManager.put("Component.focusColor", ACCENT);
         UIManager.put("Component.innerFocusWidth", 1);
         UIManager.put("Component.accentColor", ACCENT);
+        // 统一控件圆角：按钮与输入框用同一刻度，避免每个控件单独声明 arc。
+        UIManager.put("Component.arc", RADIUS_CONTROL);
+        UIManager.put("Button.arc", RADIUS_CONTROL);
+        UIManager.put("TextComponent.arc", RADIUS_CONTROL);
+        // 禁用态用弱文字色而不是默认灰，深底下对比度更可控。
+        UIManager.put("Component.disabledForeground", TEXT_FAINT);
+        UIManager.put("Button.disabledText", TEXT_FAINT);
+        UIManager.put("Button.disabledBackground", PANEL_RAISED);
+        // 占位符与文本选区色。
+        UIManager.put("TextField.placeholderForeground", TEXT_FAINT);
+        UIManager.put("TextComponent.selectionBackground", ACCENT);
+        UIManager.put("TextComponent.selectionForeground", Color.WHITE);
+        UIManager.put("ScrollPane.smoothScrolling", Boolean.TRUE);
+        // 进度条（扫描/注入进行中的不定态反馈）。
+        UIManager.put("ProgressBar.background", PANEL_HOVER);
+        UIManager.put("ProgressBar.foreground", ACCENT);
+        UIManager.put("ProgressBar.arc", 999);
+
 
         UIManager.put("Label.foreground", TEXT);
         UIManager.put("Label.disabledForeground", TEXT_MUTED);
@@ -102,7 +172,8 @@ public final class AppTheme {
         UIManager.put("Table.gridColor", new Color(0x18, 0x24, 0x3C));
         UIManager.put("TableHeader.background", PANEL);
         UIManager.put("TableHeader.foreground", TEXT_MUTED);
-        UIManager.put("TableHeader.separatorColor", new Color(0x18, 0x24, 0x3C));
+        UIManager.put("TableHeader.separatorColor", BORDER_SOFT);
+        UIManager.put("TableHeader.bottomSeparatorColor", BORDER_SOFT);
 
         UIManager.put("ScrollBar.thumb", new Color(0x2A, 0x3A, 0x58));
         UIManager.put("ScrollBar.thumbHover", new Color(0x36, 0x4A, 0x70));

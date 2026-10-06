@@ -14,6 +14,10 @@ vendor/setsuna-gui/libs/
 vendor/setsuna-gui/build/
 vendor/setsuna-gui/.gradle/
 
+# Vendored Vape（CC0 照抄源码）的隔离编译探针产物；源码本身要入库。
+vendor/vape/build/
+vendor/vape/.gradle/
+
 # .NET launcher
 launcher/bin/
 launcher/obj/

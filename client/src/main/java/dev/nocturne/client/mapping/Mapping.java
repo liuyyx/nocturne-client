@@ -19,6 +19,27 @@ public interface Mapping {
     String className(ClassType type);
 
     /**
+     * 该类在运行期**可能使用的全部候选名**，按尝试优先级排列（去重）。
+     *
+     * <p>为什么需要它：同一份映射表要同时覆盖四种运行期命名空间——原版混淆名（1.8.9 的
+     * {@code ave}）、Fabric 的 intermediary（{@code net/minecraft/class_1657}）、Forge 的 SRG
+     * （类名可读、成员 {@code func_/field_}）、NeoForge（1.20.2+ 即 Mojmap 恒等）。只取其中一个
+     * 会让另外几种环境按名找不到类，症状看起来毫不相关（GUI 一个字不显示、ESP 永远为空……）。
+     *
+     * <p>调用方应逐个尝试 {@code Class.forName}，第一个成功者胜出。
+     *
+     * <p>默认实现只返回 {@link #className} 一个名字，保持既有行为；{@link ObfuscatedMapping} 会按表里
+     * 记录的命名空间展开成有序候选，并在末尾追加规范名兜底。
+     * 列表<b>至少</b>有一个元素，且首项恒等于 {@link #className}(type)。
+     *
+     * @param type 要翻译的类型
+     * @return 候选运行时类名列表（至少一个元素，首项为 {@link #className}）
+     */
+    default java.util.List<String> classNameCandidates(ClassType type) {
+        return java.util.Collections.singletonList(className(type));
+    }
+
+    /**
      * 查询运行期方法名；表未收录时回退为 {@code canonicalName}。
      *
      * @param descriptor 该方法的 JNI 描述符，用于同名重载的消歧；实现可忽略此参数
@@ -31,13 +52,15 @@ public interface Mapping {
     /**
      * 该字段在运行期**可能使用的全部候选名**，按尝试优先级排列（去重）。
      *
-     * <p>为什么需要它：同一个字段在三种环境下有三个名字——原版混淆名（1.8.9 的 {@code w}）、
-     * Forge 等重映射环境的 SRG 名（{@code field_71415_G}）、未混淆构建的规范名。只取其中一个
-     * 会让另外两种环境按名访问全部落空（读字段拿到 null、写字段静默失败），而症状看起来毫不相关
+     * <p>为什么需要它：同一个字段在四种环境下有四种名字——原版混淆名（1.8.9 的 {@code h}）、
+     * Fabric 的 intermediary（{@code field_1724}）、Forge 等重映射环境的 SRG 名
+     * （{@code f_91073_}）、以及未混淆构建的规范名（{@code player}）。只取其中一个
+     * 会让另外几种环境按名访问全部落空（读字段拿到 null、写字段静默失败），而症状看起来毫不相关
      * （字体绑不上、拖 GUI 时视角跟着转……）。
      *
      * <p>默认实现只返回 {@link #fieldName} 一个名字，保持既有行为；
-     * {@link ObfuscatedMapping} 会额外带上表里记录的 SRG 名与规范名。
+     * {@link ObfuscatedMapping} 会按表里记录的命名空间（vanilla → fabric → forge → neoforge）
+     * 展开为有序候选，并在末尾追加规范名兜底。
      *
      * @param owner         声明该字段的类
      * @param canonicalName 未混淆的规范字段名
@@ -59,6 +82,35 @@ public interface Mapping {
     default java.util.List<String> methodNameCandidates(ClassType owner, String canonicalName,
                                                        String descriptor) {
         return java.util.Collections.singletonList(methodName(owner, canonicalName, descriptor));
+    }
+
+    /**
+     * 该方法在运行期可能使用的全部候选（名字 + 配套描述符），按尝试优先级排列（去重）。
+     *
+     * <p>与方法名候选 {@link #methodNameCandidates} 的区别只有一个，但对混淆构建至关重要：
+     * 这里把<b>描述符也和名字成对带上</b>。跨命名空间（原版混淆 / intermediary / SRG / Mojmap）
+     * 时，名字与描述符必须来自同一个命名空间——用原版混淆名 {@code A} 去配 SRG 描述符里的类名，
+     * 参数类型根本解析不出来。
+     *
+     * <p>默认实现按 {@link #methodNameCandidates} 的顺序组装，描述符统一取
+     * {@link #methodDescriptor}（对恒等映射恒为 {@code null}，调用方据此按实参类型推断）。
+     * {@link ObfuscatedMapping} 会为每个候选带上该命名空间自己的描述符。
+     *
+     * <p>返回的列表<b>至少</b>有一个元素。
+     *
+     * @param owner         声明该方法的类
+     * @param canonicalName 未混淆的规范方法名
+     * @return 候选列表（至少一个元素）
+     */
+    default java.util.List<MethodCandidate> methodCandidates(ClassType owner, String canonicalName) {
+        String descriptor = methodDescriptor(owner, canonicalName);
+        java.util.List<String> names = methodNameCandidates(owner, canonicalName, descriptor);
+        java.util.List<MethodCandidate> candidates =
+                new java.util.ArrayList<MethodCandidate>(names.size());
+        for (String name : names) {
+            candidates.add(new MethodCandidate(name, descriptor));
+        }
+        return candidates;
     }
 
     /**

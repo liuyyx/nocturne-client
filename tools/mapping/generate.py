@@ -9,10 +9,13 @@ actually resolves through the table) comes from two places, merged:
 * ``requirements.txt`` — the curated list for names that travel through a
   variable / GUI-font-input members added later.
 
-Each requirement is resolved against the version's native mapping source (see
-``sources.py``); anything that cannot be resolved is written as
-``"absent": true`` and listed in the report — that list is the to-do list for
-patching an alias or a requirement.
+Every requirement is resolved into **loader namespaces** (``vanilla`` /
+``fabric`` / ``forge`` / ``neoforge``) by ``namespaces.py``; the runtime tries
+those names in order, so one table serves a plain install, a Fabric install, a
+Forge install and a NeoForge install of the same game version.  Anything that
+cannot be resolved in a version is written as ``"absent": true`` and listed by
+``--report`` — that list is the to-do list for patching an alias or a
+requirement.
 
 Usage::
 
@@ -33,6 +36,7 @@ import os
 import sys
 
 import javap
+import namespaces
 import scan
 import sources
 
@@ -51,18 +55,19 @@ DEFAULT_JAVAP = os.environ.get(
     r"C:\Program Files\Eclipse Adoptium\jdk-25.0.4.7-hotspot\bin\javap.exe",
 )
 
-# version -> backend kind
-VERSIONS = {
-    "1.8.9": "legacy",
-    "1.12.2": "legacy",
-    "1.16.5": "proguard",
-    "1.20.1": "proguard",
-    "1.21.4": "proguard",
-    "1.21.10": "proguard",
-    "1.21.11": "proguard",
-    "26.2": "identity",
-    "26.3": "identity",
-}
+#: Oldest version the client supports.  Everything released after it is a
+#: candidate; ``namespaces.build_resolver`` decides per version whether a
+#: source exists (it returns ``None`` for versions older than Mojang's
+#: mappings that have no alias bridge — those are reported, not guessed).
+OLDEST = "1.8.9"
+
+
+def release_versions(manifest: sources.Manifest) -> "list[str]":
+    """Every release from ``OLDEST`` up to the newest, newest first."""
+    versions = [v["id"] for v in manifest.manifest()["versions"] if v["type"] == "release"]
+    floor = namespaces._version_key(OLDEST)
+    selected = [v for v in versions if namespaces._version_key(v) >= floor]
+    return list(reversed(selected))
 
 
 def load_shape_hints() -> dict:
@@ -82,106 +87,26 @@ def load_shape_hints() -> dict:
     hints = {}
     for canonical, entry in table.get("classes", {}).items():
         for name, spec in (entry.get("methods") or {}).items():
-            signature = spec.get("signature")
-            if signature:
-                hints[(canonical, name)] = _param_count(signature)
+            descriptor = _first_signature(spec)
+            if descriptor:
+                hints[(canonical, name)] = namespaces.parameter_count(descriptor)
     return hints
 
 
-def _param_count(descriptor: str) -> int:
-    inner = descriptor[descriptor.find("(") + 1: descriptor.find(")")]
-    count = 0
-    i = 0
-    while i < len(inner):
-        ch = inner[i]
-        if ch == "[":
-            i += 1
-            continue
-        if ch == "L":
-            i = inner.index(";", i) + 1
-        else:
-            i += 1
-        count += 1
-    return count
-
-
-def ensure_jar(version: str, manifest: sources.Manifest) -> "str | None":
-    jar = find_local_jar(version)
-    if jar is not None:
-        return jar
-    return manifest.client_jar(version)
-
-
-def build_source(version: str, kind: str, manifest: sources.Manifest, shape_hints: dict):
-    if kind == "legacy":
-        aliases = os.path.join(TOOLS, f"aliases-{version}.toml")
-        return sources.LegacySource(version, VANILLA_ROOT, aliases)
-    if kind == "proguard":
-        jar = ensure_jar(version, manifest)
-        return sources.ProguardSource(
-            version, manifest, jar_path=jar, javap_exe=DEFAULT_JAVAP,
-            javap_cache=os.path.join(CACHE, f"javap-{version}.json"),
-            shape_hints=shape_hints,
-        )
-    if kind == "identity":
-        return IdentitySource(version)
-    raise ValueError(f"unknown backend {kind}")
-
-
-class IdentitySource:
-    """Unobfuscated build: the canonical name is the runtime name.
-
-    Member existence is verified against the real client jar (class list from
-    the jar; members via ``javap``); anything not found is reported absent
-    rather than silently claimed to exist.
-    """
-
-    def __init__(self, version: str) -> None:
-        self.version = version
-        self.jar = find_local_jar(version)
-        self.index = None
-        self._entries = None
-        self._missing_jar = self.jar is None
-        if self.jar is not None:
-            self._entries = javap.class_entries(self.jar)
-            self.index = javap.JavapIndex(
-                self.jar, DEFAULT_JAVAP, os.path.join(CACHE, f"javap-{version}.json")
-            )
-
-    def resolve_class(self, canonical: str) -> sources.Answer:
-        internal = canonical.replace(".", "/")
-        if self._missing_jar:
-            return sources.Answer.absent(f"no local client jar for {self.version}")
-        if internal not in self._entries:
-            return sources.Answer.absent(f"{internal} not present in {self.version} client jar")
-        # Runtime name is the canonical binary (dotted) name.
-        return sources.Answer.found(canonical.replace("/", "."))
-
-    def _member(self, canonical: str, kind: str, name: str) -> sources.Answer:
-        internal = canonical.replace(".", "/")
-        if self._missing_jar:
-            return sources.Answer.absent(f"no local client jar for {self.version}")
-        if not self.index.reachable(internal, kind, name):
-            return sources.Answer.absent(f"{internal}#{name} not found in {self.version} client jar")
-        # Unobfuscated: the member keeps its canonical name.
-        return sources.Answer.found(name)
-
-    def resolve_method(self, cls: str, name: str) -> sources.Answer:
-        return self._member(cls, "method", name)
-
-    def resolve_field(self, cls: str, name: str) -> sources.Answer:
-        return self._member(cls, "field", name)
-
-    def save(self) -> None:
-        if self.index is not None:
-            self.index.save()
+def _first_signature(spec: dict) -> "str | None":
+    """The first recorded descriptor of a member entry, whatever its shape."""
+    signatures = spec.get("signatures")
+    if isinstance(signatures, dict):
+        for namespace in namespaces.NAMESPACES:
+            if signatures.get(namespace):
+                return signatures[namespace]
+    return spec.get("signature")
 
 
 def find_local_jar(version: str) -> "str | None":
     candidates = [
         os.path.join(ROOT, "..", "analysis", f"client-{version}.jar"),
         os.path.join(CACHE, f"client-{version}.jar"),
-        os.path.join(ROOT, "..", "analysis", f"client-{version}.jar"),
     ]
     for candidate in candidates:
         if os.path.isfile(candidate):
@@ -189,58 +114,55 @@ def find_local_jar(version: str) -> "str | None":
     return None
 
 
-def build_table(version: str, kind: str, requirements: scan.Requirements,
-                manifest: sources.Manifest, report: dict, shape_hints: dict) -> dict:
-    source = build_source(version, kind, manifest, shape_hints)
+def build_table(version: str, resolver, requirements: scan.Requirements,
+                report: dict, shape_hints: dict) -> dict:
     classes = {}
     resolved = 0
     absent = []
-    overloads = []
     for canonical in sorted(requirements.classes):
-        class_answer = source.resolve_class(canonical)
-        if not class_answer.ok:
-            classes[canonical] = {"absent": True, "methods": {}, "fields": {}}
-            absent.append((canonical, None, class_answer.reason))
+        class_names = resolver.resolve_class(canonical)
+        if not class_names:
+            classes[canonical] = {"absent": True, "names": {}, "methods": {}, "fields": {}}
+            absent.append((canonical, None, f"no counterpart in {version}"))
             continue
         methods = {}
         fields = {}
         for name in sorted(requirements.methods[canonical]):
-            answer = source.resolve_method(canonical, name)
-            if answer.ok:
-                entry = {"name": answer.name}
-                if answer.signature is not None:
-                    entry["signature"] = answer.signature
-                # Forge 等环境用 SRG 名：与 obf 名一起写进表，运行期按 [obf, srg, canonical] 依次试。
-                if answer.srg is not None and answer.srg != answer.name:
-                    entry["srg"] = answer.srg
+            hint = shape_hints.get((canonical, name))
+            answer = resolver.resolve_method(canonical, name, hint)
+            if answer:
+                entry = {"names": {ns: name_ for ns, (name_, _) in answer.items()}}
+                signatures = {ns: sig for ns, (_, sig) in answer.items() if sig}
+                if signatures:
+                    entry["signatures"] = signatures
                 methods[name] = entry
                 resolved += 1
             else:
                 methods[name] = {"absent": True}
-                absent.append((canonical, name + "()", answer.reason))
-            if kind == "proguard" and source.overload_count(canonical, name) > 1:
-                overloads.append(f"{canonical}#{name}()")
+                absent.append((canonical, name + "()", f"{version}: unresolved"))
         for name in sorted(requirements.fields[canonical]):
-            answer = source.resolve_field(canonical, name)
-            if answer.ok:
-                entry = {"name": answer.name}
-                if answer.srg is not None and answer.srg != answer.name:
-                    entry["srg"] = answer.srg
+            answer = resolver.resolve_field(canonical, name)
+            if answer:
+                entry = {"names": {ns: name_ for ns, (name_, _) in answer.items()}}
+                descriptors = {ns: desc for ns, (_, desc) in answer.items() if desc}
+                if descriptors:
+                    entry["descriptors"] = descriptors
                 fields[name] = entry
                 resolved += 1
             else:
                 fields[name] = {"absent": True}
-                absent.append((canonical, name, answer.reason))
-        classes[canonical] = {"name": class_answer.name, "methods": methods, "fields": fields}
-    if isinstance(source, IdentitySource):
-        source.save()
-    elif isinstance(source, sources.ProguardSource):
-        source.close()
+                absent.append((canonical, name, f"{version}: unresolved"))
+        classes[canonical] = {"names": class_names, "methods": methods, "fields": fields}
+    save = getattr(resolver, "save", None)
+    if save is not None:
+        save()
     report["versions"][version] = {
         "classes": len(requirements.classes),
         "resolved": resolved,
         "absent": absent,
-        "overloads": overloads,
+        "namespaces": sorted(
+            {ns for entry in classes.values() for ns in (entry.get("names") or {})}
+        ),
     }
     return {"version": version, "classes": classes}
 
@@ -259,6 +181,12 @@ def table_path(version: str) -> str:
 
 
 def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
+    """Check the ``vanilla`` (obfuscated) names against the real client jar.
+
+    That namespace is the only one whose jar we can obtain: Fabric/Forge
+    installs are produced by the loader at launch, so their names are verified
+    against the mapping sources themselves, not a jar.
+    """
     jar = find_local_jar(version)
     if jar is None:
         return ([f"{version}: no local client jar"], 0, True)
@@ -268,7 +196,9 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
     for canonical, entry in table["classes"].items():
         if entry.get("absent"):
             continue
-        obf = entry["name"]
+        obf = (entry.get("names") or {}).get("vanilla")
+        if not obf:
+            continue
         internal = obf.replace(".", "/")
         if not index.exists(internal):
             problems.append(f"{version}: {canonical} -> {obf} not in jar")
@@ -276,18 +206,24 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
         for name, spec in entry["methods"].items():
             if spec.get("absent"):
                 continue
-            if not index.reachable(internal, "method", spec["name"], spec.get("signature")):
+            runtime = (spec.get("names") or {}).get("vanilla")
+            if not runtime:
+                continue
+            signature = (spec.get("signatures") or {}).get("vanilla")
+            if not index.reachable(internal, "method", runtime, signature):
                 problems.append(
-                    f"{version}: {canonical}.{name} -> {spec['name']}"
-                    f"{spec.get('signature', '')} not found on {obf}"
+                    f"{version}: {canonical}.{name} -> {runtime}{signature or ''} not found on {obf}"
                 )
             else:
                 checked += 1
         for name, spec in entry["fields"].items():
             if spec.get("absent"):
                 continue
-            if not index.reachable(internal, "field", spec["name"]):
-                problems.append(f"{version}: {canonical}.{name} -> {spec['name']} not found on {obf}")
+            runtime = (spec.get("names") or {}).get("vanilla")
+            if not runtime:
+                continue
+            if not index.reachable(internal, "field", runtime):
+                problems.append(f"{version}: {canonical}.{name} -> {runtime} not found on {obf}")
             else:
                 checked += 1
     index.save()
@@ -310,28 +246,37 @@ def main() -> int:
     requirements = scan.collect(CLIENT_SRC, CLASS_TYPE, REQUIREMENTS)
     manifest = sources.Manifest(CACHE)
     shape_hints = load_shape_hints()
+    fetch = namespaces.Fetch(CACHE)
 
-    versions = list(VERSIONS)
+    versions = release_versions(manifest)
     if args.only:
         wanted = {v.strip() for v in args.only.split(",")}
-        unknown = wanted - set(VERSIONS)
+        versions = [v for v in versions if v in wanted]
+        unknown = wanted - set(versions)
         if unknown:
             print(f"unknown versions: {sorted(unknown)}", file=sys.stderr)
             return 2
-        versions = [v for v in versions if v in wanted]
 
-    report = {"versions": {}}
+    report = {"versions": {}, "unsupported": []}
     stale = False
     failures = []
     for version in versions:
-        kind = VERSIONS[version]
-        table = build_table(version, kind, requirements, manifest, report, shape_hints)
+        local_jar = find_local_jar(version)
+        resolver = namespaces.build_resolver(
+            version, fetch, CACHE, manifest, VANILLA_ROOT, TOOLS, DEFAULT_JAVAP, local_jar
+        )
+        if resolver is None:
+            report["unsupported"].append(version)
+            print(f"{version:8} skipped  (no mapping source for this version)")
+            continue
+        table = build_table(version, resolver, requirements, report, shape_hints)
         text = render(table)
         path = table_path(version)
         info = report["versions"][version]
         print(
-            f"{version:8} {kind:8} classes={info['classes']:3} "
-            f"resolved={info['resolved']:4} absent={len(info['absent']):3}"
+            f"{version:8} classes={info['classes']:3} "
+            f"resolved={info['resolved']:4} absent={len(info['absent']):3} "
+            f"namespaces={','.join(info['namespaces'])}"
         )
         if args.javap:
             problems, checked, skipped = verify_javap(version, table)
@@ -359,15 +304,18 @@ def main() -> int:
 
     if args.report:
         for version in versions:
-            info = report["versions"][version]
+            info = report["versions"].get(version)
+            if info is None:
+                continue
             print(f"\n===== {version} — {len(info['absent'])} absent =====")
             for canonical, member, reason in info["absent"]:
                 where = canonical + ("#" + member if member else "")
                 print(f"  {where}: {reason}")
-            if info["overloads"]:
-                print(f"  (overloaded methods, deterministic pick applied: {len(info['overloads'])})")
-                for item in info["overloads"]:
-                    print(f"    {item}")
+        if report["unsupported"]:
+            print(f"\n===== no mapping source ({len(report['unsupported'])}) =====")
+            print("  " + ", ".join(report["unsupported"]))
+            print("  These are older than Mojang's official mappings (1.14.4) and have no"
+                  " alias bridge in tools/mapping/aliases-<version>.toml.")
 
     if failures:
         print(f"\n{len(failures)} javap problems", file=sys.stderr)

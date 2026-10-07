@@ -155,19 +155,21 @@ public final class TracersModule extends Module {
 
     /** 实体面是否存在：LivingEntity 类可解析即认为可用。 */
     private static boolean hasEntityFace(GameBridge bridge) {
-        try {
-            String mapped = bridge.mapping().className(ClassType.LIVING_ENTITY);
-            if (mapped == null) {
-                return false;
+        Object player = bridge.player();
+        ClassLoader loader = player != null && player.getClass().getClassLoader() != null
+                ? player.getClass().getClassLoader()
+                : TracersModule.class.getClassLoader();
+        // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
+        for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
+            try {
+                if (Class.forName(mapped, false, loader) != null) {
+                    return true;
+                }
+            } catch (Throwable t) {
+                // 该候选名在当前加载器里不可用：继续尝试下一个。
             }
-            Object player = bridge.player();
-            ClassLoader loader = player != null && player.getClass().getClassLoader() != null
-                    ? player.getClass().getClassLoader()
-                    : TracersModule.class.getClassLoader();
-            return Class.forName(mapped, false, loader) != null;
-        } catch (Throwable t) {
-            return false;
         }
+        return false;
     }
 
     /**
@@ -218,19 +220,19 @@ public final class TracersModule extends Module {
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */
     private static boolean isLiving(GameBridge bridge, Object entity) {
-        try {
-            String mapped = bridge.mapping().className(ClassType.LIVING_ENTITY);
-            if (mapped == null) {
-                return false;
+        ClassLoader loader = entity.getClass().getClassLoader() != null
+                ? entity.getClass().getClassLoader()
+                : TracersModule.class.getClassLoader();
+        // 候选名逐个试，第一个加载成功者即该环境下的 LivingEntity。
+        for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
+            try {
+                Class<?> living = Class.forName(mapped, false, loader);
+                return living.isInstance(entity);
+            } catch (Throwable t) {
+                // 该候选名在当前加载器里不可用：继续尝试下一个。
             }
-            ClassLoader loader = entity.getClass().getClassLoader() != null
-                    ? entity.getClass().getClassLoader()
-                    : TracersModule.class.getClassLoader();
-            Class<?> living = Class.forName(mapped, false, loader);
-            return living.isInstance(entity);
-        } catch (Throwable t) {
-            return false;
         }
+        return false;
     }
 
     /** 本地玩家到实体的距离；实体坐标面未落地前恒返回负数（调用方视为不过滤）。 */

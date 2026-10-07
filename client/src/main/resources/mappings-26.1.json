@@ -1,0 +1,2008 @@
+{
+    "version": "26.1",
+    "classes": {
+        "com/mojang/blaze3d/platform/InputConstants": {
+            "names": {
+                "vanilla": "com.mojang.blaze3d.platform.InputConstants",
+                "fabric": "com.mojang.blaze3d.platform.InputConstants",
+                "forge": "com.mojang.blaze3d.platform.InputConstants",
+                "neoforge": "com.mojang.blaze3d.platform.InputConstants"
+            },
+            "methods": {
+                "isKeyDown": {
+                    "names": {
+                        "vanilla": "isKeyDown",
+                        "fabric": "isKeyDown",
+                        "forge": "isKeyDown",
+                        "neoforge": "isKeyDown"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "com/mojang/blaze3d/platform/InputConstants$Key": {
+            "names": {
+                "vanilla": "com.mojang.blaze3d.platform.InputConstants$Key",
+                "fabric": "com.mojang.blaze3d.platform.InputConstants$Key",
+                "forge": "com.mojang.blaze3d.platform.InputConstants$Key",
+                "neoforge": "com.mojang.blaze3d.platform.InputConstants$Key"
+            },
+            "methods": {
+                "getValue": {
+                    "names": {
+                        "vanilla": "getValue",
+                        "fabric": "getValue",
+                        "forge": "getValue",
+                        "neoforge": "getValue"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "com/mojang/blaze3d/platform/InputConstants$Type": {
+            "names": {
+                "vanilla": "com.mojang.blaze3d.platform.InputConstants$Type",
+                "fabric": "com.mojang.blaze3d.platform.InputConstants$Type",
+                "forge": "com.mojang.blaze3d.platform.InputConstants$Type",
+                "neoforge": "com.mojang.blaze3d.platform.InputConstants$Type"
+            },
+            "methods": {
+                "getOrCreate": {
+                    "names": {
+                        "vanilla": "getOrCreate",
+                        "fabric": "getOrCreate",
+                        "forge": "getOrCreate",
+                        "neoforge": "getOrCreate"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "com/mojang/blaze3d/platform/Window": {
+            "names": {
+                "vanilla": "com.mojang.blaze3d.platform.Window",
+                "fabric": "com.mojang.blaze3d.platform.Window",
+                "forge": "com.mojang.blaze3d.platform.Window",
+                "neoforge": "com.mojang.blaze3d.platform.Window"
+            },
+            "methods": {
+                "getHeight": {
+                    "names": {
+                        "vanilla": "getHeight",
+                        "fabric": "getHeight",
+                        "forge": "getHeight",
+                        "neoforge": "getHeight"
+                    }
+                },
+                "getWidth": {
+                    "names": {
+                        "vanilla": "getWidth",
+                        "fabric": "getWidth",
+                        "forge": "getWidth",
+                        "neoforge": "getWidth"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/KeyMapping": {
+            "names": {
+                "vanilla": "net.minecraft.client.KeyMapping",
+                "fabric": "net.minecraft.client.KeyMapping",
+                "forge": "net.minecraft.client.KeyMapping",
+                "neoforge": "net.minecraft.client.KeyMapping"
+            },
+            "methods": {
+                "isDown": {
+                    "names": {
+                        "vanilla": "isDown",
+                        "fabric": "isDown",
+                        "forge": "isDown",
+                        "neoforge": "isDown"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/Minecraft": {
+            "names": {
+                "vanilla": "net.minecraft.client.Minecraft",
+                "fabric": "net.minecraft.client.Minecraft",
+                "forge": "net.minecraft.client.Minecraft",
+                "neoforge": "net.minecraft.client.Minecraft"
+            },
+            "methods": {
+                "displayGuiScreen": {
+                    "absent": true
+                },
+                "getInstance": {
+                    "names": {
+                        "vanilla": "getInstance",
+                        "fabric": "getInstance",
+                        "forge": "getInstance",
+                        "neoforge": "getInstance"
+                    }
+                },
+                "getWindow": {
+                    "names": {
+                        "vanilla": "getWindow",
+                        "fabric": "getWindow",
+                        "forge": "getWindow",
+                        "neoforge": "getWindow"
+                    }
+                },
+                "renderFrame": {
+                    "names": {
+                        "vanilla": "renderFrame",
+                        "fabric": "renderFrame",
+                        "forge": "renderFrame",
+                        "neoforge": "renderFrame"
+                    }
+                },
+                "runGameLoop": {
+                    "absent": true
+                },
+                "runTick": {
+                    "names": {
+                        "vanilla": "runTick",
+                        "fabric": "runTick",
+                        "forge": "runTick",
+                        "neoforge": "runTick"
+                    }
+                }
+            },
+            "fields": {
+                "currentScreen": {
+                    "absent": true
+                },
+                "displayHeight": {
+                    "absent": true
+                },
+                "displayWidth": {
+                    "absent": true
+                },
+                "font": {
+                    "names": {
+                        "vanilla": "font",
+                        "fabric": "font",
+                        "forge": "font",
+                        "neoforge": "font"
+                    }
+                },
+                "fontRenderer": {
+                    "absent": true
+                },
+                "gameMode": {
+                    "names": {
+                        "vanilla": "gameMode",
+                        "fabric": "gameMode",
+                        "forge": "gameMode",
+                        "neoforge": "gameMode"
+                    }
+                },
+                "gameRenderer": {
+                    "names": {
+                        "vanilla": "gameRenderer",
+                        "fabric": "gameRenderer",
+                        "forge": "gameRenderer",
+                        "neoforge": "gameRenderer"
+                    }
+                },
+                "gui": {
+                    "names": {
+                        "vanilla": "gui",
+                        "fabric": "gui",
+                        "forge": "gui",
+                        "neoforge": "gui"
+                    }
+                },
+                "inGameHasFocus": {
+                    "absent": true
+                },
+                "level": {
+                    "names": {
+                        "vanilla": "level",
+                        "fabric": "level",
+                        "forge": "level",
+                        "neoforge": "level"
+                    }
+                },
+                "mouseHandler": {
+                    "names": {
+                        "vanilla": "mouseHandler",
+                        "fabric": "mouseHandler",
+                        "forge": "mouseHandler",
+                        "neoforge": "mouseHandler"
+                    }
+                },
+                "options": {
+                    "names": {
+                        "vanilla": "options",
+                        "fabric": "options",
+                        "forge": "options",
+                        "neoforge": "options"
+                    }
+                },
+                "player": {
+                    "names": {
+                        "vanilla": "player",
+                        "fabric": "player",
+                        "forge": "player",
+                        "neoforge": "player"
+                    }
+                },
+                "screen": {
+                    "names": {
+                        "vanilla": "screen",
+                        "fabric": "screen",
+                        "forge": "screen",
+                        "neoforge": "screen"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/MouseHandler": {
+            "names": {
+                "vanilla": "net.minecraft.client.MouseHandler",
+                "fabric": "net.minecraft.client.MouseHandler",
+                "forge": "net.minecraft.client.MouseHandler",
+                "neoforge": "net.minecraft.client.MouseHandler"
+            },
+            "methods": {
+                "grabMouse": {
+                    "names": {
+                        "vanilla": "grabMouse",
+                        "fabric": "grabMouse",
+                        "forge": "grabMouse",
+                        "neoforge": "grabMouse"
+                    }
+                },
+                "isLeftPressed": {
+                    "names": {
+                        "vanilla": "isLeftPressed",
+                        "fabric": "isLeftPressed",
+                        "forge": "isLeftPressed",
+                        "neoforge": "isLeftPressed"
+                    }
+                },
+                "isMouseGrabbed": {
+                    "names": {
+                        "vanilla": "isMouseGrabbed",
+                        "fabric": "isMouseGrabbed",
+                        "forge": "isMouseGrabbed",
+                        "neoforge": "isMouseGrabbed"
+                    }
+                },
+                "releaseMouse": {
+                    "names": {
+                        "vanilla": "releaseMouse",
+                        "fabric": "releaseMouse",
+                        "forge": "releaseMouse",
+                        "neoforge": "releaseMouse"
+                    }
+                },
+                "xpos": {
+                    "names": {
+                        "vanilla": "xpos",
+                        "fabric": "xpos",
+                        "forge": "xpos",
+                        "neoforge": "xpos"
+                    }
+                },
+                "ypos": {
+                    "names": {
+                        "vanilla": "ypos",
+                        "fabric": "ypos",
+                        "forge": "ypos",
+                        "neoforge": "ypos"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/Options": {
+            "names": {
+                "vanilla": "net.minecraft.client.Options",
+                "fabric": "net.minecraft.client.Options",
+                "forge": "net.minecraft.client.Options",
+                "neoforge": "net.minecraft.client.Options"
+            },
+            "methods": {},
+            "fields": {
+                "fov": {
+                    "names": {
+                        "vanilla": "fov",
+                        "fabric": "fov",
+                        "forge": "fov",
+                        "neoforge": "fov"
+                    }
+                },
+                "gamma": {
+                    "names": {
+                        "vanilla": "gamma",
+                        "fabric": "gamma",
+                        "forge": "gamma",
+                        "neoforge": "gamma"
+                    }
+                },
+                "sensitivity": {
+                    "names": {
+                        "vanilla": "sensitivity",
+                        "fabric": "sensitivity",
+                        "forge": "sensitivity",
+                        "neoforge": "sensitivity"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/gui/Font": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.Font",
+                "fabric": "net.minecraft.client.gui.Font",
+                "forge": "net.minecraft.client.gui.Font",
+                "neoforge": "net.minecraft.client.gui.Font"
+            },
+            "methods": {
+                "width": {
+                    "names": {
+                        "vanilla": "width",
+                        "fabric": "width",
+                        "forge": "width",
+                        "neoforge": "width"
+                    }
+                }
+            },
+            "fields": {
+                "lineHeight": {
+                    "names": {
+                        "vanilla": "lineHeight",
+                        "fabric": "lineHeight",
+                        "forge": "lineHeight",
+                        "neoforge": "lineHeight"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/gui/FontRenderer": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/Gui": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.Gui",
+                "fabric": "net.minecraft.client.gui.Gui",
+                "forge": "net.minecraft.client.gui.Gui",
+                "neoforge": "net.minecraft.client.gui.Gui"
+            },
+            "methods": {
+                "drawRect": {
+                    "absent": true
+                },
+                "extractRenderState": {
+                    "names": {
+                        "vanilla": "extractRenderState",
+                        "fabric": "extractRenderState",
+                        "forge": "extractRenderState",
+                        "neoforge": "extractRenderState"
+                    }
+                },
+                "render": {
+                    "absent": true
+                },
+                "renderGameOverlay": {
+                    "absent": true
+                }
+            },
+            "fields": {
+                "hud": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/client/gui/GuiGraphics": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/GuiGraphicsExtractor": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.GuiGraphicsExtractor",
+                "fabric": "net.minecraft.client.gui.GuiGraphicsExtractor",
+                "forge": "net.minecraft.client.gui.GuiGraphicsExtractor",
+                "neoforge": "net.minecraft.client.gui.GuiGraphicsExtractor"
+            },
+            "methods": {
+                "disableScissor": {
+                    "names": {
+                        "vanilla": "disableScissor",
+                        "fabric": "disableScissor",
+                        "forge": "disableScissor",
+                        "neoforge": "disableScissor"
+                    }
+                },
+                "enableScissor": {
+                    "names": {
+                        "vanilla": "enableScissor",
+                        "fabric": "enableScissor",
+                        "forge": "enableScissor",
+                        "neoforge": "enableScissor"
+                    }
+                },
+                "fill": {
+                    "names": {
+                        "vanilla": "fill",
+                        "fabric": "fill",
+                        "forge": "fill",
+                        "neoforge": "fill"
+                    }
+                },
+                "text": {
+                    "names": {
+                        "vanilla": "text",
+                        "fabric": "text",
+                        "forge": "text",
+                        "neoforge": "text"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/gui/Hud": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/screens/ChatScreen": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.screens.ChatScreen",
+                "fabric": "net.minecraft.client.gui.screens.ChatScreen",
+                "forge": "net.minecraft.client.gui.screens.ChatScreen",
+                "neoforge": "net.minecraft.client.gui.screens.ChatScreen"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/screens/PauseScreen": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.screens.PauseScreen",
+                "fabric": "net.minecraft.client.gui.screens.PauseScreen",
+                "forge": "net.minecraft.client.gui.screens.PauseScreen",
+                "neoforge": "net.minecraft.client.gui.screens.PauseScreen"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/screens/Screen": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.screens.Screen",
+                "fabric": "net.minecraft.client.gui.screens.Screen",
+                "forge": "net.minecraft.client.gui.screens.Screen",
+                "neoforge": "net.minecraft.client.gui.screens.Screen"
+            },
+            "methods": {
+                "render": {
+                    "absent": true
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/gui/screens/inventory/AbstractContainerScreen": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.screens.inventory.AbstractContainerScreen",
+                "fabric": "net.minecraft.client.gui.screens.inventory.AbstractContainerScreen",
+                "forge": "net.minecraft.client.gui.screens.inventory.AbstractContainerScreen",
+                "neoforge": "net.minecraft.client.gui.screens.inventory.AbstractContainerScreen"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/screens/inventory/CraftingScreen": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.screens.inventory.CraftingScreen",
+                "fabric": "net.minecraft.client.gui.screens.inventory.CraftingScreen",
+                "forge": "net.minecraft.client.gui.screens.inventory.CraftingScreen",
+                "neoforge": "net.minecraft.client.gui.screens.inventory.CraftingScreen"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/screens/inventory/CreativeModeInventoryScreen": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen",
+                "fabric": "net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen",
+                "forge": "net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen",
+                "neoforge": "net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/screens/inventory/InventoryScreen": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.screens.inventory.InventoryScreen",
+                "fabric": "net.minecraft.client.gui.screens.inventory.InventoryScreen",
+                "forge": "net.minecraft.client.gui.screens.inventory.InventoryScreen",
+                "neoforge": "net.minecraft.client.gui.screens.inventory.InventoryScreen"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/multiplayer/ClientLevel": {
+            "names": {
+                "vanilla": "net.minecraft.client.multiplayer.ClientLevel",
+                "fabric": "net.minecraft.client.multiplayer.ClientLevel",
+                "forge": "net.minecraft.client.multiplayer.ClientLevel",
+                "neoforge": "net.minecraft.client.multiplayer.ClientLevel"
+            },
+            "methods": {
+                "entitiesForRendering": {
+                    "names": {
+                        "vanilla": "entitiesForRendering",
+                        "fabric": "entitiesForRendering",
+                        "forge": "entitiesForRendering",
+                        "neoforge": "entitiesForRendering"
+                    }
+                },
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "getBlockState",
+                        "fabric": "getBlockState",
+                        "forge": "getBlockState",
+                        "neoforge": "getBlockState"
+                    }
+                },
+                "getChunk": {
+                    "names": {
+                        "vanilla": "getChunk",
+                        "fabric": "getChunk",
+                        "forge": "getChunk",
+                        "neoforge": "getChunk"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
+            "names": {
+                "vanilla": "net.minecraft.client.multiplayer.MultiPlayerGameMode",
+                "fabric": "net.minecraft.client.multiplayer.MultiPlayerGameMode",
+                "forge": "net.minecraft.client.multiplayer.MultiPlayerGameMode",
+                "neoforge": "net.minecraft.client.multiplayer.MultiPlayerGameMode"
+            },
+            "methods": {
+                "attack": {
+                    "names": {
+                        "vanilla": "attack",
+                        "fabric": "attack",
+                        "forge": "attack",
+                        "neoforge": "attack"
+                    }
+                },
+                "continueDestroyBlock": {
+                    "names": {
+                        "vanilla": "continueDestroyBlock",
+                        "fabric": "continueDestroyBlock",
+                        "forge": "continueDestroyBlock",
+                        "neoforge": "continueDestroyBlock"
+                    }
+                },
+                "startDestroyBlock": {
+                    "names": {
+                        "vanilla": "startDestroyBlock",
+                        "fabric": "startDestroyBlock",
+                        "forge": "startDestroyBlock",
+                        "neoforge": "startDestroyBlock"
+                    }
+                },
+                "stopDestroyBlock": {
+                    "names": {
+                        "vanilla": "stopDestroyBlock",
+                        "fabric": "stopDestroyBlock",
+                        "forge": "stopDestroyBlock",
+                        "neoforge": "stopDestroyBlock"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/multiplayer/PlayerInfo": {
+            "names": {
+                "vanilla": "net.minecraft.client.multiplayer.PlayerInfo",
+                "fabric": "net.minecraft.client.multiplayer.PlayerInfo",
+                "forge": "net.minecraft.client.multiplayer.PlayerInfo",
+                "neoforge": "net.minecraft.client.multiplayer.PlayerInfo"
+            },
+            "methods": {},
+            "fields": {
+                "gameMode": {
+                    "names": {
+                        "vanilla": "gameMode",
+                        "fabric": "gameMode",
+                        "forge": "gameMode",
+                        "neoforge": "gameMode"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/player/LocalPlayer": {
+            "names": {
+                "vanilla": "net.minecraft.client.player.LocalPlayer",
+                "fabric": "net.minecraft.client.player.LocalPlayer",
+                "forge": "net.minecraft.client.player.LocalPlayer",
+                "neoforge": "net.minecraft.client.player.LocalPlayer"
+            },
+            "methods": {
+                "distanceToSqr": {
+                    "names": {
+                        "vanilla": "distanceToSqr",
+                        "fabric": "distanceToSqr",
+                        "forge": "distanceToSqr",
+                        "neoforge": "distanceToSqr"
+                    }
+                },
+                "getEyePosition": {
+                    "names": {
+                        "vanilla": "getEyePosition",
+                        "fabric": "getEyePosition",
+                        "forge": "getEyePosition",
+                        "neoforge": "getEyePosition"
+                    }
+                },
+                "getHealth": {
+                    "names": {
+                        "vanilla": "getHealth",
+                        "fabric": "getHealth",
+                        "forge": "getHealth",
+                        "neoforge": "getHealth"
+                    }
+                },
+                "getId": {
+                    "names": {
+                        "vanilla": "getId",
+                        "fabric": "getId",
+                        "forge": "getId",
+                        "neoforge": "getId"
+                    }
+                },
+                "getMaxHealth": {
+                    "names": {
+                        "vanilla": "getMaxHealth",
+                        "fabric": "getMaxHealth",
+                        "forge": "getMaxHealth",
+                        "neoforge": "getMaxHealth"
+                    }
+                },
+                "getName": {
+                    "names": {
+                        "vanilla": "getName",
+                        "fabric": "getName",
+                        "forge": "getName",
+                        "neoforge": "getName"
+                    }
+                },
+                "getSpeed": {
+                    "names": {
+                        "vanilla": "getSpeed",
+                        "fabric": "getSpeed",
+                        "forge": "getSpeed",
+                        "neoforge": "getSpeed"
+                    }
+                },
+                "isShiftKeyDown": {
+                    "names": {
+                        "vanilla": "isShiftKeyDown",
+                        "fabric": "isShiftKeyDown",
+                        "forge": "isShiftKeyDown",
+                        "neoforge": "isShiftKeyDown"
+                    }
+                },
+                "isSprinting": {
+                    "names": {
+                        "vanilla": "isSprinting",
+                        "fabric": "isSprinting",
+                        "forge": "isSprinting",
+                        "neoforge": "isSprinting"
+                    }
+                },
+                "isUsingItem": {
+                    "names": {
+                        "vanilla": "isUsingItem",
+                        "fabric": "isUsingItem",
+                        "forge": "isUsingItem",
+                        "neoforge": "isUsingItem"
+                    }
+                },
+                "position": {
+                    "names": {
+                        "vanilla": "position",
+                        "fabric": "position",
+                        "forge": "position",
+                        "neoforge": "position"
+                    }
+                },
+                "respawnPlayer": {
+                    "absent": true
+                },
+                "setPos": {
+                    "names": {
+                        "vanilla": "setPos",
+                        "fabric": "setPos",
+                        "forge": "setPos",
+                        "neoforge": "setPos"
+                    }
+                },
+                "setSprinting": {
+                    "names": {
+                        "vanilla": "setSprinting",
+                        "fabric": "setSprinting",
+                        "forge": "setSprinting",
+                        "neoforge": "setSprinting"
+                    }
+                },
+                "swing": {
+                    "names": {
+                        "vanilla": "swing",
+                        "fabric": "swing",
+                        "forge": "swing",
+                        "neoforge": "swing"
+                    }
+                }
+            },
+            "fields": {
+                "fallDistance": {
+                    "names": {
+                        "vanilla": "fallDistance",
+                        "fabric": "fallDistance",
+                        "forge": "fallDistance",
+                        "neoforge": "fallDistance"
+                    }
+                },
+                "jumping": {
+                    "names": {
+                        "vanilla": "jumping",
+                        "fabric": "jumping",
+                        "forge": "jumping",
+                        "neoforge": "jumping"
+                    }
+                },
+                "noPhysics": {
+                    "names": {
+                        "vanilla": "noPhysics",
+                        "fabric": "noPhysics",
+                        "forge": "noPhysics",
+                        "neoforge": "noPhysics"
+                    }
+                },
+                "playerInfo": {
+                    "names": {
+                        "vanilla": "playerInfo",
+                        "fabric": "playerInfo",
+                        "forge": "playerInfo",
+                        "neoforge": "playerInfo"
+                    }
+                },
+                "tickCount": {
+                    "names": {
+                        "vanilla": "tickCount",
+                        "fabric": "tickCount",
+                        "forge": "tickCount",
+                        "neoforge": "tickCount"
+                    }
+                },
+                "xRotO": {
+                    "names": {
+                        "vanilla": "xRotO",
+                        "fabric": "xRotO",
+                        "forge": "xRotO",
+                        "neoforge": "xRotO"
+                    }
+                },
+                "xxa": {
+                    "names": {
+                        "vanilla": "xxa",
+                        "fabric": "xxa",
+                        "forge": "xxa",
+                        "neoforge": "xxa"
+                    }
+                },
+                "yRotO": {
+                    "names": {
+                        "vanilla": "yRotO",
+                        "fabric": "yRotO",
+                        "forge": "yRotO",
+                        "neoforge": "yRotO"
+                    }
+                },
+                "zza": {
+                    "names": {
+                        "vanilla": "zza",
+                        "fabric": "zza",
+                        "forge": "zza",
+                        "neoforge": "zza"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/player/RemotePlayer": {
+            "names": {
+                "vanilla": "net.minecraft.client.player.RemotePlayer",
+                "fabric": "net.minecraft.client.player.RemotePlayer",
+                "forge": "net.minecraft.client.player.RemotePlayer",
+                "neoforge": "net.minecraft.client.player.RemotePlayer"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/renderer/GameRenderer": {
+            "names": {
+                "vanilla": "net.minecraft.client.renderer.GameRenderer",
+                "fabric": "net.minecraft.client.renderer.GameRenderer",
+                "forge": "net.minecraft.client.renderer.GameRenderer",
+                "neoforge": "net.minecraft.client.renderer.GameRenderer"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/renderer/state/gui/GuiRenderState": {
+            "names": {
+                "vanilla": "net.minecraft.client.renderer.state.gui.GuiRenderState",
+                "fabric": "net.minecraft.client.renderer.state.gui.GuiRenderState",
+                "forge": "net.minecraft.client.renderer.state.gui.GuiRenderState",
+                "neoforge": "net.minecraft.client.renderer.state.gui.GuiRenderState"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/settings/GameSettings": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/settings/KeyBinding": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/core/BlockPos": {
+            "names": {
+                "vanilla": "net.minecraft.core.BlockPos",
+                "fabric": "net.minecraft.core.BlockPos",
+                "forge": "net.minecraft.core.BlockPos",
+                "neoforge": "net.minecraft.core.BlockPos"
+            },
+            "methods": {
+                "getX": {
+                    "names": {
+                        "vanilla": "getX",
+                        "fabric": "getX",
+                        "forge": "getX",
+                        "neoforge": "getX"
+                    }
+                },
+                "getY": {
+                    "names": {
+                        "vanilla": "getY",
+                        "fabric": "getY",
+                        "forge": "getY",
+                        "neoforge": "getY"
+                    }
+                },
+                "getZ": {
+                    "names": {
+                        "vanilla": "getZ",
+                        "fabric": "getZ",
+                        "forge": "getZ",
+                        "neoforge": "getZ"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/core/Direction": {
+            "names": {
+                "vanilla": "net.minecraft.core.Direction",
+                "fabric": "net.minecraft.core.Direction",
+                "forge": "net.minecraft.core.Direction",
+                "neoforge": "net.minecraft.core.Direction"
+            },
+            "methods": {},
+            "fields": {
+                "DOWN": {
+                    "names": {
+                        "vanilla": "DOWN",
+                        "fabric": "DOWN",
+                        "forge": "DOWN",
+                        "neoforge": "DOWN"
+                    }
+                },
+                "EAST": {
+                    "names": {
+                        "vanilla": "EAST",
+                        "fabric": "EAST",
+                        "forge": "EAST",
+                        "neoforge": "EAST"
+                    }
+                },
+                "NORTH": {
+                    "names": {
+                        "vanilla": "NORTH",
+                        "fabric": "NORTH",
+                        "forge": "NORTH",
+                        "neoforge": "NORTH"
+                    }
+                },
+                "SOUTH": {
+                    "names": {
+                        "vanilla": "SOUTH",
+                        "fabric": "SOUTH",
+                        "forge": "SOUTH",
+                        "neoforge": "SOUTH"
+                    }
+                },
+                "UP": {
+                    "names": {
+                        "vanilla": "UP",
+                        "fabric": "UP",
+                        "forge": "UP",
+                        "neoforge": "UP"
+                    }
+                },
+                "WEST": {
+                    "names": {
+                        "vanilla": "WEST",
+                        "fabric": "WEST",
+                        "forge": "WEST",
+                        "neoforge": "WEST"
+                    }
+                }
+            }
+        },
+        "net/minecraft/core/Vec3i": {
+            "names": {
+                "vanilla": "net.minecraft.core.Vec3i",
+                "fabric": "net.minecraft.core.Vec3i",
+                "forge": "net.minecraft.core.Vec3i",
+                "neoforge": "net.minecraft.core.Vec3i"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/chat/Component": {
+            "names": {
+                "vanilla": "net.minecraft.network.chat.Component",
+                "fabric": "net.minecraft.network.chat.Component",
+                "forge": "net.minecraft.network.chat.Component",
+                "neoforge": "net.minecraft.network.chat.Component"
+            },
+            "methods": {
+                "getString": {
+                    "names": {
+                        "vanilla": "getString",
+                        "fabric": "getString",
+                        "forge": "getString",
+                        "neoforge": "getString"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket",
+                "forge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Pos": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Pos",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Pos",
+                "forge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Pos",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Pos"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$PosRot": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$PosRot",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$PosRot",
+                "forge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$PosRot",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$PosRot"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Rot": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Rot",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Rot",
+                "forge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Rot",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Rot"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$StatusOnly": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly",
+                "forge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffect": {
+            "names": {
+                "vanilla": "net.minecraft.world.effect.MobEffect",
+                "fabric": "net.minecraft.world.effect.MobEffect",
+                "forge": "net.minecraft.world.effect.MobEffect",
+                "neoforge": "net.minecraft.world.effect.MobEffect"
+            },
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/world/effect/MobEffectInstance": {
+            "names": {
+                "vanilla": "net.minecraft.world.effect.MobEffectInstance",
+                "fabric": "net.minecraft.world.effect.MobEffectInstance",
+                "forge": "net.minecraft.world.effect.MobEffectInstance",
+                "neoforge": "net.minecraft.world.effect.MobEffectInstance"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/entity/Entity": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.Entity",
+                "fabric": "net.minecraft.world.entity.Entity",
+                "forge": "net.minecraft.world.entity.Entity",
+                "neoforge": "net.minecraft.world.entity.Entity"
+            },
+            "methods": {
+                "distanceToSqr": {
+                    "names": {
+                        "vanilla": "distanceToSqr",
+                        "fabric": "distanceToSqr",
+                        "forge": "distanceToSqr",
+                        "neoforge": "distanceToSqr"
+                    }
+                },
+                "getEyePosition": {
+                    "names": {
+                        "vanilla": "getEyePosition",
+                        "fabric": "getEyePosition",
+                        "forge": "getEyePosition",
+                        "neoforge": "getEyePosition"
+                    }
+                },
+                "getId": {
+                    "names": {
+                        "vanilla": "getId",
+                        "fabric": "getId",
+                        "forge": "getId",
+                        "neoforge": "getId"
+                    }
+                },
+                "getName": {
+                    "names": {
+                        "vanilla": "getName",
+                        "fabric": "getName",
+                        "forge": "getName",
+                        "neoforge": "getName"
+                    }
+                },
+                "isShiftKeyDown": {
+                    "names": {
+                        "vanilla": "isShiftKeyDown",
+                        "fabric": "isShiftKeyDown",
+                        "forge": "isShiftKeyDown",
+                        "neoforge": "isShiftKeyDown"
+                    }
+                },
+                "isSprinting": {
+                    "names": {
+                        "vanilla": "isSprinting",
+                        "fabric": "isSprinting",
+                        "forge": "isSprinting",
+                        "neoforge": "isSprinting"
+                    }
+                },
+                "position": {
+                    "names": {
+                        "vanilla": "position",
+                        "fabric": "position",
+                        "forge": "position",
+                        "neoforge": "position"
+                    }
+                },
+                "setPos": {
+                    "names": {
+                        "vanilla": "setPos",
+                        "fabric": "setPos",
+                        "forge": "setPos",
+                        "neoforge": "setPos"
+                    }
+                },
+                "setSprinting": {
+                    "names": {
+                        "vanilla": "setSprinting",
+                        "fabric": "setSprinting",
+                        "forge": "setSprinting",
+                        "neoforge": "setSprinting"
+                    }
+                }
+            },
+            "fields": {
+                "fallDistance": {
+                    "names": {
+                        "vanilla": "fallDistance",
+                        "fabric": "fallDistance",
+                        "forge": "fallDistance",
+                        "neoforge": "fallDistance"
+                    }
+                },
+                "isDead": {
+                    "absent": true
+                },
+                "noPhysics": {
+                    "names": {
+                        "vanilla": "noPhysics",
+                        "fabric": "noPhysics",
+                        "forge": "noPhysics",
+                        "neoforge": "noPhysics"
+                    }
+                },
+                "tickCount": {
+                    "names": {
+                        "vanilla": "tickCount",
+                        "fabric": "tickCount",
+                        "forge": "tickCount",
+                        "neoforge": "tickCount"
+                    }
+                },
+                "xRotO": {
+                    "names": {
+                        "vanilla": "xRotO",
+                        "fabric": "xRotO",
+                        "forge": "xRotO",
+                        "neoforge": "xRotO"
+                    }
+                },
+                "yRotO": {
+                    "names": {
+                        "vanilla": "yRotO",
+                        "fabric": "yRotO",
+                        "forge": "yRotO",
+                        "neoforge": "yRotO"
+                    }
+                }
+            }
+        },
+        "net/minecraft/world/entity/LivingEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.LivingEntity",
+                "fabric": "net.minecraft.world.entity.LivingEntity",
+                "forge": "net.minecraft.world.entity.LivingEntity",
+                "neoforge": "net.minecraft.world.entity.LivingEntity"
+            },
+            "methods": {
+                "addEffect": {
+                    "names": {
+                        "vanilla": "addEffect",
+                        "fabric": "addEffect",
+                        "forge": "addEffect",
+                        "neoforge": "addEffect"
+                    }
+                },
+                "distanceToSqr": {
+                    "names": {
+                        "vanilla": "distanceToSqr",
+                        "fabric": "distanceToSqr",
+                        "forge": "distanceToSqr",
+                        "neoforge": "distanceToSqr"
+                    }
+                },
+                "getEyePosition": {
+                    "names": {
+                        "vanilla": "getEyePosition",
+                        "fabric": "getEyePosition",
+                        "forge": "getEyePosition",
+                        "neoforge": "getEyePosition"
+                    }
+                },
+                "getHealth": {
+                    "names": {
+                        "vanilla": "getHealth",
+                        "fabric": "getHealth",
+                        "forge": "getHealth",
+                        "neoforge": "getHealth"
+                    }
+                },
+                "getId": {
+                    "names": {
+                        "vanilla": "getId",
+                        "fabric": "getId",
+                        "forge": "getId",
+                        "neoforge": "getId"
+                    }
+                },
+                "getMaxHealth": {
+                    "names": {
+                        "vanilla": "getMaxHealth",
+                        "fabric": "getMaxHealth",
+                        "forge": "getMaxHealth",
+                        "neoforge": "getMaxHealth"
+                    }
+                },
+                "getName": {
+                    "names": {
+                        "vanilla": "getName",
+                        "fabric": "getName",
+                        "forge": "getName",
+                        "neoforge": "getName"
+                    }
+                },
+                "getSpeed": {
+                    "names": {
+                        "vanilla": "getSpeed",
+                        "fabric": "getSpeed",
+                        "forge": "getSpeed",
+                        "neoforge": "getSpeed"
+                    }
+                },
+                "isShiftKeyDown": {
+                    "names": {
+                        "vanilla": "isShiftKeyDown",
+                        "fabric": "isShiftKeyDown",
+                        "forge": "isShiftKeyDown",
+                        "neoforge": "isShiftKeyDown"
+                    }
+                },
+                "isSprinting": {
+                    "names": {
+                        "vanilla": "isSprinting",
+                        "fabric": "isSprinting",
+                        "forge": "isSprinting",
+                        "neoforge": "isSprinting"
+                    }
+                },
+                "position": {
+                    "names": {
+                        "vanilla": "position",
+                        "fabric": "position",
+                        "forge": "position",
+                        "neoforge": "position"
+                    }
+                },
+                "setPos": {
+                    "names": {
+                        "vanilla": "setPos",
+                        "fabric": "setPos",
+                        "forge": "setPos",
+                        "neoforge": "setPos"
+                    }
+                },
+                "setSprinting": {
+                    "names": {
+                        "vanilla": "setSprinting",
+                        "fabric": "setSprinting",
+                        "forge": "setSprinting",
+                        "neoforge": "setSprinting"
+                    }
+                },
+                "swing": {
+                    "names": {
+                        "vanilla": "swing",
+                        "fabric": "swing",
+                        "forge": "swing",
+                        "neoforge": "swing"
+                    }
+                }
+            },
+            "fields": {
+                "fallDistance": {
+                    "names": {
+                        "vanilla": "fallDistance",
+                        "fabric": "fallDistance",
+                        "forge": "fallDistance",
+                        "neoforge": "fallDistance"
+                    }
+                },
+                "jumping": {
+                    "names": {
+                        "vanilla": "jumping",
+                        "fabric": "jumping",
+                        "forge": "jumping",
+                        "neoforge": "jumping"
+                    }
+                },
+                "noPhysics": {
+                    "names": {
+                        "vanilla": "noPhysics",
+                        "fabric": "noPhysics",
+                        "forge": "noPhysics",
+                        "neoforge": "noPhysics"
+                    }
+                },
+                "tickCount": {
+                    "names": {
+                        "vanilla": "tickCount",
+                        "fabric": "tickCount",
+                        "forge": "tickCount",
+                        "neoforge": "tickCount"
+                    }
+                },
+                "xRotO": {
+                    "names": {
+                        "vanilla": "xRotO",
+                        "fabric": "xRotO",
+                        "forge": "xRotO",
+                        "neoforge": "xRotO"
+                    }
+                },
+                "xxa": {
+                    "names": {
+                        "vanilla": "xxa",
+                        "fabric": "xxa",
+                        "forge": "xxa",
+                        "neoforge": "xxa"
+                    }
+                },
+                "yRotO": {
+                    "names": {
+                        "vanilla": "yRotO",
+                        "fabric": "yRotO",
+                        "forge": "yRotO",
+                        "neoforge": "yRotO"
+                    }
+                },
+                "zza": {
+                    "names": {
+                        "vanilla": "zza",
+                        "fabric": "zza",
+                        "forge": "zza",
+                        "neoforge": "zza"
+                    }
+                }
+            }
+        },
+        "net/minecraft/world/entity/Mob": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.Mob",
+                "fabric": "net.minecraft.world.entity.Mob",
+                "forge": "net.minecraft.world.entity.Mob",
+                "neoforge": "net.minecraft.world.entity.Mob"
+            },
+            "methods": {
+                "distanceToSqr": {
+                    "names": {
+                        "vanilla": "distanceToSqr",
+                        "fabric": "distanceToSqr",
+                        "forge": "distanceToSqr",
+                        "neoforge": "distanceToSqr"
+                    }
+                },
+                "getEyePosition": {
+                    "names": {
+                        "vanilla": "getEyePosition",
+                        "fabric": "getEyePosition",
+                        "forge": "getEyePosition",
+                        "neoforge": "getEyePosition"
+                    }
+                },
+                "getHealth": {
+                    "names": {
+                        "vanilla": "getHealth",
+                        "fabric": "getHealth",
+                        "forge": "getHealth",
+                        "neoforge": "getHealth"
+                    }
+                },
+                "getId": {
+                    "names": {
+                        "vanilla": "getId",
+                        "fabric": "getId",
+                        "forge": "getId",
+                        "neoforge": "getId"
+                    }
+                },
+                "getMaxHealth": {
+                    "names": {
+                        "vanilla": "getMaxHealth",
+                        "fabric": "getMaxHealth",
+                        "forge": "getMaxHealth",
+                        "neoforge": "getMaxHealth"
+                    }
+                },
+                "getName": {
+                    "names": {
+                        "vanilla": "getName",
+                        "fabric": "getName",
+                        "forge": "getName",
+                        "neoforge": "getName"
+                    }
+                },
+                "getSpeed": {
+                    "names": {
+                        "vanilla": "getSpeed",
+                        "fabric": "getSpeed",
+                        "forge": "getSpeed",
+                        "neoforge": "getSpeed"
+                    }
+                },
+                "isShiftKeyDown": {
+                    "names": {
+                        "vanilla": "isShiftKeyDown",
+                        "fabric": "isShiftKeyDown",
+                        "forge": "isShiftKeyDown",
+                        "neoforge": "isShiftKeyDown"
+                    }
+                },
+                "isSprinting": {
+                    "names": {
+                        "vanilla": "isSprinting",
+                        "fabric": "isSprinting",
+                        "forge": "isSprinting",
+                        "neoforge": "isSprinting"
+                    }
+                },
+                "position": {
+                    "names": {
+                        "vanilla": "position",
+                        "fabric": "position",
+                        "forge": "position",
+                        "neoforge": "position"
+                    }
+                },
+                "setPos": {
+                    "names": {
+                        "vanilla": "setPos",
+                        "fabric": "setPos",
+                        "forge": "setPos",
+                        "neoforge": "setPos"
+                    }
+                },
+                "setSprinting": {
+                    "names": {
+                        "vanilla": "setSprinting",
+                        "fabric": "setSprinting",
+                        "forge": "setSprinting",
+                        "neoforge": "setSprinting"
+                    }
+                },
+                "swing": {
+                    "names": {
+                        "vanilla": "swing",
+                        "fabric": "swing",
+                        "forge": "swing",
+                        "neoforge": "swing"
+                    }
+                }
+            },
+            "fields": {
+                "fallDistance": {
+                    "names": {
+                        "vanilla": "fallDistance",
+                        "fabric": "fallDistance",
+                        "forge": "fallDistance",
+                        "neoforge": "fallDistance"
+                    }
+                },
+                "jumping": {
+                    "names": {
+                        "vanilla": "jumping",
+                        "fabric": "jumping",
+                        "forge": "jumping",
+                        "neoforge": "jumping"
+                    }
+                },
+                "noPhysics": {
+                    "names": {
+                        "vanilla": "noPhysics",
+                        "fabric": "noPhysics",
+                        "forge": "noPhysics",
+                        "neoforge": "noPhysics"
+                    }
+                },
+                "tickCount": {
+                    "names": {
+                        "vanilla": "tickCount",
+                        "fabric": "tickCount",
+                        "forge": "tickCount",
+                        "neoforge": "tickCount"
+                    }
+                },
+                "xRotO": {
+                    "names": {
+                        "vanilla": "xRotO",
+                        "fabric": "xRotO",
+                        "forge": "xRotO",
+                        "neoforge": "xRotO"
+                    }
+                },
+                "xxa": {
+                    "names": {
+                        "vanilla": "xxa",
+                        "fabric": "xxa",
+                        "forge": "xxa",
+                        "neoforge": "xxa"
+                    }
+                },
+                "yRotO": {
+                    "names": {
+                        "vanilla": "yRotO",
+                        "fabric": "yRotO",
+                        "forge": "yRotO",
+                        "neoforge": "yRotO"
+                    }
+                },
+                "zza": {
+                    "names": {
+                        "vanilla": "zza",
+                        "fabric": "zza",
+                        "forge": "zza",
+                        "neoforge": "zza"
+                    }
+                }
+            }
+        },
+        "net/minecraft/world/entity/player/Inventory": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.player.Inventory",
+                "fabric": "net.minecraft.world.entity.player.Inventory",
+                "forge": "net.minecraft.world.entity.player.Inventory",
+                "neoforge": "net.minecraft.world.entity.player.Inventory"
+            },
+            "methods": {
+                "getItem": {
+                    "names": {
+                        "vanilla": "getItem",
+                        "fabric": "getItem",
+                        "forge": "getItem",
+                        "neoforge": "getItem"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/entity/player/Player": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.player.Player",
+                "fabric": "net.minecraft.world.entity.player.Player",
+                "forge": "net.minecraft.world.entity.player.Player",
+                "neoforge": "net.minecraft.world.entity.player.Player"
+            },
+            "methods": {
+                "distanceToSqr": {
+                    "names": {
+                        "vanilla": "distanceToSqr",
+                        "fabric": "distanceToSqr",
+                        "forge": "distanceToSqr",
+                        "neoforge": "distanceToSqr"
+                    }
+                },
+                "getEyePosition": {
+                    "names": {
+                        "vanilla": "getEyePosition",
+                        "fabric": "getEyePosition",
+                        "forge": "getEyePosition",
+                        "neoforge": "getEyePosition"
+                    }
+                },
+                "getHealth": {
+                    "names": {
+                        "vanilla": "getHealth",
+                        "fabric": "getHealth",
+                        "forge": "getHealth",
+                        "neoforge": "getHealth"
+                    }
+                },
+                "getId": {
+                    "names": {
+                        "vanilla": "getId",
+                        "fabric": "getId",
+                        "forge": "getId",
+                        "neoforge": "getId"
+                    }
+                },
+                "getMaxHealth": {
+                    "names": {
+                        "vanilla": "getMaxHealth",
+                        "fabric": "getMaxHealth",
+                        "forge": "getMaxHealth",
+                        "neoforge": "getMaxHealth"
+                    }
+                },
+                "getName": {
+                    "names": {
+                        "vanilla": "getName",
+                        "fabric": "getName",
+                        "forge": "getName",
+                        "neoforge": "getName"
+                    }
+                },
+                "getSpeed": {
+                    "names": {
+                        "vanilla": "getSpeed",
+                        "fabric": "getSpeed",
+                        "forge": "getSpeed",
+                        "neoforge": "getSpeed"
+                    }
+                },
+                "isShiftKeyDown": {
+                    "names": {
+                        "vanilla": "isShiftKeyDown",
+                        "fabric": "isShiftKeyDown",
+                        "forge": "isShiftKeyDown",
+                        "neoforge": "isShiftKeyDown"
+                    }
+                },
+                "isSprinting": {
+                    "names": {
+                        "vanilla": "isSprinting",
+                        "fabric": "isSprinting",
+                        "forge": "isSprinting",
+                        "neoforge": "isSprinting"
+                    }
+                },
+                "isUsingItem": {
+                    "names": {
+                        "vanilla": "isUsingItem",
+                        "fabric": "isUsingItem",
+                        "forge": "isUsingItem",
+                        "neoforge": "isUsingItem"
+                    }
+                },
+                "position": {
+                    "names": {
+                        "vanilla": "position",
+                        "fabric": "position",
+                        "forge": "position",
+                        "neoforge": "position"
+                    }
+                },
+                "setPos": {
+                    "names": {
+                        "vanilla": "setPos",
+                        "fabric": "setPos",
+                        "forge": "setPos",
+                        "neoforge": "setPos"
+                    }
+                },
+                "setSprinting": {
+                    "names": {
+                        "vanilla": "setSprinting",
+                        "fabric": "setSprinting",
+                        "forge": "setSprinting",
+                        "neoforge": "setSprinting"
+                    }
+                },
+                "swing": {
+                    "names": {
+                        "vanilla": "swing",
+                        "fabric": "swing",
+                        "forge": "swing",
+                        "neoforge": "swing"
+                    }
+                }
+            },
+            "fields": {
+                "containerMenu": {
+                    "names": {
+                        "vanilla": "containerMenu",
+                        "fabric": "containerMenu",
+                        "forge": "containerMenu",
+                        "neoforge": "containerMenu"
+                    }
+                },
+                "fallDistance": {
+                    "names": {
+                        "vanilla": "fallDistance",
+                        "fabric": "fallDistance",
+                        "forge": "fallDistance",
+                        "neoforge": "fallDistance"
+                    }
+                },
+                "jumping": {
+                    "names": {
+                        "vanilla": "jumping",
+                        "fabric": "jumping",
+                        "forge": "jumping",
+                        "neoforge": "jumping"
+                    }
+                },
+                "noPhysics": {
+                    "names": {
+                        "vanilla": "noPhysics",
+                        "fabric": "noPhysics",
+                        "forge": "noPhysics",
+                        "neoforge": "noPhysics"
+                    }
+                },
+                "tickCount": {
+                    "names": {
+                        "vanilla": "tickCount",
+                        "fabric": "tickCount",
+                        "forge": "tickCount",
+                        "neoforge": "tickCount"
+                    }
+                },
+                "xRotO": {
+                    "names": {
+                        "vanilla": "xRotO",
+                        "fabric": "xRotO",
+                        "forge": "xRotO",
+                        "neoforge": "xRotO"
+                    }
+                },
+                "xxa": {
+                    "names": {
+                        "vanilla": "xxa",
+                        "fabric": "xxa",
+                        "forge": "xxa",
+                        "neoforge": "xxa"
+                    }
+                },
+                "yRotO": {
+                    "names": {
+                        "vanilla": "yRotO",
+                        "fabric": "yRotO",
+                        "forge": "yRotO",
+                        "neoforge": "yRotO"
+                    }
+                },
+                "zza": {
+                    "names": {
+                        "vanilla": "zza",
+                        "fabric": "zza",
+                        "forge": "zza",
+                        "neoforge": "zza"
+                    }
+                }
+            }
+        },
+        "net/minecraft/world/inventory/AbstractContainerMenu": {
+            "names": {
+                "vanilla": "net.minecraft.world.inventory.AbstractContainerMenu",
+                "fabric": "net.minecraft.world.inventory.AbstractContainerMenu",
+                "forge": "net.minecraft.world.inventory.AbstractContainerMenu",
+                "neoforge": "net.minecraft.world.inventory.AbstractContainerMenu"
+            },
+            "methods": {
+                "getItems": {
+                    "names": {
+                        "vanilla": "getItems",
+                        "fabric": "getItems",
+                        "forge": "getItems",
+                        "neoforge": "getItems"
+                    }
+                }
+            },
+            "fields": {
+                "containerId": {
+                    "names": {
+                        "vanilla": "containerId",
+                        "fabric": "containerId",
+                        "forge": "containerId",
+                        "neoforge": "containerId"
+                    }
+                }
+            }
+        },
+        "net/minecraft/world/item/Item": {
+            "names": {
+                "vanilla": "net.minecraft.world.item.Item",
+                "fabric": "net.minecraft.world.item.Item",
+                "forge": "net.minecraft.world.item.Item",
+                "neoforge": "net.minecraft.world.item.Item"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/ItemStack": {
+            "names": {
+                "vanilla": "net.minecraft.world.item.ItemStack",
+                "fabric": "net.minecraft.world.item.ItemStack",
+                "forge": "net.minecraft.world.item.ItemStack",
+                "neoforge": "net.minecraft.world.item.ItemStack"
+            },
+            "methods": {
+                "getItem": {
+                    "names": {
+                        "vanilla": "getItem",
+                        "fabric": "getItem",
+                        "forge": "getItem",
+                        "neoforge": "getItem"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/item/Items": {
+            "names": {
+                "vanilla": "net.minecraft.world.item.Items",
+                "fabric": "net.minecraft.world.item.Items",
+                "forge": "net.minecraft.world.item.Items",
+                "neoforge": "net.minecraft.world.item.Items"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/GameType": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.GameType",
+                "fabric": "net.minecraft.world.level.GameType",
+                "forge": "net.minecraft.world.level.GameType",
+                "neoforge": "net.minecraft.world.level.GameType"
+            },
+            "methods": {},
+            "fields": {
+                "SPECTATOR": {
+                    "names": {
+                        "vanilla": "SPECTATOR",
+                        "fabric": "SPECTATOR",
+                        "forge": "SPECTATOR",
+                        "neoforge": "SPECTATOR"
+                    }
+                }
+            }
+        },
+        "net/minecraft/world/level/LevelReader": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.LevelReader",
+                "fabric": "net.minecraft.world.level.LevelReader",
+                "forge": "net.minecraft.world.level.LevelReader",
+                "neoforge": "net.minecraft.world.level.LevelReader"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/BlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.BlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.BlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.BlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.BlockEntity"
+            },
+            "methods": {
+                "getBlockPos": {
+                    "names": {
+                        "vanilla": "getBlockPos",
+                        "fabric": "getBlockPos",
+                        "forge": "getBlockPos",
+                        "neoforge": "getBlockPos"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/ChestBlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.ChestBlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.ChestBlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.ChestBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.ChestBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/EnderChestBlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.EnderChestBlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.EnderChestBlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.EnderChestBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.EnderChestBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/state/BlockState": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.state.BlockState",
+                "fabric": "net.minecraft.world.level.block.state.BlockState",
+                "forge": "net.minecraft.world.level.block.state.BlockState",
+                "neoforge": "net.minecraft.world.level.block.state.BlockState"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/chunk/LevelChunk": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.chunk.LevelChunk",
+                "fabric": "net.minecraft.world.level.chunk.LevelChunk",
+                "forge": "net.minecraft.world.level.chunk.LevelChunk",
+                "neoforge": "net.minecraft.world.level.chunk.LevelChunk"
+            },
+            "methods": {
+                "getBlockEntities": {
+                    "names": {
+                        "vanilla": "getBlockEntities",
+                        "fabric": "getBlockEntities",
+                        "forge": "getBlockEntities",
+                        "neoforge": "getBlockEntities"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/phys/BlockHitResult": {
+            "names": {
+                "vanilla": "net.minecraft.world.phys.BlockHitResult",
+                "fabric": "net.minecraft.world.phys.BlockHitResult",
+                "forge": "net.minecraft.world.phys.BlockHitResult",
+                "neoforge": "net.minecraft.world.phys.BlockHitResult"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/phys/Vec3": {
+            "names": {
+                "vanilla": "net.minecraft.world.phys.Vec3",
+                "fabric": "net.minecraft.world.phys.Vec3",
+                "forge": "net.minecraft.world.phys.Vec3",
+                "neoforge": "net.minecraft.world.phys.Vec3"
+            },
+            "methods": {},
+            "fields": {
+                "x": {
+                    "names": {
+                        "vanilla": "x",
+                        "fabric": "x",
+                        "forge": "x",
+                        "neoforge": "x"
+                    }
+                },
+                "y": {
+                    "names": {
+                        "vanilla": "y",
+                        "fabric": "y",
+                        "forge": "y",
+                        "neoforge": "y"
+                    }
+                },
+                "z": {
+                    "names": {
+                        "vanilla": "z",
+                        "fabric": "z",
+                        "forge": "z",
+                        "neoforge": "z"
+                    }
+                }
+            }
+        }
+    }
+}

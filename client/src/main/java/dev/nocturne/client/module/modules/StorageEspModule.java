@@ -155,22 +155,24 @@ public final class StorageEspModule extends Module {
     }
 
     /**
-     * 方块实体面是否存在（任一证据即可）：映射表有描述符，或运行时能解析出类。
+     * 方块实体面是否存在：映射表给的候选类名里有任意一个能在当前加载器里解析出来即可。
      */
     private static boolean hasBlockEntityFace(GameBridge bridge) {
-        try {
-            String mapped = bridge.mapping().className(ClassType.BLOCK_ENTITY);
-            if (mapped == null) {
-                return false;
+        Object player = bridge.player();
+        ClassLoader loader = player != null && player.getClass().getClassLoader() != null
+                ? player.getClass().getClassLoader()
+                : StorageEspModule.class.getClassLoader();
+        // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
+        for (String mapped : bridge.mapping().classNameCandidates(ClassType.BLOCK_ENTITY)) {
+            try {
+                if (Class.forName(mapped, false, loader) != null) {
+                    return true;
+                }
+            } catch (Throwable t) {
+                // 该候选名在当前加载器里不可用：继续尝试下一个。
             }
-            Object player = bridge.player();
-            ClassLoader loader = player != null && player.getClass().getClassLoader() != null
-                    ? player.getClass().getClassLoader()
-                    : StorageEspModule.class.getClassLoader();
-            return Class.forName(mapped, false, loader) != null;
-        } catch (Throwable t) {
-            return false;
         }
+        return false;
     }
 
     /**

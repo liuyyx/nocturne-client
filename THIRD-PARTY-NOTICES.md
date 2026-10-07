@@ -75,3 +75,20 @@ family 名是 `.PingFang SC`，即**苹果苹方字体**——苹果的字体许
 | JUnit 5（`org.junit.jupiter`、`org.junit.platform`） | EPL-2.0 | 测试 |
 
 > GPL-3.0 与 Apache-2.0 / EPL-2.0 兼容；分发时保留各自的许可与版权声明即可。
+
+---
+
+## 3. 映射数据来源（只在生成期使用；产物是衍生事实）
+
+`client/src/main/resources/mappings-<版本>.json` 由 `tools/mapping/` 离线生成，
+输入来自下列上游（下载物只落在 gitignored 的 `tools/mapping/cache/`，**不进仓库、不进 jar**）。
+
+| 上游 | 用途 | 许可 |
+|---|---|---|
+| Mojang 官方 `client_mappings`（`piston-meta.mojang.com`） | 1.14.4+ 的 canonical ↔ 混淆名 | Minecraft EULA；版权头明确**不得原样再分发完整映射文件**，故只分发由它派生的 JSON（类名/成员名/描述符） |
+| [MinecraftForge/MCPConfig](https://github.com/MinecraftForge/MCPConfig) | 1.12.2+ 的 SRG（Forge 运行期成员名） | 修改版 zlib（© 2018 Forge Development LLC）；允许创建与发布衍生作品，但须以**不同的 group 与名称**发布——本项目只发布自己命名的衍生 JSON，并在此致谢 |
+| [FabricMC/intermediary](https://github.com/FabricMC/intermediary) | 1.14–1.21.11 的 intermediary（Fabric 运行期名） | CC0-1.0 |
+| [Legacy-Fabric/Legacy-Intermediaries](https://github.com/Legacy-Fabric/Legacy-Intermediaries) | 1.8.2–1.13.2 的遗留 intermediary | CC0-1.0 |
+| 本机 MCP 资产（`OpenVape4.21/.../mappings/vanilla189`、`forge189` 等） | 1.8.9 / 1.12.2 的 SRG 与 MCP 人类名 | 随该工程一并提供，仅本地读取 |
+
+生成期还读取目标版本的官方 client jar（`javap` 取类继承链），同样只落在 `cache/`。

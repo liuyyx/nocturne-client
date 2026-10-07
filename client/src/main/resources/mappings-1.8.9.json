@@ -3,41 +3,64 @@
     "classes": {
         "com/mojang/blaze3d/platform/InputConstants": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "com/mojang/blaze3d/platform/InputConstants$Key": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "com/mojang/blaze3d/platform/InputConstants$Type": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "com/mojang/blaze3d/platform/Window": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/KeyMapping": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/Minecraft": {
-            "name": "ave",
+            "names": {
+                "vanilla": "ave",
+                "fabric": "net.minecraft.class_310",
+                "forge": "net.minecraft.client.Minecraft"
+            },
             "methods": {
                 "displayGuiScreen": {
-                    "name": "a",
-                    "signature": "(Laxu;)V",
-                    "srg": "func_147108_a"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1507",
+                        "forge": "func_147108_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Laxu;)V",
+                        "fabric": "(Lnet/minecraft/class_437;)V",
+                        "forge": "(Lnet/minecraft/client/gui/GuiScreen;)V"
+                    }
                 },
                 "getInstance": {
-                    "name": "A",
-                    "signature": "()Lave;",
-                    "srg": "func_71410_x"
+                    "names": {
+                        "vanilla": "A",
+                        "fabric": "method_1551",
+                        "forge": "func_71410_x"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lave;",
+                        "fabric": "()Lnet/minecraft/class_310;",
+                        "forge": "()Lnet/minecraft/client/Minecraft;"
+                    }
                 },
                 "getWindow": {
                     "absent": true
@@ -46,124 +69,218 @@
                     "absent": true
                 },
                 "runGameLoop": {
-                    "name": "av",
-                    "signature": "()V",
-                    "srg": "func_71411_J"
+                    "names": {
+                        "vanilla": "av",
+                        "fabric": "method_0_2281",
+                        "forge": "func_71411_J"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 },
                 "runTick": {
-                    "name": "s",
-                    "signature": "()V",
-                    "srg": "func_71407_l"
+                    "names": {
+                        "vanilla": "s",
+                        "fabric": "method_1574",
+                        "forge": "func_71407_l"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 }
             },
             "fields": {
                 "currentScreen": {
-                    "name": "m",
-                    "srg": "field_71462_r"
+                    "names": {
+                        "vanilla": "m",
+                        "fabric": "field_1755",
+                        "forge": "field_71462_r"
+                    }
                 },
                 "displayHeight": {
-                    "name": "e",
-                    "srg": "field_71440_d"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "field_0_2582",
+                        "forge": "field_71440_d"
+                    }
                 },
                 "displayWidth": {
-                    "name": "d",
-                    "srg": "field_71443_c"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_0_2581",
+                        "forge": "field_71443_c"
+                    }
                 },
                 "font": {
                     "absent": true
                 },
                 "fontRenderer": {
-                    "name": "k",
-                    "srg": "field_71466_p"
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "field_1772",
+                        "forge": "field_71466_p"
+                    }
                 },
                 "gameMode": {
-                    "name": "c",
-                    "srg": "field_71442_b"
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_1761",
+                        "forge": "field_71442_b"
+                    }
                 },
                 "gameRenderer": {
-                    "name": "o",
-                    "srg": "field_71460_t"
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "field_1773",
+                        "forge": "field_71460_t"
+                    }
                 },
                 "gui": {
-                    "name": "q",
-                    "srg": "field_71456_v"
+                    "names": {
+                        "vanilla": "q",
+                        "fabric": "field_1705",
+                        "forge": "field_71456_v"
+                    }
                 },
                 "inGameHasFocus": {
-                    "name": "w",
-                    "srg": "field_71415_G"
+                    "names": {
+                        "vanilla": "w",
+                        "fabric": "field_0_2600",
+                        "forge": "field_71415_G"
+                    }
                 },
                 "level": {
-                    "name": "f",
-                    "srg": "field_71441_e"
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "field_1687",
+                        "forge": "field_71441_e"
+                    }
                 },
                 "mouseHandler": {
                     "absent": true
                 },
                 "options": {
-                    "name": "t",
-                    "srg": "field_71474_y"
+                    "names": {
+                        "vanilla": "t",
+                        "fabric": "field_1690",
+                        "forge": "field_71474_y"
+                    }
                 },
                 "player": {
-                    "name": "h",
-                    "srg": "field_71439_g"
+                    "names": {
+                        "vanilla": "h",
+                        "fabric": "field_1724",
+                        "forge": "field_71439_g"
+                    }
                 },
                 "screen": {
-                    "name": "m",
-                    "srg": "field_71462_r"
+                    "names": {
+                        "vanilla": "m",
+                        "fabric": "field_1755",
+                        "forge": "field_71462_r"
+                    }
                 }
             }
         },
         "net/minecraft/client/MouseHandler": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/Options": {
-            "name": "avh",
+            "names": {
+                "vanilla": "avh",
+                "fabric": "net.minecraft.class_315",
+                "forge": "net.minecraft.client.settings.GameSettings"
+            },
             "methods": {},
             "fields": {
                 "fov": {
-                    "name": "aI",
-                    "srg": "field_74334_X"
+                    "names": {
+                        "vanilla": "aI",
+                        "fabric": "field_1826",
+                        "forge": "field_74334_X"
+                    }
                 },
                 "gamma": {
-                    "name": "aJ",
-                    "srg": "field_74333_Y"
+                    "names": {
+                        "vanilla": "aJ",
+                        "fabric": "field_1840",
+                        "forge": "field_74333_Y"
+                    }
                 },
                 "sensitivity": {
-                    "name": "a",
-                    "srg": "field_74341_c"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_1843",
+                        "forge": "field_74341_c"
+                    }
                 }
             }
         },
         "net/minecraft/client/gui/Font": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/FontRenderer": {
-            "name": "avn",
+            "names": {
+                "vanilla": "avn",
+                "fabric": "net.minecraft.class_0_681",
+                "forge": "net.minecraft.client.gui.FontRenderer"
+            },
             "methods": {
                 "drawString": {
-                    "name": "a",
-                    "signature": "(Ljava/lang/String;III)I",
-                    "srg": "func_78276_b"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_0_2385",
+                        "forge": "func_78276_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ljava/lang/String;III)I",
+                        "fabric": "(Ljava/lang/String;III)I",
+                        "forge": "(Ljava/lang/String;III)I"
+                    }
                 },
                 "drawStringWithShadow": {
-                    "name": "a",
-                    "signature": "(Ljava/lang/String;FFI)I",
-                    "srg": "func_175063_a"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_0_2382",
+                        "forge": "func_175063_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ljava/lang/String;FFI)I",
+                        "fabric": "(Ljava/lang/String;FFI)I",
+                        "forge": "(Ljava/lang/String;FFI)I"
+                    }
                 },
                 "getStringWidth": {
-                    "name": "a",
-                    "signature": "(Ljava/lang/String;)I",
-                    "srg": "func_78256_a"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_0_2381",
+                        "forge": "func_78256_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ljava/lang/String;)I",
+                        "fabric": "(Ljava/lang/String;)I",
+                        "forge": "(Ljava/lang/String;)I"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/client/gui/Gui": {
-            "name": "avo",
+            "names": {
+                "vanilla": "avo",
+                "fabric": "net.minecraft.class_329",
+                "forge": "net.minecraft.client.gui.GuiIngame"
+            },
             "methods": {
                 "drawRect": {
                     "absent": true
@@ -186,31 +303,46 @@
         },
         "net/minecraft/client/gui/GuiGraphics": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/GuiGraphicsExtractor": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/Hud": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/ChatScreen": {
-            "name": "awv",
+            "names": {
+                "vanilla": "awv",
+                "fabric": "net.minecraft.class_408",
+                "forge": "net.minecraft.client.gui.GuiChat"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/PauseScreen": {
-            "name": "axp",
+            "names": {
+                "vanilla": "axp",
+                "fabric": "net.minecraft.class_433",
+                "forge": "net.minecraft.client.gui.GuiIngameMenu"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/Screen": {
-            "name": "axu",
+            "names": {
+                "vanilla": "axu",
+                "fabric": "net.minecraft.class_437",
+                "forge": "net.minecraft.client.gui.GuiScreen"
+            },
             "methods": {
                 "render": {
                     "absent": true
@@ -219,864 +351,1757 @@
             "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/AbstractContainerScreen": {
-            "name": "ayl",
+            "names": {
+                "vanilla": "ayl",
+                "fabric": "net.minecraft.class_465",
+                "forge": "net.minecraft.client.gui.inventory.GuiContainer"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/CraftingScreen": {
-            "name": "ays",
+            "names": {
+                "vanilla": "ays",
+                "fabric": "net.minecraft.class_479",
+                "forge": "net.minecraft.client.gui.inventory.GuiCrafting"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/CreativeModeInventoryScreen": {
-            "name": "ayu",
+            "names": {
+                "vanilla": "ayu",
+                "fabric": "net.minecraft.class_481",
+                "forge": "net.minecraft.client.gui.inventory.GuiContainerCreative"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/InventoryScreen": {
-            "name": "azc",
+            "names": {
+                "vanilla": "azc",
+                "fabric": "net.minecraft.class_490",
+                "forge": "net.minecraft.client.gui.inventory.GuiInventory"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/multiplayer/ClientLevel": {
-            "name": "bdb",
+            "names": {
+                "vanilla": "bdb",
+                "fabric": "net.minecraft.class_638",
+                "forge": "net.minecraft.client.multiplayer.WorldClient"
+            },
             "methods": {
                 "entitiesForRendering": {
-                    "name": "E",
-                    "signature": "()Ljava/util/List;",
-                    "srg": "func_72910_y"
+                    "names": {
+                        "vanilla": "E",
+                        "fabric": "method_0_244",
+                        "forge": "func_72910_y"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/List;",
+                        "fabric": "()Ljava/util/List;",
+                        "forge": "()Ljava/util/List;"
+                    }
                 },
                 "getBlockState": {
-                    "name": "p",
-                    "signature": "(Lcj;)Lalz;",
-                    "srg": "func_180495_p"
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "method_8511",
+                        "forge": "func_180495_p"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcj;)Lalz;",
+                        "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_0_378;",
+                        "forge": "(Lnet/minecraft/util/BlockPos;)Lnet/minecraft/block/state/IBlockState;"
+                    }
                 },
                 "getChunk": {
-                    "name": "a",
-                    "signature": "(II)Lamy;",
-                    "srg": "func_72964_e"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_0_271",
+                        "forge": "func_72964_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(II)Lamy;",
+                        "fabric": "(II)Lnet/minecraft/class_2818;",
+                        "forge": "(II)Lnet/minecraft/world/chunk/Chunk;"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
-            "name": "bda",
+            "names": {
+                "vanilla": "bda",
+                "fabric": "net.minecraft.class_636",
+                "forge": "net.minecraft.client.multiplayer.PlayerControllerMP"
+            },
             "methods": {
                 "attack": {
-                    "name": "a",
-                    "signature": "(Lwn;Lpk;)V",
-                    "srg": "func_78764_a"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2918",
+                        "forge": "func_78764_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lwn;Lpk;)V",
+                        "fabric": "(Lnet/minecraft/class_1657;Lnet/minecraft/class_1297;)V",
+                        "forge": "(Lnet/minecraft/entity/player/EntityPlayer;Lnet/minecraft/entity/Entity;)V"
+                    }
                 },
                 "continueDestroyBlock": {
-                    "name": "c",
-                    "signature": "(Lcj;Lcq;)Z",
-                    "srg": "func_180512_c"
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_2902",
+                        "forge": "func_180512_c"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcj;Lcq;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;)Z",
+                        "forge": "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/util/EnumFacing;)Z"
+                    }
                 },
                 "startDestroyBlock": {
-                    "name": "b",
-                    "signature": "(Lcj;Lcq;)Z",
-                    "srg": "func_180511_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_2910",
+                        "forge": "func_180511_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcj;Lcq;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;)Z",
+                        "forge": "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/util/EnumFacing;)Z"
+                    }
                 },
                 "stopDestroyBlock": {
-                    "name": "c",
-                    "signature": "()V",
-                    "srg": "func_78767_c"
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_2925",
+                        "forge": "func_78767_c"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/PlayerInfo": {
-            "name": "bdc",
+            "names": {
+                "vanilla": "bdc",
+                "fabric": "net.minecraft.class_640",
+                "forge": "net.minecraft.client.network.NetworkPlayerInfo"
+            },
             "methods": {},
             "fields": {
                 "gameMode": {
-                    "name": "b",
-                    "srg": "field_178866_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_3744",
+                        "forge": "field_178866_b"
+                    }
                 }
             }
         },
         "net/minecraft/client/player/LocalPlayer": {
-            "name": "bew",
+            "names": {
+                "vanilla": "bew",
+                "fabric": "net.minecraft.class_746",
+                "forge": "net.minecraft.client.entity.EntityPlayerSP"
+            },
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
-                    "signature": "(DDD)D",
-                    "srg": "func_70092_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5649",
+                        "forge": "func_70092_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)D",
+                        "fabric": "(DDD)D",
+                        "forge": "(DDD)D"
+                    }
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;",
-                    "srg": "func_174824_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5836",
+                        "forge": "func_174824_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(F)Laui;",
+                        "fabric": "(F)Lnet/minecraft/class_243;",
+                        "forge": "(F)Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "getHealth": {
-                    "name": "bn",
-                    "signature": "()F",
-                    "srg": "func_110143_aJ"
+                    "names": {
+                        "vanilla": "bn",
+                        "fabric": "method_6032",
+                        "forge": "func_110143_aJ"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "getId": {
-                    "name": "F",
-                    "signature": "()I",
-                    "srg": "func_145782_y"
+                    "names": {
+                        "vanilla": "F",
+                        "fabric": "method_5628",
+                        "forge": "func_145782_y"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
                 },
                 "getMaxHealth": {
-                    "name": "bu",
-                    "signature": "()F",
-                    "srg": "func_110138_aP"
+                    "names": {
+                        "vanilla": "bu",
+                        "fabric": "method_6063",
+                        "forge": "func_110138_aP"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "getName": {
-                    "name": "e_",
-                    "signature": "()Ljava/lang/String;",
-                    "srg": "func_70005_c_"
+                    "names": {
+                        "vanilla": "e_",
+                        "fabric": "getName",
+                        "forge": "func_70005_c_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
                 },
                 "getSpeed": {
-                    "name": "bI",
-                    "signature": "()F",
-                    "srg": "func_70689_ay"
+                    "names": {
+                        "vanilla": "bI",
+                        "fabric": "method_6029",
+                        "forge": "func_70689_ay"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
-                    "signature": "()Z",
-                    "srg": "func_70093_af"
+                    "names": {
+                        "vanilla": "av",
+                        "fabric": "method_5715",
+                        "forge": "func_70093_af"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "isSprinting": {
-                    "name": "aw",
-                    "signature": "()Z",
-                    "srg": "func_70051_ag"
+                    "names": {
+                        "vanilla": "aw",
+                        "fabric": "method_5624",
+                        "forge": "func_70051_ag"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "isUsingItem": {
-                    "name": "bS",
-                    "signature": "()Z",
-                    "srg": "func_71039_bw"
+                    "names": {
+                        "vanilla": "bS",
+                        "fabric": "method_0_7991",
+                        "forge": "func_71039_bw"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "position": {
-                    "name": "d",
-                    "signature": "()Laui;",
-                    "srg": "func_174791_d"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5784",
+                        "forge": "func_174791_d"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laui;",
+                        "fabric": "()Lnet/minecraft/class_243;",
+                        "forge": "()Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "respawnPlayer": {
-                    "name": "cb",
-                    "signature": "()V",
-                    "srg": "func_71004_bE"
+                    "names": {
+                        "vanilla": "cb",
+                        "fabric": "respawnPlayer",
+                        "forge": "func_71004_bE"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 },
                 "setPos": {
-                    "name": "b",
-                    "signature": "(DDD)V",
-                    "srg": "func_70107_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_5814",
+                        "forge": "func_70107_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)V",
+                        "fabric": "(DDD)V",
+                        "forge": "(DDD)V"
+                    }
                 },
                 "setSprinting": {
-                    "name": "d",
-                    "signature": "(Z)V",
-                    "srg": "func_70031_b"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5728",
+                        "forge": "func_70031_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(Z)V",
+                        "fabric": "(Z)V",
+                        "forge": "(Z)V"
+                    }
                 },
                 "swing": {
-                    "name": "bw",
-                    "signature": "()V",
-                    "srg": "func_71038_i"
+                    "names": {
+                        "vanilla": "bw",
+                        "fabric": "method_6104",
+                        "forge": "func_71038_i"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 }
             },
             "fields": {
                 "fallDistance": {
-                    "name": "O",
-                    "srg": "field_70143_R"
+                    "names": {
+                        "vanilla": "O",
+                        "fabric": "field_6017",
+                        "forge": "field_70143_R"
+                    }
                 },
                 "jumping": {
-                    "name": "aY",
-                    "srg": "field_70703_bu"
+                    "names": {
+                        "vanilla": "aY",
+                        "fabric": "field_6282",
+                        "forge": "field_70703_bu"
+                    }
                 },
                 "noPhysics": {
-                    "name": "T",
-                    "srg": "field_70145_X"
+                    "names": {
+                        "vanilla": "T",
+                        "fabric": "field_5960",
+                        "forge": "field_70145_X"
+                    }
                 },
                 "playerInfo": {
-                    "name": "a",
-                    "srg": "field_175157_a"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_3901",
+                        "forge": "field_175157_a"
+                    }
                 },
                 "tickCount": {
-                    "name": "W",
-                    "srg": "field_70173_aa"
+                    "names": {
+                        "vanilla": "W",
+                        "fabric": "field_6012",
+                        "forge": "field_70173_aa"
+                    }
                 },
                 "xRotO": {
-                    "name": "B",
-                    "srg": "field_70127_C"
+                    "names": {
+                        "vanilla": "B",
+                        "fabric": "field_6004",
+                        "forge": "field_70127_C"
+                    }
                 },
                 "xxa": {
-                    "name": "aZ",
-                    "srg": "field_70702_br"
+                    "names": {
+                        "vanilla": "aZ",
+                        "fabric": "field_6212",
+                        "forge": "field_70702_br"
+                    }
                 },
                 "yRotO": {
-                    "name": "A",
-                    "srg": "field_70126_B"
+                    "names": {
+                        "vanilla": "A",
+                        "fabric": "field_5982",
+                        "forge": "field_70126_B"
+                    }
                 },
                 "zza": {
-                    "name": "ba",
-                    "srg": "field_70701_bs"
+                    "names": {
+                        "vanilla": "ba",
+                        "fabric": "field_6250",
+                        "forge": "field_70701_bs"
+                    }
                 }
             }
         },
         "net/minecraft/client/player/RemotePlayer": {
-            "name": "bex",
+            "names": {
+                "vanilla": "bex",
+                "fabric": "net.minecraft.class_745",
+                "forge": "net.minecraft.client.entity.EntityOtherPlayerMP"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/renderer/GameRenderer": {
-            "name": "bfk",
+            "names": {
+                "vanilla": "bfk",
+                "fabric": "net.minecraft.class_757",
+                "forge": "net.minecraft.client.renderer.EntityRenderer"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/renderer/state/gui/GuiRenderState": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/settings/GameSettings": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/client/settings/KeyBinding": {
             "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },
         "net/minecraft/core/BlockPos": {
-            "name": "cj",
+            "names": {
+                "vanilla": "cj",
+                "fabric": "net.minecraft.class_2338",
+                "forge": "net.minecraft.util.BlockPos"
+            },
             "methods": {
                 "getX": {
-                    "name": "n",
-                    "signature": "()I",
-                    "srg": "func_177958_n"
+                    "names": {
+                        "vanilla": "n",
+                        "fabric": "method_10263",
+                        "forge": "func_177958_n"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
                 },
                 "getY": {
-                    "name": "o",
-                    "signature": "()I",
-                    "srg": "func_177956_o"
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_10264",
+                        "forge": "func_177956_o"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
                 },
                 "getZ": {
-                    "name": "p",
-                    "signature": "()I",
-                    "srg": "func_177952_p"
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "method_10260",
+                        "forge": "func_177952_p"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/core/Direction": {
-            "name": "cq",
+            "names": {
+                "vanilla": "cq",
+                "fabric": "net.minecraft.class_2350",
+                "forge": "net.minecraft.util.EnumFacing"
+            },
             "methods": {},
             "fields": {
                 "DOWN": {
-                    "name": "a",
-                    "srg": "DOWN"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_11033",
+                        "forge": "DOWN"
+                    }
                 },
                 "EAST": {
-                    "name": "f",
-                    "srg": "EAST"
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "field_11034",
+                        "forge": "EAST"
+                    }
                 },
                 "NORTH": {
-                    "name": "c",
-                    "srg": "NORTH"
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_11043",
+                        "forge": "NORTH"
+                    }
                 },
                 "SOUTH": {
-                    "name": "d",
-                    "srg": "SOUTH"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_11035",
+                        "forge": "SOUTH"
+                    }
                 },
                 "UP": {
-                    "name": "b",
-                    "srg": "UP"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_11036",
+                        "forge": "UP"
+                    }
                 },
                 "WEST": {
-                    "name": "e",
-                    "srg": "WEST"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "field_11039",
+                        "forge": "WEST"
+                    }
                 }
             }
         },
         "net/minecraft/core/Vec3i": {
-            "name": "df",
+            "names": {
+                "vanilla": "df",
+                "fabric": "net.minecraft.class_2382",
+                "forge": "net.minecraft.util.Vec3i"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/chat/Component": {
-            "name": "eu",
+            "names": {
+                "vanilla": "eu",
+                "fabric": "net.minecraft.class_2561",
+                "forge": "net.minecraft.util.IChatComponent"
+            },
             "methods": {
                 "getString": {
-                    "name": "d",
-                    "signature": "()Ljava/lang/String;",
-                    "srg": "func_150254_d"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_10865",
+                        "forge": "func_150254_d"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket": {
-            "name": "gz",
+            "names": {
+                "vanilla": "gz",
+                "fabric": "net.minecraft.class_2703",
+                "forge": "net.minecraft.network.play.server.S38PacketPlayerListItem"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket": {
-            "name": "hm",
+            "names": {
+                "vanilla": "hm",
+                "fabric": "net.minecraft.class_2743",
+                "forge": "net.minecraft.network.play.server.S12PacketEntityVelocity"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket": {
-            "name": "ip",
+            "names": {
+                "vanilla": "ip",
+                "fabric": "net.minecraft.class_2828",
+                "forge": "net.minecraft.network.play.client.C03PacketPlayer"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Pos": {
-            "name": "ip$a",
+            "names": {
+                "vanilla": "ip$a",
+                "fabric": "net.minecraft.class_2828$class_2829",
+                "forge": "net.minecraft.network.play.client.C03PacketPlayer$C04PacketPlayerPosition"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$PosRot": {
-            "name": "ip$b",
+            "names": {
+                "vanilla": "ip$b",
+                "fabric": "net.minecraft.class_2828$class_2830",
+                "forge": "net.minecraft.network.play.client.C03PacketPlayer$C06PacketPlayerPosLook"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Rot": {
-            "name": "ip$c",
+            "names": {
+                "vanilla": "ip$c",
+                "fabric": "net.minecraft.class_2828$class_2831",
+                "forge": "net.minecraft.network.play.client.C03PacketPlayer$C05PacketPlayerLook"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$StatusOnly": {
-            "name": "ip",
+            "names": {
+                "vanilla": "ip",
+                "fabric": "net.minecraft.class_2828",
+                "forge": "net.minecraft.network.play.client.C03PacketPlayer"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/effect/MobEffect": {
-            "name": "pe",
+            "names": {
+                "vanilla": "pe",
+                "fabric": "net.minecraft.class_1291",
+                "forge": "net.minecraft.potion.Potion"
+            },
             "methods": {},
             "fields": {
                 "NIGHT_VISION": {
-                    "name": "r",
-                    "srg": "field_76439_r"
+                    "names": {
+                        "vanilla": "r",
+                        "fabric": "field_0_7291",
+                        "forge": "field_76439_r"
+                    }
                 }
             }
         },
         "net/minecraft/world/effect/MobEffectInstance": {
-            "name": "pf",
+            "names": {
+                "vanilla": "pf",
+                "fabric": "net.minecraft.class_1293",
+                "forge": "net.minecraft.potion.PotionEffect"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/entity/Entity": {
-            "name": "pk",
+            "names": {
+                "vanilla": "pk",
+                "fabric": "net.minecraft.class_1297",
+                "forge": "net.minecraft.entity.Entity"
+            },
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
-                    "signature": "(DDD)D",
-                    "srg": "func_70092_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5649",
+                        "forge": "func_70092_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)D",
+                        "fabric": "(DDD)D",
+                        "forge": "(DDD)D"
+                    }
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;",
-                    "srg": "func_174824_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5836",
+                        "forge": "func_174824_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(F)Laui;",
+                        "fabric": "(F)Lnet/minecraft/class_243;",
+                        "forge": "(F)Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "getId": {
-                    "name": "F",
-                    "signature": "()I",
-                    "srg": "func_145782_y"
+                    "names": {
+                        "vanilla": "F",
+                        "fabric": "method_5628",
+                        "forge": "func_145782_y"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
                 },
                 "getName": {
-                    "name": "e_",
-                    "signature": "()Ljava/lang/String;",
-                    "srg": "func_70005_c_"
+                    "names": {
+                        "vanilla": "e_",
+                        "fabric": "getName",
+                        "forge": "func_70005_c_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
-                    "signature": "()Z",
-                    "srg": "func_70093_af"
+                    "names": {
+                        "vanilla": "av",
+                        "fabric": "method_5715",
+                        "forge": "func_70093_af"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "isSprinting": {
-                    "name": "aw",
-                    "signature": "()Z",
-                    "srg": "func_70051_ag"
+                    "names": {
+                        "vanilla": "aw",
+                        "fabric": "method_5624",
+                        "forge": "func_70051_ag"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "position": {
-                    "name": "d",
-                    "signature": "()Laui;",
-                    "srg": "func_174791_d"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5784",
+                        "forge": "func_174791_d"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laui;",
+                        "fabric": "()Lnet/minecraft/class_243;",
+                        "forge": "()Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "setPos": {
-                    "name": "b",
-                    "signature": "(DDD)V",
-                    "srg": "func_70107_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_5814",
+                        "forge": "func_70107_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)V",
+                        "fabric": "(DDD)V",
+                        "forge": "(DDD)V"
+                    }
                 },
                 "setSprinting": {
-                    "name": "d",
-                    "signature": "(Z)V",
-                    "srg": "func_70031_b"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5728",
+                        "forge": "func_70031_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(Z)V",
+                        "fabric": "(Z)V",
+                        "forge": "(Z)V"
+                    }
                 }
             },
             "fields": {
                 "fallDistance": {
-                    "name": "O",
-                    "srg": "field_70143_R"
+                    "names": {
+                        "vanilla": "O",
+                        "fabric": "field_6017",
+                        "forge": "field_70143_R"
+                    }
                 },
                 "isDead": {
-                    "name": "I",
-                    "srg": "field_70128_L"
+                    "names": {
+                        "vanilla": "I",
+                        "fabric": "field_5988",
+                        "forge": "field_70128_L"
+                    }
                 },
                 "noPhysics": {
-                    "name": "T",
-                    "srg": "field_70145_X"
+                    "names": {
+                        "vanilla": "T",
+                        "fabric": "field_5960",
+                        "forge": "field_70145_X"
+                    }
                 },
                 "tickCount": {
-                    "name": "W",
-                    "srg": "field_70173_aa"
+                    "names": {
+                        "vanilla": "W",
+                        "fabric": "field_6012",
+                        "forge": "field_70173_aa"
+                    }
                 },
                 "xRotO": {
-                    "name": "B",
-                    "srg": "field_70127_C"
+                    "names": {
+                        "vanilla": "B",
+                        "fabric": "field_6004",
+                        "forge": "field_70127_C"
+                    }
                 },
                 "yRotO": {
-                    "name": "A",
-                    "srg": "field_70126_B"
+                    "names": {
+                        "vanilla": "A",
+                        "fabric": "field_5982",
+                        "forge": "field_70126_B"
+                    }
                 }
             }
         },
         "net/minecraft/world/entity/LivingEntity": {
-            "name": "pr",
+            "names": {
+                "vanilla": "pr",
+                "fabric": "net.minecraft.class_1309",
+                "forge": "net.minecraft.entity.EntityLivingBase"
+            },
             "methods": {
                 "addEffect": {
-                    "name": "c",
-                    "signature": "(Lpf;)V",
-                    "srg": "func_70690_d"
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_6092",
+                        "forge": "func_70690_d"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lpf;)V",
+                        "fabric": "(Lnet/minecraft/class_1293;)V",
+                        "forge": "(Lnet/minecraft/potion/PotionEffect;)V"
+                    }
                 },
                 "distanceToSqr": {
-                    "name": "e",
-                    "signature": "(DDD)D",
-                    "srg": "func_70092_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5649",
+                        "forge": "func_70092_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)D",
+                        "fabric": "(DDD)D",
+                        "forge": "(DDD)D"
+                    }
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;",
-                    "srg": "func_174824_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5836",
+                        "forge": "func_174824_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(F)Laui;",
+                        "fabric": "(F)Lnet/minecraft/class_243;",
+                        "forge": "(F)Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "getHealth": {
-                    "name": "bn",
-                    "signature": "()F",
-                    "srg": "func_110143_aJ"
+                    "names": {
+                        "vanilla": "bn",
+                        "fabric": "method_6032",
+                        "forge": "func_110143_aJ"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "getId": {
-                    "name": "F",
-                    "signature": "()I",
-                    "srg": "func_145782_y"
+                    "names": {
+                        "vanilla": "F",
+                        "fabric": "method_5628",
+                        "forge": "func_145782_y"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
                 },
                 "getMaxHealth": {
-                    "name": "bu",
-                    "signature": "()F",
-                    "srg": "func_110138_aP"
+                    "names": {
+                        "vanilla": "bu",
+                        "fabric": "method_6063",
+                        "forge": "func_110138_aP"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "getName": {
-                    "name": "e_",
-                    "signature": "()Ljava/lang/String;",
-                    "srg": "func_70005_c_"
+                    "names": {
+                        "vanilla": "e_",
+                        "fabric": "getName",
+                        "forge": "func_70005_c_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
                 },
                 "getSpeed": {
-                    "name": "bI",
-                    "signature": "()F",
-                    "srg": "func_70689_ay"
+                    "names": {
+                        "vanilla": "bI",
+                        "fabric": "method_6029",
+                        "forge": "func_70689_ay"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
-                    "signature": "()Z",
-                    "srg": "func_70093_af"
+                    "names": {
+                        "vanilla": "av",
+                        "fabric": "method_5715",
+                        "forge": "func_70093_af"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "isSprinting": {
-                    "name": "aw",
-                    "signature": "()Z",
-                    "srg": "func_70051_ag"
+                    "names": {
+                        "vanilla": "aw",
+                        "fabric": "method_5624",
+                        "forge": "func_70051_ag"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "position": {
-                    "name": "d",
-                    "signature": "()Laui;",
-                    "srg": "func_174791_d"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5784",
+                        "forge": "func_174791_d"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laui;",
+                        "fabric": "()Lnet/minecraft/class_243;",
+                        "forge": "()Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "setPos": {
-                    "name": "b",
-                    "signature": "(DDD)V",
-                    "srg": "func_70107_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_5814",
+                        "forge": "func_70107_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)V",
+                        "fabric": "(DDD)V",
+                        "forge": "(DDD)V"
+                    }
                 },
                 "setSprinting": {
-                    "name": "d",
-                    "signature": "(Z)V",
-                    "srg": "func_70031_b"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5728",
+                        "forge": "func_70031_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(Z)V",
+                        "fabric": "(Z)V",
+                        "forge": "(Z)V"
+                    }
                 },
                 "swing": {
-                    "name": "bw",
-                    "signature": "()V",
-                    "srg": "func_71038_i"
+                    "names": {
+                        "vanilla": "bw",
+                        "fabric": "method_6104",
+                        "forge": "func_71038_i"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 }
             },
             "fields": {
                 "fallDistance": {
-                    "name": "O",
-                    "srg": "field_70143_R"
+                    "names": {
+                        "vanilla": "O",
+                        "fabric": "field_6017",
+                        "forge": "field_70143_R"
+                    }
                 },
                 "jumping": {
-                    "name": "aY",
-                    "srg": "field_70703_bu"
+                    "names": {
+                        "vanilla": "aY",
+                        "fabric": "field_6282",
+                        "forge": "field_70703_bu"
+                    }
                 },
                 "noPhysics": {
-                    "name": "T",
-                    "srg": "field_70145_X"
+                    "names": {
+                        "vanilla": "T",
+                        "fabric": "field_5960",
+                        "forge": "field_70145_X"
+                    }
                 },
                 "tickCount": {
-                    "name": "W",
-                    "srg": "field_70173_aa"
+                    "names": {
+                        "vanilla": "W",
+                        "fabric": "field_6012",
+                        "forge": "field_70173_aa"
+                    }
                 },
                 "xRotO": {
-                    "name": "B",
-                    "srg": "field_70127_C"
+                    "names": {
+                        "vanilla": "B",
+                        "fabric": "field_6004",
+                        "forge": "field_70127_C"
+                    }
                 },
                 "xxa": {
-                    "name": "aZ",
-                    "srg": "field_70702_br"
+                    "names": {
+                        "vanilla": "aZ",
+                        "fabric": "field_6212",
+                        "forge": "field_70702_br"
+                    }
                 },
                 "yRotO": {
-                    "name": "A",
-                    "srg": "field_70126_B"
+                    "names": {
+                        "vanilla": "A",
+                        "fabric": "field_5982",
+                        "forge": "field_70126_B"
+                    }
                 },
                 "zza": {
-                    "name": "ba",
-                    "srg": "field_70701_bs"
+                    "names": {
+                        "vanilla": "ba",
+                        "fabric": "field_6250",
+                        "forge": "field_70701_bs"
+                    }
                 }
             }
         },
         "net/minecraft/world/entity/Mob": {
-            "name": "vv",
+            "names": {
+                "vanilla": "vv",
+                "fabric": "net.minecraft.class_1588",
+                "forge": "net.minecraft.entity.monster.EntityMob"
+            },
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
-                    "signature": "(DDD)D",
-                    "srg": "func_70092_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5649",
+                        "forge": "func_70092_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)D",
+                        "fabric": "(DDD)D",
+                        "forge": "(DDD)D"
+                    }
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;",
-                    "srg": "func_174824_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5836",
+                        "forge": "func_174824_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(F)Laui;",
+                        "fabric": "(F)Lnet/minecraft/class_243;",
+                        "forge": "(F)Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "getHealth": {
-                    "name": "bn",
-                    "signature": "()F",
-                    "srg": "func_110143_aJ"
+                    "names": {
+                        "vanilla": "bn",
+                        "fabric": "method_6032",
+                        "forge": "func_110143_aJ"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "getId": {
-                    "name": "F",
-                    "signature": "()I",
-                    "srg": "func_145782_y"
+                    "names": {
+                        "vanilla": "F",
+                        "fabric": "method_5628",
+                        "forge": "func_145782_y"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
                 },
                 "getMaxHealth": {
-                    "name": "bu",
-                    "signature": "()F",
-                    "srg": "func_110138_aP"
+                    "names": {
+                        "vanilla": "bu",
+                        "fabric": "method_6063",
+                        "forge": "func_110138_aP"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "getName": {
-                    "name": "e_",
-                    "signature": "()Ljava/lang/String;",
-                    "srg": "func_70005_c_"
+                    "names": {
+                        "vanilla": "e_",
+                        "fabric": "getName",
+                        "forge": "func_70005_c_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
                 },
                 "getSpeed": {
-                    "name": "bI",
-                    "signature": "()F",
-                    "srg": "func_70689_ay"
+                    "names": {
+                        "vanilla": "bI",
+                        "fabric": "method_6029",
+                        "forge": "func_70689_ay"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
-                    "signature": "()Z",
-                    "srg": "func_70093_af"
+                    "names": {
+                        "vanilla": "av",
+                        "fabric": "method_5715",
+                        "forge": "func_70093_af"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "isSprinting": {
-                    "name": "aw",
-                    "signature": "()Z",
-                    "srg": "func_70051_ag"
+                    "names": {
+                        "vanilla": "aw",
+                        "fabric": "method_5624",
+                        "forge": "func_70051_ag"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "position": {
-                    "name": "d",
-                    "signature": "()Laui;",
-                    "srg": "func_174791_d"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5784",
+                        "forge": "func_174791_d"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laui;",
+                        "fabric": "()Lnet/minecraft/class_243;",
+                        "forge": "()Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "setPos": {
-                    "name": "b",
-                    "signature": "(DDD)V",
-                    "srg": "func_70107_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_5814",
+                        "forge": "func_70107_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)V",
+                        "fabric": "(DDD)V",
+                        "forge": "(DDD)V"
+                    }
                 },
                 "setSprinting": {
-                    "name": "d",
-                    "signature": "(Z)V",
-                    "srg": "func_70031_b"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5728",
+                        "forge": "func_70031_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(Z)V",
+                        "fabric": "(Z)V",
+                        "forge": "(Z)V"
+                    }
                 },
                 "swing": {
-                    "name": "bw",
-                    "signature": "()V",
-                    "srg": "func_71038_i"
+                    "names": {
+                        "vanilla": "bw",
+                        "fabric": "method_6104",
+                        "forge": "func_71038_i"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 }
             },
             "fields": {
                 "fallDistance": {
-                    "name": "O",
-                    "srg": "field_70143_R"
+                    "names": {
+                        "vanilla": "O",
+                        "fabric": "field_6017",
+                        "forge": "field_70143_R"
+                    }
                 },
                 "jumping": {
-                    "name": "aY",
-                    "srg": "field_70703_bu"
+                    "names": {
+                        "vanilla": "aY",
+                        "fabric": "field_6282",
+                        "forge": "field_70703_bu"
+                    }
                 },
                 "noPhysics": {
-                    "name": "T",
-                    "srg": "field_70145_X"
+                    "names": {
+                        "vanilla": "T",
+                        "fabric": "field_5960",
+                        "forge": "field_70145_X"
+                    }
                 },
                 "tickCount": {
-                    "name": "W",
-                    "srg": "field_70173_aa"
+                    "names": {
+                        "vanilla": "W",
+                        "fabric": "field_6012",
+                        "forge": "field_70173_aa"
+                    }
                 },
                 "xRotO": {
-                    "name": "B",
-                    "srg": "field_70127_C"
+                    "names": {
+                        "vanilla": "B",
+                        "fabric": "field_6004",
+                        "forge": "field_70127_C"
+                    }
                 },
                 "xxa": {
-                    "name": "aZ",
-                    "srg": "field_70702_br"
+                    "names": {
+                        "vanilla": "aZ",
+                        "fabric": "field_6212",
+                        "forge": "field_70702_br"
+                    }
                 },
                 "yRotO": {
-                    "name": "A",
-                    "srg": "field_70126_B"
+                    "names": {
+                        "vanilla": "A",
+                        "fabric": "field_5982",
+                        "forge": "field_70126_B"
+                    }
                 },
                 "zza": {
-                    "name": "ba",
-                    "srg": "field_70701_bs"
+                    "names": {
+                        "vanilla": "ba",
+                        "fabric": "field_6250",
+                        "forge": "field_70701_bs"
+                    }
                 }
             }
         },
         "net/minecraft/world/entity/player/Inventory": {
-            "name": "wm",
+            "names": {
+                "vanilla": "wm",
+                "fabric": "net.minecraft.class_1661",
+                "forge": "net.minecraft.entity.player.InventoryPlayer"
+            },
             "methods": {
                 "getItem": {
-                    "name": "a",
-                    "signature": "(I)Lzx;",
-                    "srg": "func_70301_a"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_7375",
+                        "forge": "func_70301_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lzx;",
+                        "fabric": "(I)Lnet/minecraft/class_1799;",
+                        "forge": "(I)Lnet/minecraft/item/ItemStack;"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/world/entity/player/Player": {
-            "name": "wn",
+            "names": {
+                "vanilla": "wn",
+                "fabric": "net.minecraft.class_1657",
+                "forge": "net.minecraft.entity.player.EntityPlayer"
+            },
             "methods": {
                 "distanceToSqr": {
-                    "name": "e",
-                    "signature": "(DDD)D",
-                    "srg": "func_70092_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5649",
+                        "forge": "func_70092_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)D",
+                        "fabric": "(DDD)D",
+                        "forge": "(DDD)D"
+                    }
                 },
                 "getEyePosition": {
-                    "name": "e",
-                    "signature": "(F)Laui;",
-                    "srg": "func_174824_e"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_5836",
+                        "forge": "func_174824_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(F)Laui;",
+                        "fabric": "(F)Lnet/minecraft/class_243;",
+                        "forge": "(F)Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "getHealth": {
-                    "name": "bn",
-                    "signature": "()F",
-                    "srg": "func_110143_aJ"
+                    "names": {
+                        "vanilla": "bn",
+                        "fabric": "method_6032",
+                        "forge": "func_110143_aJ"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "getId": {
-                    "name": "F",
-                    "signature": "()I",
-                    "srg": "func_145782_y"
+                    "names": {
+                        "vanilla": "F",
+                        "fabric": "method_5628",
+                        "forge": "func_145782_y"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
                 },
                 "getMaxHealth": {
-                    "name": "bu",
-                    "signature": "()F",
-                    "srg": "func_110138_aP"
+                    "names": {
+                        "vanilla": "bu",
+                        "fabric": "method_6063",
+                        "forge": "func_110138_aP"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "getName": {
-                    "name": "e_",
-                    "signature": "()Ljava/lang/String;",
-                    "srg": "func_70005_c_"
+                    "names": {
+                        "vanilla": "e_",
+                        "fabric": "getName",
+                        "forge": "func_70005_c_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
                 },
                 "getSpeed": {
-                    "name": "bI",
-                    "signature": "()F",
-                    "srg": "func_70689_ay"
+                    "names": {
+                        "vanilla": "bI",
+                        "fabric": "method_6029",
+                        "forge": "func_70689_ay"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
                 },
                 "isShiftKeyDown": {
-                    "name": "av",
-                    "signature": "()Z",
-                    "srg": "func_70093_af"
+                    "names": {
+                        "vanilla": "av",
+                        "fabric": "method_5715",
+                        "forge": "func_70093_af"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "isSprinting": {
-                    "name": "aw",
-                    "signature": "()Z",
-                    "srg": "func_70051_ag"
+                    "names": {
+                        "vanilla": "aw",
+                        "fabric": "method_5624",
+                        "forge": "func_70051_ag"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "isUsingItem": {
-                    "name": "bS",
-                    "signature": "()Z",
-                    "srg": "func_71039_bw"
+                    "names": {
+                        "vanilla": "bS",
+                        "fabric": "method_0_7991",
+                        "forge": "func_71039_bw"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "position": {
-                    "name": "d",
-                    "signature": "()Laui;",
-                    "srg": "func_174791_d"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5784",
+                        "forge": "func_174791_d"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laui;",
+                        "fabric": "()Lnet/minecraft/class_243;",
+                        "forge": "()Lnet/minecraft/util/Vec3;"
+                    }
                 },
                 "setPos": {
-                    "name": "b",
-                    "signature": "(DDD)V",
-                    "srg": "func_70107_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_5814",
+                        "forge": "func_70107_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)V",
+                        "fabric": "(DDD)V",
+                        "forge": "(DDD)V"
+                    }
                 },
                 "setSprinting": {
-                    "name": "d",
-                    "signature": "(Z)V",
-                    "srg": "func_70031_b"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5728",
+                        "forge": "func_70031_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(Z)V",
+                        "fabric": "(Z)V",
+                        "forge": "(Z)V"
+                    }
                 },
                 "swing": {
-                    "name": "bw",
-                    "signature": "()V",
-                    "srg": "func_71038_i"
+                    "names": {
+                        "vanilla": "bw",
+                        "fabric": "method_6104",
+                        "forge": "func_71038_i"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 }
             },
             "fields": {
                 "containerMenu": {
-                    "name": "bk",
-                    "srg": "field_71070_bA"
+                    "names": {
+                        "vanilla": "bk",
+                        "fabric": "field_7512",
+                        "forge": "field_71070_bA"
+                    }
                 },
                 "fallDistance": {
-                    "name": "O",
-                    "srg": "field_70143_R"
+                    "names": {
+                        "vanilla": "O",
+                        "fabric": "field_6017",
+                        "forge": "field_70143_R"
+                    }
                 },
                 "jumping": {
-                    "name": "aY",
-                    "srg": "field_70703_bu"
+                    "names": {
+                        "vanilla": "aY",
+                        "fabric": "field_6282",
+                        "forge": "field_70703_bu"
+                    }
                 },
                 "noPhysics": {
-                    "name": "T",
-                    "srg": "field_70145_X"
+                    "names": {
+                        "vanilla": "T",
+                        "fabric": "field_5960",
+                        "forge": "field_70145_X"
+                    }
                 },
                 "tickCount": {
-                    "name": "W",
-                    "srg": "field_70173_aa"
+                    "names": {
+                        "vanilla": "W",
+                        "fabric": "field_6012",
+                        "forge": "field_70173_aa"
+                    }
                 },
                 "xRotO": {
-                    "name": "B",
-                    "srg": "field_70127_C"
+                    "names": {
+                        "vanilla": "B",
+                        "fabric": "field_6004",
+                        "forge": "field_70127_C"
+                    }
                 },
                 "xxa": {
-                    "name": "aZ",
-                    "srg": "field_70702_br"
+                    "names": {
+                        "vanilla": "aZ",
+                        "fabric": "field_6212",
+                        "forge": "field_70702_br"
+                    }
                 },
                 "yRotO": {
-                    "name": "A",
-                    "srg": "field_70126_B"
+                    "names": {
+                        "vanilla": "A",
+                        "fabric": "field_5982",
+                        "forge": "field_70126_B"
+                    }
                 },
                 "zza": {
-                    "name": "ba",
-                    "srg": "field_70701_bs"
+                    "names": {
+                        "vanilla": "ba",
+                        "fabric": "field_6250",
+                        "forge": "field_70701_bs"
+                    }
                 }
             }
         },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
-            "name": "xi",
+            "names": {
+                "vanilla": "xi",
+                "fabric": "net.minecraft.class_1703",
+                "forge": "net.minecraft.inventory.Container"
+            },
             "methods": {
                 "getItems": {
-                    "name": "a",
-                    "signature": "()Ljava/util/List;",
-                    "srg": "func_75138_a"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_7602",
+                        "forge": "func_75138_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/List;",
+                        "fabric": "()Ljava/util/List;",
+                        "forge": "()Ljava/util/List;"
+                    }
                 }
             },
             "fields": {
                 "containerId": {
-                    "name": "d",
-                    "srg": "field_75152_c"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_7763",
+                        "forge": "field_75152_c"
+                    }
                 }
             }
         },
         "net/minecraft/world/item/Item": {
-            "name": "zw",
+            "names": {
+                "vanilla": "zw",
+                "fabric": "net.minecraft.class_1792",
+                "forge": "net.minecraft.item.Item"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/item/ItemStack": {
-            "name": "zx",
+            "names": {
+                "vanilla": "zx",
+                "fabric": "net.minecraft.class_1799",
+                "forge": "net.minecraft.item.ItemStack"
+            },
             "methods": {
                 "getItem": {
-                    "name": "b",
-                    "signature": "()Lzw;",
-                    "srg": "func_77973_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_0_8333",
+                        "forge": "func_77973_b"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lzw;",
+                        "fabric": "()Lnet/minecraft/class_1792;",
+                        "forge": "()Lnet/minecraft/item/Item;"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/world/item/Items": {
-            "name": "zy",
+            "names": {
+                "vanilla": "zy",
+                "fabric": "net.minecraft.class_1802",
+                "forge": "net.minecraft.init.Items"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/GameType": {
-            "name": "adp$a",
+            "names": {
+                "vanilla": "adp$a",
+                "fabric": "net.minecraft.class_1940$class_1934",
+                "forge": "net.minecraft.world.WorldSettings$GameType"
+            },
             "methods": {},
             "fields": {
                 "SPECTATOR": {
-                    "name": "e",
-                    "srg": "SPECTATOR"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "field_9219",
+                        "forge": "SPECTATOR"
+                    }
                 }
             }
         },
         "net/minecraft/world/level/LevelReader": {
-            "name": "adq",
+            "names": {
+                "vanilla": "adq",
+                "fabric": "net.minecraft.class_0_105",
+                "forge": "net.minecraft.world.IBlockAccess"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/entity/BlockEntity": {
-            "name": "akw",
+            "names": {
+                "vanilla": "akw",
+                "fabric": "net.minecraft.class_2586",
+                "forge": "net.minecraft.tileentity.TileEntity"
+            },
             "methods": {
                 "getBlockPos": {
-                    "name": "v",
-                    "signature": "()Lcj;",
-                    "srg": "func_174877_v"
+                    "names": {
+                        "vanilla": "v",
+                        "fabric": "method_11016",
+                        "forge": "func_174877_v"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lcj;",
+                        "fabric": "()Lnet/minecraft/class_2338;",
+                        "forge": "()Lnet/minecraft/util/BlockPos;"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/world/level/block/entity/ChestBlockEntity": {
-            "name": "aky",
+            "names": {
+                "vanilla": "aky",
+                "fabric": "net.minecraft.class_2595",
+                "forge": "net.minecraft.tileentity.TileEntityChest"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/entity/EnderChestBlockEntity": {
-            "name": "alf",
+            "names": {
+                "vanilla": "alf",
+                "fabric": "net.minecraft.class_2611",
+                "forge": "net.minecraft.tileentity.TileEntityEnderChest"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {
-            "name": "alz",
+            "names": {
+                "vanilla": "alz",
+                "fabric": "net.minecraft.class_0_378",
+                "forge": "net.minecraft.block.state.IBlockState"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/chunk/LevelChunk": {
-            "name": "amy",
+            "names": {
+                "vanilla": "amy",
+                "fabric": "net.minecraft.class_2818",
+                "forge": "net.minecraft.world.chunk.Chunk"
+            },
             "methods": {
                 "getBlockEntities": {
-                    "name": "r",
-                    "signature": "()Ljava/util/Map;",
-                    "srg": "func_177434_r"
+                    "names": {
+                        "vanilla": "r",
+                        "fabric": "method_12214",
+                        "forge": "func_177434_r"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/Map;",
+                        "fabric": "()Ljava/util/Map;",
+                        "forge": "()Ljava/util/Map;"
+                    }
                 }
             },
             "fields": {}
         },
         "net/minecraft/world/phys/BlockHitResult": {
-            "name": "auh",
+            "names": {
+                "vanilla": "auh",
+                "fabric": "net.minecraft.class_239",
+                "forge": "net.minecraft.util.MovingObjectPosition"
+            },
             "methods": {},
             "fields": {}
         },
         "net/minecraft/world/phys/Vec3": {
-            "name": "aui",
+            "names": {
+                "vanilla": "aui",
+                "fabric": "net.minecraft.class_243",
+                "forge": "net.minecraft.util.Vec3"
+            },
             "methods": {},
             "fields": {
                 "x": {
-                    "name": "a",
-                    "srg": "field_72450_a"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_1352",
+                        "forge": "field_72450_a"
+                    }
                 },
                 "y": {
-                    "name": "b",
-                    "srg": "field_72448_b"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_1351",
+                        "forge": "field_72448_b"
+                    }
                 },
                 "z": {
-                    "name": "c",
-                    "srg": "field_72449_c"
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_1350",
+                        "forge": "field_72449_c"
+                    }
                 }
             }
         }

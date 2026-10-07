@@ -1,23 +1,51 @@
 # 版本矩阵
 
-目标版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
+映射表现已覆盖 **1.8.9 – 26.3 的 46 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
+下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
-## 1. 每版本的差异点（全部是「数据」，不是代码分支）
+## 1. 映射表：每版本一张，四个加载器命名空间
+
+表的规模固定为 **61 个类**（客户端实际解析的规范面）。每个类/成员带
+`vanilla` / `fabric` / `forge` / `neoforge` 四套运行期名 + **配套的 JNI 描述符**；
+运行时按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试，因此
+**同一份表同时服务原版、Fabric、Forge、NeoForge 四种安装**（不做加载器探测）。
+
+| 命名空间 | 运行期类名 | 运行期成员名 | 数据源 |
+|---|---|---|---|
+| `vanilla` | 混淆（`enn`） | 混淆（`N`、`f_90977_`） | Mojang 官方 `client_mappings`（1.14.4+）；1.8.9/1.12.2 用本机 SRG |
+| `fabric` | intermediary（`net.minecraft.class_1657`） | intermediary（`method_1551`） | FabricMC/intermediary（1.14+）、Legacy-Fabric/Legacy-Intermediaries（1.8.2–1.13.2） |
+| `forge` | 可读名（`net.minecraft.client.Minecraft`） | SRG：`func_`/`field_` ≤1.15.2，`m_`/`f_` ≥1.16.5 | MinecraftForge/MCPConfig `joined.tsrg` |
+| `neoforge` | 同 forge | 1.20.1 同 forge；**1.20.2+ 即 Mojmap 名**（未混淆） | 同 forge / 恒等 |
+
+**覆盖 46 张表**：`1.8.9`、`1.12.2`、`1.14.4 – 1.21.11`（39 张）、`26.1 – 26.3`（5 张）。
+`python tools/mapping/generate.py --check` 全绿；生成器与联表细节见 `tools/mapping/README.md`。
+
+**无表版本（20 个）**：`1.9 – 1.12.1`、`1.13 – 1.13.2`、`1.14 – 1.14.3`。这些版本早于 Mojang 官方
+映射（1.14.4 首发），本机也只有 1.8.9 / 1.12.2 两份 `aliases-<版本>.toml` 人工桥；缺表时运行时
+退化为恒等映射并打日志（不静默）。补法：加一份 `tools/mapping/aliases-<版本>.toml`。
+
+以下是**真机验证过**的版本的绘制/帧钩子差异：
 
 | 版本 | 混淆 | 映射表来源 | 绘制代际 | 帧钩子目标 | 表状态 |
 |---|---|---|---|---|---|
-| 1.8.9 | 混淆 | 本机 SRG + MCP CSV + 人工别名（四步） | A | `Display.update()V` | ✅ 已产出（48 类 / 47 具名 / 88 方法 / 68 字段） |
-| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（48 / 47 / 88 / 68） |
-| 1.16.5 | 混淆 | 官方 ProGuard `client.txt`（一步） | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 45 / 85 / 68） |
-| 1.20.1 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 47 / 85 / 68） |
-| 1.21.4 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出（48 / 47 / 85 / 68） |
-| 1.21.10 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出 |
-| 1.21.11 | 混淆 | 官方 ProGuard | B | `glfwSwapBuffers(J)V` | ✅ 已产出（已抽查确认为真实内容） |
-| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出 |
-| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（已抽查确认为真实内容） |
+| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（156 具名成员；vanilla 名与旧表逐项一致） |
+| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（150） |
+| 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（162，`--javap` 通过） |
+| 1.20.1 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（166，`--javap` 通过；forge 名用真实 Forge jar 校验 149/149） |
+| 1.21.4 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（166，`--javap` 通过） |
+| 1.21.10 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（166） |
+| 1.21.11 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（166；neoforge 名用真实 NeoForge patched jar 校验 166/166） |
+| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（167） |
+| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（167，`--javap` 通过） |
 
-> 表的规模固定为 48 个类（客户端实际解析的规范面），因此各版本行数一致；差异在 `name` 为 `null`
-> 的条目数（表示该版本运行时**没有**对应类，标注为 absent）。
+> 各版本行内的成员数差异来自 `absent`：该版本运行时**没有**对应类/成员时显式标注，
+> 由运行期打一次性日志并回退规范名，而不是把规范名当混淆名静默使用。
+
+> **已知不确定项（1.16.5 的 Forge 成员名）**：本世界 MCPConfig 的 1.16.5 `joined.tsrg` 给的是
+> `m_`/`f_`（与它 1.14.4–1.15.2 的 `func_`、1.17+ 的 `m_` 自洽），而本机 OpenVape 的
+> `forge1165/methods.csv` 给的是 `func_71410_x`。两种说法不能同时成立，且本机**没有**可裁决的
+> Forge 1.16.5 运行产物（`libraries/net/minecraftforge/forge` 仅有 1.8.9 与 1.20.1）。当前按
+> MCPConfig 生成；装一台 Forge 1.16.5 后用 `--javap`-等价的方式核对即可定案。
 
 > 26.x 的映射表不是「不必要」：未混淆只意味着**名字相同**，成员**存不存在**仍逐版本不同
 > （例如 26.2 的 HUD 入口与 26.1 不兼容）。表里的 `"absent": true` 就是给这种情况用的。

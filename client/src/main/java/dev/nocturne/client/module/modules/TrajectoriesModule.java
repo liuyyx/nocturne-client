@@ -143,19 +143,21 @@ public final class TrajectoriesModule extends Module {
      * 按物品种类细分弹道参数待物品 kind 面落地后补齐。
      */
     private static boolean hasProjectileFace(GameBridge bridge) {
-        try {
-            String mapped = bridge.mapping().className(ClassType.ITEM_STACK);
-            if (mapped == null) {
-                return false;
+        Object player = bridge.player();
+        ClassLoader loader = player != null && player.getClass().getClassLoader() != null
+                ? player.getClass().getClassLoader()
+                : TrajectoriesModule.class.getClassLoader();
+        // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
+        for (String mapped : bridge.mapping().classNameCandidates(ClassType.ITEM_STACK)) {
+            try {
+                if (Class.forName(mapped, false, loader) != null) {
+                    return true;
+                }
+            } catch (Throwable t) {
+                // 该候选名在当前加载器里不可用：继续尝试下一个。
             }
-            Object player = bridge.player();
-            ClassLoader loader = player != null && player.getClass().getClassLoader() != null
-                    ? player.getClass().getClassLoader()
-                    : TrajectoriesModule.class.getClassLoader();
-            return Class.forName(mapped, false, loader) != null;
-        } catch (Throwable t) {
-            return false;
         }
+        return false;
     }
 
     /**

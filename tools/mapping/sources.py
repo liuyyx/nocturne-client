@@ -27,8 +27,6 @@ import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass
 
-import javap
-
 
 MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 
@@ -68,18 +66,30 @@ def validate_signature(signature: str) -> None:
         raise ValueError(f"invalid JNI descriptor: {signature}")
 
 
-def _download(url: str, dest: str) -> str:
+def _download(url: str, dest: str, attempts: int = 3) -> str:
+    """Fetch ``url`` into ``dest`` (no-op when already cached).
+
+    Retried a few times: the raw.githubusercontent.com endpoint used for the
+    community mapping repositories answers with 502/timeouts under load.
+    """
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    if not os.path.exists(dest) or os.path.getsize(dest) == 0:
+    if os.path.exists(dest) and os.path.getsize(dest) > 0:
+        return dest
+    last: "Exception | None" = None
+    for _ in range(max(1, attempts)):
         tmp = dest + ".part"
-        with urllib.request.urlopen(url, timeout=120) as response, open(tmp, "wb") as out:
-            while True:
-                chunk = response.read(1 << 20)
-                if not chunk:
-                    break
-                out.write(chunk)
-        os.replace(tmp, dest)
-    return dest
+        try:
+            with urllib.request.urlopen(url, timeout=180) as response, open(tmp, "wb") as out:
+                while True:
+                    chunk = response.read(1 << 20)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+            os.replace(tmp, dest)
+            return dest
+        except Exception as failure:  # noqa: BLE001 - retried below, re-raised at the end
+            last = failure
+    raise last if last is not None else RuntimeError(f"download failed: {url}")
 
 
 class Manifest:
@@ -266,184 +276,6 @@ def _tag(version: str) -> str:
     return "".join(version.split("."))
 
 
-# --------------------------------------------------------------------------
-# modern (1.16.5 - 1.21.11): official ProGuard client mappings
-# --------------------------------------------------------------------------
-
-
-_CLASS_RE = re.compile(r"^([\w.$]+) -> ([\w$]+):$")
-_METHOD_RE = re.compile(
-    r"^\s+(?:\d+:\d+:)?([\w.$]+)\s+([\w.$]+)\((.*)\)\s+->\s+([\w$]+)$"
-)
-_FIELD_RE = re.compile(r"^\s+([\w.$]+)\s+([\w$]+)\s+->\s+([\w$]+)$")
-
-_PRIMITIVES = {
-    "void": "V", "boolean": "Z", "byte": "B", "char": "C",
-    "short": "S", "int": "I", "float": "F", "long": "J", "double": "D",
-}
-
-
-class ProguardSource:
-    def __init__(self, version: str, manifest: Manifest, jar_path: "str | None" = None,
-                 javap_exe: str = "javap", javap_cache: "str | None" = None,
-                 shape_hints: "dict | None" = None) -> None:
-        self.version = version
-        text = manifest.mappings_text(version)
-        # canonical internal name -> {"name": obf, "methods": {...}, "fields": {...}}
-        self.classes: "dict[str, dict]" = {}
-        self.class_map: "dict[str, str]" = {}
-        self.obf_to_canonical: "dict[str, str]" = {}
-        for line in text.splitlines():
-            m = _CLASS_RE.match(line)
-            if not m:
-                continue
-            original = m.group(1).replace(".", "/")
-            obf = m.group(2)
-            self.class_map[original] = obf
-            self.obf_to_canonical.setdefault(obf, original)
-            self.classes[original] = {"name": obf, "methods": {}, "fields": {}}
-        current = None
-        for line in text.splitlines():
-            m = _CLASS_RE.match(line)
-            if m:
-                current = m.group(1).replace(".", "/")
-                continue
-            if current is None or not line.strip() or line.lstrip().startswith("#"):
-                continue
-            m = _METHOD_RE.match(line)
-            if m:
-                ret, name, params, obf = m.groups()
-                sig = _signature(ret, params, self.class_map)
-                self.classes[current]["methods"].setdefault(name, []).append((obf, sig))
-                continue
-            m = _FIELD_RE.match(line)
-            if m:
-                _type, name, obf = m.groups()
-                self.classes[current]["fields"].setdefault(name, obf)
-        self.index = None
-        if jar_path is not None:
-            self.index = javap.JavapIndex(jar_path, javap_exe, javap_cache)
-        self._supers: "dict[str, list]" = {}
-        # (canonical class, method) -> parameter count recorded by the 1.8.9
-        # reference table, used to pick the right modern overload.
-        self.shape_hints: "dict[tuple, int]" = shape_hints or {}
-
-    def close(self) -> None:
-        if self.index is not None:
-            self.index.save()
-
-    # -- hierarchy -------------------------------------------------------
-    def _mojmap_supers(self, canonical: str) -> "list[str]":
-        """Direct Mojmap superclasses/interfaces of a canonical class."""
-        if canonical in self._supers:
-            return self._supers[canonical]
-        result: "list[str]" = []
-        if self.index is not None:
-            entry = self.classes.get(canonical)
-            if entry is not None:
-                info = self.index.class_info(entry["name"])
-                if info is not None:
-                    for obf_super in info["supers"]:
-                        mapped = self.obf_to_canonical.get(obf_super)
-                        if mapped is not None:
-                            result.append(mapped)
-        self._supers[canonical] = result
-        return result
-
-    def _ancestors(self, canonical: str) -> "list[str]":
-        """Breadth-first: the class itself, then supers, most-derived first."""
-        order: "list[str]" = []
-        seen = set()
-        queue = [canonical]
-        while queue:
-            current = queue.pop(0)
-            if current in seen:
-                continue
-            seen.add(current)
-            order.append(current)
-            queue.extend(self._mojmap_supers(current))
-        return order
-
-    def resolve_class(self, canonical: str) -> Answer:
-        entry = self.classes.get(canonical.replace(".", "/"))
-        if entry is None:
-            return Answer.absent(f"class not present in {self.version} client_mappings")
-        return Answer.found(entry["name"])
-
-    def resolve_method(self, cls: str, name: str) -> Answer:
-        key = cls.replace(".", "/")
-        if key not in self.classes:
-            return Answer.absent(f"class not present in {self.version} client_mappings")
-        for ancestor in self._ancestors(key):
-            entry = self.classes.get(ancestor)
-            if entry is None:
-                continue
-            candidates = entry["methods"].get(name)
-            if not candidates:
-                continue
-            if len(candidates) > 1:
-                hint = self.shape_hints.get((key, name))
-                if hint is not None:
-                    matching = [c for c in candidates if _param_count(c[1]) == hint]
-                    if matching:
-                        candidates = matching
-                candidates = sorted(candidates, key=lambda c: (_param_count(c[1]), c[1], c[0]))
-            obf, sig = candidates[0]
-            return Answer.found(obf, sig)
-        return Answer.absent(f"{key}#{name} not present in {self.version} client_mappings")
-
-    def resolve_field(self, cls: str, name: str) -> Answer:
-        key = cls.replace(".", "/")
-        if key not in self.classes:
-            return Answer.absent(f"class not present in {self.version} client_mappings")
-        for ancestor in self._ancestors(key):
-            entry = self.classes.get(ancestor)
-            if entry is None:
-                continue
-            obf = entry["fields"].get(name)
-            if obf:
-                return Answer.found(obf)
-        return Answer.absent(f"{key}#{name} not present in {self.version} client_mappings")
-
-    def overload_count(self, cls: str, name: str) -> int:
-        for ancestor in self._ancestors(cls.replace(".", "/")):
-            entry = self.classes.get(ancestor)
-            if entry and name in entry["methods"]:
-                return len(entry["methods"][name])
-        return 0
-
-
-def _convert_type(java_type: str, class_map: "dict[str, str]") -> str:
-    depth = java_type.count("[]")
-    base = java_type.replace("[]", "")
-    if base in _PRIMITIVES:
-        jvm = _PRIMITIVES[base]
-    else:
-        internal = base.replace(".", "/")
-        jvm = "L" + class_map.get(internal, internal) + ";"
-    return "[" * depth + jvm
-
-
-def _signature(ret: str, params: str, class_map: "dict[str, str]") -> str:
-    parts = []
-    if params.strip():
-        for param in params.split(","):
-            parts.append(_convert_type(param.strip().split(" ")[0], class_map))
-    return "(" + "".join(parts) + ")" + _convert_type(ret, class_map)
-
-
-def _param_count(descriptor: str) -> int:
-    inner = descriptor[descriptor.find("(") + 1: descriptor.find(")")]
-    count = 0
-    i = 0
-    while i < len(inner):
-        ch = inner[i]
-        if ch == "[":
-            i += 1
-            continue
-        if ch == "L":
-            i = inner.index(";", i) + 1
-        else:
-            i += 1
-        count += 1
-    return count
+def _tag(version: str) -> str:
+    """``1.8.9`` -> ``189``;  ``1.12.2`` -> ``1122`` (matches OpenVape dir names)."""
+    return "".join(version.split("."))

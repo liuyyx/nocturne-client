@@ -169,15 +169,8 @@ public final class FullBrightModule extends Module {
      * <p>表驱动门的第一道：类或字段 absent 时返回 null，调用方打一次日志并跳过。
      */
     private static Object readStaticField(GameBridge bridge, ClassType owner, String canonicalField) {
-        String mappedClass = bridge.mapping().className(owner);
-        if (mappedClass == null) {
-            return null;
-        }
-        ClassLoader loader = playerLoader(bridge);
-        Class<?> type;
-        try {
-            type = Class.forName(mappedClass, false, loader);
-        } catch (Throwable t) {
+        Class<?> type = loadCandidateClass(bridge, owner);
+        if (type == null) {
             return null;
         }
         String mappedField = bridge.mapping().fieldName(owner, canonicalField);
@@ -194,21 +187,35 @@ public final class FullBrightModule extends Module {
     }
 
     /**
+     * 按映射表给的候选类名逐个尝试加载，返回第一个成功解析出的类；全部失败返回 {@code null}。
+     *
+     * <p>候选覆盖四种运行期命名空间（原版混淆名 → intermediary → SRG → NeoForge），
+     * 规范名兜底，因此同一份代码在 vanilla / Fabric / Forge / NeoForge 上都能拿到类。
+     */
+    private static Class<?> loadCandidateClass(GameBridge bridge, ClassType owner) {
+        ClassLoader loader = playerLoader(bridge);
+        for (String mapped : bridge.mapping().classNameCandidates(owner)) {
+            try {
+                Class<?> type = Class.forName(mapped, false, loader);
+                if (type != null) {
+                    return type;
+                }
+            } catch (Throwable t) {
+                // 该候选名在当前加载器里不可用：继续尝试下一个。
+            }
+        }
+        return null;
+    }
+
+    /**
      * 构造药水效果实例：按 (效果类型, 时长 tick, 等级) 形参匹配构造器。
      *
      * <p>不经过映射表（表无构造器档）：类名从表里取，构造器按形参数量与首参类型匹配。
      * 1.8.9 PotionEffect(int, int, int)，现代 MobEffectInstance(Holder,int,int)。
      */
     private static Object newEffectInstance(GameBridge bridge, Object effectType) {
-        String mappedClass = bridge.mapping().className(ClassType.MOB_EFFECT_INSTANCE);
-        if (mappedClass == null) {
-            return null;
-        }
-        ClassLoader loader = playerLoader(bridge);
-        Class<?> type;
-        try {
-            type = Class.forName(mappedClass, false, loader);
-        } catch (Throwable t) {
+        Class<?> type = loadCandidateClass(bridge, ClassType.MOB_EFFECT_INSTANCE);
+        if (type == null) {
             return null;
         }
         for (java.lang.reflect.Constructor<?> ctor : type.getDeclaredConstructors()) {

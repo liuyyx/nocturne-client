@@ -82,14 +82,15 @@ class GameBridgeTest {
     }
 
     /**
-     * 验证混淆映射下候选类名把映射名排在首位：反编译产物的混淆名优先尝试，
-     * 规范名作为兜底，保证不同打包方式的客户端都能命中。
+     * 验证混淆映射下候选类名把映射名排在首位、规范名压尾：四套加载器命名空间按
+     * {@code vanilla → fabric → forge → neoforge} 展开（1.8.9 无 NeoForge），
+     * 规范名作为最后的兜底，保证不同加载方式下的客户端都能命中。
      */
     @Test
     void obfuscatedCandidatesPreferTheMappedName() {
         GameBridge bridge = new GameBridge(null, ObfuscatedMapping.load("/mappings-1.8.9.json"));
         assertArrayEquals(
-                new String[]{"ave", "net.minecraft.client.Minecraft"},
+                new String[]{"ave", "net.minecraft.class_310", "net.minecraft.client.Minecraft"},
                 bridge.minecraftClassCandidates());
     }
 

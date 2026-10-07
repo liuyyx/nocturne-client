@@ -36,7 +36,7 @@
 
 | 关注点 | 做法 |
 |---|---|
-| 类/字段/方法名 | 映射表（每版本一份 JSON，打进 jar 资源） |
+| 类/字段/方法名 | 映射表（每版本一份 JSON，打进 jar 资源）。每类/成员带 `vanilla`/`fabric`/`forge`/`neoforge` 四套运行期名与配套 JNI 描述符，运行期按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试——**因此不需要探测加载器**，同一份表同时服务原版、Fabric、Forge、NeoForge |
 | 目标版本 | 注入器传入 `mcVersion`，运行时**不探测**。实例名里没有版本号时（`fpsmaster`、`TLauncher` 这类自定义实例），读该实例 json 的 `clientVersion`/`inheritsFrom`——这是启动器自己写的权威字段；两者都拿不到才退化为未知（恒等映射 + 日志） |
 | 界面绘制与字体 | **Skija 直绘**：对着当前 GL 上下文把界面画进游戏帧缓冲，自带字体栈（含中文回退），完全不依赖游戏的绘制 API——一份代码管所有版本。Skija 不可用时回落到按代际的自绘 GL 后端（成员名查表） |
 | 输入 | 用游戏自己的键鼠状态（成员名查表） |
@@ -70,7 +70,7 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>     # 注入指定�
 | 自实现 attach（免 `jdk.attach` / `tools.jar`） | **Windows 已实测**：`nocturne-attach.dll` 在官方 1.8.9 真机与 JDK 8 靶上均完成 attach → `agentmain` → 帧钩子 live → 叠加层 attach（`tmp/mc189-native.log`、`tmp/selftest-target.log`）；**裁剪 JRE 验收已通过**——在无 `tools.jar`、无 `jdk.attach` 的 JRE 上，CLI 打印 `attach strategy: windows-native` 并完成注入（`tmp/selftest-trimmed.log`）。**Linux/macOS 通道已实现**（`PosixAttachStrategy` + `attach_unix.c`，域套接字），但只在 WSL 里通过 `gcc -Werror` 编译校验与单测，**未实机验证**；`PayloadPack` 接入生产待做 |
 | 26.3 真机（注入 + 稳定性） | **已实测**：真实 26.3 + Fabric 上 attach → `agentmain` → `client installed (modules=4)`，游戏存活、无崩溃（`tmp/mc263-*.log`）。SDL 栈下按设计**不注册帧钩子、不安装叠加层**（LWJGL 的 GL 绑定在 SDL 进程里不可用），原因与后续方案见 `docs/VERSION-MATRIX.md` |
 | 1.8.9 真机（注入 + 界面） | **已实测可用**：官方 1.8.9 + LWJGL2 上 attach → `agentmain` → 帧钩子 live → 叠加层 attach，右 Shift 唤出 ClickGUI，四个分类面板与模块名正常显示（`backend=gl-fixed`、`screen=ClickGui`），游戏稳定不崩。细节见 `docs/VERSION-MATRIX.md` |
-| 映射表生成器（9 个版本） | 进行中（`tools/mapping/`） |
+| 映射表生成器（1.8.9–26.3 全部 46 个 release × 四加载器命名空间） | **已完成**：`tools/mapping/` 从 Mojang 官方映射 + FabricMC/intermediary + Legacy-Fabric + MinecraftForge/MCPConfig 联表生成；`--check` 全绿，`--javap` 对本地 client jar 校验通过，forge/neoforge 命名空间另用真实 Forge 1.20.1 / NeoForge 1.21.11 产物逐成员核对（149/149、166/166）。1.9–1.12.1、1.13–1.14.3 无官方映射且无人工别名桥，无表 |
 | 版本号传递、两种注入点 | 已完成并有测试 |
 | 界面：Setsuna 风格三栏 ClickGUI（分类导航 / 模块列表 / 设置详情，含颜色选择器与右键恢复默认） | **已完成并离屏验证**（Java 8 + LWJGL2 + Skija 真实 GL）。方案、证据与截图见 `docs/research/setsuna-gui-port.md` |
 | HUD（常显）+ HUD 编辑器（拖动摆放） | **已完成并离屏验证**。顺带补齐了一直缺失的 `HudSink` 实现——此前模块发布的文本行全部落到空处 |

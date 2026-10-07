@@ -2,6 +2,7 @@ package dev.nocturne.client.game;
 
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.mapping.Mapping;
+import dev.nocturne.client.mapping.MethodCandidate;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
@@ -68,15 +69,17 @@ public final class GameBridge {
     }
 
     /**
-     * 主游戏类的候选运行时名称，按优先级从高到低排列。
+     * 主游戏类的候选运行时名称，按优先级从高到低排列（取自 {@link Mapping#classNameCandidates}）。
      *
-     * <p>映射得到的（混淆）名优先；规范名作为兜底保留，因为 Forge/SRG 环境以及未混淆版本
-     * 暴露的是可读名。
+     * <p>候选覆盖四种命名空间（原版混淆名 → intermediary → SRG → NeoForge），规范名兜底；
+     * 逐个尝试 {@code Class.forName}，第一个成功者胜出。
      */
     public String[] minecraftClassCandidates() {
-        String mapped = mapping.className(ClassType.MINECRAFT);
-        String canonical = ClassType.MINECRAFT.canonicalName();
-        return mapped.equals(canonical) ? new String[]{canonical} : new String[]{mapped, canonical};
+        java.util.List<String> candidates = mapping.classNameCandidates(ClassType.MINECRAFT);
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<String>(candidates);
+        // 规范名兜底：未混淆构建以及 Forge/SRG 暴露可读名的场合仍能命中。
+        names.add(ClassType.MINECRAFT.canonicalName());
+        return names.toArray(new String[names.size()]);
     }
 
     /** @return 游戏类与单例访问器是否都已定位成功；两者齐备才算解析完成 */
@@ -109,9 +112,14 @@ public final class GameBridge {
         if (found == null) {
             return false;
         }
-        String descriptor = "()L" + found.getName().replace('.', '/') + ";";
-        String methodName = mapping.methodName(ClassType.MINECRAFT, "getInstance", descriptor);
-        Method accessor = findStaticAccessor(found, methodName, found);
+        // 单例访问器的候选名逐个试（getInstance 在 vanilla/forge 等命名空间下各有其名）。
+        Method accessor = null;
+        for (MethodCandidate candidate : mapping.methodCandidates(ClassType.MINECRAFT, "getInstance")) {
+            accessor = findStaticAccessor(found, candidate.name(), found);
+            if (accessor != null) {
+                break;
+            }
+        }
         if (accessor == null) {
             // 形状兜底：Forge 等环境在运行期把成员重映射成 SRG 名（1.8.9 的 getMinecraft 变成
             // func_71410_x），映射表里记的原版混淆名（A）在那里根本不存在，于是单例永远拿不到——
@@ -189,36 +197,42 @@ public final class GameBridge {
     }
 
     /**
-     * 调用一个映射方法，按记录的 JNI 描述符挑选重载。
+     * 调用一个映射方法。
      *
-     * <p>描述符正是用来区分同名混淆方法的手段；{@link Mapping#hasMethodDescriptor} 显式区分
-     * 「表中无记录」（恒等映射、或表缺条目——此时按实参运行时类型推导形参）与「确有描述符」
-     * （含零参的 {@code ()...}），不再把 {@code null} 当成空参数组（H-35）。恒等映射下会按实参
-     * 在类/父类/接口上匹配唯一重载；匹配不到或存在歧义时记录限流日志并返回 {@code null}（M-69）。
+     * <p>候选（名字 + 配套 JNI 描述符）由 {@link Mapping#methodCandidates} 按命名空间优先级给出：
+     * 每个候选自带<b>与它同命名空间</b>的描述符（跨命名空间混用名字与描述符会导致参数类型解析失败），
+     * 逐个尝试「按描述符解析形参 → 失败则按实参类型推断 → 反射调用」，第一个成功者胜出。
+     *
+     * <p>描述符解析失败或无描述符时按实参推导形参（恒等映射、以及描述符引用类在本地加载器里
+     * 不存在的跨命名空间场景）；匹配不到或存在歧义时记录限流日志并跳过该候选（M-69）。
      *
      * @param target          接收调用的实例，可为 {@code null}（直接返回 {@code null}）
      * @param owner           声明该方法的类
      * @param canonicalMethod 未混淆的规范方法名
      * @param args            实参；反射调用会按目标方法的形参自动装箱
-     * @return 方法返回值；方法未找到或调用失败时为 {@code null}
+     * @return 方法返回值；全部候选均未命中或调用失败时为 {@code null}
      */
     public Object callMapped(Object target, ClassType owner, String canonicalMethod, Object... args) {
         if (target == null) {
             return null;
         }
         Class<?> type = target.getClass();
-        boolean hasDescriptor = mapping.hasMethodDescriptor(owner, canonicalMethod);
-        String descriptor = hasDescriptor ? mapping.methodDescriptor(owner, canonicalMethod) : null;
-        // 候选名逐个试（原版混淆名 → SRG 名 → 规范名）：Forge 目标上方法名是 SRG
-        // （getMinecraft → func_71410_x），只试一个名字会让整条调用链静默返回 null。
-        for (String methodName : mapping.methodNameCandidates(owner, canonicalMethod, descriptor)) {
-            Class<?>[] parameters = hasDescriptor
-                    ? descriptorParameters(type, methodName, descriptor)
-                    : inferParameters(type, methodName, args);
+        // 候选逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名）：Forge 目标上方法名是
+        // SRG（getMinecraft → func_71410_x），只试一个名字会让整条调用链静默返回 null。
+        for (MethodCandidate candidate : mapping.methodCandidates(owner, canonicalMethod)) {
+            String descriptor = candidate.descriptor();
+            Class<?>[] parameters = descriptor == null
+                    ? null
+                    : descriptorParameters(type, candidate.name(), descriptor);
+            if (parameters == null) {
+                // 没有描述符（恒等映射/表缺条目），或该命名空间的描述符在本加载器里解析不出来：
+                // 退化为按实参类型推断，而不是把整条链就此中断。
+                parameters = inferParameters(type, candidate.name(), args);
+            }
             if (parameters == null) {
                 continue;
             }
-            Method method = findMethodCached(type, methodName, parameters);
+            Method method = findMethodCached(type, candidate.name(), parameters);
             if (method != null) {
                 return Reflect.call(method, target, args);
             }

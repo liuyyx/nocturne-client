@@ -24,6 +24,31 @@ class MappingTest {
         assertEquals("player", mapping.fieldName(ClassType.MINECRAFT, "player"));
     }
 
+    /**
+     * 验证接口默认实现：候选列表退化为单个规范名/方法名，描述符无记录。
+     *
+     * <p>{@link IdentityMapping} 不覆写这两个新方法，依赖的正是这里的默认行为。
+     */
+    @Test
+    void defaultCandidatesDegradeToTheSingleCanonicalName() {
+        Mapping mapping = new IdentityMapping();
+
+        assertEquals(java.util.Collections.singletonList(mapping.className(ClassType.MINECRAFT)),
+                mapping.classNameCandidates(ClassType.MINECRAFT));
+
+        java.util.List<MethodCandidate> candidates =
+                mapping.methodCandidates(ClassType.MINECRAFT, "getInstance");
+        assertEquals(1, candidates.size());
+        assertEquals("getInstance", candidates.get(0).name());
+        assertEquals(null, candidates.get(0).descriptor());
+        assertTrue(candidates.get(0).equals(new MethodCandidate("getInstance", null)));
+
+        assertEquals(java.util.Collections.singletonList("player"),
+                mapping.fieldNameCandidates(ClassType.MINECRAFT, "player"));
+        assertEquals(java.util.Collections.singletonList("getInstance"),
+                mapping.methodNameCandidates(ClassType.MINECRAFT, "getInstance", null));
+    }
+
     /** 验证 {@link ClassType} 枚举中每个类型的规范名都是全限定（含包名），并抽查一个具体取值。 */
     @Test
     void classTypesCoverTheCoreGameSurface() {

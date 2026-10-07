@@ -99,15 +99,15 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
 | 注入链路（attach → agentmain → 帧钩子 live → 叠加层装载） | **已实测**：官方 1.8.9 真机；另有 LWJGL2 实验靶（Java 8 + 真实 LWJGL2 + 真实 OpenGL，靶内无 Minecraft）单独验证过 Java 8 栈上的链路 |
 | 自实现 attach（免 `jdk.attach` / `tools.jar`） | **Windows 已实测**：`nocturne-attach.dll` 在官方 1.8.9 真机与 JDK 8 靶上均完成 attach → `agentmain` → 帧钩子 live → 叠加层 attach；**裁剪 JRE 验收通过**——在无 `tools.jar`、无 `jdk.attach` 的 JRE 上 CLI 打印 `attach strategy: windows-native` 并完成注入。**Linux/macOS 通道已实现**（`PosixAttachStrategy` + `attach_unix.c`，域套接字），但只做过 WSL 编译校验与单测，**未实机验证** |
 | 1.8.9 真机（注入 + 界面） | **已实测可用**：attach → `agentmain` → 帧钩子 live → 叠加层 attach，右 Shift 唤出 ClickGUI，四个分类面板与模块名正常显示（`backend=gl-fixed`、`screen=ClickGui`），游戏稳定不崩 |
-| 1.16.5 真机（注入 + 界面） | **已实测**：注入、帧钩子、输入层、叠加层装载全部正常（`backend=skija`、`input=glfw`、`screen=SetsunaClickGui`），面板可见、字号正常 |
-| 26.3 真机（注入 + 稳定性） | **已实测**：真实 26.3 + Fabric 上 attach → `agentmain` → `client installed (modules=4)`，游戏存活、无崩溃。SDL 栈下按设计**不注册帧钩子、不安装叠加层**（LWJGL 的 GL 绑定在 SDL 进程里不可用），后续方案见 `docs/VERSION-MATRIX.md` |
+| 1.16.5 真机（注入 + 界面） | **当时实测**：注入、帧钩子、输入层、叠加层装载全部正常（`backend=skija`、`input=glfw`、`screen=SetsunaClickGui`），面板可见、字号正常。**注**：其后 Skija 路径因"直写外部帧缓冲会盖黑游戏"被禁用（1.8.9 与 1.16.5 真机实锤），当前 1.13+ 一律走 `gl-core`，**未在 1.16.5 上按当前代码重新实测** |
+| 26.3 真机（注入 + 界面） | **已实测可用**：真实 26.3 + Fabric 上 attach → `agentmain` → 界面可见可点（`backend=gui-extractor`、`input=sdl`、`screen=ClickGui`；三列面板 + 模块名正常，点击 `FullBright` 状态翻转）。SDL 栈下**不注册帧钩子、也不碰 GL**，绘制走游戏自己的 `GuiGraphicsExtractor`，详见 `docs/VERSION-MATRIX.md` |
 | 映射表生成器（66 个 release × 四套命名空间） | **已完成**：`--check` 全绿；`--javap` 对**每个版本**的真实 client jar 逐成员校验通过；`forge` / `neoforge` 另用真实 Forge 1.20.1 运行产物与 NeoForge 1.21.11 patched jar 逐成员核对（166/166）。仅 `1.9.1 / 1.9.3 / 1.10.1` 缺 `forge` |
 | 版本号传递、两种注入点 | 已完成并有测试 |
 | 界面：Setsuna 风格三栏 ClickGUI（分类导航 / 模块列表 / 设置详情，含颜色选择器与右键恢复默认） | **已完成并离屏验证**（Java 8 + LWJGL2 + Skija 真实 GL）。方案、证据与截图见 `docs/research/setsuna-gui-port.md` |
 | HUD（常显）+ HUD 编辑器（拖动摆放） | **已完成并离屏验证**；顺带补齐了此前缺失的 `HudSink` 实现（此前模块发布的文本行全部落到空处） |
 | 纹理桥（GL 纹理借用 / 帧快照 / 背景模糊） | **已完成并验证**：真 GL 上下文下借用 4×4 纹理、棋盘模糊均有像素级判定；从 MC 取纹理 id 与快照时机待真机 |
-| Skija 通道 | 首选后端（Skija 绑定是 Multi-Release JAR，Java 8 可用且已实测）；不可用时回落按代际的自绘 GL 后端 |
-| ⚠️ 界面 / HUD / 纹理桥**均未在真实 Minecraft 内验证** | 验证跑在无 MC 的 GL 靶与离屏光栅上；待真机项（取纹理 id、快照时机、屏幕壳层与输入适配、HUD 真实数据源）逐条列在 `docs/research/setsuna-gui-port.md` |
+| Skija 通道 | 已实现（Skija 绑定是 Multi-Release JAR，Java 8 可用且已实测）；但当前**不在任何路径上被 probe**——直写外部帧缓冲会盖黑游戏（1.8.9 与 1.16.5 真机实锤），修法是纹理中转，未做。1.13–26.2 走 `gl-core`，26.3 走 `gui-extractor` |
+| ⚠️ HUD / 纹理桥**未在真实 Minecraft 内验证** | ClickGUI 已在 1.8.9 / 1.16.5（当时）/ 26.3 真机可见可点；HUD 与纹理桥的验证跑在无 MC 的 GL 靶与离屏光栅上。待真机项（取纹理 id、快照时机、屏幕壳层与输入适配、HUD 真实数据源）逐条列在 `docs/research/setsuna-gui-port.md` |
 | 模组形态 | 已移除（不再支持放进 `mods/`） |
 
 ## 文档索引

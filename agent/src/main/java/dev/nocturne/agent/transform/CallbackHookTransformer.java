@@ -47,6 +47,8 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
     private final String hookOwner;
     /** 钩子方法名。 */
     private final String hookMethod;
+    /** 注入位置：{@code false} 方法开头，{@code true} 方法末尾（首个 {@code RETURN} 之前）。 */
+    private final boolean atMethodEnd;
     /** 描述串，仅用于诊断日志。 */
     private final String label;
 
@@ -58,16 +60,22 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
      * @param targetDescriptor        目标方法描述符，需与字节码完全一致
      * @param hookOwner               钩子类内部名（斜杠形式）
      * @param hookMethod              钩子方法名，签名固定为 {@code (Ljava/lang/Object;)V}
+     * @param atMethodEnd             {@code true} = 在方法末尾注入（首个 {@code RETURN} 之前），
+     *                                {@code false} = 在方法开头注入。绘制类入口需要末尾注入：
+     *                                目标方法自己也要画东西，开头注入的内容会被它随后画的内容盖住
      */
     public CallbackHookTransformer(String targetClassInternalName, String targetMethod,
-                                   String targetDescriptor, String hookOwner, String hookMethod) {
+                                   String targetDescriptor, String hookOwner, String hookMethod,
+                                   boolean atMethodEnd) {
         this.targetClassInternalName = internalize(targetClassInternalName);
         this.targetMethod = targetMethod;
         this.targetDescriptor = targetDescriptor;
         this.hookOwner = internalize(hookOwner);
         this.hookMethod = hookMethod;
+        this.atMethodEnd = atMethodEnd;
         this.label = this.targetClassInternalName + "." + targetMethod + targetDescriptor
-                + " -> " + this.hookOwner + "." + hookMethod + HOOK_DESCRIPTOR;
+                + " -> " + this.hookOwner + "." + hookMethod + HOOK_DESCRIPTOR
+                + (atMethodEnd ? " @end" : " @head");
     }
 
     /** 把点号全限定名归一化为斜杠内部名；null 原样返回。 */
@@ -103,6 +111,24 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                         @Override
                         public void visitCode() {
                             super.visitCode();
+                            if (!atMethodEnd) {
+                                inject();
+                            }
+                        }
+
+                        @Override
+                        public void visitInsn(int opcode) {
+                            // 末尾注入：目标方法自己先画完，钩子再把叠加层画上去（否则被它盖住）。
+                            // 只在**首个** RETURN 之前插入——多返回点的方法里每个 RETURN 都插会让
+                            // 钩子一帧内被调多次，叠加层重复绘制。
+                            if (atMethodEnd && opcode == Opcodes.RETURN && !patched[0]) {
+                                inject();
+                            }
+                            super.visitInsn(opcode);
+                        }
+
+                        /** 插入 {@code aload <首个引用形参>; invokestatic 钩子}；只插一次。 */
+                        private void inject() {
                             super.visitVarInsn(Opcodes.ALOAD, firstArgumentSlot);
                             super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, hookMethod,
                                     HOOK_DESCRIPTOR, false);

@@ -25,17 +25,26 @@ class CallbackHookTransformerTest {
         public static Object last;
         /** 调用次数。 */
         public static int calls;
+        /** 事件序列：钉住"钩子在方法开头还是末尾被调用"。 */
+        public static final java.util.List<String> trace = new java.util.ArrayList<>();
+
+        /** 替身方法自己的方法体（在钩子之前或之后执行，取决于注入位置）。 */
+        public static void body() {
+            trace.add("body");
+        }
 
         /** 钩子方法本体（签名必须与转换器插入的调用一致）。 */
         public static void accept(Object value) {
             last = value;
             calls++;
+            trace.add("hook");
         }
 
         /** 清空记录。 */
         static void reset() {
             last = null;
             calls = 0;
+            trace.clear();
         }
     }
 
@@ -91,7 +100,7 @@ class CallbackHookTransformerTest {
     @Test
     void capturesTheFirstArgumentOfAnInstanceMethod() throws Exception {
         CallbackHookTransformer transformer = new CallbackHookTransformer(
-                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V", HOOK_OWNER, "accept");
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V", HOOK_OWNER, "accept", false);
 
         byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
                 sampleClass("handle", "(Ljava/lang/Object;)V", Opcodes.ACC_PUBLIC));
@@ -109,7 +118,7 @@ class CallbackHookTransformerTest {
     @Test
     void capturesTheFirstArgumentOfAStaticMethod() throws Exception {
         CallbackHookTransformer transformer = new CallbackHookTransformer(
-                "dev.nocturne.agent.transform.SubjectSample", "handleStatic", "(Ljava/lang/Object;)V", HOOK_OWNER, "accept");
+                "dev.nocturne.agent.transform.SubjectSample", "handleStatic", "(Ljava/lang/Object;)V", HOOK_OWNER, "accept", false);
 
         byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
                 sampleClass("handleStatic", "(Ljava/lang/Object;)V", Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC));
@@ -126,7 +135,7 @@ class CallbackHookTransformerTest {
     @Test
     void leavesParameterlessMethodsUntouched() {
         CallbackHookTransformer transformer = new CallbackHookTransformer(
-                "dev/nocturne/agent/transform/SubjectSample", "tick", "()V", HOOK_OWNER, "accept");
+                "dev/nocturne/agent/transform/SubjectSample", "tick", "()V", HOOK_OWNER, "accept", false);
 
         assertNull(transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
                 sampleClass("tick", "()V", Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC)));
@@ -136,7 +145,7 @@ class CallbackHookTransformerTest {
     @Test
     void leavesPrimitiveFirstArgumentsUntouched() {
         CallbackHookTransformer transformer = new CallbackHookTransformer(
-                "dev/nocturne/agent/transform/SubjectSample", "resize", "(JI)V", HOOK_OWNER, "accept");
+                "dev/nocturne/agent/transform/SubjectSample", "resize", "(JI)V", HOOK_OWNER, "accept", false);
 
         assertNull(transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
                 sampleClass("resize", "(JI)V", Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC)));
@@ -146,7 +155,7 @@ class CallbackHookTransformerTest {
     @Test
     void requiresExactClassMethodAndDescriptorMatch() {
         CallbackHookTransformer transformer = new CallbackHookTransformer(
-                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V", HOOK_OWNER, "accept");
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V", HOOK_OWNER, "accept", false);
         byte[] bytes = sampleClass("handle", "(Ljava/lang/Object;)V", Opcodes.ACC_PUBLIC);
 
         assertNull(transformer.transform(null, "other/Thing", null, null, bytes));
@@ -160,8 +169,77 @@ class CallbackHookTransformerTest {
     @Test
     void toleratesGarbageInput() {
         CallbackHookTransformer transformer = new CallbackHookTransformer(
-                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V", HOOK_OWNER, "accept");
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V", HOOK_OWNER, "accept", false);
 
         assertNull(transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null, new byte[]{1, 2, 3}));
+    }
+
+    /**
+     * 末尾注入：钩子必须在目标方法**自己的方法体之后**被调用。
+     *
+     * <p>绘制入口（{@code Hud.extractRenderState}）自己也要往同一个绘制上下文里画 HUD，钩子若在方法
+     * 开头触发，叠加层会被随后画的内容盖住——这里用带可观察副作用的替身方法钉住调用顺序。
+     */
+    @Test
+    void injectsAtTheEndWhenAskedTo() throws Exception {
+        CallbackHookTransformer transformer = new CallbackHookTransformer(
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
+                HOOK_OWNER, "accept", true);
+
+        byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
+                bodyClass("handle", "(Ljava/lang/Object;)V", Opcodes.ACC_PUBLIC));
+        assertNotNull(patched, "target method must be patched");
+
+        Object subject = define(patched).getConstructor().newInstance();
+        subject.getClass().getMethod("handle", Object.class).invoke(subject, new Object());
+
+        assertEquals(java.util.Arrays.asList("body", "hook"), Sink.trace,
+                "with atMethodEnd the hook must run after the method's own body");
+    }
+
+    /** 对照：不要求末尾注入时，钩子在方法**开头**触发（先画叠加层，随后被目标方法盖住）。 */
+    @Test
+    void injectsAtTheHeadByDefault() throws Exception {
+        CallbackHookTransformer transformer = new CallbackHookTransformer(
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
+                HOOK_OWNER, "accept", false);
+
+        byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
+                bodyClass("handle", "(Ljava/lang/Object;)V", Opcodes.ACC_PUBLIC));
+        assertNotNull(patched, "target method must be patched");
+
+        Object subject = define(patched).getConstructor().newInstance();
+        subject.getClass().getMethod("handle", Object.class).invoke(subject, new Object());
+
+        assertEquals(java.util.Arrays.asList("hook", "body"), Sink.trace,
+                "without atMethodEnd the hook must run before the method's own body");
+    }
+
+    /**
+     * 生成"方法体有可观察副作用"的替身类：目标方法先调用 {@code Sink.body()} 再返回。
+     *
+     * <p>与 {@link #sampleClass} 的差别只在方法体——用它才能分辨钩子插在方法体的前面还是后面。
+     */
+    private static byte[] bodyClass(String methodName, String descriptor, int accessFlags) {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "dev/nocturne/agent/transform/SubjectSample",
+                null, "java/lang/Object", null);
+
+        MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        constructor.visitCode();
+        constructor.visitVarInsn(Opcodes.ALOAD, 0);
+        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        constructor.visitInsn(Opcodes.RETURN);
+        constructor.visitMaxs(0, 0);
+        constructor.visitEnd();
+
+        MethodVisitor method = writer.visitMethod(accessFlags, methodName, descriptor, null, null);
+        method.visitCode();
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK_OWNER, "body", "()V", false);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
     }
 }

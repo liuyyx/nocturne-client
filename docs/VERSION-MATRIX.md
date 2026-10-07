@@ -79,9 +79,29 @@
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`；Skija 包 fb0 直写盖黑游戏已实锤，LWJGL2 不再 probe Skija；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
 | 1.16.5 | ✅ **真机已实测**（`vanilla-1.16.5` + LWJGL3：attach → `agentmain` → `glfwSwapBuffers` 帧钩子 live → 叠加层 attach；`tmp/mc1165*.log`） | ✅ | ✅ 已产出 | ✅ 可见（`backend=gl-core`、`screen=ClickGui`，三列面板 + FullBright 行可点选；修过 `glLinkProgram` 缺失 + 视口回退游戏 Window；toggle 用扩展右 Shift；文字待复验） |
 | 26.2 | ⏳ | 未验 | ✅ 已产出 | ⏳ |
-| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩；`tmp/mc263-*.log`） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册） | ✅ 已产出 | ❌ 不可用（见下） |
+| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=sdl`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转） |
 
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
+
+> **P4-C 正式实现（2026-10-07，真机 26.3 通过）**：叠加层在 SDL 栈上可用了。
+>
+> - **绘制后端** `ExtractorRenderer`：把 `Renderer` 原语翻译成 `GuiGraphicsExtractor` 调用——
+>   `fill` 收左上/右下两个角、`outline` 收左上 + 宽高、`enableScissor`/`disableScissor` 做裁剪、
+>   `text(Font, String, x, y, argb)` 画字；圆角没有原语，用逐行内缩近似。坐标就是游戏的 GUI 缩放坐标
+>   （`guiWidth()` = `Window.getGuiScaledWidth()`），所以布局与鼠标换算都不需要额外处理缩放。
+> - **两个绘制入口都要织**：`Hud.extractRenderState`（游戏内）与
+>   `Screen.extractRenderStateWithTooltipAndSubtitles`（主菜单/任意界面，`final`）。只织 HUD 那条的话
+>   主菜单根本不调用它，界面永远画不出来（实测：注入后钩子一行日志都没有）；两条都织时，有界面就让
+>   HUD 那条让位——界面在 HUD 之后提取、在上层，画在 HUD 层的内容会被盖住。
+> - **坑（值得记住）**：注入到游戏方法里的那条调用由游戏的隔离类加载器解析，`GuiDrawHook` 因此存在
+>   两份，静态字段互不可见。早先它直接调 `OverlayBootstrap.setDrawContext`，写进的是空副本，现象是
+>   "界面已打开但一个像素都不画"（日志里只有 `overlay opened but renderer not ready`）。修法与帧分发
+>   同路：把绘制上下文汇放到 **bootstrap 层**的 `FrameDispatcher`，由 `NocturneRuntime` 转发。
+> - **真机证据**：注入后 `backend=gui-extractor; input=sdl`，随后
+>   `extractor backend first frame: 427x240, font=Font`；三列面板（MOVEMENT / RENDER / PLAYER）与模块名
+>   正常显示，点击 `FullBright` 行状态翻转（前后截图对比）。
+> - **仍未做**：HUD 常显（`SetsunaHud` 要 Skija 画布，SDL 栈下没有）；`ForeignScreenGuard` 依赖的
+>   `Minecraft.inGameHasFocus` 在 26.3 不存在（该守卫在 26.x 上不生效，待换等价判据）；滚轮（见 P5）。
 
 > **P4-C spike 结论（2026-10-06，真机 26.3 通过）**：SDL 栈下**游戏自己的绘制 API 可用**——
 > `Screen.extractRenderState(GuiGraphicsExtractor,int,int,float)` 每帧调用（主菜单/世界内都调），
@@ -89,8 +109,6 @@
 > 游戏不崩、HUD/世界正常渲染（截图见证）。LWJGL GL 绑定依然全进程不可用（三处时机 native abort），
 > 所以路线定为**改用游戏自身的绘制 API**（`fill`/`fillGradient`/`drawString` 走 RenderPearl 管线），
 > 「经 SDL 自行 make current 后交 Skia」不再考虑。spike 代码已从生产代码移除（只留结论）。
-> 下一步：把叠加层的绘制后端接到 `GuiGraphicsExtractor` 上（P4-C 正式实现），输入栈随后跟进。
-> 在此之前 agent 在 SDL 栈下仍**不注册帧钩子、不安装叠加层**（`OverlayBootstrap` 已有判定保持不动）。
 
 > **1.8.9 真机结论**：官方 1.8.9（Mojang 直链）+ LWJGL2 上端到端可用——注入、帧钩子、叠加层装载、
 > 右 Shift 唤出、四个分类面板与模块名显示全部正常（`backend=gl-fixed; input=lwjgl2; toggle key=54;
@@ -105,6 +123,9 @@
 > `backend=skija; input=glfw`、`screen=SetsunaClickGui`，右 Shift 开 GUI 后 NOCTURNE 面板可见、
 > 字号正常（Skija 不分代，gl-core 画不出的问题被绕过）。`ModernGlApi.getInteger` 的余量校验
 > （`flip()` 后查 `remaining()`）已修，不再有每帧 `BufferUnderflowException`。
+> **注（后续订正）**：其后 Skija 路径因"直写外部帧缓冲会盖黑游戏"（1.8.9 与 1.16.5 真机实锤）
+> 被从 `selectBackend` 移除，1.13+ 一律走 `gl-core`。**这一行记录的是 Skija 启用当时的状态，
+> 未按当前代码在 1.16.5 上重新实测**。
 
 > **「注入」列指什么**：目前唯一跑通的是 LWJGL2 实验靶（`tmp/lab189/Fake189v5`：真实 Java 8 +
 > 真实 LWJGL2 + 真实 OpenGL 4.6，320×240 空白窗口，120 帧 `Display.update()`），**靶内没有 Minecraft**。

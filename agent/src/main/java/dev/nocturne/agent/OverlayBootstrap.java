@@ -5,6 +5,7 @@ import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.Mapping;
 import dev.nocturne.client.runtime.FrameListener;
 import dev.nocturne.client.runtime.NocturneRuntime;
+import dev.nocturne.ui.gl.ExtractorRenderer;
 import dev.nocturne.ui.gl.GlApi;
 import dev.nocturne.ui.gl.GuiOverlay;
 import dev.nocturne.ui.gl.InputSource;
@@ -34,6 +35,11 @@ import java.lang.instrument.Instrumentation;
  *
  * <p>游戏类加载器**每帧重新解析**，绝不做一次性快照：{@code premain} 路径下 GL11 一定还没加载，
  * 此时若把系统类加载器记下来，之后 GL11 真正加载了也永远找不到它（H-02 / M-87）。
+ *
+ * <p><b>SDL 渲染栈（26.x）是另一条路</b>：那里 LWJGL 的 GL 绑定全进程不可用，叠加层不能走 GL
+ * 后端，改用游戏自己的 {@code GuiGraphicsExtractor}（{@link ExtractorRenderer}）。因此这里的
+ * 「就绪条件」不是 GL，而是「绘制上下文可用」——由 {@link GuiDrawHook} 在
+ * {@code extractRenderState} 期间每帧把 extractor 交给后端。
  */
 public final class OverlayBootstrap implements FrameListener {
 
@@ -41,7 +47,7 @@ public final class OverlayBootstrap implements FrameListener {
      * 安装尝试上限。
      *
      * <p>按 60fps 估算约 10 秒；超过这个窗口还没装成功，说明当前环境无法安装叠加层，再试下去只是
-     * 白耗每帧开销。注意：这一计数只在「GL 与客户端都已就绪、但绑定/安装失败」时累加，GL 尚未
+     * 白耗每帧开销。注意：这一计数只在「前置条件与客户端都已就绪、但绑定/安装失败」时累加，GL 尚未
      * 加载的帧不计数，因此不会出现「还没看到 GL 就把重试次数用完」的情况。
      */
     private static final int MAX_ATTEMPTS = 600;
@@ -56,6 +62,23 @@ public final class OverlayBootstrap implements FrameListener {
 
     /** GL11 全限定名；每帧用它去已加载类里重新解析游戏类加载器。 */
     private static final String GL11_CLASS = "org.lwjgl.opengl.GL11";
+
+    /** 26.x 的绘制上下文类名（点号）；SDL 栈下叠加层的绘制入口。 */
+    private static final String EXTRACTOR_CLASS = "net.minecraft.client.gui.GuiGraphicsExtractor";
+
+    /** SDL 栈的判据类名（点号）：它在就说明 LWJGL 的 GL 绑定不可用。 */
+    private static final String SDL_CLASS = "org.lwjgl.sdl.SDLVideo";
+
+    /**
+     * 已安装的 extractor 后端；SDL 栈下由 {@link GuiDrawHook} 每帧喂绘制上下文。
+     *
+     * <p>静态字段而不是实例字段：喂上下文的一方（钩子）与持有后端的一方（安装器）不是同一个对象，
+     * 且钩子必须能在不持有安装器引用的前提下把 extractor 送到后端。
+     */
+    private static volatile ExtractorRenderer extractorBackend;
+
+    /** 后端尚未装好时收到的绘制上下文；装好后立刻补喂，避免白丢第一帧。 */
+    private static volatile Object pendingGraphics;
 
     /** 游戏类加载器；仅在无 {@link Instrumentation} 的模组路径下作为兜底使用。 */
     private final ClassLoader gameLoader;
@@ -73,8 +96,8 @@ public final class OverlayBootstrap implements FrameListener {
     private boolean installed;
     /** 是否已记录过放弃日志，保证只打印一次。 */
     private boolean abandoned;
-    /** 是否已就 SDL 栈延迟安装打过一次说明日志。 */
-    private boolean sdlStackDetected;
+    /** 是否已就 SDL 栈的绘制路径打过一次说明日志。 */
+    private boolean sdlReported;
 
     private OverlayBootstrap(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey,
                              boolean openGuiOnInstall) {
@@ -93,6 +116,19 @@ public final class OverlayBootstrap implements FrameListener {
      */
     public static void install(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey,
                                boolean openGuiOnInstall) {
+        // 绘制上下文汇必须注册到 **bootstrap 层**（见 FrameDispatcher 的说明）：26.x 的绘制钩子由
+        // 游戏的隔离加载器解析，而本类由 agent 的加载器加载——同一个类有两份，静态字段互不可见。
+        // 早先钩子直接调 setDrawContext，写进的是空副本，界面"已打开"却一个像素都不画（实测）。
+        NocturneRuntime.setDrawContextSink(new java.util.function.Consumer<Object>() {
+            @Override
+            public void accept(Object graphics) {
+                if (graphics == null) {
+                    clearDrawContext();
+                } else {
+                    setDrawContext(graphics);
+                }
+            }
+        });
         // 文件诊断（diag2）已删除：生产环境写 nocturne-diag.txt 是残留 IO；
         // 安装状态由 tryInstall 成功后的 overlay diag 日志行覆盖。
         NocturneRuntime.addListener(new OverlayBootstrap(gameLoader, instrumentation, toggleKey,
@@ -113,44 +149,39 @@ public final class OverlayBootstrap implements FrameListener {
 
     /** 尝试安装一次；任何一步不满足就返回等下一帧。 */
     private void tryInstall() {
-        Class<?> gl11 = resolveGl11();
-        if (gl11 == null) {
-            // GL 还没加载（游戏启动早期）：不计数，下一帧继续等。
-            return;
-        }
         // 不直接解引用 NocturneClient.get()：客户端若尚未 boot 完成，取不到就下一帧再试，
         // 且不消耗重试次数（L-53）。
         NocturneClient client = NocturneClient.get();
         if (client == null) {
             return;
         }
-        // SDL 栈（26.x）保护：那里 LWJGL 的 GL 绑定不可用——实测帧回调（缓冲交换点）、GUI 绘制路径
-        // 与游戏自己的呈现入口三处调用 GL 都会让 LWJGL FATAL ERROR 终止 JVM（native abort，捕获不到）。
-        // 判定必须用 Instrumentation 的**已加载类现查**：启动早期游戏类还没加载，按名字探会漏判，
-        // 而漏判的代价正是"注册了帧钩子 → 帧回调里做 GL → 崩游戏"（实测如此）。
-        if (instrumentation != null) {
-            for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-                if ("org.lwjgl.sdl.SDLVideo".equals(loaded.getName())) {
-                    if (!sdlStackDetected) {
-                        sdlStackDetected = true;
-                        log("SDL GL stack: overlay disabled (LWJGL GL bindings unusable);"
-                                + " the game is left untouched");
-                    }
-                    return;
-                }
+        // SDL 栈（26.x）走另一条绘制路径：GL 全进程不可用——帧回调（缓冲交换点）、GUI 绘制路径与
+        // 游戏自己的呈现入口三处调用 GL 都会让 LWJGL FATAL ERROR 终止 JVM（native abort，捕获不到），
+        // 因此这里既不绑 GL 也不碰 GL，改把绘制交给游戏自己的 GuiGraphicsExtractor。
+        // 判定必须用 Instrumentation 的**已加载类现查**：按名字探会漏判，而漏判的代价正是
+        // "注册了帧钩子 → 帧回调里做 GL → 崩游戏"（实测如此）。
+        Class<?> extractorType = isSdlStack() ? resolveLoaded(EXTRACTOR_CLASS) : null;
+        boolean sdl = extractorType != null;
+        Class<?> gl11 = null;
+        GlApi gl = null;
+        if (!sdl) {
+            gl11 = resolveGl11();
+            if (gl11 == null) {
+                // GL 还没加载（游戏启动早期）：不计数，下一帧继续等。
+                return;
+            }
+            gl = GlApi.bind(gl11);
+            if (gl == null) {
+                return;
             }
         }
         attempts++;
 
-        // 注：SDL 栈（Minecraft 26.x）下帧钩子**不再注册**（见 NocturneAgent.installFrameHook），
-        // 帧回调因此只由 GUI 绘制钩子驱动——那里 GL 上下文安全（见 GuiDrawHook）。所以这里不必再
-        // 拦截安装：它只会在安全时机发生。
+        // 注：SDL 栈下帧钩子**不再注册**（见 NocturneAgent.installFrameHook），帧回调只由 GUI 绘制
+        // 钩子驱动——那时绘制上下文有效（见 GuiDrawHook）。所以这里不必再拦截安装：它只在安全时机发生。
 
-        ClassLoader loader = gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader;
-        GlApi gl = GlApi.bind(gl11);
-        if (gl == null) {
-            return;
-        }
+        ClassLoader loader = sdl ? gameLoader
+                : (gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader);
         Mapping mapping = currentMapping();
         GameBridge bridge = new GameBridge(instrumentation, mapping);
         // 等游戏主类实例就绪再绑定字体：GL 可用**早于** Minecraft 实例构造（Forge/launchwrapper 下
@@ -161,7 +192,8 @@ public final class OverlayBootstrap implements FrameListener {
         if (!gameReady && attempts <= GAME_WAIT_ATTEMPTS) {
             return;
         }
-        TextRenderer font = MinecraftTextRenderer.bind(bridge);
+        // SDL 栈不建 MinecraftTextRenderer：26.x 的 Font 没有画字方法，文字由 extractor 后端自己画。
+        TextRenderer font = sdl ? null : MinecraftTextRenderer.bind(bridge);
         // bind 不再因"字体晚到"返回 null（改为绘制时晚绑定），所以这里只需报告是否已就绪。
         if (!gameReady) {
             log("game instance still unreachable after " + attempts
@@ -170,13 +202,45 @@ public final class OverlayBootstrap implements FrameListener {
         // 字体状态必须可见：字体没就绪时界面能开但**一个字都不显示**，而日志里此前没有任何线索。
         // 最常见的根因是映射表与目标版本/重映射环境不匹配（例如 Forge 用 SRG 名）。
         // 这里只报"是否已就绪"；真正的绑定结果由 MinecraftTextRenderer 打（含 font/gl/widthHandle）。
-        System.out.println("[nocturne] text renderer: "
-                + (font == null ? "bridge unavailable" : font.getClass().getSimpleName()
-                        + " (font may bind late; see text renderer bound/pending lines)")
-                + "; mapping=" + mapping.describe());
+        if (sdl) {
+            System.out.println("[nocturne] text renderer: game Font, drawn through the extractor backend"
+                    + "; mapping=" + mapping.describe());
+        } else {
+            System.out.println("[nocturne] text renderer: "
+                    + (font == null ? "bridge unavailable" : font.getClass().getSimpleName()
+                            + " (font may bind late; see text renderer bound/pending lines)")
+                    + "; mapping=" + mapping.describe());
+        }
         client.setGameBridge(bridge);
 
-        UiBackend backend = selectBackend(gl, gl11, font, bridge);
+        UiBackend backend;
+        if (sdl) {
+            ExtractorRenderer extractor = ExtractorRenderer.bind(extractorType, bridge::minecraft);
+            if (extractor == null) {
+                // 绘制 API 签名不认识（这个版本的 extractor 换了形状）：报一次，之后仍按上限重试。
+                if (!sdlReported) {
+                    sdlReported = true;
+                    log("SDL render stack: GuiGraphicsExtractor signatures not recognised;"
+                            + " the overlay cannot draw on this version");
+                }
+                return;
+            }
+            if (!sdlReported) {
+                sdlReported = true;
+                log("SDL render stack: drawing through the game's GuiGraphicsExtractor"
+                        + " (LWJGL GL bindings are unusable here)");
+            }
+            // 钩子每帧从这里取后端，把当帧的绘制上下文喂进去（见 setDrawContext）。
+            extractorBackend = extractor;
+            // 本帧的上下文在安装之前就送过来了（安装发生在同一帧的 onFrame 里）：补喂，否则第一帧白丢。
+            Object pending = pendingGraphics;
+            if (pending != null) {
+                extractor.setFrame(pending);
+            }
+            backend = extractor;
+        } else {
+            backend = selectBackend(gl, gl11, font, bridge);
+        }
         InputSource input = ReflectiveInput.create(loader, backend::width, backend::height);
         // 诊断（diag1）：把输入源的真实类与它的类来源打出来。"input=none" 这类现象必须能区分
         // 「探测失败」与「运行时加载到了别处的旧类」——否则只在日志里猜，无法定位。
@@ -217,14 +281,69 @@ public final class OverlayBootstrap implements FrameListener {
      * 构造时传入的游戏类加载器，并用不初始化方式探测。
      */
     private Class<?> resolveGl11() {
+        return resolveLoaded(GL11_CLASS);
+    }
+
+    /**
+     * 当前渲染栈是否为 SDL（Minecraft 26.x）。
+     *
+     * <p>判据是 {@code org.lwjgl.sdl.SDLVideo} 已加载：它在就说明 GL 上下文由 SDL 管理，
+     * LWJGL 的 GL 绑定在这个进程里不可用。用**已加载类现查**而不是按名探测：启动早期游戏类还没加载，
+     * 按名字探会漏判，而漏判的代价是"注册了帧钩子 → 帧回调里做 GL → 崩游戏"（实测如此）。
+     *
+     * @return 是 SDL 栈返回 {@code true}
+     */
+    private boolean isSdlStack() {
+        return resolveLoaded(SDL_CLASS) != null;
+    }
+
+    /**
+     * 从已加载类里按名取类；取不到再按名字从游戏加载器加载（不初始化）。
+     *
+     * <p>优先查已加载类：它能看到 Fabric/Forge 隔离类加载器里的类，且不触发目标类的静态初始化
+     * （K2 / M-88）。
+     *
+     * @param className 点号全限定名
+     * @return 类对象；不存在时返回 {@code null}
+     */
+    private Class<?> resolveLoaded(String className) {
         if (instrumentation != null) {
             for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-                if (GL11_CLASS.equals(loaded.getName())) {
+                if (className.equals(loaded.getName())) {
                     return loaded;
                 }
             }
         }
-        return loadNoInit(GL11_CLASS, gameLoader);
+        return loadNoInit(className, gameLoader);
+    }
+
+    /**
+     * 把本帧的绘制上下文交给 SDL 栈的绘制后端。
+     *
+     * <p>由 {@link GuiDrawHook} 在绘制入口期间每帧调用一次，随后由它驱动
+     * {@code NocturneRuntime.onFrame()}：extractor 只在那一帧有效，绘制必须当帧完成。
+     *
+     * <p>后端还没装好时（安装发生在同一帧的 onFrame 里）先把上下文记下来，装好后立刻补喂——
+     * 否则第一帧必然画不出来，日志里那句"overlay opened but renderer not ready"会一直挂着。
+     *
+     * @param graphics 本帧的 {@code GuiGraphicsExtractor} 实例
+     */
+    public static void setDrawContext(Object graphics) {
+        ExtractorRenderer backend = extractorBackend;
+        if (backend == null) {
+            pendingGraphics = graphics;
+            return;
+        }
+        backend.setFrame(graphics);
+    }
+
+    /** 释放本帧的绘制上下文；钩子在驱动完 {@code onFrame()} 之后调用。 */
+    public static void clearDrawContext() {
+        pendingGraphics = null;
+        ExtractorRenderer backend = extractorBackend;
+        if (backend != null) {
+            backend.clearFrame();
+        }
     }
 
     /** 放弃安装：打一次明确日志并把自己移出监听器列表，避免永久空转（M-90）。 */

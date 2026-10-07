@@ -361,34 +361,43 @@ public final class NocturneAgent {
         registerFrameHook(instrumentation, asmLoader, "org/lwjgl/sdl/SDLVideo", "SDL_GL_SwapWindow", "(J)Z");
     }
 
-    /**
-     * 注册一个帧钩子转换器，并在目标类已加载时立即重转换。
-     *
-     * @param instrumentation 插桩句柄
-     * @param asmLoader 内嵌 ASM 子加载器，用于创建转换器
-     * @param targetInternalName 目标类内部名（斜杠形式）
-     * @param method 目标方法名
-     * @param descriptor 目标方法描述符
-     */
-    /** GUI 绘制钩子的目标类（点号形式）。签名取自 26.3 实际字节码：{@code javap net.minecraft.client.gui.Hud}。 */
-    private static final String GUI_DRAW_CLASS = "net.minecraft.client.gui.Hud";
+    /** HUD 绘制入口：游戏内每帧一次。签名取自 26.3 实际字节码（{@code javap net.minecraft.client.gui.Hud}）。 */
+    private static final String HUD_DRAW_CLASS = "net.minecraft.client.gui.Hud";
     /** 目标方法名。 */
-    private static final String GUI_DRAW_METHOD = "extractRenderState";
+    private static final String HUD_DRAW_METHOD = "extractRenderState";
     /** 目标方法描述符：首个引用形参即绘制上下文。 */
-    private static final String GUI_DRAW_DESCRIPTOR =
+    private static final String HUD_DRAW_DESCRIPTOR =
             "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V";
-    /** 钩子类内部名（斜杠形式）。 */
-    private static final String GUI_HOOK_OWNER = "dev/nocturne/agent/GuiDrawHook";
     /** 钩子方法名（描述符固定 {@code (Ljava/lang/Object;)V}）。 */
-    private static final String GUI_HOOK_METHOD = "onDraw";
+    private static final String HUD_HOOK_METHOD = "onHudDraw";
 
     /**
-     * 注册 GUI 绘制钩子：把 {@code Hud.extractRenderState(GuiGraphicsExtractor, DeltaTracker)} 的首个
-     * 引用形参交给 {@link GuiDrawHook#onDraw(Object)}。
+     * 界面绘制入口：主菜单、暂停菜单、容器界面…都走它。
+     *
+     * <p>它是 {@code final}（子类覆盖的是 {@code extractRenderState}），所以织基类这一个方法就覆盖
+     * 所有界面。只织 HUD 那条的话，主菜单里根本没有 HUD 提取，叠加层永远画不出来。
+     */
+    private static final String SCREEN_DRAW_CLASS = "net.minecraft.client.gui.screens.Screen";
+    /** 目标方法名。 */
+    private static final String SCREEN_DRAW_METHOD = "extractRenderStateWithTooltipAndSubtitles";
+    /** 目标方法描述符：首个引用形参即绘制上下文，后三个是鼠标 x/y 与部分刻。 */
+    private static final String SCREEN_DRAW_DESCRIPTOR =
+            "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V";
+    /** 钩子方法名。 */
+    private static final String SCREEN_HOOK_METHOD = "onScreenDraw";
+
+    /** 钩子类内部名（斜杠形式）。 */
+    private static final String GUI_HOOK_OWNER = "dev/nocturne/agent/GuiDrawHook";
+
+    /**
+     * 注册绘制钩子：把 HUD 与界面两个绘制入口的首个引用形参交给 {@link GuiDrawHook}。
      *
      * <p>为什么是这里：Minecraft 26.x 用 SDL 管理 GL 上下文，帧回调里做任何 GL 调用都会让 LWJGL
-     * 直接终止 JVM（native abort，捕获不到）。而 GUI 绘制期的 GL 上下文是有效的——游戏自己正在画界面。
-     * 因此 SDL 栈上把"输入轮询 + 绘制"整体挪到这个钩子里，由它每帧驱动 {@code NocturneRuntime.onFrame()}。
+     * 直接终止 JVM（native abort，捕获不到）。因此 SDL 栈上把"输入轮询 + 绘制"整体挪到绘制入口上，
+     * 由它每帧驱动 {@code NocturneRuntime.onFrame()}——那条路上不碰 GL，绘制走游戏自己的
+     * {@code GuiGraphicsExtractor}。
+     *
+     * <p>两个入口缺一不可：HUD 那条只在游戏内（世界里的 HUD）触发，界面那条只在挂着界面时触发。
      *
      * <p>钩子描述符必须是 {@code (Ljava/lang/Object;)V}：转换器只负责把首个引用形参原样传出来，
      * 不关心它具体是什么类型（把具体类型写进描述符会让钩子在类加载顺序变化时失配）。
@@ -399,31 +408,59 @@ public final class NocturneAgent {
             log("embedded ASM unavailable; gui draw hook skipped");
             return;
         }
+        registerGuiDrawHook(instrumentation, asmLoader, HUD_DRAW_CLASS, HUD_DRAW_METHOD,
+                HUD_DRAW_DESCRIPTOR, HUD_HOOK_METHOD);
+        registerGuiDrawHook(instrumentation, asmLoader, SCREEN_DRAW_CLASS, SCREEN_DRAW_METHOD,
+                SCREEN_DRAW_DESCRIPTOR, SCREEN_HOOK_METHOD);
+    }
+
+    /**
+     * 注册一个绘制钩子转换器，并在目标类已加载时立即重转换。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader       内嵌 ASM 子加载器
+     * @param targetClass     目标类（点号形式）
+     * @param method          目标方法名
+     * @param descriptor      目标方法描述符（首个形参须是引用类型）
+     * @param hookMethod      {@link GuiDrawHook} 上的入口方法名
+     */
+    private static void registerGuiDrawHook(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
+                                            String targetClass, String method, String descriptor,
+                                            String hookMethod) {
         ClassFileTransformer transformer = asmLoader.createCallbackTransformer(
-                GUI_DRAW_CLASS, GUI_DRAW_METHOD, GUI_DRAW_DESCRIPTOR, GUI_HOOK_OWNER, GUI_HOOK_METHOD);
+                targetClass, method, descriptor, GUI_HOOK_OWNER, hookMethod, true);
         if (transformer == null) {
             return;
         }
         try {
             instrumentation.addTransformer(transformer, true);
         } catch (Throwable t) {
-            log("could not register gui draw hook: " + t);
+            log("could not register gui draw hook on " + targetClass + ": " + t);
             return;
         }
         // 目标类可能已被加载：显式重转换一次，否则要等下一次加载（那时可能永远不重载）。
         for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-            if (GUI_DRAW_CLASS.equals(loaded.getName())) {
+            if (targetClass.equals(loaded.getName())) {
                 try {
                     instrumentation.retransformClasses(loaded);
                 } catch (Throwable t) {
-                    log("retransform " + GUI_DRAW_CLASS + " failed: " + t);
+                    log("retransform " + targetClass + " failed: " + t);
                 }
                 break;
             }
         }
-        log("gui draw hook registered on " + GUI_DRAW_CLASS + "." + GUI_DRAW_METHOD);
+        log("gui draw hook registered on " + targetClass + "." + method);
     }
 
+    /**
+     * 注册一个帧钩子转换器，并在目标类已加载时立即重转换。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader 内嵌 ASM 子加载器，用于创建转换器
+     * @param targetInternalName 目标类内部名（斜杠形式）
+     * @param method 目标方法名
+     * @param descriptor 目标方法描述符
+     */
     private static void registerFrameHook(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                           String targetInternalName, String method, String descriptor) {
         ClassFileTransformer transformer =
@@ -471,9 +508,8 @@ public final class NocturneAgent {
                     : ClassLoader.getSystemClassLoader();
             // 交给 OverlayBootstrap：它在 GL 真正可用后才安装，模组路径复用同一套逻辑。
             // trace(true) 已在 start() 里、注册转换器之前打开（见 M-82），此处不再重复。
-            // GUI 绘制钩子需要 loader/instrumentation 才能发起安装：SDL 栈下只有它触发的时机
-            // GL 上下文有效，因此安装由它首次调用时发起（见 GuiDrawHook）。
-            GuiDrawHook.arm(loader, instrumentation, guiToggleKey, openGuiOnInstall);
+            // 绘制钩子不需要任何预置配置：它只把当帧绘制上下文交给 bootstrap 层的汇，
+            // 而汇由这里的 install 注册（静态状态必须放 bootstrap 层，见 GuiDrawHook 的说明）。
             OverlayBootstrap.install(loader, instrumentation, guiToggleKey, openGuiOnInstall);
             log("overlay bootstrap registered; toggle key=" + guiToggleKey);
         } catch (Throwable t) {

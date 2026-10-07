@@ -115,17 +115,19 @@ public final class EmbeddedAsmLoader extends ClassLoader {
      * @param descriptor         目标方法描述符（必须含至少一个引用形参）
      * @param hookOwner          钩子类内部名（斜杠形式）
      * @param hookMethod         钩子方法名（描述符固定为 {@code (Ljava/lang/Object;)V}）
+     * @param atMethodEnd        {@code true} = 在方法末尾注入（首个 {@code RETURN} 之前）；
+     *                           绘制入口必须末尾注入，否则叠加层会被目标方法随后画的内容盖住
      * @return 转换器；内嵌 ASM 缺失或类加载失败时返回 {@code null}
      */
     public ClassFileTransformer createCallbackTransformer(String targetInternalName, String method,
                                                           String descriptor, String hookOwner,
-                                                          String hookMethod) {
+                                                          String hookMethod, boolean atMethodEnd) {
         try {
             Class<?> transformerClass = loadClass(CALLBACK_TRANSFORMER_CLASS);
             Constructor<?> constructor = transformerClass.getConstructor(
-                    String.class, String.class, String.class, String.class, String.class);
+                    String.class, String.class, String.class, String.class, String.class, boolean.class);
             Object instance = constructor.newInstance(
-                    targetInternalName, method, descriptor, hookOwner, hookMethod);
+                    targetInternalName, method, descriptor, hookOwner, hookMethod, atMethodEnd);
             return (ClassFileTransformer) instance;
         } catch (Throwable t) {
             log("could not create callback hook transformer for " + targetInternalName + "." + method

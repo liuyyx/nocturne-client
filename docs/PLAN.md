@@ -18,9 +18,9 @@
 | P0 清理 | 删模组路径 / 启动动画 / 版本适配分支；修指针捕获语义 | ✅ 已完成 |
 | P1 版本传递 | `AgentOptions`（组装 + 版本族归一化）；注入器 GUI 与命令行两条路径共用同一份判定；agent 解析并按表名取表。自定义实例（`fpsmaster` 这类名字里没有版本号的）改读实例 json 的 `clientVersion`/`inheritsFrom`——**已在 fpsmaster（Forge 1.8.9）实机验证** `mapping=obfuscated 1.8.9` | ✅ 已完成 |
 | P2 注入点 | 帧交换钩子 + **绘制上下文钩子**（含行为测试） | ✅ 已完成 |
-| P3 映射表生成器 | `tools/mapping/` 三档流水线；9 个版本的表**已全部入库**（`client/src/main/resources/mappings-*.json`，1.21.11 与 26.3 已抽查确认为真实内容） | ✅ 完成，收尾见 P3-R |
-| P4 绘制后端 | A（1.8.9/1.12.2 固定管线）✅ 真机可用；B（1.16.5 gl-core）✅ 真机可用（linkProgram 缺失 + 视口回退 Window 已修，界面可见可点）；C（26.x SDL 栈）❌ 按设计不装叠加层，游戏原生绘制 spike 通过，正式实现待做 | 部分，P4-B 已关闭，见 P4-C |
-| P5 输入 | 右 Shift 唤出 / Esc 关闭 / 鼠标在 A 代际可用；滚轮：LWJGL2 轮询 `getDWheel`、GLFW 回调 `setScrollCallback`，派发链走读无断点（合成事件进不了游戏队列，待真人验收）；26.3 输入栈未实现 | 部分，见 P5 |
+| P3 映射表生成器 | `tools/mapping/` 流水线；**66 个 release（1.8.9–26.3）的表全部入库**，每版本四套命名空间；`--check` 绿、`--javap` 逐版本对真实 client jar 校验通过 | ✅ 完成，收尾见 P3-R |
+| P4 绘制后端 | A（1.8.9/1.12.2 固定管线）✅ 真机可用；B（1.16.5 gl-core）✅ 真机可用（linkProgram 缺失 + 视口回退 Window 已修，界面可见可点）；C（26.x SDL 栈）✅ 真机可用（`ExtractorRenderer` 走游戏自己的 `GuiGraphicsExtractor`，界面可见可点） | ✅ 全部关闭 |
+| P5 输入 | 右 Shift 唤出 / Esc 关闭 / 鼠标在 A 代际可用；滚轮：LWJGL2 轮询 `getDWheel`、GLFW 回调 `setScrollCallback`，派发链走读无断点（合成事件进不了游戏队列，待真人验收）；26.x 走 `SdlInput`（轮询 SDL 键鼠，界面已能开能点；**SDL 滚轮无轮询接口，仍是缺口**） | 部分，见 P5 |
 | P6 模块 | 4 个模块入库；Tick/Packet/Render/Input 四事件已立类型并接生产（Tick 广播+直调、Render 每帧广播）；FullBright 对齐 OpenVape（Mode/Fade/夜视，1.8.9 真机启用+设置面板已验）；B1 剩余 8 模块待世界绘制挂钩 | 部分，见 P6 |
 | P7 自实现 attach | **已收尾**：Windows 原生通道实测（官方 1.8.9 真机 / JDK 8 靶 / 裁剪 JRE 注入成功，全程不碰 `jdk.attach`）；Linux/macOS 域套接字通道已实现（WSL `gcc -Werror` 编译校验 + 单测，未实机）；`PayloadPack` 已接入生产（内嵌 ASM 改为加密载荷，1.8.9 真机帧钩子 live 证明解包生效） | ✅ 已完成 |
 
@@ -39,14 +39,15 @@
 - 验收：`gradle build` 通过；`git status` 干净；commit + push。
 - 不做：不 revert、不另起重构——迁移方向是对的（H05-B3：旧代码无条件分配 staging 导致数组形态永不可达），只差收尾。
 
-### P3-R 映射表收尾（小活，先清掉）
+### P3-R 映射表收尾 —— ✅ 已完成
 
-- `python tools/mapping/generate.py --check` 必须干净；`--javap` 对本地 client jar 全版本校验一遍。
-- `requirements.txt` 与 `--report` 的 absent 清单对齐：要么加别名/需求解决，要么确认为版本真实缺失（保留 `"absent": true`）。
-- `ObfuscatedMapping` 目前只读**类级** absent，成员级 `"absent": true` 写了也白写（`tools/mapping/README.md`
-  末尾的 Note 点名了这个缺口）：补成员级诊断日志，缺成员时响亮报错而不是按规范名硬调。
-- 订正 `VERSION-MATRIX.md` §1 四个版本的表状态 ❌→✅。
-- 验收：`--check` 绿、`--javap` 绿、`--report` 无意外 absent；缺成员时日志能定位到版本+类+成员；commit + push。
+- `--check` 干净；`--javap` 对本地 client jar 全版本（66 个）校验通过。
+- `requirements.txt` 与 `--report` 的 absent 清单已对齐（`1.9.1/1.9.3/1.10.1` 无 MCP SRG 是**真实缺失**，
+  表里保留 `"absent": true` 并在 README / VERSION-MATRIX 写明）。
+- `ObfuscatedMapping` 已补**成员级** absent 诊断：缺成员时打一次性日志（版本 + 类 + 成员）并回退规范名，
+  不再按规范名硬调（26.3 上 `Minecraft#inGameHasFocus` 就是这条日志报出来的）。有回归测试钉住。
+- `VERSION-MATRIX.md` §1 的表状态已订正为 ✅。
+
 ### P4-B 代际 B 画不出界面（离"可用"最近的一个 bug，优先）
 
 现状（1.16.5 真机）：注入、帧钩子、输入层、叠加层装载全绿，`screen=ClickGui`，渲染异常已清零——
@@ -55,15 +56,22 @@
 
 - 验收：1.16.5 真机注入后界面可见、可点；`backend=gl-core` 日志无异常；commit + push。
 
-### P4-C 26.x 绘制路径（架构级难题，单独一个 spike，不承诺交付）
+### P4-C 26.x 绘制路径 —— ✅ 已完成（2026-10-07 真机 26.3 通过）
 
-实测结论：26.1 起 SDL 栈下 LWJGL 的 GL 绑定全进程不可用（三处时机都试过，native abort，Java 侧接不住），
-所以 agent 按设计不注册帧钩子、不装叠加层。界面要回来，必须是不依赖 LWJGL 绑定的绘制路径。
-候选三选一，先做最小 spike 再定：经 SDL 自行 make current 后交 Skia；或改用游戏自身的绘制 API；
-HUD 的 `GuiGraphicsExtractor.fill` 思路可先在 lab 里验证。
+路线：**改用游戏自身的绘制 API**（`GuiGraphicsExtractor`）。SDL 栈下 LWJGL 的 GL 绑定全进程不可用
+（三处时机都试过，native abort，Java 侧接不住），所以 agent 不注册帧钩子、也不碰 GL；绘制走游戏自己的
+RenderPearl 管线（`fill` / `outline` / `enableScissor` / `text`）。
 
-- 验收（spike）：26.3 真机上画出一个矩形且游戏不崩；结论写进 VERSION-MATRIX（哪条路通、哪两条死）；commit + push。
-- spike 失败是可接受的结果：那就把「26.x 无界面」从 ❌ 改成架构决策（只保留注入+模块），P4-C 关闭，不再投时间。
+- 新后端 `ExtractorRenderer`：把 `Renderer` 原语翻译成 extractor 调用；坐标就是游戏 GUI 缩放坐标。
+- 两个绘制入口都要织（`Hud.extractRenderState` 与 `Screen.extractRenderStateWithTooltipAndSubtitles`）：
+  只织 HUD 那条的话主菜单根本不调用它；两条都织时有界面就让 HUD 让位（界面在上层）。
+- **坑（记下来）**：钩子与后端分属两个类加载器，静态状态必须放 bootstrap 层的 `FrameDispatcher`，
+  否则界面"已打开但一个像素都不画"（早先直接调 `OverlayBootstrap.setDrawContext` 就是这个症状）。
+- 验收：26.3 真机注入后界面可见可点（`backend=gui-extractor`、`input=sdl`、`screen=ClickGui`；
+  三列面板 + 模块名正常，点击 `FullBright` 状态翻转）；结论写进 VERSION-MATRIX 与 ARCHITECTURE。
+- 未做（另开）：HUD 常显（要 Skija 画布）、`ForeignScreenGuard` 在 26.x 的等价判据（它依赖的
+  `Minecraft.inGameHasFocus` 在 26.3 不存在）、滚轮（见 P5）。
+
 ### P5 输入收尾
 
 - 核对滚轮现状：`CallbackHookTransformer` 目前只交首个**引用**形参，滚轮是 `double` 形参——

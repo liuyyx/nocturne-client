@@ -80,6 +80,40 @@ public final class FrameDispatcher {
     }
 
     /**
+     * 绘制上下文汇：叠加层后端在这里收当帧的绘制上下文。
+     *
+     * <p>和监听器列表同理，**必须放在本类**：26.x 的绘制钩子由游戏的隔离加载器解析，
+     * 而叠加层后端由 agent 的加载器持有——各自存一份静态字段的话，钩子写进去的是空副本，
+     * 后端永远收不到上下文（实测现象：界面"已打开"但一个像素都不画，日志里只有
+     * "overlay opened but renderer not ready"）。
+     *
+     * <p>只收 {@link java.util.function.Consumer}（JDK 类型）：两个加载器眼里它就是同一个类型，
+     * 不会出现"自定义接口类不同"的类型错误。
+     */
+    private static volatile java.util.function.Consumer<Object> DRAW_CONTEXT_SINK;
+
+    /**
+     * 注册绘制上下文汇；后注册的覆盖先前的。
+     *
+     * @param sink 接收当帧绘制上下文的消费者；{@code null} 表示注销
+     */
+    public static void setDrawContextSink(java.util.function.Consumer<Object> sink) {
+        DRAW_CONTEXT_SINK = sink;
+    }
+
+    /**
+     * 把当帧绘制上下文交给叠加层后端；未注册汇时无副作用。
+     *
+     * @param graphics 当帧的绘制上下文；{@code null} 表示本帧结束、释放引用
+     */
+    public static void setDrawContext(Object graphics) {
+        java.util.function.Consumer<Object> sink = DRAW_CONTEXT_SINK;
+        if (sink != null) {
+            sink.accept(graphics);
+        }
+    }
+
+    /**
      * 分发一帧给全部动作。
      *
      * <p>契约：无论发生什么都不得抛出异常，也不得阻塞——本方法由注入的字节码在游戏的缓冲交换点调用，

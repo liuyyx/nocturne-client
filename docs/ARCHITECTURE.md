@@ -27,12 +27,15 @@
 
 ```
 nocturne-client/
-├── core/      注入侧：进程发现、attach、载荷容器、CLI 入口
-├── injector/  注入器 GUI（Swing + FlatLaf + MigLayout）
-├── agent/     被注入侧：premain/agentmain 接线、帧钩子、叠加层装配
-├── client/    客户端核心：模块与值框架、事件总线、映射层、反射桥
-├── ui/        自绘 ClickGUI 与 HUD
-└── dist/      纯聚合模块（无源码），合并上述五者成单 jar
+├── core/        注入侧：进程发现、attach、载荷容器、CLI 入口
+├── injector/    注入器 GUI（Swing + FlatLaf + MigLayout）
+├── agent/       被注入侧：premain/agentmain 接线、帧钩子与绘制钩子、叠加层装配
+├── client/      客户端核心：模块与值框架、事件总线、映射层、反射桥、bootstrap 层分发器
+├── ui/          自绘 ClickGUI 与 HUD（四个绘制后端，见 3.4）
+├── dist/        纯聚合模块（无源码），合并上述五者成单 jar
+├── launcher/    Windows 启动器壳（WPF / .NET 8）——**不在 Gradle 构建内**，见 3.6
+├── tools/mapping/  映射表生成器（Python）——**不在 Gradle 构建内**
+└── vendor/      第三方源码快照（Setsuna / Vape）——只作参考与许可留存，不参与构建
 ```
 
 依赖图是**森林**，不是链：
@@ -43,6 +46,7 @@ agent ──→ client, ui             (被注入侧：agent 同时是 ui 的宿
 ui ──────→ client
 core, client                     (叶子)
 dist ────→ 全部
+launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进程驱动)
 ```
 
 `core` 与 `client` 都是叶子，没有循环依赖。注入器不依赖客户端，因此能独立启动。
@@ -67,15 +71,21 @@ dist ────→ 全部
 2. 解析 agent 参数 `guiKey=`（畸形输入一律回退 `VK_RIGHT_SHIFT`）。
 3. 在**守护线程** `nocturne-init` 上依次 `boot → installFrameHook → installOverlay`
    （在 `premain` 里同步初始化会拖死待插桩 JVM 的类加载）。
-4. `FrameHookTransformer`（ASM9）在三个帧交换点织入 `NocturneRuntime.onFrame()`：
-   `org/lwjgl/opengl/Display.update()V` / `org/lwjgl/glfw/GLFW.glfwSwapBuffers(J)V` /
-   `org/lwjgl/sdl/SDLVideo.SDL_GL_SwapWindow(J)Z`。
-   未命中或解析失败一律返回 `null`，JVM 沿用原字节码——**绝不让插桩导致类加载失败**。
+4. 两个 ASM9 转换器（未命中或解析失败一律返回 `null`，JVM 沿用原字节码——**绝不让插桩导致类加载失败**）：
+   - `FrameHookTransformer`：在三个帧交换点织入**无参**调用 `NocturneRuntime.onFrame()`——
+     `org/lwjgl/opengl/Display.update()V` / `org/lwjgl/glfw/GLFW.glfwSwapBuffers(J)V` /
+     `org/lwjgl/sdl/SDLVideo.SDL_GL_SwapWindow(J)Z`（LWJGL2 / GLFW 两代用；SDL 栈不注册，见下）。
+   - `CallbackHookTransformer`：把目标方法的**首个引用形参**交给钩子（描述符固定
+     `(Ljava/lang/Object;)V`），可插在方法**开头**或**末尾**。末尾用于绘制入口——目标方法自己也要往
+     同一个绘制上下文里画，插在开头的内容会被它随后画的内容盖住。26.x 用它接两个绘制入口
+     （`Hud.extractRenderState`、`Screen.extractRenderStateWithTooltipAndSubtitles`）驱动 `GuiDrawHook`。
 5. `EmbeddedAsmLoader` 用 child-first 子加载器从内嵌的加密载荷
    `dev/nocturne/agent/asm.pack`（`PayloadPack`：deflate + AES-256-GCM）解包出 ASM
    （同时覆盖转换器自身的类，否则它 import 的 ASM 解析不到内嵌副本）。
 6. `OverlayBootstrap` 是**延迟安装器**（自身实现 `FrameListener`）：每帧重解析游戏类加载器
-   里的 `GL11`，等第一帧真到来再装叠加层，成功后自摘。上限 600 次。
+   里的 `GL11`，等第一帧真到来再装叠加层，成功后自摘。上限 600 次。SDL 栈（26.x）下 GL 全进程
+   不可用，因此改走游戏自己的 `GuiGraphicsExtractor`（后端 `ExtractorRenderer`），由绘制钩子每帧把
+   当帧绘制上下文喂进来；那个汇放在 **bootstrap 层**（见 3.5）——钩子与后端分属两个类加载器。
 
 ### 3.3 client（客户端核心）
 
@@ -83,30 +93,57 @@ dist ────→ 全部
   + 值体系（`BooleanValue` / `NumberValue` / `ColorValue` / `ModeValue`）。
   分类只有 4 个：`MOVEMENT` / `RENDER` / `PLAYER` / `MISC`。
 - **事件总线**：`EventBus`，同步、按订阅顺序、逐订阅者异常隔离。
-  **当前零个事件类型，无优先级，生产未接线。**
+  已有 Tick / Packet / Render / Input 四类事件并接生产（Tick 广播 + 直调、Render 每帧广播）。
 - **跨版本适配**：
   - `Mapping` 抽象：把"规范名"翻译成运行时真实名。
   - `IdentityMapping`（26.1+，无混淆，原样返回）。
-  - `ObfuscatedMapping`（查 `/mappings-1.8.9.json`，重载消歧依赖 `methodDescriptor` 单键）。
+  - `ObfuscatedMapping`（查 `/mappings-<版本族>.json`，schema v2：每类/成员带
+    `vanilla`/`fabric`/`forge`/`neoforge` 四套运行期名与配套 JNI 描述符，按候选顺序试；
+    缺项由生成器标 `"absent": true`，运行期回退规范名并打一次性诊断日志）。
 - **反射桥**：`GameBridge` 提供类解析（含限流重试）、映射字段读写、映射方法调用
   （描述符消歧 / 恒等映射下按实参推导重载）与成功缓存。**没有有类型的 wrapper 对象**——
   `player()` 返回裸 `Object`。
 - **运行时**：`NocturneRuntime.onFrame()` 是帧广播器，四层防御：
   ThreadLocal 重入 → `tryLock` 非阻塞 → 逐监听器 `catch(Throwable)` → 最外层兜底。
-  按 50ms 折算成 20Hz 驱动 `ModuleRegistry.tick()`。
-- **HUD 接缝**：`HudSink`（`add`/`remove`/`has`）。
-  **生产未接线**——`setHudSink()` 无调用方，`ui` 侧也没有它的实现。
+  按 50ms 折算成 20Hz 驱动 `ModuleRegistry.tick()`。状态全在 bootstrap 层的 `FrameDispatcher`（见 3.5）。
+- **HUD 接缝**：`HudSink`（`add`/`remove`/`has`）；`ui` 侧实现是 `SkijaHudSink`，由 `OverlayBootstrap`
+  在 Skija 后端下接上（其余后端 HUD 暂不可用）。
 
 ### 3.4 ui（自绘 ClickGUI / HUD）
 
 - 渲染抽象 `Renderer`（rect / roundedRect / outline / text / pushClip / popClip）
   + `UiBackend`（+ beginFrame/endFrame/backendName/width/height/ready）。
-- 两个后端：`GlRenderer`（固定管线，`glOrtho` + `glScissor` 裁剪栈）、`ModernRenderer`
-  （核心 profile，GLSL 150 + 单 VBO/VAO，颜色走 uniform）。
-- 输入 `ReflectiveInput`：反射绑定 lwjgl2 / glfw 两代输入；GLFW 滚轮走动态代理回调
-  并**转发被顶掉的旧回调**；两端都不可用时退化为 `NoInput`。
+- 四个后端（都挂在 `UiBackend` 下，由 `OverlayBootstrap.selectBackend` 按栈挑选）：
+  `GlRenderer`（固定管线，`glOrtho` + `glScissor` 裁剪栈；≤1.12）、
+  `ModernRenderer`（核心 profile，GLSL 150 + 单 VBO/VAO，颜色走 uniform；1.13–26.2）、
+  `ExtractorRenderer`（26.x SDL 栈：**完全不碰 GL**，把原语翻译成游戏自己的 `GuiGraphicsExtractor`
+  调用——`fill` 收左上/右下两角、`outline` 收左上+宽高、`enableScissor`/`disableScissor` 裁剪、
+  `text(Font,…)` 画字；圆角无原语，逐行内缩近似）、
+  `SkijaBackend`（Skija 画布，Multi-Release JAR 在 Java 8 可用）。后两者当前都不在 LWJGL2 / 核心
+  profile 路径上被 probe：Skia 直写外部帧缓冲会盖黑游戏（修法是纹理中转，未做）。
+- 输入三代：`ReflectiveInput` 绑 lwjgl2 / glfw（GLFW 滚轮走动态代理回调并转发被顶掉的旧回调）、
+  `SdlInput`（26.x SDL3：轮询 `SDL_GetMouseState` / `SDL_GetKeyboardState`；**SDL 的滚轮是事件驱动、
+  没有轮询接口，仍为已知缺口**）；三代都解析不出时退化为 `NoInput`。
 - 组件树、主题、字体、动画、分类栏拖动、滚轮、右键设置面板、指针捕获交接。
-- HUD（`HudManager` / `TextElement`）：**生产零引用**，且无拖动、无持久化。
+- HUD：`SetsunaHud` / `HudManager` 挂在 `SkijaHudSink` 上；非 Skija 后端（含 26.x）HUD 暂不可用。
+
+### 3.5 runtime（bootstrap 层的全局状态）
+
+`FrameDispatcher` / `FrameListener` 被追加到 **bootstrap** 搜索路径
+（`NocturneAgent.installBootstrapBridge`），并由 `NocturneRuntime` 用
+`Class.forName(name, true, null)` **强制从 bootstrap 取用**。
+
+原因：注入到游戏方法里的那条调用由游戏的**隔离类加载器**（Fabric 的 `KnotClassLoader`）解析，
+而它会把认得的所有 jar 各加载一遍——**本项目任何类都会出现两份**，静态状态各存一份。实测现象：
+帧回调连续触发，但监听器列表恒为 0，界面永远不出现。因此所有跨加载器的静态状态（监听器列表、
+绘制上下文汇）都必须放在 bootstrap 层，对外只传 JDK 类型（`Runnable` / `Consumer`），
+避免"同名接口但不是同一个类型"的类型错误。
+
+### 3.6 launcher（WPF 壳）
+
+`launcher/` 是一个独立的 .NET 8 / WPF 项目（`NocturneLauncher.exe`），**不在 Gradle 构建内**。
+它刻意保持极薄：不链接 jar 中的任何类型，只把 jar 当子进程驱动（`--list-json` / `--pid=`），
+因此客户端升级后无需重新编译这个壳。它也是 `nocturne.bat` 之外的另一条启动路径。
 
 ## 4. 注入链
 
@@ -146,7 +183,9 @@ MAGIC 'NTPK'(4) | VERSION(1) | nonce(12) | AES-256-GCM 密文 + 16B 标签
 `getResource`/`getResourceAsStream` 用自定义 `memory:` `URLStreamHandler` 提供内存资源。
 解析有硬上限（条目数 ≤ 2²⁰、单条 ≤ 64MiB、明文 ≤ 512MiB、拒绝重名），inflate 带无进展自旋保护。
 
-**现状：整条链在生产代码里零调用**，无密钥生成、无 payload 资源打包。是"已实现且有测试但未接线"的孤岛。
+**现状：已接入生产**——内嵌 ASM 不再以明文 jar 资源分发，改为构建期由 `PayloadTool asm-pack`
+加密成 `dev/nocturne/agent/asm.pack`，agent 侧 `EmbeddedAsmLoader` 用同一密钥在内存解包加载
+（`PayloadKey` 的种子写在代码里，只提高零成本静态扫描门槛，不构成对定向逆向的防护）。
 
 ## 6. 入口矩阵
 
@@ -162,10 +201,10 @@ MAGIC 'NTPK'(4) | VERSION(1) | nonce(12) | AES-256-GCM 密文 + 16B 标签
 
 | 区间 | 特征 | 适配方式 |
 |---|---|---|
-| 1.8.9 | Java 8，MCP 名 | 映射表 + ASM 帧钩子 + GL 固定管线 |
-| 1.12 – 1.21 | 混淆 | 映射表（**未产出**） |
-| 26.1 – 26.2 | Java 21，无混淆 | 反射解析 + 核心 profile 渲染 |
-| 26.3 | Java 21，无混淆，SDL3 | 渲染与帧钩子已适配，**输入栈未实现** |
+| 1.8.9 | Java 8，MCP 名 | 映射表 + 帧钩子（`Display.update`）+ GL 固定管线 |
+| 1.12 – 1.21.x | 混淆 | 映射表（66 个 release 全部产出）+ 帧钩子（GLFW 交换点）+ 核心 profile 渲染 |
+| 26.1 – 26.2 | Java 21，无混淆，SDL3 | 反射解析 + 核心 profile 渲染（SDL 栈上未实机验证） |
+| 26.3 | Java 21，无混淆，SDL3 | **不注册帧钩子**；绘制走游戏自己的 `GuiGraphicsExtractor`，输入走 `SdlInput` |
 
 ## 8. 阶段计划
 

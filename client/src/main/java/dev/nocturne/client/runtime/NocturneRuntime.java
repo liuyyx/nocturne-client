@@ -41,6 +41,10 @@ public final class NocturneRuntime {
     private static Method removeMethod;
     private static Method countMethod;
     private static Method traceMethod;
+    /** {@code FrameDispatcher.setDrawContextSink(Consumer)}；未解析时为 null。 */
+    private static Method setDrawContextSinkMethod;
+    /** {@code FrameDispatcher.setDrawContext(Object)}；未解析时为 null。 */
+    private static Method setDrawContextMethod;
 
     /** 工具类，禁止实例化。 */
     private NocturneRuntime() {
@@ -63,6 +67,9 @@ public final class NocturneRuntime {
             removeMethod = dispatcher.getMethod("remove", Runnable.class);
             countMethod = dispatcher.getMethod("count");
             traceMethod = dispatcher.getMethod("trace", boolean.class);
+            setDrawContextSinkMethod = dispatcher.getMethod("setDrawContextSink",
+                    java.util.function.Consumer.class);
+            setDrawContextMethod = dispatcher.getMethod("setDrawContext", Object.class);
             return true;
         } catch (Throwable t) {
             System.out.println("[nocturne] bootstrap dispatcher unavailable: " + t);
@@ -141,6 +148,43 @@ public final class NocturneRuntime {
             traceMethod.invoke(null, Boolean.valueOf(enabled));
         } catch (Throwable ignored) {
             // 诊断开关失败不影响帧回调
+        }
+    }
+
+    /**
+     * 注册绘制上下文汇；转发到 bootstrap 分发器。
+     *
+     * <p>必须走 bootstrap：26.x 的绘制钩子由游戏的隔离加载器解析，本类因此存在两份，
+     * 汇若存在本类的静态字段里，钩子写进去的是空副本（实测：界面"已打开"却一个像素都不画）。
+     *
+     * @param sink 接收当帧绘制上下文的消费者；{@code null} 表示注销
+     */
+    public static void setDrawContextSink(java.util.function.Consumer<Object> sink) {
+        if (!bindDispatcher()) {
+            return;
+        }
+        try {
+            setDrawContextSinkMethod.invoke(null, sink);
+        } catch (Throwable t) {
+            System.out.println("[nocturne] setDrawContextSink failed: " + t);
+        }
+    }
+
+    /**
+     * 把当帧绘制上下文交给叠加层后端；转发到 bootstrap 分发器。
+     *
+     * <p>契约：绝不抛出异常——调用方是游戏的绘制路径。
+     *
+     * @param graphics 当帧的绘制上下文；{@code null} 表示本帧结束、释放引用
+     */
+    public static void setDrawContext(Object graphics) {
+        if (!bindDispatcher()) {
+            return;
+        }
+        try {
+            setDrawContextMethod.invoke(null, graphics);
+        } catch (Throwable ignored) {
+            // 绘制路径上不得抛出；失败只表现为本帧不画
         }
     }
 

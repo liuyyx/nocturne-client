@@ -51,6 +51,15 @@ public final class ObfuscatedMapping implements Mapping {
         /** 该成员的 JNI 描述符；表未记录时为 {@code null}。 */
         String signature;
         /**
+         * 该成员在 <b>Forge 等重映射环境</b>里的 SRG 名（如 {@code field_71415_G}）。
+         *
+         * <p>那些环境在运行期把成员改名为 SRG，原版混淆名（{@code w}）根本不存在——
+         * 只按 {@link #name} 访问会全部落空（写字段/读字段/调方法都是）。表里带上它，
+         * 运行期就能按 [obf, srg, canonical] 依次尝试。{@code null} 表示该来源没有 SRG 名
+         * （现代版本用官方映射，混淆名即真名）。
+         */
+        String srg;
+        /**
          * 该成员在<b>本表对应的版本里不存在</b>（例如 {@code Entity#isDead} 在 26.2/26.3 已被改名）。
          *
          * <p>为 true 时 {@link #name} 为 {@code null}：查询会打印一次性诊断并回退为规范名，
@@ -249,6 +258,51 @@ public final class ObfuscatedMapping implements Mapping {
             }
         }
         return canonicalName;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>顺序即尝试顺序：**原版混淆名 → SRG 名 → 规范名**。第三条是为 Forge/SRG 环境兜底——
+     * 那里的成员既不叫 {@code w} 也不叫 {@code field_71415_G}（某些构建会保留可读名）。
+     */
+    @Override
+    public java.util.List<String> fieldNameCandidates(ClassType owner, String canonicalName) {
+        ClassData data = classes.get(key(owner.canonicalName()));
+        MemberData member = data == null || data.fields == null
+                ? null : data.fields.get(canonicalName);
+        if (member != null && member.absent) {
+            reportAbsentMember(owner.canonicalName(), canonicalName, "field");
+        }
+        return candidates(member, canonicalName);
+    }
+
+    /** {@inheritDoc}（顺序同 {@link #fieldNameCandidates}）。 */
+    @Override
+    public java.util.List<String> methodNameCandidates(ClassType owner, String canonicalName,
+                                                      String descriptor) {
+        ClassData data = classes.get(key(owner.canonicalName()));
+        MemberData member = data == null || data.methods == null
+                ? null : data.methods.get(canonicalName);
+        if (member != null && member.absent) {
+            reportAbsentMember(owner.canonicalName(), canonicalName, "method");
+        }
+        return candidates(member, canonicalName);
+    }
+
+    /** 组装候选名列表（去重、保序）；表未收录时只剩规范名。 */
+    private static java.util.List<String> candidates(MemberData member, String canonicalName) {
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<String>(3);
+        if (member != null && !member.absent) {
+            if (member.name != null && !member.name.isEmpty()) {
+                names.add(member.name);
+            }
+            if (member.srg != null && !member.srg.isEmpty()) {
+                names.add(member.srg);
+            }
+        }
+        names.add(canonicalName);
+        return new java.util.ArrayList<String>(names);
     }
 
     /** 一次性诊断集合：同一个「本版本不存在」的成员只提示一次。 */

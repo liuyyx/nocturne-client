@@ -41,10 +41,14 @@ class Answer:
     name: "str | None" = None       # runtime (obf) name; None when absent
     signature: "str | None" = None  # obf JNI descriptor for methods
     reason: "str | None" = None     # why it is absent
+    # Forge 等环境在运行期把成员重映射成 SRG 名（Minecraft.inGameHasFocus -> field_71415_G），
+    # 而原版混淆名（w）在那里不存在。表里带上 SRG 名，运行期就能按 [obf, srg, canonical]
+    # 依次尝试——否则 Forge 目标上按表名访问成员必然失败（写字段/读字段全落空）。
+    srg: "str | None" = None        # SRG name, when the source knows one
 
     @staticmethod
-    def found(name: str, signature: "str | None" = None) -> "Answer":
-        return Answer(True, name=name, signature=signature)
+    def found(name: str, signature: "str | None" = None, srg: "str | None" = None) -> "Answer":
+        return Answer(True, name=name, signature=signature, srg=srg)
 
     @staticmethod
     def absent(reason: str) -> "Answer":
@@ -244,11 +248,11 @@ class LegacySource:
                 f"{mcp_class}.{human} ambiguous: {sorted(c[0] for c in candidates)}"
             )
         if kind == "method":
-            _srg, _owner, obf_name, obf_desc, _mcp_desc = candidates[0]
+            srg, _owner, obf_name, obf_desc, _mcp_desc = candidates[0]
             validate_signature(obf_desc)
-            return Answer.found(obf_name, obf_desc)
-        _srg, _owner, obf_name = candidates[0]
-        return Answer.found(obf_name)
+            return Answer.found(obf_name, obf_desc, srg=srg)
+        srg, _owner, obf_name = candidates[0]
+        return Answer.found(obf_name, srg=srg)
 
     def resolve_method(self, cls: str, name: str) -> Answer:
         return self._resolve(cls, "method", name)

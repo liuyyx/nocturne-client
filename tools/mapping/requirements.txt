@@ -314,3 +314,8 @@ net/minecraft/client/Minecraft#renderFrame()
 net/minecraft/client/Minecraft#font
 net/minecraft/client/Minecraft#mouseHandler
 net/minecraft/client/gui/Gui
+
+# 叠加层打开期间要让游戏停止处理鼠标（否则拖滑块会同时转视角）。
+# 1.8.9 的等价物是 Minecraft.inGameHasFocus（见 aliases-1.8.9.toml）；
+# 现代版本用 MouseHandler.grabMouse()/releaseMouse()（上面已列）。
+net/minecraft/client/Minecraft#inGameHasFocus

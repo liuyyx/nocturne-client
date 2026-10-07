@@ -209,15 +209,21 @@ public final class GameBridge {
         Class<?> type = target.getClass();
         boolean hasDescriptor = mapping.hasMethodDescriptor(owner, canonicalMethod);
         String descriptor = hasDescriptor ? mapping.methodDescriptor(owner, canonicalMethod) : null;
-        String methodName = mapping.methodName(owner, canonicalMethod, descriptor == null ? "" : descriptor);
-        Class<?>[] parameters = hasDescriptor
-                ? descriptorParameters(type, methodName, descriptor)
-                : inferParameters(type, methodName, args);
-        if (parameters == null) {
-            return null;
+        // 候选名逐个试（原版混淆名 → SRG 名 → 规范名）：Forge 目标上方法名是 SRG
+        // （getMinecraft → func_71410_x），只试一个名字会让整条调用链静默返回 null。
+        for (String methodName : mapping.methodNameCandidates(owner, canonicalMethod, descriptor)) {
+            Class<?>[] parameters = hasDescriptor
+                    ? descriptorParameters(type, methodName, descriptor)
+                    : inferParameters(type, methodName, args);
+            if (parameters == null) {
+                continue;
+            }
+            Method method = findMethodCached(type, methodName, parameters);
+            if (method != null) {
+                return Reflect.call(method, target, args);
+            }
         }
-        Method method = findMethodCached(type, methodName, parameters);
-        return Reflect.call(method, target, args);
+        return null;
     }
 
     /** 解析表中记录的描述符；结构非法时记录限流日志并返回 {@code null}。 */
@@ -318,34 +324,41 @@ public final class GameBridge {
         if (target == null) {
             return false;
         }
-        String name = mapping.fieldName(owner, canonicalField);
-        Field field = findFieldCached(target.getClass(), name);
-        if (field == null) {
-            return false;
+        // 候选名逐个试：原版混淆名 → SRG 名 → 规范名（见 Mapping#fieldNameCandidates）。
+        // 只试一个名字时，Forge 目标上写字段会静默失败（成员名是 SRG），
+        // 表现成毫不相关的症状——例如"拖 GUI 时视角跟着转"。
+        for (String candidate : mapping.fieldNameCandidates(owner, canonicalField)) {
+            Field field = findFieldCached(target.getClass(), candidate);
+            if (field == null) {
+                continue;
+            }
+            try {
+                field.set(target, value);
+                return true;
+            } catch (Throwable t) {
+                return false;
+            }
         }
-        try {
-            field.set(target, value);
-            return true;
-        } catch (Throwable t) {
-            return false;
-        }
+        return false;
     }
 
-    /** 读取一个映射字段，沿类继承链向上查找声明处。 */
+    /** 读取一个映射字段，沿类继承链向上查找声明处（候选名顺序同 {@link #writeField}）。 */
     public Object readField(Object target, ClassType owner, String canonicalField) {
         if (target == null) {
             return null;
         }
-        String name = mapping.fieldName(owner, canonicalField);
-        Field field = findFieldCached(target.getClass(), name);
-        if (field == null) {
-            return null;
+        for (String candidate : mapping.fieldNameCandidates(owner, canonicalField)) {
+            Field field = findFieldCached(target.getClass(), candidate);
+            if (field == null) {
+                continue;
+            }
+            try {
+                return field.get(target);
+            } catch (Throwable t) {
+                return null;
+            }
         }
-        try {
-            return field.get(target);
-        } catch (Throwable t) {
-            return null;
-        }
+        return null;
     }
 
     /** 命中缓存则直接返回；未命中时查找，仅缓存成功结果以便失败可重试。 */

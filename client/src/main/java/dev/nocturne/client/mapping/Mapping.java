@@ -29,6 +29,39 @@ public interface Mapping {
     String fieldName(ClassType owner, String canonicalName);
 
     /**
+     * 该字段在运行期**可能使用的全部候选名**，按尝试优先级排列（去重）。
+     *
+     * <p>为什么需要它：同一个字段在三种环境下有三个名字——原版混淆名（1.8.9 的 {@code w}）、
+     * Forge 等重映射环境的 SRG 名（{@code field_71415_G}）、未混淆构建的规范名。只取其中一个
+     * 会让另外两种环境按名访问全部落空（读字段拿到 null、写字段静默失败），而症状看起来毫不相关
+     * （字体绑不上、拖 GUI 时视角跟着转……）。
+     *
+     * <p>默认实现只返回 {@link #fieldName} 一个名字，保持既有行为；
+     * {@link ObfuscatedMapping} 会额外带上表里记录的 SRG 名与规范名。
+     *
+     * @param owner         声明该字段的类
+     * @param canonicalName 未混淆的规范字段名
+     * @return 候选名列表（至少一个元素）
+     */
+    default java.util.List<String> fieldNameCandidates(ClassType owner, String canonicalName) {
+        return java.util.Collections.singletonList(fieldName(owner, canonicalName));
+    }
+
+    /**
+     * 该方法在运行期可能使用的全部候选名，按尝试优先级排列（去重）。
+     *
+     * @param owner         声明该方法的类
+     * @param canonicalName 未混淆的规范方法名
+     * @param descriptor    该方法的 JNI 描述符（消歧用，可为 {@code null}）
+     * @return 候选名列表（至少一个元素）
+     * @see #fieldNameCandidates(ClassType, String)
+     */
+    default java.util.List<String> methodNameCandidates(ClassType owner, String canonicalName,
+                                                       String descriptor) {
+        return java.util.Collections.singletonList(methodName(owner, canonicalName, descriptor));
+    }
+
+    /**
      * 表中记录的某方法的 JNI 描述符（若存在）。
      *
      * <p>之所以需要它，是因为混淆构建会复用短方法名，描述符才是区分它们的依据。

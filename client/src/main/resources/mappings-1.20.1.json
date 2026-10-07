@@ -105,6 +105,9 @@
                 "gui": {
                     "name": "l"
                 },
+                "inGameHasFocus": {
+                    "absent": true
+                },
                 "level": {
                     "name": "s"
                 },

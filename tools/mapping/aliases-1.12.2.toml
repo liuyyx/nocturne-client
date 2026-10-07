@@ -121,6 +121,12 @@ version = "1.8.9"
 mcp = "getMinecraft"
 scope = "net/minecraft/client/Minecraft"
 
+# 见 aliases-1.8.9.toml 的同名条目：叠加层打开时让游戏停止处理鼠标。
+[fields.inGameHasFocus]
+mcp = "inGameHasFocus"
+scope = "net/minecraft/client/Minecraft"
+note = "public boolean；GUI 打开期间置 false、关闭后恢复 true"
+
 [methods.getBlockPos]
 mcp = "getPos"
 scope = "net/minecraft/tileentity/TileEntity"

@@ -38,6 +38,12 @@ final class ForeignScreenGuard implements FrameListener {
     /** 只记一次"顶替了谁"的日志：每帧都打会把游戏日志刷爆。 */
     private boolean loggedOnce;
 
+    /** 上一次下发的「游戏是否处理鼠标」期望值；null = 尚未成功下发过。 */
+    private Boolean gameInputApplied;
+
+    /** 「已关闭游戏鼠标处理」是否已提示过（只打一次）。 */
+    private boolean loggedInputSuppression;
+
     /**
      * @param bridge  游戏桥（必须已可用；未解析时本守护什么都不做）
      * @param guiOpen 返回"我们的界面是否打开"的判定
@@ -69,7 +75,11 @@ final class ForeignScreenGuard implements FrameListener {
     @Override
     public void onFrame() {
         try {
-            if (!guiOpen.getAsBoolean()) {
+            boolean open = guiOpen.getAsBoolean();
+            // 先做"接管鼠标"这件事，且必须**在早退之前**：关闭界面时同样要把它恢复回去，
+            // 否则关掉 GUI 后游戏再也收不到鼠标（视角转不动、点不了东西）。
+            applyGameInputSuppression(open);
+            if (!open) {
                 return;
             }
             // 只在**游戏内**顶替外部界面。主菜单/加载界面也是外部客户端自己的 screen，
@@ -106,6 +116,41 @@ final class ForeignScreenGuard implements FrameListener {
             }
         } catch (Throwable ignored) {
             // 每帧回调：这里的任何问题都不该影响游戏。
+        }
+    }
+
+    /**
+     * 我们的界面打开期间让**游戏**停止处理鼠标。
+     *
+     * <p>不这样做的话，拖动滑块 / 点按钮的同时视角也在转：1.8.9 只看
+     * {@code Minecraft.inGameHasFocus}，而我们的叠加层并不占用 {@code currentScreen}，
+     * 游戏因此照旧把鼠标位移喂给相机。（我们已把 LWJGL 的 {@code Mouse.setGrabbed(false)}
+     * 设为 false，但那个开关不足以让 1.8.9 停手——实测拖动时视角照样转。）
+     *
+     * <p>关闭界面时必须恢复，否则游戏彻底收不到鼠标。映射表里没有该字段的版本
+     * （现代版本改用 {@code MouseHandler} 的抓取 API）写会失败，这里静默跳过：
+     * 只做能做的事，绝不影响游戏本身。
+     *
+     * @param guiOpen 我们的界面是否打开
+     */
+    private void applyGameInputSuppression(boolean guiOpen) {
+        boolean wantGameInput = !guiOpen;
+        Boolean applied = gameInputApplied;
+        if (applied != null && applied.booleanValue() == wantGameInput) {
+            return;   // 期望值没变，不重复写
+        }
+        Object minecraft = bridge.minecraft();
+        if (minecraft == null) {
+            return;
+        }
+        if (!bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus", wantGameInput)) {
+            return;   // 该版本没有这个字段（或写失败）：维持原状
+        }
+        gameInputApplied = wantGameInput;
+        if (!wantGameInput && !loggedInputSuppression) {
+            loggedInputSuppression = true;
+            System.out.println("[nocturne] game mouse handling suppressed while our GUI is open"
+                    + " (Minecraft.inGameHasFocus=false)");
         }
     }
 

@@ -210,6 +210,9 @@ def build_table(version: str, kind: str, requirements: scan.Requirements,
                 entry = {"name": answer.name}
                 if answer.signature is not None:
                     entry["signature"] = answer.signature
+                # Forge 等环境用 SRG 名：与 obf 名一起写进表，运行期按 [obf, srg, canonical] 依次试。
+                if answer.srg is not None and answer.srg != answer.name:
+                    entry["srg"] = answer.srg
                 methods[name] = entry
                 resolved += 1
             else:
@@ -220,7 +223,10 @@ def build_table(version: str, kind: str, requirements: scan.Requirements,
         for name in sorted(requirements.fields[canonical]):
             answer = source.resolve_field(canonical, name)
             if answer.ok:
-                fields[name] = {"name": answer.name}
+                entry = {"name": answer.name}
+                if answer.srg is not None and answer.srg != answer.name:
+                    entry["srg"] = answer.srg
+                fields[name] = entry
                 resolved += 1
             else:
                 fields[name] = {"absent": True}

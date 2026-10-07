@@ -35,12 +35,38 @@ public final class GlRenderer implements UiBackend {
     private int clipDepth;
     /** 裁剪栈溢出是否已提示过；保证只打印一次，避免每帧刷屏。 */
     private boolean clipOverflowWarned;
+
+    /**
+     * UI 缩放的基准高度（物理像素）。
+     *
+     * <p>屏幕越高，UI 按越大的整数倍放大。取值使 854×480 这类小窗保持 1 倍（不缩小），
+     * 而 1080p 得到 3 倍、1440p/2K 得到 4~5 倍——界面元素都是固定像素尺寸写的，
+     * 不缩放就会在高分屏上"十分小"。
+     */
+    private static final int UI_BASE_HEIGHT = 320;
+
+    /** 自动缩放上限：再大会让 1px 描边与圆角显得过粗。 */
+    private static final int UI_MAX_SCALE = 8;
+
+    /**
+     * 当前生效的 UI 缩放系数（1 = 逐像素）。
+     *
+     * <p>它只影响两件事：{@link #viewportWidth}/{@link #viewportHeight} 记的是**逻辑尺寸**
+     * （物理 / 缩放），据此建立的 {@code glOrtho} 与所有绘制坐标、以及 {@code width()}/{@code height()}
+     * 的返回值三者保持一致；{@link #toScissorBox} 再乘回来换算成物理窗口坐标。
+     *
+     * <p>注意：之前那次"逻辑尺寸折算"之所以让叠加层完全不可见，是因为只改了 ortho 而
+     * {@code width()} 仍返回物理尺寸——组件树按物理宽高布局、却被画在逻辑坐标系里，于是全部落在
+     * 视口之外。这次三者同源，不会重演。
+     */
+    private volatile int uiScale = 1;
     /** 视口读取失败的诊断是否已打印过；保证只打印一次。 */
     private final java.util.concurrent.atomic.AtomicBoolean viewportLogged =
             new java.util.concurrent.atomic.AtomicBoolean(false);
-    /** 首帧布局诊断是否已打印过（两条路径各打一次就够，避免每帧刷屏）。 */
-    private final java.util.concurrent.atomic.AtomicBoolean frameDiag =
-            new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** 首帧布局诊断是否已打印过；之后仅在尺寸/缩放变化时再打（窗口 resize、全屏切换）。 */
+    private volatile int loggedRawWidth = -1;
+    private volatile int loggedRawHeight = -1;
+    private volatile int loggedScale = -1;
 
     /**
      * 构造渲染器。
@@ -71,6 +97,11 @@ public final class GlRenderer implements UiBackend {
     @Override
     public int height() {
         return viewportHeight;
+    }
+
+    @Override
+    public int scale() {
+        return uiScale;
     }
 
     /**
@@ -104,7 +135,8 @@ public final class GlRenderer implements UiBackend {
         // 而「改了尺寸却完全不可见」正是这种情形——必须先能区分两条路径。
         boolean matrixControl = gl.hasMatrixControl();
         if (!matrixControl) {
-            if (frameDiag.compareAndSet(false, true)) {
+            if (loggedScale != 0) {
+                loggedScale = 0;
                 System.out.println("[nocturne] gl renderer: hasMatrixControl=false"
                         + " (matrixMode/loadIdentity/ortho handle missing); layout stays "
                         + viewportWidth + "x" + viewportHeight);
@@ -113,14 +145,23 @@ public final class GlRenderer implements UiBackend {
         }
         int[] rawViewport = gl.viewport();
         if (rawViewport != null && rawViewport[2] > 0 && rawViewport[3] > 0) {
-            // 恢复物理视口写法：逻辑尺寸折算（raw/240 取整）曾让叠加层完全不可见，
-            // 根因未定位前不做折算。诊断保留 raw 与 layout，供后续排查 GUI Scale 适配使用。
-            viewportWidth = rawViewport[2];
-            viewportHeight = rawViewport[3];
+            // 逻辑尺寸 = 物理 / uiScale：ortho、绘制坐标、width()/height() 三者同源（见 uiScale 注释）。
+            // 固定像素尺寸的界面在高分屏上"十分小"，就是缺这一层缩放。
+            uiScale = computeUiScale(rawViewport[2], rawViewport[3]);
+            viewportWidth = Math.max(1, rawViewport[2] / uiScale);
+            viewportHeight = Math.max(1, rawViewport[3] / uiScale);
         }
-        if (frameDiag.compareAndSet(false, true)) {
+        // 只在「尺寸或缩放变化」时打印：窗口 resize / 全屏切换后必须能看到新的真实值，
+        // 只打首帧会让「界面没跟着放大」这类现象无从判断（首帧往往还是启动时的小窗口）。
+        if (rawViewport != null
+                && (loggedRawWidth != rawViewport[2] || loggedRawHeight != rawViewport[3]
+                    || loggedScale != uiScale)) {
+            loggedRawWidth = rawViewport[2];
+            loggedRawHeight = rawViewport[3];
+            loggedScale = uiScale;
             System.out.println("[nocturne] gl renderer: raw=" + java.util.Arrays.toString(rawViewport)
-                    + " layout=" + viewportWidth + "x" + viewportHeight);
+                    + " layout=" + viewportWidth + "x" + viewportHeight
+                    + " uiScale=" + uiScale);
         }
         // 视口未知或退化时不能调用 glOrtho：左右相等 / 上下相等在 GL 里是非法的（GL_INVALID_VALUE），
         // 该调用会被丢弃、矩阵保持原样，GUI 于是永久画在裁剪空间之外——必须留痕而不是静默。
@@ -299,23 +340,41 @@ public final class GlRenderer implements UiBackend {
      * 会把视口上方/下方本应裁掉的区域整体移进画面。
      */
     private int[] toScissorBox(float x, float y, float width, float height) {
-        int x0 = Math.round(x);
-        int y0 = Math.round(y);
-        int x1 = x0 + Math.max(0, Math.round(width));
-        int y1 = y0 + Math.max(0, Math.round(height));
-        if (viewportWidth > 0 && viewportHeight > 0) {
-            x0 = clamp(x0, 0, viewportWidth);
-            x1 = clamp(x1, 0, viewportWidth);
-            y0 = clamp(y0, 0, viewportHeight);
-            y1 = clamp(y1, 0, viewportHeight);
-            return new int[]{x0, viewportHeight - y1, x1 - x0, y1 - y0};
+        // GUI 坐标是**逻辑**坐标（已按 uiScale 缩小），而 glScissor 用的是窗口物理像素：
+        // 这里必须乘回去，否则裁剪框会缩在左上角（放大后内容被裁掉大半）。
+        int scale = uiScale;
+        int x0 = Math.round(x * scale);
+        int y0 = Math.round(y * scale);
+        int x1 = x0 + Math.max(0, Math.round(width * scale));
+        int y1 = y0 + Math.max(0, Math.round(height * scale));
+        int limitWidth = viewportWidth * scale;
+        int limitHeight = viewportHeight * scale;
+        if (limitWidth > 0 && limitHeight > 0) {
+            x0 = clamp(x0, 0, limitWidth);
+            x1 = clamp(x1, 0, limitWidth);
+            y0 = clamp(y0, 0, limitHeight);
+            y1 = clamp(y1, 0, limitHeight);
+            return new int[]{x0, limitHeight - y1, x1 - x0, y1 - y0};
         }
         // 视口未知时不与视口求交，仅保证宽高非负。
         int sx = Math.max(0, x0);
         int sw = Math.max(0, x1 - x0);
         int sh = Math.max(0, y1 - y0);
-        int sy = Math.max(0, viewportHeight - y1);
+        int sy = Math.max(0, limitHeight - y1);
         return new int[]{sx, sy, sw, sh};
+    }
+
+    /**
+     * 按物理视口算 UI 缩放系数（见 {@link #UI_BASE_HEIGHT} 的取值理由）。
+     *
+     * @param rawWidth  物理视口宽（像素）
+     * @param rawHeight 物理视口高（像素）
+     * @return 1..{@link #UI_MAX_SCALE} 的整数倍
+     */
+    private static int computeUiScale(int rawWidth, int rawHeight) {
+        int shorter = Math.min(rawWidth, rawHeight);
+        int scale = Math.max(1, Math.round(shorter / (float) UI_BASE_HEIGHT));
+        return Math.min(scale, UI_MAX_SCALE);
     }
 
     /** 把 {@code value} 夹取到 {@code [lo, hi]}。 */

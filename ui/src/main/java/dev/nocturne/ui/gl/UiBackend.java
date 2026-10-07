@@ -44,4 +44,16 @@ public interface UiBackend extends Renderer {
     default boolean ready() {
         return true;
     }
+
+    /**
+     * UI 缩放系数（1 = 逐像素绘制）。
+     *
+     * <p>界面元素都是按固定像素尺寸写的，在 2K/4K 屏上不缩放就会显得"十分小"。
+     * 会自己按屏幕高度放大的后端（目前是固定管线的 {@link GlRenderer}）返回大于 1 的整数，
+     * 且 {@link #width()}/{@link #height()} 返回的是**逻辑**尺寸（物理 ÷ 缩放）——
+     * 这样依赖 {@code width()} 推导鼠标坐标换算的输入层会自动跟随，不需要各自处理缩放。
+     */
+    default int scale() {
+        return 1;
+    }
 }

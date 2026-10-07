@@ -133,46 +133,66 @@ resolve in a given version is written as `"absent": true` and listed by
 | Version | canonical <-> obf | obf <-> SRG (forge) | obf <-> intermediary (fabric) |
 |---|---|---|---|
 | 1.8.9 / 1.12.2 | `aliases-<version>.toml` + vendored MCP `joined.srg`/CSVs | same (joined.srg right half) | Legacy-Fabric/Legacy-Intermediaries |
+| 1.9 – 1.14.3 | **bridged through intermediary** (see `AnchorResolver`) | MCP `joined.srg` (1.9 – 1.12.1, from the `de.oceanlabs.mcp:mcp` artifact) / MCPConfig `joined.tsrg` (1.13 – 1.14.3) | Legacy-Fabric (1.9 – 1.13.2) / FabricMC (1.14 – 1.14.3) |
 | 1.14.4 – 1.21.11 | official `client_mappings` (`client.txt`) | MinecraftForge/MCPConfig `joined.tsrg` | FabricMC/intermediary |
 | 26.1 – 26.3 | not obfuscated | — (no SRG file) | — (not obfuscated) |
 
-The obfuscated name is the pivot every source agrees on, so the joins are:
+The obf name is reached differently in each era, but it is always the pivot the
+other namespaces hang off:
 
 ```
 canonical --(client_mappings)-->  obf --(joined.tsrg)------> srg
-                                       --(intermediary)----> intermediary
-                                       --(client jar/javap)-> superclass chain
+       \--(alias bridge)-------->     --(intermediary)----> intermediary
+        \--(intermediary anchor)->    --(client jar/javap)-> superclass chain
 ```
+
+* **1.14.4+** — Mojang publishes the mappings, so canonical -> obf is one lookup.
+* **1.8.9 / 1.12.2** — the alias TOML bridges canonical -> MCP human name, the
+  CSVs give the SRG name, and `joined.srg` gives obf.
+* **1.9 – 1.14.3** — no official mappings and no MCP human names for 1.13+, so
+  neither route reaches them. Intermediary does: it is version-stable, and each
+  version's own tiny file carries the obf name behind every intermediary name.
+  `AnchorResolver` therefore learns `canonical -> intermediary` on 1.12.2 and
+  looks it up in the target version's tiny file, then keys the Forge namespace
+  off the resulting obf name. Point releases MCP never shipped an SRG for
+  (1.9.1, 1.9.3, 1.10.1) get no `forge` namespace — the other three are still
+  complete.
 
 The class hierarchy comes from the real client jar (`javap`), because
 requirements name members on the class the client talks to
 (`Player#getHealth`) while the obf/SRG name only exists on the declaring class
 (`LivingEntity`).
 
-Versions older than Mojang's official mappings (1.14.4) have no
-canonical->obf bridge unless an `aliases-<version>.toml` exists, so 1.9 – 1.13.2
-and 1.14 – 1.14.3 produce **no table**; `--report` lists them under "no mapping
-source" and the agent falls back to the identity mapping with a log line.
+**Coverage: all 66 releases from 1.8.9 to 26.3** produce a table; `--report`
+prints the per-version absent list and `--javap` verifies every version's
+vanilla names against its real client jar.
 
-### Local checkouts instead of downloads
+### Local checkouts, mirrors, and offline runs
 
-Downloading from `raw.githubusercontent.com` is rate-limited and flaky, so the
-generator can read the sources out of a local clone instead (same cache files,
-entirely offline afterwards):
+`raw.githubusercontent.com` is rate-limited and flaky, and a single file cannot
+be fetched without cloning, so the generator has three routes to the same cache
+file and picks whichever works:
+
+1. a local checkout (`NOCTURNE_*_DIR`, below) — authoritative when set;
+2. a mirror (`cdn.jsdelivr.net`, the NeoForged maven for MCP's SRG zips);
+3. the upstream raw URL, with retries.
 
 ```
-git clone --depth 1 https://github.com/MinecraftForge/MCPConfig          mcpconfig
-git clone --depth 1 https://github.com/FabricMC/intermediary             intermediary
+git clone --depth 1 https://github.com/MinecraftForge/MCPConfig           mcpconfig
+git clone --depth 1 https://github.com/FabricMC/intermediary              intermediary
 git clone --depth 1 https://github.com/Legacy-Fabric/Legacy-Intermediaries legacy-intermediary
 
 NOCTURNE_MCPCONFIG_DIR=<abs path>/mcpconfig \
 NOCTURNE_INTERMEDIARY_DIR=<abs path>/intermediary \
 NOCTURNE_LEGACY_INTERMEDIARY_DIR=<abs path>/legacy-intermediary \
+NOCTURNE_MCP_SRG_DIR=<abs dir holding srg-<version>.srg files> \
   python tools/mapping/generate.py
 ```
 
-When one of these is set, that checkout is authoritative for its files; the
-download path stays as the fallback for a clean checkout of this repository.
+Once `cache/` is populated a run is fully offline. `Legacy-Intermediaries` has
+no jsdelivr mirror and its clone is large; the individual `*.tiny` files are
+reachable through `api.github.com` (`/repos/{owner}/{repo}/git/trees/…` +
+`/git/blobs/…`), which is what seeded the pre-1.14 files.
 
 ### Caching and EULA
 

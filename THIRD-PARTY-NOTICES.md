@@ -89,6 +89,7 @@ family 名是 `.PingFang SC`，即**苹果苹方字体**——苹果的字体许
 | [MinecraftForge/MCPConfig](https://github.com/MinecraftForge/MCPConfig) | 1.12.2+ 的 SRG（Forge 运行期成员名） | 修改版 zlib（© 2018 Forge Development LLC）；允许创建与发布衍生作品，但须以**不同的 group 与名称**发布——本项目只发布自己命名的衍生 JSON，并在此致谢 |
 | [FabricMC/intermediary](https://github.com/FabricMC/intermediary) | 1.14–1.21.11 的 intermediary（Fabric 运行期名） | CC0-1.0 |
 | [Legacy-Fabric/Legacy-Intermediaries](https://github.com/Legacy-Fabric/Legacy-Intermediaries) | 1.8.2–1.13.2 的遗留 intermediary | CC0-1.0 |
+| MCP 官方 `joined.srg`（`de.oceanlabs.mcp:mcp:<版本>-srg`，经 NeoForged maven 镜像取得；Forge 自家 maven 现需认证） | 1.9–1.12.1 的 SRG（Forge 运行期成员名） | MCP 的历史分发物；只在生成期读取，不进仓库、不进 jar |
 | 本机 MCP 资产（`OpenVape4.21/.../mappings/vanilla189`、`forge189` 等） | 1.8.9 / 1.12.2 的 SRG 与 MCP 人类名 | 随该工程一并提供，仅本地读取 |
 
 生成期还读取目标版本的官方 client jar（`javap` 取类继承链），同样只落在 `cache/`。

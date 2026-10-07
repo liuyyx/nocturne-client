@@ -248,6 +248,59 @@ class McpSrg:
         return None
 
 
+class SrgV1:
+    """MCP ``joined.srg`` (SRG v1): obf <-> SRG for the pre-1.12.2 era.
+
+    ``CL:`` class rows, ``MD:``/``FD:`` member rows whose *left* half is the obf
+    name + obf descriptor and whose *right* half is the MCP name + MCP
+    descriptor.  The MCP descriptor is what Forge exposes at runtime for that
+    era (readable class names, ``func_``/``field_`` members), so it is kept.
+    """
+
+    def __init__(self, text: str) -> None:
+        self.class_to_srg: "dict[str, str]" = {}
+        self.methods: "dict[tuple, tuple]" = {}
+        self.fields: "dict[tuple, str]" = {}
+        self._methods_by_name: "dict[tuple, list]" = defaultdict(list)
+        for line in text.splitlines():
+            parts = line.rstrip("\n").split(" ")
+            if parts[0] == "CL:" and len(parts) == 3:
+                self.class_to_srg[parts[1]] = parts[2]
+            elif parts[0] == "MD:" and len(parts) == 5:
+                obf_owner, obf_name = parts[1].rsplit("/", 1)
+                srg_name = parts[3].rsplit("/", 1)[1]
+                self.methods[(obf_owner, obf_name, parts[2])] = (srg_name, parts[4])
+                self._methods_by_name[(obf_owner, obf_name)].append((srg_name, parts[4]))
+            elif parts[0] == "FD:" and len(parts) == 3:
+                obf_owner, obf_name = parts[1].rsplit("/", 1)
+                self.fields[(obf_owner, obf_name)] = parts[2].rsplit("/", 1)[1]
+
+    def class_name(self, obf: str) -> "str | None":
+        return self.class_to_srg.get(obf)
+
+    def method(self, owner: str, name: str, descriptor: "str | None") -> "str | None":
+        if descriptor is not None:
+            found = self.methods.get((owner, name, descriptor))
+            if found is not None:
+                return found[0]
+        candidates = self._methods_by_name.get((owner, name))
+        if candidates and len({c[0] for c in candidates}) == 1:
+            return candidates[0][0]
+        return None
+
+    def method_descriptor(self, owner: str, name: str, descriptor: "str | None") -> "str | None":
+        """The MCP-namespace descriptor Forge exposes for this method."""
+        if descriptor is not None:
+            found = self.methods.get((owner, name, descriptor))
+            if found is not None:
+                return found[1]
+        candidates = self._methods_by_name.get((owner, name))
+        return candidates[0][1] if candidates else None
+
+    def field(self, owner: str, name: str, descriptor: "str | None" = None) -> "str | None":
+        return self.fields.get((owner, name))
+
+
 class Intermediary:
     """tiny v1: obf <-> intermediary (``CLASS``/``FIELD``/``METHOD`` lines)."""
 
@@ -261,6 +314,12 @@ class Intermediary:
         # per class, so ``(owner, name)`` is still an unambiguous key.
         self.methods_by_name: "dict[tuple, str]" = {}
         self.fields_by_name: "dict[tuple, str]" = {}
+        # Reverse direction (intermediary -> obf): the anchor resolver starts
+        # from an intermediary name it knows from another version and has to
+        # find what *this* version calls it.  One intermediary name can appear
+        # on several classes (an override shares its id), so these hold lists.
+        self.methods_by_inter: "dict[str, list]" = defaultdict(list)
+        self.fields_by_inter: "dict[str, list]" = defaultdict(list)
         for line in text.splitlines():
             parts = line.rstrip("\n").split("\t")
             if not parts:
@@ -272,10 +331,12 @@ class Intermediary:
                 # METHOD <obfOwner> <obfDesc> <obfName> <intermediaryName>
                 self.methods[(parts[1], parts[3], parts[2])] = parts[4]
                 self.methods_by_name.setdefault((parts[1], parts[3]), parts[4])
+                self.methods_by_inter[parts[4]].append((parts[1], parts[3], parts[2]))
             elif parts[0] == "FIELD" and len(parts) >= 5:
                 # FIELD <obfOwner> <obfDesc> <obfName> <intermediaryName>
                 self.fields[(parts[1], parts[3], parts[2])] = parts[4]
                 self.fields_by_name.setdefault((parts[1], parts[3]), parts[4])
+                self.fields_by_inter[parts[4]].append((parts[1], parts[3], parts[2]))
 
     def class_name(self, obf: str) -> "str | None":
         return self.class_to_inter.get(obf)
@@ -300,9 +361,15 @@ class Intermediary:
 # --------------------------------------------------------------------------
 
 
-MCPCONFIG_RAW = "https://raw.githubusercontent.com/MinecraftForge/MCPConfig/master/versions/release/{v}/joined.tsrg"
-INTERMEDIARY_RAW = "https://raw.githubusercontent.com/FabricMC/intermediary/master/mappings/{v}.tiny"
-LEGACY_INTERMEDIARY_RAW = "https://raw.githubusercontent.com/Legacy-Fabric/Legacy-Intermediaries/v2/mappings/{v}.tiny"
+MCPCONFIG_RAW = ("https://raw.githubusercontent.com/MinecraftForge/MCPConfig/master/versions/release/{v}/joined.tsrg",
+                 "https://cdn.jsdelivr.net/gh/MinecraftForge/MCPConfig@master/versions/release/{v}/joined.tsrg")
+INTERMEDIARY_RAW = ("https://raw.githubusercontent.com/FabricMC/intermediary/master/mappings/{v}.tiny",
+                    "https://cdn.jsdelivr.net/gh/FabricMC/intermediary@master/mappings/{v}.tiny")
+LEGACY_INTERMEDIARY_RAW = "https://raw.githubusercontent.com/Legacy-Fabric/Legacy-Intermediaries/v2/mappings/{v}.tiny"  # no jsdelivr mirror: it 404s for this repo
+#: MCP's own SRG zip (pre-1.12.2, i.e. before MCPConfig existed).  The zip holds
+#: a single ``joined.srg``.  Forge's maven requires auth these days; the
+#: NeoForged mirror carries the same artifacts anonymously.
+MCP_SRG_RAW = "https://maven.neoforged.net/releases/de/oceanlabs/mcp/mcp/{v}/mcp-{v}-srg.zip"
 
 #: MCPConfig release versions (its ``versions/release`` directory).  Used to
 #: decide whether a version has SRG data at all instead of probing the network.
@@ -338,6 +405,22 @@ LEGACY_INTERMEDIARY_VERSIONS = {
     "1.13", "1.13.1", "1.13.2",
 }
 
+#: Versions MCP shipped its own ``joined.srg`` for (the ``mcp`` artifact, before
+#: MCPConfig took over at 1.12.2).  MCP skipped some point releases, and those
+#: skipped ones simply have no SRG — their Forge namespace stays empty.
+MCP_LEGACY_SRG_VERSIONS = {
+    "1.9", "1.9.2", "1.9.4", "1.10", "1.10.2", "1.11", "1.11.1", "1.11.2",
+    "1.12", "1.12.1",
+}
+
+#: Versions that predate Mojang's official mappings and are therefore resolved
+#: through the intermediary anchor (see :class:`AnchorResolver`).
+ANCHOR_VERSIONS = {
+    "1.9", "1.9.1", "1.9.2", "1.9.3", "1.9.4", "1.10", "1.10.1", "1.10.2",
+    "1.11", "1.11.1", "1.11.2", "1.12", "1.12.1",
+    "1.13", "1.13.1", "1.13.2", "1.14", "1.14.1", "1.14.2", "1.14.3",
+}
+
 
 class Fetch:
     """Supplies the raw mapping sources into ``cache/`` (idempotent).
@@ -354,7 +437,20 @@ class Fetch:
     def __init__(self, cache_dir: str) -> None:
         self.cache = cache_dir
 
-    def _text(self, url: str, name: str, copies: "list[tuple[str, str]]" = ()) -> str:
+    @staticmethod
+    def _download_any(urls, dest: str) -> None:
+        """Try each mirror in turn; the last failure is re-raised."""
+        candidates = [urls] if isinstance(urls, str) else list(urls)
+        last: "Exception | None" = None
+        for url in candidates:
+            try:
+                sources._download(url, dest)
+                return
+            except Exception as failure:  # noqa: BLE001 - tried in turn, raised below
+                last = failure
+        raise last if last is not None else RuntimeError(f"download failed: {urls}")
+
+    def _text(self, url, name: str, copies: "list[tuple[str, str]]" = ()) -> str:
         path = os.path.join(self.cache, name)
         for root, relative in copies:
             source = os.path.join(root, relative)
@@ -371,13 +467,48 @@ class Fetch:
                         handle.write(data)
                 break
         if not os.path.exists(path) or os.path.getsize(path) == 0:
-            sources._download(url, path)
+            self._download_any(url, path)
         return open(path, encoding="utf-8").read()
+
+    def _zip_text(self, url: str, name: str, member_suffix: str,
+                  copies: "list[tuple[str, str]]" = ()) -> str:
+        """Like :meth:`_text`, but the artifact is a zip holding one member."""
+        path = os.path.join(self.cache, name)
+        for root, relative in copies:
+            source = os.path.join(root, relative)
+            if root and os.path.isfile(source):
+                if (not os.path.exists(path)
+                        or os.path.getsize(path) != os.path.getsize(source)):
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(source, "rb") as handle:
+                        data = handle.read()
+                    with open(path, "wb") as handle:
+                        handle.write(data)
+                break
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
+            archive = os.path.join(self.cache, "mcp",
+                                   os.path.basename(name).replace(".srg", ".zip"))
+            self._download_any(url, archive)
+            import zipfile
+            with zipfile.ZipFile(archive) as bundle:
+                member = next(n for n in bundle.namelist() if n.endswith(member_suffix))
+                data = bundle.read(member)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as handle:
+                handle.write(data)
+        return open(path, encoding="utf-8").read()
+
+    @staticmethod
+    def _urls(template, **kwargs):
+        """One or more mirrors for the same file, ready to try in order."""
+        if isinstance(template, tuple):
+            return [t.format(**kwargs) for t in template]
+        return template.format(**kwargs)
 
     def mcpconfig(self, version: str) -> str:
         root = os.environ.get("NOCTURNE_MCPCONFIG_DIR", "")
         return self._text(
-            MCPCONFIG_RAW.format(v=version),
+            self._urls(MCPCONFIG_RAW, v=version),
             os.path.join("mcpconfig", f"joined-{version}.tsrg"),
             [(root, os.path.join("versions", "release", version, "joined.tsrg"))],
         )
@@ -386,18 +517,30 @@ class Fetch:
         if version in FABRIC_INTERMEDIARY_VERSIONS:
             root = os.environ.get("NOCTURNE_INTERMEDIARY_DIR", "")
             return self._text(
-                INTERMEDIARY_RAW.format(v=version),
+                self._urls(INTERMEDIARY_RAW, v=version),
                 os.path.join("intermediary", f"official-{version}.tiny"),
                 [(root, os.path.join("mappings", f"{version}.tiny"))],
             )
         if version in LEGACY_INTERMEDIARY_VERSIONS:
             root = os.environ.get("NOCTURNE_LEGACY_INTERMEDIARY_DIR", "")
             return self._text(
-                LEGACY_INTERMEDIARY_RAW.format(v=version),
+                self._urls(LEGACY_INTERMEDIARY_RAW, v=version),
                 os.path.join("intermediary", f"legacy-{version}.tiny"),
                 [(root, os.path.join("mappings", f"{version}.tiny"))],
             )
         return None
+
+    def mcp_srg(self, version: str) -> "str | None":
+        """MCP's own ``joined.srg`` for the pre-MCPConfig era, or ``None``."""
+        if version not in MCP_LEGACY_SRG_VERSIONS:
+            return None
+        root = os.environ.get("NOCTURNE_MCP_SRG_DIR", "")
+        return self._zip_text(
+            self._urls(MCP_SRG_RAW, v=version),
+            os.path.join("mcp", f"srg-{version}.srg"),
+            "joined.srg",
+            [(root, f"srg-{version}.srg")],
+        )
 
 
 # --------------------------------------------------------------------------
@@ -697,6 +840,161 @@ class LegacyResolver:
         return result
 
 
+class AnchorTable:
+    """canonical -> intermediary, read off the 1.12.2 table.
+
+    Intermediary names are version-stable by design, so a name learned on
+    1.12.2 can be looked up in any older version's tiny file.  The 1.12.2 table
+    is the anchor because the legacy path builds it from the alias bridge with
+    no anchor involvement, so there is no circular dependency.
+    """
+
+    def __init__(self, table: dict) -> None:
+        self.classes: "dict[str, str]" = {}
+        self.methods: "dict[tuple, str]" = {}
+        self.fields: "dict[tuple, str]" = {}
+        self.arity: "dict[tuple, int]" = {}
+        for canonical, entry in (table.get("classes") or {}).items():
+            if entry.get("absent"):
+                continue
+            inter = (entry.get("names") or {}).get("fabric")
+            if inter:
+                # tiny files key classes by internal name; the table stores the
+                # binary (dotted) form, so normalise on the way in.
+                self.classes[canonical] = inter.replace(".", "/")
+            for member, spec in (entry.get("methods") or {}).items():
+                if spec.get("absent"):
+                    continue
+                name = (spec.get("names") or {}).get("fabric")
+                if not name:
+                    continue
+                self.methods[(canonical, member)] = name
+                descriptor = (spec.get("signatures") or {}).get("fabric")
+                if descriptor:
+                    self.arity[(canonical, member)] = parameter_count(descriptor)
+            for member, spec in (entry.get("fields") or {}).items():
+                if spec.get("absent"):
+                    continue
+                name = (spec.get("names") or {}).get("fabric")
+                if name:
+                    self.fields[(canonical, member)] = name
+
+
+class AnchorResolver:
+    """1.9 - 1.14.3: bridge the canonical name through intermediary.
+
+    These versions predate Mojang's ``client_mappings`` (1.14.4) and have no MCP
+    human names for the 1.13+ era either, so neither the ProGuard route nor the
+    alias bridge reaches them.  Intermediary does: it is a version-stable naming
+    layer covering 1.8.2 - 1.13.2 (Legacy-Fabric) and 1.14+ (upstream), and each
+    version's own tiny file carries the obf name behind every intermediary name.
+    The Forge namespace comes from that version's SRG (MCP ``joined.srg`` before
+    1.12.2, MCPConfig from 1.12.2 on) keyed by the obf name; versions MCP never
+    published an SRG for simply have no Forge namespace.
+    """
+
+    def __init__(self, version: str, anchor: AnchorTable, intermediary: Intermediary,
+                 srg) -> None:
+        self.version = version
+        self.anchor = anchor
+        self.intermediary = intermediary
+        self.srg = srg
+
+    def _forge_class(self, obf: str, canonical: str) -> "str | None":
+        if self.srg is None:
+            return None
+        name = self.srg.class_name(obf)
+        if name is None:
+            return None
+        return name if _is_readable_class(name) else canonical
+
+    def resolve_class(self, canonical: str) -> "dict[str, str] | None":
+        key = canonical.replace(".", "/")
+        inter = self.anchor.classes.get(key)
+        if inter is None:
+            return None
+        obf = self.intermediary.from_inter.get(inter)
+        if obf is None:
+            return None
+        names = {"vanilla": obf, "fabric": inter}
+        forge = self._forge_class(obf, key)
+        if forge is not None:
+            names["forge"] = forge
+        return {namespace: dotted(name) for namespace, name in names.items()}
+
+    def _forge_descriptor(self, owner: str, obf_name: str, obf_desc: str) -> "str | None":
+        if isinstance(self.srg, SrgV1):
+            # The MCP descriptor is exactly what Forge exposes for this era.
+            return self.srg.method_descriptor(owner, obf_name, obf_desc)
+        class_map = getattr(self.srg, "class_to_srg", None)
+        return convert_descriptor(obf_desc, class_map) if class_map else None
+
+    def _owner_filter(self, canonical: str, inter: str, entries: list) -> list:
+        """Keep only entries that can actually belong to this class.
+
+        A canonical-looking anchor name (the anchor table falls back to the
+        canonical name when a version has no intermediary entry) can otherwise
+        match an unrelated class that simply kept the same name, which silently
+        yields a name that does not exist on the target class.
+        """
+        anchor_class = self.anchor.classes.get(canonical)
+        expected = self.intermediary.from_inter.get(anchor_class) if anchor_class else None
+        exact = [e for e in entries if e[0] == expected] if expected else []
+        if exact:
+            return exact
+        # Nothing is declared on this very class.  A genuine intermediary name
+        # may legitimately live on an ancestor (an override shares its id), but
+        # a canonical fallback name must not be trusted to.
+        if inter.startswith(("method_", "field_")):
+            return entries
+        return []
+
+    def resolve_method(self, canonical: str, name: str,
+                       shape_hint: "int | None") -> "dict[str, tuple] | None":
+        key = canonical.replace(".", "/")
+        inter = self.anchor.methods.get((key, name))
+        if inter is None:
+            return None
+        entries = self._owner_filter(key, inter, list(self.intermediary.methods_by_inter.get(inter, ())))
+        if not entries:
+            return None
+        arity = self.anchor.arity.get((key, name))
+        if arity is not None:
+            matching = [e for e in entries if parameter_count(e[2]) == arity]
+            if matching:
+                entries = matching
+        owner, obf_name, obf_desc = sorted(entries)[0]
+        result = {
+            "vanilla": (obf_name, obf_desc),
+            "fabric": (inter, convert_descriptor(obf_desc, self.intermediary.class_to_inter)),
+        }
+        if self.srg is not None:
+            srg_name = self.srg.method(owner, obf_name, obf_desc)
+            if srg_name:
+                descriptor = self._forge_descriptor(owner, obf_name, obf_desc)
+                result["forge"] = (srg_name, descriptor or obf_desc)
+        return result
+
+    def resolve_field(self, canonical: str, name: str) -> "dict[str, tuple] | None":
+        key = canonical.replace(".", "/")
+        inter = self.anchor.fields.get((key, name))
+        if inter is None:
+            return None
+        entries = self._owner_filter(key, inter, list(self.intermediary.fields_by_inter.get(inter, ())))
+        if not entries:
+            return None
+        owner, obf_name, obf_desc = sorted(entries)[0]
+        result = {
+            "vanilla": (obf_name, obf_desc),
+            "fabric": (inter, convert_descriptor(obf_desc, self.intermediary.class_to_inter)),
+        }
+        if self.srg is not None:
+            srg_name = self.srg.field(owner, obf_name)
+            if srg_name:
+                result["forge"] = (srg_name, None)
+        return result
+
+
 class IdentityResolver:
     """Unobfuscated build (26.1+): every namespace names the same thing.
 
@@ -746,12 +1044,25 @@ class IdentityResolver:
 
 def build_resolver(version: str, fetch: Fetch, cache_dir: str, manifest,
                    legacy_root: str, tools_dir: str, javap_exe: str,
-                   local_jar: "str | None"):
+                   local_jar: "str | None", anchor_table: "AnchorTable | None" = None):
     """Pick and construct the resolver for one version.
 
     Returns ``None`` when no source can express this version at all — those
     versions are reported by the generator instead of being guessed at.
     """
+    if version in ANCHOR_VERSIONS:
+        # Pre-1.14.4 (and pre-MCP-human-name): resolved through intermediary.
+        text = fetch.intermediary(version)
+        if text is None or anchor_table is None:
+            return None
+        srg = None
+        if version in MCP_LEGACY_SRG_VERSIONS:
+            srg_text = fetch.mcp_srg(version)
+            if srg_text:
+                srg = SrgV1(srg_text)
+        elif version in MCPCONFIG_SRG_VERSIONS:
+            srg = McpSrg(fetch.mcpconfig(version))
+        return AnchorResolver(version, anchor_table, Intermediary(text), srg)
     if version.startswith("26."):
         # 26.1+ is not obfuscated, so there is no client_mappings file to find:
         # the canonical name *is* the runtime name in every namespace.  Member

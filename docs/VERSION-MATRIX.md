@@ -1,6 +1,6 @@
 # 版本矩阵
 
-映射表现已覆盖 **1.8.9 – 26.3 的 46 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
+映射表现已覆盖 **1.8.9 – 26.3 的全部 66 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
 下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
 ## 1. 映射表：每版本一张，四个加载器命名空间
@@ -17,12 +17,17 @@
 | `forge` | 可读名（`net.minecraft.client.Minecraft`） | SRG：`func_`/`field_` ≤1.15.2，`m_`/`f_` ≥1.16.5 | MinecraftForge/MCPConfig `joined.tsrg` |
 | `neoforge` | 同 forge | 1.20.1 同 forge；**1.20.2+ 即 Mojmap 名**（未混淆） | 同 forge / 恒等 |
 
-**覆盖 46 张表**：`1.8.9`、`1.12.2`、`1.14.4 – 1.21.11`（39 张）、`26.1 – 26.3`（5 张）。
+**覆盖 66 张表**：`1.8.9 – 26.3` 的**每一个 release** 都有表。
 `python tools/mapping/generate.py --check` 全绿；生成器与联表细节见 `tools/mapping/README.md`。
 
-**无表版本（20 个）**：`1.9 – 1.12.1`、`1.13 – 1.13.2`、`1.14 – 1.14.3`。这些版本早于 Mojang 官方
-映射（1.14.4 首发），本机也只有 1.8.9 / 1.12.2 两份 `aliases-<版本>.toml` 人工桥；缺表时运行时
-退化为恒等映射并打日志（不静默）。补法：加一份 `tools/mapping/aliases-<版本>.toml`。
+**1.9 – 1.14.3 怎么来的**：这些版本早于 Mojang 官方映射（1.14.4 首发），且 1.13+ 没有 MCP 人类名，
+两条老路都到不了。改走 **intermediary 锚点**：intermediary 名跨版本稳定（`class_310`/`field_1724`
+在每个版本都指向同一个成员），于是先在 1.12.2 学到 `规范名 → intermediary`，再到目标版本的 tiny
+文件里反查出混淆名，Forge 命名空间再由混淆名接该版本的 SRG（1.9–1.12.1 用 MCP 自己的
+`joined.srg`，1.13–1.14.3 用 MCPConfig）。
+
+**唯一的不完整**：`1.9.1 / 1.9.3 / 1.10.1` 三个点版本 MCP 从未发布 SRG，因此它们的表只有
+`vanilla` / `fabric` 两套名（`forge` 缺省）；其余 63 个版本四套齐全。
 
 以下是**真机验证过**的版本的绘制/帧钩子差异：
 

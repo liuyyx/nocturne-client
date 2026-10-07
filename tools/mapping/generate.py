@@ -103,6 +103,24 @@ def _first_signature(spec: dict) -> "str | None":
     return spec.get("signature")
 
 
+def build_anchor_table(requirements: scan.Requirements, manifest: sources.Manifest,
+                       fetch: namespaces.Fetch, shape_hints: dict) -> "namespaces.AnchorTable | None":
+    """canonical -> intermediary, learned on 1.12.2.
+
+    Built in memory from the same legacy path that produces the 1.12.2 table, so
+    an anchor run never depends on a previously written artefact and the order
+    of ``--only`` arguments cannot change the result.
+    """
+    resolver = namespaces.build_resolver(
+        "1.12.2", fetch, CACHE, manifest, VANILLA_ROOT, TOOLS, DEFAULT_JAVAP,
+        find_local_jar("1.12.2"),
+    )
+    if resolver is None:
+        return None
+    table = build_table("1.12.2", resolver, requirements, {"versions": {}}, shape_hints)
+    return namespaces.AnchorTable(table)
+
+
 def find_local_jar(version: str) -> "str | None":
     candidates = [
         os.path.join(ROOT, "..", "analysis", f"client-{version}.jar"),
@@ -247,6 +265,7 @@ def main() -> int:
     manifest = sources.Manifest(CACHE)
     shape_hints = load_shape_hints()
     fetch = namespaces.Fetch(CACHE)
+    anchor_table = build_anchor_table(requirements, manifest, fetch, shape_hints)
 
     versions = release_versions(manifest)
     if args.only:
@@ -263,7 +282,8 @@ def main() -> int:
     for version in versions:
         local_jar = find_local_jar(version)
         resolver = namespaces.build_resolver(
-            version, fetch, CACHE, manifest, VANILLA_ROOT, TOOLS, DEFAULT_JAVAP, local_jar
+            version, fetch, CACHE, manifest, VANILLA_ROOT, TOOLS, DEFAULT_JAVAP, local_jar,
+            anchor_table,
         )
         if resolver is None:
             report["unsupported"].append(version)
@@ -314,8 +334,8 @@ def main() -> int:
         if report["unsupported"]:
             print(f"\n===== no mapping source ({len(report['unsupported'])}) =====")
             print("  " + ", ".join(report["unsupported"]))
-            print("  These are older than Mojang's official mappings (1.14.4) and have no"
-                  " alias bridge in tools/mapping/aliases-<version>.toml.")
+            print("  No route reaches these: they need either an aliases-<version>.toml"
+                  " bridge, an intermediary file, or an SRG source for that version.")
 
     if failures:
         print(f"\n{len(failures)} javap problems", file=sys.stderr)

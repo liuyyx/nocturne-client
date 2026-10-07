@@ -114,6 +114,9 @@ public final class GlApi {
     /** 已解析的 {@code glScissor}，设置裁剪矩形。 */
     private final Method scissor;
 
+    /** 游戏的 GlStateManager 桥；为 {@code null} 时状态类调用直接走 GL11。 */
+    private final StateManager state;
+
     /**
      * 保存已解析的方法句柄。
      *
@@ -124,7 +127,8 @@ public final class GlApi {
                   Method pushAttrib, Method popAttrib,
                   Method translatef, Method scalef, Method lineWidth, Method texCoord2f,
                   Method bindTexture, Method matrixMode, Method loadIdentity, Method ortho,
-                  Method getIntegerv, Method getIntegervBuffer, Method scissor) {
+                  Method getIntegerv, Method getIntegervBuffer, Method scissor,
+                  StateManager state) {
         this.color4f = color4f;
         this.begin = begin;
         this.end = end;
@@ -150,6 +154,147 @@ public final class GlApi {
                 .order(ByteOrder.nativeOrder())
                 .asIntBuffer();
         this.scissor = scissor;
+        this.state = state;
+    }
+
+    /**
+     * 游戏的 {@code GlStateManager} 桥（1.8.9 是 {@code bfl}）。
+     *
+     * <p><b>为什么状态类调用必须走它</b>：这个类给每个 GL 状态位维护了一份"我认为现在是开还是关"的
+     * 缓存，并在设置时**跳过"已经是这个值"的调用**。我们若直接 {@code glDisable(GL_TEXTURE_2D)}，
+     * 真实状态关掉了、它的缓存还说开着，于是游戏字体渲染器以为自己已经开过纹理、不再 glEnable，
+     * 字形就画不出来——而鼠标一动触发的重绘恰好把缓存刷对，症状就成了
+     * **"字要鼠标移上去才显示"**。
+     *
+     * <p>方法名按 [原版混淆名, SRG 名, 语义名] 依次解析：原版 1.8.9 用第一个、Forge 用第二个、
+     * 未混淆构建用第三个。名字来自 `vanilla189/joined.srg` + `forge189/methods.csv`。
+     * 解析不到（其它版本、或核心 profile）时本桥为 {@code null}，状态调用原样走 GL11。
+     */
+    static final class StateManager {
+
+        private final Method enableTexture2D;
+        private final Method disableTexture2D;
+        private final Method enableBlend;
+        private final Method disableBlend;
+        private final Method enableDepth;
+        private final Method disableDepth;
+        private final Method enableCull;
+        private final Method disableCull;
+        private final Method blendFunc;
+        private final Method pushMatrix;
+        private final Method popMatrix;
+
+        private StateManager(Method enableTexture2D, Method disableTexture2D, Method enableBlend,
+                             Method disableBlend, Method enableDepth, Method disableDepth,
+                             Method enableCull, Method disableCull, Method blendFunc,
+                             Method pushMatrix, Method popMatrix) {
+            this.enableTexture2D = enableTexture2D;
+            this.disableTexture2D = disableTexture2D;
+            this.enableBlend = enableBlend;
+            this.disableBlend = disableBlend;
+            this.enableDepth = enableDepth;
+            this.disableDepth = disableDepth;
+            this.enableCull = enableCull;
+            this.disableCull = disableCull;
+            this.blendFunc = blendFunc;
+            this.pushMatrix = pushMatrix;
+            this.popMatrix = popMatrix;
+        }
+
+        /**
+         * 在给定类加载器里解析状态桥。
+         *
+         * @param loader 游戏类加载器
+         * @return 状态桥；找不到该类（或方法全缺）时返回 {@code null}
+         */
+        static StateManager resolve(ClassLoader loader) {
+            Class<?> type = null;
+            String[] classNames = {
+                    "net.minecraft.client.renderer.GlStateManager",  // Forge deobf / 未混淆
+                    "bfl",                                            // 原版 1.8.9 混淆名
+            };
+            for (String name : classNames) {
+                type = Reflect.loadWithoutInit(name, loader);
+                if (type != null) {
+                    break;
+                }
+            }
+            if (type == null) {
+                return null;
+            }
+            StateManager state = new StateManager(
+                    find(type, "w", "func_179098_w", "enableTexture2D"),
+                    find(type, "x", "func_179090_x", "disableTexture2D"),
+                    find(type, "l", "func_179147_l", "enableBlend"),
+                    find(type, "k", "func_179084_k", "disableBlend"),
+                    find(type, "j", "func_179126_j", "enableDepth"),
+                    find(type, "i", "func_179097_i", "disableDepth"),
+                    find(type, "", "func_179089_o", "enableCull"),
+                    find(type, "p", "func_179129_p", "disableCull"),
+                    find(type, "b", "func_179112_b", "blendFunc"),
+                    find(type, "E", "func_179094_E", "pushMatrix"),
+                    find(type, "F", "func_179121_F", "popMatrix"));
+            return state.enableTexture2D == null && state.disableTexture2D == null
+                    && state.enableBlend == null && state.blendFunc == null ? null : state;
+        }
+
+        /** 按候选名逐个解析无参方法（矩阵/开关类都是无参）。 */
+        private static Method find(Class<?> type, String... names) {
+            for (String name : names) {
+                if (name.isEmpty()) {
+                    continue;
+                }
+                Method method = Reflect.method(type, name);
+                if (method != null) {
+                    return method;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * 按 GL 能力位设置开关；本桥不认识的能力位交回调用方走 GL11。
+         *
+         * @return 是否已处理
+         */
+        boolean set(int cap, boolean enabled) {
+            Method target;
+            if (cap == GL_TEXTURE_2D) {
+                target = enabled ? enableTexture2D : disableTexture2D;
+            } else if (cap == GL_BLEND) {
+                target = enabled ? enableBlend : disableBlend;
+            } else if (cap == GL_DEPTH_TEST) {
+                target = enabled ? enableDepth : disableDepth;
+            } else if (cap == GL_CULL_FACE) {
+                target = enabled ? enableCull : disableCull;
+            } else {
+                return false;
+            }
+            if (target == null) {
+                return false;
+            }
+            Reflect.call(target, null);
+            return true;
+        }
+
+        /** 设置混合因子；句柄缺失时返回 false。 */
+        boolean blend(int src, int dst) {
+            if (blendFunc == null) {
+                return false;
+            }
+            Reflect.call(blendFunc, null, src, dst);
+            return true;
+        }
+
+        /** 矩阵栈操作；本桥句柄缺失时返回 false。 */
+        boolean matrix(boolean push) {
+            Method target = push ? pushMatrix : popMatrix;
+            if (target == null) {
+                return false;
+            }
+            Reflect.call(target, null);
+            return true;
+        }
     }
 
     /**
@@ -202,7 +347,9 @@ public final class GlApi {
                 // 再退到 LWJGL3 的 glGetIntegerv(int, IntBuffer) 重载。
                 orElse(Reflect.method(gl, "glGetInteger", int.class, IntBuffer.class),
                         Reflect.method(gl, "glGetIntegerv", int.class, IntBuffer.class)),
-                Reflect.method(gl, "glScissor", int.class, int.class, int.class, int.class));
+                Reflect.method(gl, "glScissor", int.class, int.class, int.class, int.class),
+                // 状态类调用优先走游戏的 GlStateManager（缓存一致），解析不到时为 null。
+                StateManager.resolve(gl.getClassLoader()));
     }
 
     /**
@@ -235,26 +382,43 @@ public final class GlApi {
 
     /** 开启某项 GL 能力（对应 {@code glEnable}）。 */
     public void enable(int cap) {
+        // 状态类调用必须优先走游戏的 GlStateManager：直接 glEnable 会让它的状态缓存与实际失配，
+        // 之后游戏"以为已经开过"而不再设置，我们自己的字形/纹理就会画不出来（详见 StateManager）。
+        if (state != null && state.set(cap, true)) {
+            return;
+        }
         Reflect.call(enable, null, cap);
     }
 
     /** 关闭某项 GL 能力（对应 {@code glDisable}）。 */
     public void disable(int cap) {
+        if (state != null && state.set(cap, false)) {
+            return;
+        }
         Reflect.call(disable, null, cap);
     }
 
     /** 设置 alpha 混合的源/目标因子（对应 {@code glBlendFunc}）。 */
     public void blendFunc(int src, int dst) {
+        if (state != null && state.blend(src, dst)) {
+            return;
+        }
         Reflect.call(blendFunc, null, src, dst);
     }
 
     /** 压入当前模型视图矩阵（对应 {@code glPushMatrix}）。 */
     public void pushMatrix() {
+        if (state != null && state.matrix(true)) {
+            return;
+        }
         Reflect.call(pushMatrix, null);
     }
 
     /** 弹出模型视图矩阵栈（对应 {@code glPopMatrix}），必须与 {@link #pushMatrix()} 成对使用。 */
     public void popMatrix() {
+        if (state != null && state.matrix(false)) {
+            return;
+        }
         Reflect.call(popMatrix, null);
     }
 

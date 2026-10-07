@@ -170,13 +170,11 @@ public final class GlRenderer implements UiBackend {
             reportMissingViewport(rawViewport);
         }
 
-        // 属性栈保存：beginFrame 会改 texture/depth/cull/blend 与混合函数，退出时必须原样归还。
-        // 不归还时游戏的状态缓存（1.8.9 的 GlStateManager 按布尔值缓存各项开关）会与实际 GL 状态
-        // 失配——它认为纹理仍然启用于是不再 glEnable，而实际已被关闭，主菜单背景会退化成无纹理的
-        // 纯色渐变。属性栈是固定管线专属能力，核心 profile 下自动跳过。
-        if (gl.hasAttribStack()) {
-            gl.pushAttrib(GlApi.GL_ALL_ATTRIB_BITS);
-        }
+        // 属性栈保存（pushAttrib/popAttrib）**故意不用**：这两个是直接 GL 调用，GlStateManager 的
+        // 缓存不参与——"恢复真实状态"的同时缓存还停在被改过的值上，于是下一帧游戏按缓存判断
+        // "不用再设置"，实际状态却是旧的，字形/纹理就画不出来（鼠标一动触发的重绘才会刷对缓存，
+        // 表现为"文字要鼠标移上去才出现"）。状态改动一律经 {@link GlApi} → GlStateManager（缓存同步），
+        // 游戏每帧会自行设置它需要的那几项，无需我们回滚。
 
         gl.matrixMode(GlApi.GL_PROJECTION);
         gl.pushMatrix();
@@ -211,10 +209,8 @@ public final class GlRenderer implements UiBackend {
             gl.popMatrix();
             gl.matrixMode(GlApi.GL_MODELVIEW);
             gl.popMatrix();
-            // 与 beginFrame 的 pushAttrib 对称：归还 texture/depth/cull/blend 等状态位。
-            if (gl.hasAttribStack()) {
-                gl.popAttrib();
-            }
+            // 这里**不再** popAttrib：状态改动都经 GlStateManager（缓存同步），
+            // 属性栈回滚只会把真实状态与缓存再拆开一次（见 beginFrame 的说明）。
             statePushed = false;
         }
         // 裁剪清理不得被 statePushed 门控：beginFrame 可能因缺少矩阵句柄提前返回，

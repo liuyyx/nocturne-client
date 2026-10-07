@@ -56,4 +56,21 @@ public interface UiBackend extends Renderer {
     default int scale() {
         return 1;
     }
+
+    /**
+     * 覆盖 UI 缩放系数；{@code 0} 或负数表示恢复"按屏幕高度自动"。
+     *
+     * <p>给"用 {@code =} / {@code -} 手动调整界面大小"用：自动值只能按屏幕高度取整，用户在高 DPI
+     * 屏上未必满意（想要更小或更大）。它只改逻辑尺寸（{@link #width()}/{@link #height()}）与绘制
+     * 坐标的换算，输入层的鼠标映射走 {@code surface/window} 会自动跟随。
+     *
+     * <p>不做缩放的后端（{@link #scale()} 恒为 1）忽略本调用——组件树本来就按物理像素布局。
+     *
+     * <p><b>实现要求</b>：调用后当前帧的绘制不许半途改尺寸（布局已按旧尺寸排好），
+     * 新值从下一帧生效即可。
+     *
+     * @param scale 目标缩放；≤0 表示回到自动
+     */
+    default void setScaleOverride(int scale) {
+    }
 }

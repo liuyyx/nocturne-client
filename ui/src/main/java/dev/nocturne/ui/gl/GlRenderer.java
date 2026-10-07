@@ -60,6 +60,15 @@ public final class GlRenderer implements UiBackend {
      * 视口之外。这次三者同源，不会重演。
      */
     private volatile int uiScale = 1;
+
+    /**
+     * 用户手动指定的缩放；{@code 0} = 用 {@link #computeUiScale} 的自动值。
+     *
+     * <p>只存"用户想要几倍"，不当场改 {@link #uiScale}：缩放决定了逻辑尺寸，而当前帧的组件树已经
+     * 按旧尺寸排好、命中测试也基于旧坐标——半途改会让这一帧的绘制与输入错位。新值由下一帧的
+     * {@link #beginFrame()} 统一应用。
+     */
+    private volatile int scaleOverride;
     /** 视口读取失败的诊断是否已打印过；保证只打印一次。 */
     private final java.util.concurrent.atomic.AtomicBoolean viewportLogged =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -102,6 +111,33 @@ public final class GlRenderer implements UiBackend {
     @Override
     public int scale() {
         return uiScale;
+    }
+
+    @Override
+    public void setScaleOverride(int scale) {
+        int next = scale <= 0 ? 0 : Math.min(scale, UI_MAX_SCALE);
+        if (next == scaleOverride) {
+            return;
+        }
+        scaleOverride = next;
+        // 只记不动：本帧余下的绘制仍按旧逻辑尺寸（见 scaleOverride 的注释），下一帧生效。
+    }
+
+    /** @return 手动覆盖的缩放；{@code 0} 表示"按屏幕高度自动"（供界面提示当前处于哪一档）。 */
+    public int scaleOverride() {
+        return scaleOverride;
+    }
+
+    /**
+     * 定出本帧的缩放：用户手动值优先，否则按屏幕高度自动。
+     *
+     * @param rawWidth  物理视口宽
+     * @param rawHeight 物理视口高
+     * @return 1..{@link #UI_MAX_SCALE} 的整数倍
+     */
+    private int resolveUiScale(int rawWidth, int rawHeight) {
+        int override = scaleOverride;
+        return override > 0 ? override : computeUiScale(rawWidth, rawHeight);
     }
 
     /**
@@ -147,7 +183,7 @@ public final class GlRenderer implements UiBackend {
         if (rawViewport != null && rawViewport[2] > 0 && rawViewport[3] > 0) {
             // 逻辑尺寸 = 物理 / uiScale：ortho、绘制坐标、width()/height() 三者同源（见 uiScale 注释）。
             // 固定像素尺寸的界面在高分屏上"十分小"，就是缺这一层缩放。
-            uiScale = computeUiScale(rawViewport[2], rawViewport[3]);
+            uiScale = resolveUiScale(rawViewport[2], rawViewport[3]);
             viewportWidth = Math.max(1, rawViewport[2] / uiScale);
             viewportHeight = Math.max(1, rawViewport[3] / uiScale);
         }

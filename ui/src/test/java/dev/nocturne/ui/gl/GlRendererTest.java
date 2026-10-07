@@ -230,6 +230,39 @@ class GlRendererTest {
     }
 
     /**
+     * 手动缩放覆盖自动值——界面里的 {@code =} / {@code -} 走的就是这条路。
+     *
+     * <p>断言逻辑尺寸也跟着变，而不是只有 {@code scale()} 的返回值：布局、ortho、鼠标换算三者
+     * 如果不同源，界面会一半按新倍率画、一半按旧倍率排（历史上"改了缩放却完全不可见"就是这么来的）。
+     */
+    @Test
+    void scaleOverrideReplacesAutomaticValue() {
+        FakeGl.viewport = new int[]{0, 0, 1280, 720};
+        renderer.beginFrame();
+        assertEquals(2, renderer.scale(), "自动值：1280x720 按基准 320 得 2");
+        assertEquals(640, renderer.width());
+        renderer.endFrame();
+
+        renderer.setScaleOverride(6);
+        renderer.beginFrame();
+        assertEquals(6, renderer.scale(), "手动值压过自动值");
+        assertEquals(213, renderer.width(), "逻辑宽 = 物理 1280 / 6（向下取整）");
+        assertEquals(120, renderer.height());
+        renderer.endFrame();
+
+        renderer.setScaleOverride(99);
+        renderer.beginFrame();
+        assertEquals(8, renderer.scale(), "超过上限夹到 8");
+        renderer.endFrame();
+
+        renderer.setScaleOverride(0);
+        renderer.beginFrame();
+        assertEquals(2, renderer.scale(), "0 = 回到自动");
+        assertEquals(640, renderer.width());
+        renderer.endFrame();
+    }
+
+    /**
      * 视口查询失败（全 0）时不抛异常，也<b>不得</b>调用 {@code glOrtho}：左右/上下相等在 GL 里合法吗？
      * 不合法——规范规定 {@code left == right} 或 {@code bottom == top} 时产生 GL_INVALID_VALUE、
      * 矩阵保持原样，GUI 因而永久画在裁剪空间之外。此时渲染器尺寸保持未知，并打印一次诊断。

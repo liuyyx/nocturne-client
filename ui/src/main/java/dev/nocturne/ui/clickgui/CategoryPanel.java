@@ -112,6 +112,23 @@ public final class CategoryPanel extends Panel {
         this.viewportHeight = height;
     }
 
+    /**
+     * 改列宽（及其各行的宽度）。
+     *
+     * <p>给"放大界面后整列被挤出屏幕"用：列宽是固定像素写的（{@link Theme#PANEL_WIDTH}），
+     * 而放大 GUI 等于缩小逻辑分辨率——不收缩列宽，靠右的列就跑到屏幕外。
+     * 只改宽度，不动位置（位置由调用方决定）。
+     */
+    public void setColumnWidth(float newWidth) {
+        if (newWidth == width) {
+            return;
+        }
+        setBounds(x, y, newWidth, height);
+        for (ModuleRow row : rows) {
+            row.setBounds(row.x(), row.y(), newWidth, row.height());
+        }
+    }
+
     @Override
     public void cancelInteractions() {
         super.cancelInteractions();

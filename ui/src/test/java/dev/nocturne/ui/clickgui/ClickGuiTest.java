@@ -402,4 +402,38 @@ class ClickGuiTest {
         assertEquals(0, input.pointerGrabCalls, "closed GUI must not touch the pointer grab state");
         assertFalse(input.pointerGrabbed, "cursor must stay visible when the GUI was never opened");
     }
+
+    /**
+     * 放大界面（= 逻辑视口变窄）后整排仍在视口内。
+     *
+     * <p>列宽是固定像素写的：逻辑视口从 522 缩到 261（UI 缩放 3 → 6）时不收缩列宽，第三列就被
+     * 挤出屏幕——"能自己调整大小"在放大方向上是坏的。行宽/行 x 必须与列同步，否则文字会画在
+     * 面板之外（列有裁剪，看起来就是内容凭空消失）。
+     */
+    @Test
+    void relayoutKeepsEveryColumnInsideANarrowViewport() {
+        ModuleRegistry registry = new ModuleRegistry();
+        registry.register(new TestModule("Fly", Category.MOVEMENT));
+        registry.register(new TestModule("ESP", Category.RENDER));
+        registry.register(new TestModule("AutoRespawn", Category.PLAYER));
+        ClickGui gui = new ClickGui(registry);
+        gui.setOpen(true);
+
+        gui.setViewport(522, 326);                     // 默认缩放下（1568 宽 / 3）的逻辑视口
+        for (CategoryPanel panel : gui.panels()) {
+            assertEquals(Theme.PANEL_WIDTH, panel.width(), 0.01f, "宽视口下保持默认列宽");
+        }
+
+        gui.setViewport(261, 163);                     // 放大一倍后的逻辑视口
+        float rightmost = 0f;
+        for (CategoryPanel panel : gui.panels()) {
+            assertTrue(panel.width() >= 72f, "列宽不得压到读不出模块名");
+            rightmost = Math.max(rightmost, panel.right());
+            for (ModuleRow row : panel.rows()) {
+                assertEquals(panel.width(), row.width(), 0.01f, "行宽必须跟列宽同步");
+                assertEquals(panel.x(), row.x(), 0.01f, "行必须与列左对齐");
+            }
+        }
+        assertTrue(rightmost <= 261f, "整排必须落在窄视口内，实际右边界 " + rightmost);
+    }
 }

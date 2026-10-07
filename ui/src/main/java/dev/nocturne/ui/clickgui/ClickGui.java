@@ -34,6 +34,14 @@ public final class ClickGui extends Panel implements OverlayGui {
     /** 横向平移后至少保留在视口内的宽度（像素），避免整列被拖出屏幕后无法找回。 */
     private static final float MIN_VISIBLE = 24f;
 
+    /**
+     * 收缩列宽时的下限（像素）。
+     *
+     * <p>再窄就放不下模块名，列会退化成几条竖线；到了这个下限还排不下时，宁可让内容横向溢出
+     * （左键从空白处拖动可以平移整排），也不把字压没。
+     */
+    private static final float MIN_COLUMN_WIDTH = 72f;
+
     /** 模块注册表，各分类栏的内容来源。 */
     private final ModuleRegistry registry;
     /** 分类栏列表，顺序即从左到右的排列顺序。 */
@@ -47,6 +55,8 @@ public final class ClickGui extends Panel implements OverlayGui {
     private int viewportHeight;
     /** 绘制区域宽度，由叠加层每帧同步；未知时为 0，此时不做横向夹取/平移。 */
     private int viewportWidth;
+    /** 上次重排所用的逻辑宽度；与当前不一致时重排列宽（见 {@link #relayout}）。 */
+    private int laidOutWidth = -1;
     /** 本次左键手势是否从空白处开始；决定拖动是平移整体布局还是拖动某一列。 */
     private boolean panning;
 
@@ -276,10 +286,43 @@ public final class ClickGui extends Panel implements OverlayGui {
     public void setViewport(int width, int height) {
         this.viewportWidth = width;
         this.viewportHeight = height;
+        if (width > 0 && width != laidOutWidth) {
+            // 逻辑宽度变了 = 窗口尺寸或 UI 缩放变了。列宽是固定像素，放大 GUI 后靠右的列会被挤出
+            // 屏幕，所以这里按新宽度重排一次。代价是用户拖过的列位置被重置——缩放变化后回到默认
+            // 排布是可接受的（否则"放大后布局还是旧的溢出状态"，功能等于没有）。
+            laidOutWidth = width;
+            relayout();
+        }
         for (CategoryPanel panel : panels) {
             panel.setViewport(width, height);
         }
         configPanel.setViewport(width, height);
+    }
+
+    /**
+     * 按当前逻辑宽度重排：列宽取 {@code [MIN_COLUMN_WIDTH, Theme.PANEL_WIDTH]} 内"刚好排满"的值。
+     *
+     * <p>放大 GUI 等于缩小逻辑分辨率：固定 130px 的三列（418px 内容 + 边距）在 261px 宽的视口里
+     * 必然溢出。边距与列间距也按视口比例收缩（各自有上限，宽屏下仍是原值），让整排在窄视口下
+     * 依然完整可见。
+     */
+    private void relayout() {
+        int columns = panels.size();
+        if (columns == 0 || viewportWidth <= 0) {
+            return;
+        }
+        float margin = Math.min(MARGIN, viewportWidth * 0.04f);
+        float gap = Math.min(COLUMN_GAP, viewportWidth * 0.03f);
+        float usable = viewportWidth - margin * 2f - gap * (columns - 1);
+        float columnWidth = Math.max(MIN_COLUMN_WIDTH, Math.min(usable / columns, Theme.PANEL_WIDTH));
+        float cursorX = margin;
+        for (CategoryPanel panel : panels) {
+            panel.setColumnWidth(columnWidth);
+            panel.moveTo(cursorX, MARGIN);
+            cursorX += columnWidth + gap;
+        }
+        // 列的坐标变了：设置面板按锚定行定位，必须跟进，否则飘在原地与行脱钩。
+        reanchorConfigPanel();
     }
 
     /**

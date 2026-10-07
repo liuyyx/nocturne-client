@@ -168,9 +168,12 @@ public final class KeyMap {
             case 39: return 79;                   // RIGHT
             case 40: return 81;                   // DOWN
             case 44: return 70;                   // PRINTSCREEN
-            case 45: return 73;                   // INSERT
-            case 46: return 76;                   // DELETE
+            case 45: return 45;                   // MINUS（缩小界面）
+            case 46: return 55;                   // PERIOD
+            case 47: return 56;                   // SLASH
             case 48: return 39;                   // 0
+            case 61: return 46;                   // EQUALS（放大界面；键帽印的是 +）
+            case 155: return 73;                  // INSERT
             case 54: return 229;                  // RSHIFT（本项目的开关键）
             case 91: case 524: return 227;        // LGUI / WIN
             case 92: return 231;                  // RGUI

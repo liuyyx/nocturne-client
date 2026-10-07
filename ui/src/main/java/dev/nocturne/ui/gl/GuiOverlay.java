@@ -42,6 +42,19 @@ public final class GuiOverlay implements FrameListener {
     /** Esc 的键码（AWT VK_ESCAPE）；用于派发键盘事件使 Esc 关闭可达。 */
     private static final int KEY_ESCAPE = 27;
 
+    /** 放大界面的键：主键盘 {@code =}（键帽上印的是 {@code +}）。 */
+    private static final int KEY_SCALE_UP = 61;
+    /** 放大界面的键：数字键盘 {@code +}。 */
+    private static final int KEY_SCALE_UP_KEYPAD = 107;
+    /** 缩小界面的键：主键盘 {@code -}。 */
+    private static final int KEY_SCALE_DOWN = 45;
+    /** 缩小界面的键：数字键盘 {@code -}。 */
+    private static final int KEY_SCALE_DOWN_KEYPAD = 109;
+    /** 手动缩放的下限：1 = 逐像素，再小界面元素会糊成一团。 */
+    private static final int SCALE_MIN = 1;
+    /** 手动缩放的上限；与 {@code GlRenderer} 的自动上限对齐，超过只会让 1px 描边与圆角显粗。 */
+    private static final int SCALE_MAX = 8;
+
     /** 左键编号。 */
     private static final int BUTTON_LEFT = 0;
     /** 右键编号。 */
@@ -67,6 +80,10 @@ public final class GuiOverlay implements FrameListener {
 
     /** 上一帧开关按键是否按下，用于取「按下沿」。 */
     private boolean toggleWasDown;
+    /** 上一帧「放大」键是否按下，用于取按下沿（按住不重复触发）。 */
+    private boolean scaleUpWasDown;
+    /** 上一帧「缩小」键是否按下，用于取按下沿。 */
+    private boolean scaleDownWasDown;
     /** 上一帧 Esc 是否按下，用于取「按下沿」。 */
     private boolean escapeWasDown;
     /** 上一帧左键是否按下。 */
@@ -164,6 +181,49 @@ public final class GuiOverlay implements FrameListener {
         return editor != null && editor.isOpen() ? editor : gui;
     }
 
+    /**
+     * 用 {@code =} / {@code -}（含数字键盘）手动调整界面大小。
+     *
+     * <p>只在界面打开时响应：游戏里 {@code -} 常被模组占用（缩小视野之类），不吃它的按下沿就不会
+     * 误触发。关闭期间照样记录按下状态，否则"关着按住、打开瞬间连跳几档"。
+     *
+     * <p>缩放由后端从下一帧起生效（见 {@link UiBackend#setScaleOverride}）：本帧的组件树已经按旧
+     * 尺寸排好，半途改会让绘制与命中测试错位。
+     *
+     * @param open 界面当前是否打开
+     */
+    private void handleScaleKeys(boolean open) {
+        boolean up = open && (input.keyDown(KEY_SCALE_UP) || input.keyDown(KEY_SCALE_UP_KEYPAD));
+        boolean down = open && (input.keyDown(KEY_SCALE_DOWN) || input.keyDown(KEY_SCALE_DOWN_KEYPAD));
+        if (up && !scaleUpWasDown) {
+            stepScale(1);
+        }
+        if (down && !scaleDownWasDown) {
+            stepScale(-1);
+        }
+        scaleUpWasDown = up;
+        scaleDownWasDown = down;
+    }
+
+    /**
+     * 按 {@code delta} 调一档缩放，并在日志里留痕。
+     *
+     * <p>日志是必要的：缩放只改逻辑尺寸，界面本身没有别的反馈，而"按了没反应"到底是键没送到、
+     * 还是后端不支持缩放，只能靠这行区分。
+     *
+     * @param delta {@code +1} 放大、{@code -1} 缩小
+     */
+    private void stepScale(int delta) {
+        int current = renderer.scale();
+        int next = Math.max(SCALE_MIN, Math.min(SCALE_MAX, current + delta));
+        if (next == current) {
+            return;
+        }
+        renderer.setScaleOverride(next);
+        System.out.println("[nocturne] ui scale " + current + " -> " + next
+                + " (press = / - while the GUI is open)");
+    }
+
     /** 是否已打印过首帧输入诊断，保证只打印一次。 */
     private boolean loggedFirstInput;
     /** 上一帧是否有界面处于打开状态；用于识别指针捕获的交接沿。 */
@@ -241,6 +301,8 @@ public final class GuiOverlay implements FrameListener {
         // 界面关闭期间完全不碰这个状态：主菜单/聊天/原生界面本来就需要可见光标，
         // 无条件捕获会把光标锁死——真机上「鼠标被锁」就是这里来的。
         boolean open = active().isOpen();
+        // 用 = / - 手动调界面大小：与开关、指针捕获一样每帧轮询（按键只在这一层读）。
+        handleScaleKeys(open);
         if (open) {
             if (!wasOpenForPointer) {
                 pointerGrabbedBeforeGui = input.isPointerGrabbed();

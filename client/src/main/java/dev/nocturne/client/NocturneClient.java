@@ -4,6 +4,7 @@ import dev.nocturne.client.event.EventBus;
 import dev.nocturne.client.hud.HudSink;
 import dev.nocturne.client.module.Module;
 import dev.nocturne.client.module.ModuleRegistry;
+import dev.nocturne.client.runtime.NocturneRuntime;
 
 import java.lang.instrument.Instrumentation;
 
@@ -28,6 +29,8 @@ public final class NocturneClient {
     private volatile HudSink hudSink;
     /** 指向运行中游戏的反射桥；非游戏 JVM 中为 {@code null}。 */
     private volatile dev.nocturne.client.game.GameBridge gameBridge;
+    /** 是否已自销毁（panic）：置位后不再接受任何驱动，见 {@link #panic()}。 */
+    private volatile boolean panicked;
 
     private NocturneClient(Instrumentation instrumentation) {
         this.instrumentation = instrumentation;
@@ -167,6 +170,7 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.ChamsModule());
         modules.register(new dev.nocturne.client.module.modules.XrayModule());
         modules.register(new dev.nocturne.client.module.modules.SearchModule());
+        modules.register(new dev.nocturne.client.module.modules.PanicModule());
     }
 
     /** 全局事件总线。 */
@@ -202,6 +206,38 @@ public final class NocturneClient {
             }
         }
         log("client shut down");
+    }
+
+    /**
+     * 自销毁（panic）：把客户端从"正在运行"变成"看起来没注入过"。
+     *
+     * <p>做三件事，顺序有讲究：
+     * <ol>
+     *   <li>禁用全部模块（{@link #shutdown()}）——每个模块释放自己的副作用；</li>
+     *   <li>关掉模块驱动闸门（{@code ModuleRegistry.setActive(false)}）——tick 不再进模块；</li>
+     *   <li>清空 bootstrap 层分发器——GUI 不再绘制、开关键不再响应、输入不再轮询。</li>
+     * </ol>
+     *
+     * <p><b>不可逆</b>：agent 无法从目标 JVM 里卸载自己，所以"恢复"只能靠重启游戏。这是有意的——
+     * 一个还能被同一条按键唤回来的"自销毁"没有意义。
+     *
+     * <p>线程安全：可能从 GUI 线程（点模块开关）或模块 tick 线程调用，故加锁并置一次性标志。
+     */
+    public synchronized void panic() {
+        if (panicked) {
+            return;
+        }
+        panicked = true;
+        shutdown();
+        modules.setActive(false);
+        NocturneRuntime.shutdown();
+        log("panic: client disabled — no GUI, no modules, no per-frame work;"
+                + " restart the game to bring it back");
+    }
+
+    /** @return 是否已自销毁（诊断与日志用） */
+    public boolean isPanicked() {
+        return panicked;
     }
 
     /** 以 {@code [nocturne]} 前缀输出日志，保持客户端日志易于过滤。 */

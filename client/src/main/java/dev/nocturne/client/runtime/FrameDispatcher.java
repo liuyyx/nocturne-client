@@ -114,6 +114,17 @@ public final class FrameDispatcher {
     }
 
     /**
+     * 清空全部每帧动作与绘制上下文汇。
+     *
+     * <p>给"自销毁"用：注入的字节码仍然每帧调用 {@code onFrame()}，但列表空了之后就是一次空遍历
+     * ——GUI 不再绘制、开关键不再响应、模块不再 tick，行为上与"没注入过"一致。
+     */
+    public static void clear() {
+        LISTENERS.clear();
+        DRAW_CONTEXT_SINK = null;
+    }
+
+    /**
      * 分发一帧给全部动作。
      *
      * <p>契约：无论发生什么都不得抛出异常，也不得阻塞——本方法由注入的字节码在游戏的缓冲交换点调用，

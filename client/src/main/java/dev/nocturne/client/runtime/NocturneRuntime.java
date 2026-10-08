@@ -45,6 +45,8 @@ public final class NocturneRuntime {
     private static Method setDrawContextSinkMethod;
     /** {@code FrameDispatcher.setDrawContext(Object)}；未解析时为 null。 */
     private static Method setDrawContextMethod;
+    /** {@code FrameDispatcher.clear()}；未解析时为 null。 */
+    private static Method clearMethod;
 
     /** 工具类，禁止实例化。 */
     private NocturneRuntime() {
@@ -70,6 +72,7 @@ public final class NocturneRuntime {
             setDrawContextSinkMethod = dispatcher.getMethod("setDrawContextSink",
                     java.util.function.Consumer.class);
             setDrawContextMethod = dispatcher.getMethod("setDrawContext", Object.class);
+            clearMethod = dispatcher.getMethod("clear");
             return true;
         } catch (Throwable t) {
             System.out.println("[nocturne] bootstrap dispatcher unavailable: " + t);
@@ -185,6 +188,24 @@ public final class NocturneRuntime {
             setDrawContextMethod.invoke(null, graphics);
         } catch (Throwable ignored) {
             // 绘制路径上不得抛出；失败只表现为本帧不画
+        }
+    }
+
+    /**
+     * 自销毁：清空 bootstrap 层分发器的全部每帧动作与绘制上下文汇。
+     *
+     * <p>清空之后注入的字节码仍会每帧调到这里，但分发器列表是空的——一次空遍历，不绘制、不轮询输入、
+     * 不 tick 模块。这是"看起来没注入过"最接近的做法：agent 无法从目标 JVM 里卸载自己，
+     * 但可以让所有可观察行为停下。
+     */
+    public static void shutdown() {
+        if (!bindDispatcher()) {
+            return;
+        }
+        try {
+            clearMethod.invoke(null);
+        } catch (Throwable t) {
+            System.out.println("[nocturne] runtime shutdown failed: " + t);
         }
     }
 

@@ -7,6 +7,9 @@ import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.Module;
+import dev.nocturne.client.render.OverlayDraw;
+import dev.nocturne.client.render.WorldOverlay;
+import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.NumberValue;
 
@@ -20,12 +23,16 @@ import java.util.List;
  * 装备显示/强度指示/药水折算。对方未进 addValue 的 Opacity（透明度参与计算但无设置项）
  * 在我方按隐藏行为处理，不设可见项。版本门走表驱动——实体面缺失的版本一次性日志 + 跳过。
  *
- * <p>绘制挂钩说明：billboard 标签 + 装备/药水图标 + 伤害估算的真正投递点
- * （世界渲染 pass + 投影 + 字体图标管线）尚未接入，当前先订阅 {@link RenderEvent}
- * 做 per-frame 的实体收集、过滤与计数，实际画标签待世界绘制挂钩落地后补齐。
- * 模块开关/参数/门逻辑现在即可验收。
+ * <p>绘制：由 {@link WorldOverlay} 每帧在叠加层上画——实体头顶上方一行标签（名字，可带距离）。
+ * 图标（装备/药水）与血量条需要物品面与图标管线，尚未接；开关保留。
  */
-public final class NameTagsModule extends Module {
+public final class NameTagsModule extends Module implements WorldOverlay {
+
+    /** 标签画在实体头顶上方多高处（米）。 */
+    private static final double TAG_HEIGHT = 2.1d;
+
+    /** 投影结果复用（每帧几十个实体，避免逐点分配）。 */
+    private final WorldProjection.ScreenPoint point = new WorldProjection.ScreenPoint();
 
     /** 隐身实体是否跳过。 */
     private final BooleanValue ignoreInvisibles = add(new BooleanValue("Ignore Invisibles", false));
@@ -196,21 +203,26 @@ public final class NameTagsModule extends Module {
      */
     @SuppressWarnings("unchecked")
     private int countVisible(GameBridge bridge, Object level) {
-        boolean anyGroup = renderPlayers.get() || renderAnimals.get() || renderMobs.get();
-        if (!anyGroup) {
-            return 0;
+        return visibleEntities(bridge, level).size();
+    }
+
+    /** 收集可见实体（三组开关，除自己）；收集与绘制共用同一份列表。 */
+    @SuppressWarnings("unchecked")
+    private List<Object> visibleEntities(GameBridge bridge, Object level) {
+        List<Object> out = new java.util.ArrayList<Object>();
+        if (!(renderPlayers.get() || renderAnimals.get() || renderMobs.get())) {
+            return out;
         }
         Object raw;
         try {
             raw = bridge.callMapped(level, ClassType.CLIENT_LEVEL, "entitiesForRendering");
         } catch (Throwable t) {
-            return 0;
+            return out;
         }
         if (!(raw instanceof List)) {
-            return 0;
+            return out;
         }
         Object self = bridge.player();
-        int count = 0;
         for (Object entity : (List<Object>) raw) {
             if (entity == null || (self != null && self.equals(entity))) {
                 continue;
@@ -218,9 +230,86 @@ public final class NameTagsModule extends Module {
             if (!isLiving(bridge, entity)) {
                 continue;
             }
-            count++;
+            out.add(entity);
         }
-        return count;
+        return out;
+    }
+
+    /**
+     * 世界覆盖层：在每个可见实体头顶画一行标签。
+     *
+     * <p>文本 = 名字（{@code Entity#getName}），"Distance" 打开时追加米数。血量条与装备/药水图标
+     * 需要物品面与图标管线，尚未接——开关保留，不假装支持。
+     */
+    @Override
+    public void drawWorldOverlay(OverlayDraw draw, WorldProjection projection) {
+        GameBridge bridge = bridge();
+        if (bridge == null || !hasEntityFace(bridge)) {
+            return;
+        }
+        Object level = level(bridge);
+        if (level == null) {
+            return;
+        }
+        boolean withDistance = playersDistance.get();
+        float lineHeight = draw.textHeight();
+        for (Object entity : visibleEntities(bridge, level)) {
+            double[] pos = position(bridge, entity);
+            if (pos == null) {
+                continue;
+            }
+            projection.project(pos[0], pos[1] + TAG_HEIGHT, pos[2], point);
+            if (!point.visible) {
+                continue;
+            }
+            String label = label(bridge, entity, withDistance);
+            if (label == null) {
+                continue;
+            }
+            draw.text(label, point.x - draw.textWidth(label) / 2f, point.y - lineHeight, 0xFFFFFFFF);
+        }
+    }
+
+    /** 标签文本：名字（+ 距离）；名字读不到时返回 {@code null}。 */
+    private static String label(GameBridge bridge, Object entity, boolean withDistance) {
+        Object name = bridge.callMapped(entity, ClassType.ENTITY, "getName");
+        if (!(name instanceof String)) {
+            return null;
+        }
+        if (!withDistance) {
+            return (String) name;
+        }
+        double dist = distanceTo(bridge, bridge.player(), entity);
+        return dist >= 0 ? name + " " + Math.round(dist) + "m" : (String) name;
+    }
+
+    /** 读实体的世界坐标（{@code position()} → {@code Vec3#x/y/z}）；缺成员时返回 {@code null}。 */
+    private static double[] position(GameBridge bridge, Object entity) {
+        Object vec = bridge.callMapped(entity, ClassType.ENTITY, "position");
+        if (vec == null) {
+            return null;
+        }
+        Object x = bridge.readField(vec, ClassType.VEC3, "x");
+        Object y = bridge.readField(vec, ClassType.VEC3, "y");
+        Object z = bridge.readField(vec, ClassType.VEC3, "z");
+        if (!(x instanceof Number) || !(y instanceof Number) || !(z instanceof Number)) {
+            return null;
+        }
+        return new double[]{((Number) x).doubleValue(), ((Number) y).doubleValue(),
+                ((Number) z).doubleValue()};
+    }
+
+    /** 本地玩家到实体的距离（米）；任一端坐标读不到时返回负数。 */
+    private static double distanceTo(GameBridge bridge, Object self, Object entity) {
+        double[] a = position(bridge, self);
+        double[] b = position(bridge, entity);
+        if (a == null || b == null) {
+            return -1.0;
+        }
+        double dx = a[0] - b[0];
+        double dy = a[1] - b[1];
+        double dz = a[2] - b[2];
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */

@@ -108,7 +108,7 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
 | 纹理桥（GL 纹理借用 / 帧快照 / 背景模糊） | **已完成并验证**：真 GL 上下文下借用 4×4 纹理、棋盘模糊均有像素级判定；从 MC 取纹理 id 与快照时机待真机 |
 | Skija 通道 | 已实现（Skija 绑定是 Multi-Release JAR，Java 8 可用且已实测）；但当前**不在任何路径上被 probe**——直写外部帧缓冲会盖黑游戏（1.8.9 与 1.16.5 真机实锤），修法是纹理中转，未做。1.13–26.2 走 `gl-core`，26.3 走 `gui-extractor` |
 | ⚠️ HUD / 纹理桥**未在真实 Minecraft 内验证** | ClickGUI 已在 1.8.9 / 1.16.5（当时）/ 26.3 真机可见可点；HUD 与纹理桥的验证跑在无 MC 的 GL 靶与离屏光栅上。待真机项（取纹理 id、快照时机、屏幕壳层与输入适配、HUD 真实数据源）逐条列在 `docs/research/setsuna-gui-port.md` |
-| 世界覆盖层（ESP 等） | **基础设施已落地并有测试**：`WorldProjection` **自己算投影**（只读眼位/朝向/FOV，不依赖游戏的投影矩阵——所以 1.8.9 / 1.16.5 / 26.x 一份代码通用），`OverlayDraw` / `WorldOverlay` 接口，叠加层在 `beginFrame()` 之后同帧回调（四个后端都能画）。ESP 已按此画出 2D 框与名字；Tracers / NameTags / ItemEsp / StorageESP / Trajectories 走同一模式待铺。**进世界后的画面待真人验收**（自动化环境无法点击菜单进入世界） |
+| 世界覆盖层（ESP 等） | **基础设施已落地并有测试**：`WorldProjection` **自己算投影**（只读眼位/朝向/FOV，不依赖游戏的投影矩阵——所以 1.8.9 / 1.16.5 / 26.x 一份代码通用），`OverlayDraw` / `WorldOverlay` 接口，叠加层在 `beginFrame()` 之后同帧回调（四个后端都能画）。**已画出来**：ESP（2D 框 + 名字）、Tracers（底部中心连线，并修掉了恒 -1 的距离桩）、NameTags（头顶名字 + 可选距离）。**待铺**：ItemEsp / StorageEsp / Trajectories 需要新映射面（`ItemEntity`、方块实体、弹道模拟），Chams / Xray 需要实体渲染 pass 或方块渲染拦截（2D 覆盖层做不了）。**进世界后的画面待真人验收**（自动化环境无法点击菜单进入世界） |
 | 自销毁（Panic） | **已实现并有测试**：GUI 里打开即停用全部模块、关闭驱动闸门、清空 bootstrap 层分发器——之后 GUI 打不开、开关键不响应、没有任何每帧工作。**不可逆**（agent 无法卸载自己，只能重启游戏）。真机上该模块在 MISC 列可见；点击触发待真人验收（自动化环境里 Windows 前台锁不允许抢焦点，SDL 鼠标坐标随之失效） |
 | 模组形态 | 已移除（不再支持放进 `mods/`） |
 

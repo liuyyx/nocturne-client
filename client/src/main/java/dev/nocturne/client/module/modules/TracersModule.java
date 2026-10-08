@@ -7,6 +7,9 @@ import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.Module;
+import dev.nocturne.client.render.OverlayDraw;
+import dev.nocturne.client.render.WorldOverlay;
+import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.ColorValue;
 import dev.nocturne.client.value.NumberValue;
@@ -21,11 +24,16 @@ import java.util.List;
  * 实体面缺失的版本一次性日志 + 跳过。距离范围值（对方 RandomValue）在我方值框架缺失时
  * 暂用固定上限 32（与对方默认值一致），待 RandomValue 落地后补可调项。
  *
- * <p>绘制挂钩说明：屏幕空间直线的真正投递点（世界渲染 pass + 投影矩阵）尚未接入，
- * 当前先订阅 {@link RenderEvent} 做 per-frame 的实体收集、过滤与计数，
- * 实际画线待世界绘制挂钩落地后补齐。模块开关/参数/门逻辑现在即可验收。
+ * <p>绘制：由 {@link WorldOverlay} 每帧在叠加层上画——从屏幕底部中心向实体投影点连线。
+ * 投影用 {@link WorldProjection}（自己算，四代通用），实体坐标用 {@code position() + Vec3#x/y/z}。
  */
-public final class TracersModule extends Module {
+public final class TracersModule extends Module implements WorldOverlay {
+
+    /** 连线终点取实体身体中部：脚点会贴着地面、头点会飘在头顶，取 1 米高最贴近"人"的位置。 */
+    private static final double TRACER_HEIGHT = 1.0d;
+
+    /** 投影结果复用（每帧几十个实体，避免逐点分配）。 */
+    private final WorldProjection.ScreenPoint point = new WorldProjection.ScreenPoint();
 
     /** 三组渲染开关。 */
     private final BooleanValue renderPlayers = add(new BooleanValue("Render Players", true));
@@ -176,30 +184,37 @@ public final class TracersModule extends Module {
      * 统计可见实体数（三组开关 + 距离上限过滤）。
      *
      * <p>玩家/生物/动物的区分需要实体类型面（Player/Animal/Mob kind），当前表里只有
-     * LivingEntity 一层，故三组开关按“全开即全计”保守实现：任一组开着就计数全部
-     * LivingEntity（除自己），类型细分待 kind 面落地后补齐。距离用
-     * {@code distanceToSqr} 开方后与 {@link #maxDistance} 比较（仅距离检查开时）。
+     * LivingEntity 一层，故三组开关按"任一组开着就计全部 LivingEntity（除自己）"保守实现，
+     * 类型细分待 kind 面落地后补齐。
+     */
+    private int countVisible(GameBridge bridge, Object level) {
+        return visibleEntities(bridge, level).size();
+    }
+
+    /**
+     * 收集可见实体（三组开关 + 距离上限过滤）。
+     *
+     * <p>收集与绘制共用同一份列表，避免两处过滤逻辑漂移。
      */
     @SuppressWarnings("unchecked")
-    private int countVisible(GameBridge bridge, Object level) {
-        boolean anyGroup = renderPlayers.get() || renderMobs.get() || renderAnimals.get();
-        if (!anyGroup) {
-            return 0;
+    private List<Object> visibleEntities(GameBridge bridge, Object level) {
+        List<Object> out = new java.util.ArrayList<Object>();
+        if (!(renderPlayers.get() || renderMobs.get() || renderAnimals.get())) {
+            return out;
         }
         Object raw;
         try {
             raw = bridge.callMapped(level, ClassType.CLIENT_LEVEL, "entitiesForRendering");
         } catch (Throwable t) {
-            return 0;
+            return out;
         }
         if (!(raw instanceof List)) {
-            return 0;
+            return out;
         }
         Object self = bridge.player();
         boolean checkDistance = playerDistanceCheck.get() || mobDistanceCheck.get()
                 || animalDistanceCheck.get();
         double maxDist = maxDistance.get();
-        int count = 0;
         for (Object entity : (List<Object>) raw) {
             if (entity == null || (self != null && self.equals(entity))) {
                 continue;
@@ -213,9 +228,74 @@ public final class TracersModule extends Module {
                     continue;
                 }
             }
-            count++;
+            out.add(entity);
         }
-        return count;
+        return out;
+    }
+
+    /**
+     * 世界覆盖层：从屏幕底部中心向每个可见实体画一条线。
+     *
+     * <p>终点取实体上方 1 米处（身体中部）——直接用脚点会让线头贴在地上、用头点会飘在头顶。
+     */
+    @Override
+    public void drawWorldOverlay(OverlayDraw draw, WorldProjection projection) {
+        GameBridge bridge = bridge();
+        if (bridge == null || !hasEntityFace(bridge)) {
+            return;
+        }
+        Object level = level(bridge);
+        if (level == null) {
+            return;
+        }
+        float originX = draw.width() / 2f;
+        float originY = draw.height();
+        int argb = playerColor.argb();
+        for (Object entity : visibleEntities(bridge, level)) {
+            double[] pos = position(bridge, entity);
+            if (pos == null) {
+                continue;
+            }
+            projection.project(pos[0], pos[1] + TRACER_HEIGHT, pos[2], point);
+            if (!point.visible) {
+                continue;
+            }
+            draw.line(originX, originY, point.x, point.y, 1.5f, argb);
+        }
+    }
+
+    /** 读实体的世界坐标（{@code position()} → {@code Vec3#x/y/z}）；缺成员时返回 {@code null}。 */
+    private static double[] position(GameBridge bridge, Object entity) {
+        Object vec = bridge.callMapped(entity, ClassType.ENTITY, "position");
+        if (vec == null) {
+            return null;
+        }
+        Object x = bridge.readField(vec, ClassType.VEC3, "x");
+        Object y = bridge.readField(vec, ClassType.VEC3, "y");
+        Object z = bridge.readField(vec, ClassType.VEC3, "z");
+        if (!(x instanceof Number) || !(y instanceof Number) || !(z instanceof Number)) {
+            return null;
+        }
+        return new double[]{((Number) x).doubleValue(), ((Number) y).doubleValue(),
+                ((Number) z).doubleValue()};
+    }
+
+    /**
+     * 本地玩家到实体的距离（米）；任一端坐标读不到时返回负数（调用方视为"不过滤"）。
+     *
+     * <p>用双方 {@code position()} 的欧氏距离：坐标面（{@code position} + {@code Vec3#x/y/z}）
+     * 在表里已经齐了，不必依赖 {@code distanceToSqr} 那个需要传目标坐标的重载。
+     */
+    private static double distanceTo(GameBridge bridge, Object self, Object entity) {
+        double[] a = position(bridge, self);
+        double[] b = position(bridge, entity);
+        if (a == null || b == null) {
+            return -1.0;
+        }
+        double dx = a[0] - b[0];
+        double dy = a[1] - b[1];
+        double dz = a[2] - b[2];
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */
@@ -233,12 +313,6 @@ public final class TracersModule extends Module {
             }
         }
         return false;
-    }
-
-    /** 本地玩家到实体的距离；实体坐标面未落地前恒返回负数（调用方视为不过滤）。 */
-    private static double distanceTo(GameBridge bridge, Object self, Object entity) {
-        // distanceToSqr 在表里是 (DDD)D 需目标坐标；真实距离过滤待实体坐标面落地后补齐。
-        return -1.0;
     }
 
     /** 表驱动门日志：缺成员版本只报一次。 */

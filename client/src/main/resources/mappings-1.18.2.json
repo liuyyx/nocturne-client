@@ -1566,6 +1566,18 @@
                         "forge": "()I"
                     }
                 },
+                "getMainHandItem": {
+                    "names": {
+                        "vanilla": "es",
+                        "fabric": "method_6047",
+                        "forge": "m_21205_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbuw;",
+                        "fabric": "()Lnet/minecraft/class_1799;",
+                        "forge": "()Lnet/minecraft/world/item/ItemStack;"
+                    }
+                },
                 "getMaxHealth": {
                     "names": {
                         "vanilla": "em",

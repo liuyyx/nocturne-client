@@ -177,6 +177,8 @@ net/minecraft/world/entity/LivingEntity#position()
 net/minecraft/world/entity/LivingEntity#setPos()
 net/minecraft/world/entity/LivingEntity#setSprinting()
 net/minecraft/world/entity/LivingEntity#swing()
+# 主手物品（Trajectories 判"是否持有可投掷物"）：1.8.9 走别名桥 → EntityLivingBase.getHeldItem
+net/minecraft/world/entity/LivingEntity#getMainHandItem()
 
 net/minecraft/world/entity/Mob
 net/minecraft/world/entity/Mob#fallDistance

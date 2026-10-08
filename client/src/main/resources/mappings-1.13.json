@@ -1256,6 +1256,9 @@
                         "forge": "()I"
                     }
                 },
+                "getMainHandItem": {
+                    "absent": true
+                },
                 "getMaxHealth": {
                     "names": {
                         "vanilla": "cw",

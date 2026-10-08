@@ -7,6 +7,9 @@ import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.Module;
+import dev.nocturne.client.render.OverlayDraw;
+import dev.nocturne.client.render.WorldOverlay;
+import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.ColorValue;
 
@@ -18,11 +21,25 @@ import dev.nocturne.client.value.ColorValue;
  * 步进模拟重力下落、遇阻停画。版本门走表驱动——手持物品/蓄力/实体面任一缺失的版本
  * 一次性日志 + 跳过。
  *
- * <p>绘制挂钩说明：世界空间抛物线 + 落点十字的真正投递点（世界渲染 pass）尚未接入，
- * 当前先订阅 {@link RenderEvent} 做 per-frame 的持有判定与弹道模拟，
- * 实际画线待世界绘制挂钩落地后补齐。模块开关/参数/门逻辑现在即可验收。
+ * <p>绘制：由 {@link WorldOverlay} 每帧在叠加层上画——从眼位沿视线做步进弹道模拟（重力 0.03、
+ * 阻力 0.99、满蓄力初速 3.0 格/tick），每步投影后连成折线，末端画落点十字。
+ * 蓄力折算与"是不是投掷物"的物品 kind 面尚未入库：前者按满蓄力，后者只要手持非空即画。
  */
-public final class TrajectoriesModule extends Module {
+public final class TrajectoriesModule extends Module implements WorldOverlay {
+
+    /** 模拟步数上限（约 6 秒飞行；再往后就是没落地，画下去只是浪费绘制调用）。 */
+    private static final int MAX_STEPS = 120;
+    /** 每 tick 重力加速度（MC 的投掷物都是 0.03 格/tick²）。 */
+    private static final double GRAVITY = 0.03d;
+    /** 每 tick 速度衰减（空气阻力）。 */
+    private static final double DRAG = 0.99d;
+    /** 满蓄力初速（格/tick）。 */
+    private static final double FULL_POWER_SPEED = 3.0d;
+    /** 落点十字的臂长（像素）。 */
+    private static final float CROSS_ARM = 4f;
+
+    /** 投影结果复用（每帧上百步，避免逐步分配）。 */
+    private final WorldProjection.ScreenPoint point = new WorldProjection.ScreenPoint();
 
     /** 瞄准线颜色（未命中实体时的线色）。 */
     private final ColorValue aimingColor = add(new ColorValue("Aiming Color", 0xFFFFFFFF));
@@ -163,33 +180,118 @@ public final class TrajectoriesModule extends Module {
     /**
      * 弹道模拟（纯数学，不碰游戏状态）。
      *
-     * <p>对方行为：初速按拉弓时长折算（蓄满 1.0），重力每 tick 下拉，
-     * 最多 40 步，遇方块/实体停画。本方法当前只做“是否持有可投掷物”判定
-     * （手持物品栈非空即认为可画，返回固定步数），真实步进模拟与碰撞待
-     * 手持物品栏面 + 方块碰撞面落地后补齐。Ghost Bow Charge 开时未拉弓也返回步数。
+     * <p>对方行为：初速按拉弓时长折算（蓄满 1.0），重力每 tick 下拉，最多 40 步，遇方块/实体停画。
+     * 现在真的做步进模拟了——重力 0.03、阻力 0.99、满蓄力初速 3.0 格/tick，与 MC 投掷物一致。
+     * 碰撞停画需要方块碰撞面（尚未入库），因此模拟跑到步数上限为止。
      *
-     * @return 本帧应画的模拟步数；0 表示不画
+     * @return 本帧应画的模拟步数；0 表示不画（未持有且未开 Ghost）
      */
     private int simulate(GameBridge bridge, Object player) {
-        Object held = heldStack(bridge, player);
-        if (held == null && !ghostBowCharge.get()) {
+        if (heldStack(bridge, player) == null && !ghostBowCharge.get()) {
             return 0;
         }
-        // 步进模拟与碰撞待面落地；当前返回哨兵步数表示“持有判定通过”。
-        return 40;
+        return MAX_STEPS;
     }
 
     /**
-     * 读主手物品栈；物品栏面缺失时返回 {@code null}（Ghost 开时仍可画虚线）。
+     * 读主手物品栈；物品栏面缺失时返回 {@code null}（Ghost 开时仍可画）。
+     *
+     * <p>规范名 {@code getMainHandItem}，1.8.9 走别名桥到 {@code EntityLivingBase.getHeldItem}。
      */
     private static Object heldStack(GameBridge bridge, Object player) {
         try {
-            // 规范面：Player#getItem() 系方法在表里是 Inventory#getItem；
-            // 玩家手持栈的直接面尚未入库，此处保守返回 null（= 未持有）。
-            return null;
+            return bridge.callMapped(player, ClassType.LIVING_ENTITY, "getMainHandItem");
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /**
+     * 世界覆盖层：从眼位沿视线步进模拟并画出轨迹，末端画落点十字。
+     *
+     * <p>每步都投影一次：投影不可见（出屏/在背后）时断开折线，避免把屏幕外两点连成一条横穿屏幕的线。
+     */
+    @Override
+    public void drawWorldOverlay(OverlayDraw draw, WorldProjection projection) {
+        GameBridge bridge = bridge();
+        if (bridge == null || !hasProjectileFace(bridge)) {
+            return;
+        }
+        Object player = bridge.player();
+        if (player == null) {
+            return;
+        }
+        if (heldStack(bridge, player) == null && !ghostBowCharge.get()) {
+            return;
+        }
+        double[] eye = eyePosition(bridge, player);
+        float[] rotation = rotation(bridge, player);
+        if (eye == null || rotation == null) {
+            return;
+        }
+        double yaw = Math.toRadians(rotation[0]);
+        double pitch = Math.toRadians(rotation[1]);
+        double vx = -Math.sin(yaw) * Math.cos(pitch) * FULL_POWER_SPEED;
+        double vy = -Math.sin(pitch) * FULL_POWER_SPEED;
+        double vz = Math.cos(yaw) * Math.cos(pitch) * FULL_POWER_SPEED;
+        double x = eye[0];
+        double y = eye[1];
+        double z = eye[2];
+
+        int lineArgb = trajectoryColor.argb();
+        boolean hasPrevious = false;
+        float previousX = 0f;
+        float previousY = 0f;
+        for (int step = 0; step < MAX_STEPS; step++) {
+            x += vx;
+            y += vy;
+            z += vz;
+            vx *= DRAG;
+            vz *= DRAG;
+            vy = vy * DRAG - GRAVITY;
+            projection.project(x, y, z, point);
+            if (!point.visible) {
+                hasPrevious = false;
+                continue;
+            }
+            if (hasPrevious) {
+                draw.line(previousX, previousY, point.x, point.y, 1.5f, lineArgb);
+            }
+            previousX = point.x;
+            previousY = point.y;
+            hasPrevious = true;
+        }
+        if (hasPrevious) {
+            int crossArgb = targetColor.argb();
+            draw.line(previousX - CROSS_ARM, previousY, previousX + CROSS_ARM, previousY, 1.5f, crossArgb);
+            draw.line(previousX, previousY - CROSS_ARM, previousX, previousY + CROSS_ARM, 1.5f, crossArgb);
+        }
+    }
+
+    /** 读实体朝向（{@code yRot} / {@code xRot}，度）；缺成员时返回 {@code null}。 */
+    private static float[] rotation(GameBridge bridge, Object entity) {
+        Object yaw = bridge.readField(entity, ClassType.ENTITY, "yRot");
+        Object pitch = bridge.readField(entity, ClassType.ENTITY, "xRot");
+        if (!(yaw instanceof Number) || !(pitch instanceof Number)) {
+            return null;
+        }
+        return new float[]{((Number) yaw).floatValue(), ((Number) pitch).floatValue()};
+    }
+
+    /** 读实体眼位（{@code getEyePosition()} → {@code Vec3#x/y/z}）；缺成员时返回 {@code null}。 */
+    private static double[] eyePosition(GameBridge bridge, Object entity) {
+        Object vec = bridge.callMapped(entity, ClassType.ENTITY, "getEyePosition");
+        if (vec == null) {
+            return null;
+        }
+        Object x = bridge.readField(vec, ClassType.VEC3, "x");
+        Object y = bridge.readField(vec, ClassType.VEC3, "y");
+        Object z = bridge.readField(vec, ClassType.VEC3, "z");
+        if (!(x instanceof Number) || !(y instanceof Number) || !(z instanceof Number)) {
+            return null;
+        }
+        return new double[]{((Number) x).doubleValue(), ((Number) y).doubleValue(),
+                ((Number) z).doubleValue()};
     }
 
     /** 表驱动门日志：缺成员版本只报一次。 */

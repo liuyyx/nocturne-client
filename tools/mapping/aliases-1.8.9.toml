@@ -180,6 +180,11 @@ mcp = "getPositionEyes"
 scope = "net/minecraft/entity/Entity"
 note = "1.8.9 只有 getPositionEyes(float partialTicks)（1 参）；Rust 调用点传 0 参，需要 1.8.9 分支补 partialTicks"
 
+# 主手物品（Trajectories 判"是否持有可投掷物"）：1.8.9 是 getHeldItem()，1.9 起改名 getMainHandItem()。
+[methods.getMainHandItem]
+mcp = "getHeldItem"
+scope = "net/minecraft/entity/EntityLivingBase"
+
 [methods.distanceToSqr]
 mcp = "getDistanceSq"
 srg = "func_70092_e"

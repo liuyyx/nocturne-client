@@ -1563,6 +1563,18 @@
                         "forge": "()I"
                     }
                 },
+                "getMainHandItem": {
+                    "names": {
+                        "vanilla": "dj",
+                        "fabric": "method_6047",
+                        "forge": "func_184614_ca"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbek;",
+                        "fabric": "()Lnet/minecraft/class_1799;",
+                        "forge": "()Lnet/minecraft/item/ItemStack;"
+                    }
+                },
                 "getMaxHealth": {
                     "names": {
                         "vanilla": "dd",

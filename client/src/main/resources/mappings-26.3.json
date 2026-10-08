@@ -1289,6 +1289,14 @@
                         "neoforge": "getId"
                     }
                 },
+                "getMainHandItem": {
+                    "names": {
+                        "vanilla": "getMainHandItem",
+                        "fabric": "getMainHandItem",
+                        "forge": "getMainHandItem",
+                        "neoforge": "getMainHandItem"
+                    }
+                },
                 "getMaxHealth": {
                     "names": {
                         "vanilla": "getMaxHealth",

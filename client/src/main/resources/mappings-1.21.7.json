@@ -1854,6 +1854,20 @@
                         "neoforge": "()I"
                     }
                 },
+                "getMainHandItem": {
+                    "names": {
+                        "vanilla": "fh",
+                        "fabric": "method_6047",
+                        "forge": "m_21205_",
+                        "neoforge": "getMainHandItem"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ldcv;",
+                        "fabric": "()Lnet/minecraft/class_1799;",
+                        "forge": "()Lnet/minecraft/world/item/ItemStack;",
+                        "neoforge": "()Lnet/minecraft/world/item/ItemStack;"
+                    }
+                },
                 "getMaxHealth": {
                     "names": {
                         "vanilla": "fa",

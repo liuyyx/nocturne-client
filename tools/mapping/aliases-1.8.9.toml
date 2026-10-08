@@ -275,6 +275,38 @@ scope = "net/minecraft/world/chunk/Chunk"
 mcp = "getBlock"
 scope = "net/minecraft/block/state/IBlockState"
 
+# 方块身份（Search 名单匹配）：1.8.9 是 Block.getUnlocalizedName()，返回 tile.oreGold 这类键。
+[methods.getDescriptionId]
+mcp = "getUnlocalizedName"
+scope = "net/minecraft/block/Block"
+
+# 玩家所在方块坐标：1.8.9 是 Entity.getPosition()，返回 BlockPos。
+[methods.blockPosition]
+mcp = "getPosition"
+scope = "net/minecraft/entity/Entity"
+
+# 坐标偏移：1.8.9 是 BlockPos.east(int)/south(int)/up(int)（桥接层不支持构造器，只能这样造坐标）。
+# 每个都钉住 (int) 那条 SRG——同名还有无参重载。
+[methods.east]
+mcp = "east"
+srg = "func_177965_g"
+scope = "net/minecraft/util/BlockPos"
+
+[methods.south]
+mcp = "south"
+srg = "func_177970_e"
+scope = "net/minecraft/util/BlockPos"
+
+[methods.above]
+mcp = "up"
+srg = "func_177981_b"
+scope = "net/minecraft/util/BlockPos"
+
+# 逐格读方块走 LevelReader 面：1.8.9 是 IBlockAccess.getBlockState(BlockPos)。
+# ClientLevel 面（scope World）只覆盖到 World 自己的声明，锚点学不到它。
+[overrides."net/minecraft/world/level/LevelReader"]
+getBlockState = { mcp = "getBlockState", scope = "net/minecraft/world/IBlockAccess" }
+
 [methods.setFlyingSpeed]
 mcp = "setFlySpeed"
 scope = "net/minecraft/entity/player/PlayerCapabilities"
@@ -621,6 +653,8 @@ reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
 "net/minecraft/world/level/block/entity/DispenserBlockEntity" = "net/minecraft/tileentity/TileEntityDispenser"
 "net/minecraft/world/level/block/entity/DropperBlockEntity" = "net/minecraft/tileentity/TileEntityDropper"
 "net/minecraft/world/level/block/ChestBlock" = "net/minecraft/block/BlockChest"
+# 方块基类（Search 认方块身份用）。
+"net/minecraft/world/level/block/Block" = "net/minecraft/block/Block"
 
 [methods.runGameLoop]
 mcp = "runGameLoop"

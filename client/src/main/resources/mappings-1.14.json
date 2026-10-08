@@ -808,6 +808,30 @@
                 "forge": "net.minecraft.util.math.BlockPos"
             },
             "methods": {
+                "above": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_10086",
+                        "forge": "func_177981_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lev;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/util/math/BlockPos;"
+                    }
+                },
+                "east": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_10089",
+                        "forge": "func_177965_g"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lev;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/util/math/BlockPos;"
+                    }
+                },
                 "getX": {
                     "names": {
                         "vanilla": "o",
@@ -843,9 +867,31 @@
                         "fabric": "()I",
                         "forge": "()I"
                     }
+                },
+                "south": {
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_10077",
+                        "forge": "func_177970_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lev;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/util/math/BlockPos;"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "above(int)": {
+                    "absent": true
+                },
+                "east(int)": {
+                    "absent": true
+                },
+                "south(int)": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/core/Direction": {
             "names": {
@@ -1036,6 +1082,18 @@
                 "forge": "net.minecraft.entity.Entity"
             },
             "methods": {
+                "blockPosition": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5654",
+                        "forge": "func_70038_c"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)Z",
+                        "fabric": "(DDD)Z",
+                        "forge": "(DDD)Z"
+                    }
+                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "e",
@@ -2078,6 +2136,28 @@
             "absent": true,
             "names": {},
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/Block": {
+            "names": {
+                "vanilla": "bml",
+                "fabric": "net.minecraft.class_2248",
+                "forge": "net.minecraft.block.Block"
+            },
+            "methods": {
+                "getDescriptionId": {
+                    "names": {
+                        "vanilla": "l",
+                        "fabric": "method_9539",
+                        "forge": "func_149739_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/ChestBlock": {

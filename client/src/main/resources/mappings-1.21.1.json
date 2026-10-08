@@ -1332,6 +1332,34 @@
                 "neoforge": "net.minecraft.core.BlockPos"
             },
             "methods": {
+                "above": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_10086",
+                        "forge": "m_6630_",
+                        "neoforge": "above"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Ljd;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/core/BlockPos;",
+                        "neoforge": "(I)Lnet/minecraft/core/BlockPos;"
+                    }
+                },
+                "east": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_10089",
+                        "forge": "m_122030_",
+                        "neoforge": "east"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Ljd;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/core/BlockPos;",
+                        "neoforge": "(I)Lnet/minecraft/core/BlockPos;"
+                    }
+                },
                 "getX": {
                     "names": {
                         "vanilla": "a",
@@ -1373,9 +1401,33 @@
                         "forge": "(J)I",
                         "neoforge": "(J)I"
                     }
+                },
+                "south": {
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_10077",
+                        "forge": "m_122020_",
+                        "neoforge": "south"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Ljd;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/core/BlockPos;",
+                        "neoforge": "(I)Lnet/minecraft/core/BlockPos;"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "above(int)": {
+                    "absent": true
+                },
+                "east(int)": {
+                    "absent": true
+                },
+                "south(int)": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/core/Direction": {
             "names": {
@@ -1609,6 +1661,20 @@
                 "neoforge": "net.minecraft.world.entity.Entity"
             },
             "methods": {
+                "blockPosition": {
+                    "names": {
+                        "vanilla": "do",
+                        "fabric": "blockPosition",
+                        "forge": "m_20183_",
+                        "neoforge": "blockPosition"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljd;",
+                        "fabric": "()Lnet/minecraft/class_2338;",
+                        "forge": "()Lnet/minecraft/core/BlockPos;",
+                        "neoforge": "()Lnet/minecraft/core/BlockPos;"
+                    }
+                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "i",
@@ -2966,7 +3032,47 @@
                 "forge": "net.minecraft.world.level.LevelReader",
                 "neoforge": "net.minecraft.world.level.LevelReader"
             },
-            "methods": {},
+            "methods": {
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "a_",
+                        "fabric": "method_8320",
+                        "forge": "m_8055_",
+                        "neoforge": "getBlockState"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ljd;)Ldtc;",
+                        "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_2680;",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;",
+                        "neoforge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/Block": {
+            "names": {
+                "vanilla": "dfy",
+                "fabric": "net.minecraft.class_2248",
+                "forge": "net.minecraft.world.level.block.Block",
+                "neoforge": "net.minecraft.world.level.block.Block"
+            },
+            "methods": {
+                "getDescriptionId": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_9539",
+                        "forge": "m_7705_",
+                        "neoforge": "getDescriptionId"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;",
+                        "neoforge": "()Ljava/lang/String;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/ChestBlock": {

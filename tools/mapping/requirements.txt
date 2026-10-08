@@ -291,6 +291,20 @@ net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity
 net/minecraft/world/level/block/state/BlockState#getBlock()
 net/minecraft/world/level/block/ChestBlock
 
+# 方块身份（Search 名单匹配用）：描述 id 是跨代际最稳的面——1.8.9/1.12.2 返回 tile.oreGold，
+# 1.13 起返回 block.minecraft.gold_ore（两套字符串都由各版本 jar 的 en_us 语言文件核对过）。
+net/minecraft/world/level/block/Block
+net/minecraft/world/level/block/Block#getDescriptionId()
+# 区块内逐格读方块：走 LevelReader 面而不是 ClientLevel 面——后者在 1.9–1.14.3 缺（锚点学不到）。
+net/minecraft/world/level/LevelReader#getBlockState()
+# 扫描的坐标运算：从玩家所在方块出发逐格偏移（桥接层不支持构造器，只能这样造坐标）。
+# 用 arity-1 的 east/south/above，而不用 offset(int,int,int)：后者有 DDD/III/Vec3i 三个重载，
+# 表里每种成员只能记一条，挑错重载就会在运行期静默找不到方法。这三个方向面没有重载歧义。
+net/minecraft/world/entity/Entity#blockPosition()
+net/minecraft/core/BlockPos#east(int)
+net/minecraft/core/BlockPos#south(int)
+net/minecraft/core/BlockPos#above(int)
+
 # --- 界面/绘制/输入（按代际；某个版本没有的会被写成 absent，这正是我们要的显式结果） ---
 # 代际 A：1.8.9 / 1.12.2 —— FontRenderer 自绘 + Gui.drawRect
 net/minecraft/client/gui/Gui#drawRect()

@@ -46,6 +46,10 @@ public enum ClassType {
     BLOCK_ENTITY("net.minecraft.world.level.block.entity.BlockEntity"),
     /** 方块坐标（方块实体的位置读它上面的 getX/getY/getZ）。 */
     BLOCK_POS("net.minecraft.core.BlockPos"),
+    /** 方块基类：Search 用它的描述 id 认方块（1.8.9 是 Block.getUnlocalizedName）。 */
+    BLOCK("net.minecraft.world.level.block.Block"),
+    /** 只读方块访问面：逐格读方块走它（1.8.9 是 IBlockAccess），比具体世界类稳。 */
+    LEVEL_READER("net.minecraft.world.level.LevelReader"),
     /** 箱子方块实体（含陷阱箱判定与开盖计数）。 */
     CHEST_BLOCK_ENTITY("net.minecraft.world.level.block.entity.ChestBlockEntity"),
     /** 末影箱方块实体。 */

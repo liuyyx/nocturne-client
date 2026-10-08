@@ -922,6 +922,22 @@
                 "neoforge": "net.minecraft.core.BlockPos"
             },
             "methods": {
+                "above": {
+                    "names": {
+                        "vanilla": "above",
+                        "fabric": "above",
+                        "forge": "above",
+                        "neoforge": "above"
+                    }
+                },
+                "east": {
+                    "names": {
+                        "vanilla": "east",
+                        "fabric": "east",
+                        "forge": "east",
+                        "neoforge": "east"
+                    }
+                },
                 "getX": {
                     "names": {
                         "vanilla": "getX",
@@ -945,9 +961,27 @@
                         "forge": "getZ",
                         "neoforge": "getZ"
                     }
+                },
+                "south": {
+                    "names": {
+                        "vanilla": "south",
+                        "fabric": "south",
+                        "forge": "south",
+                        "neoforge": "south"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "above(int)": {
+                    "absent": true
+                },
+                "east(int)": {
+                    "absent": true
+                },
+                "south(int)": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/core/Direction": {
             "names": {
@@ -1139,6 +1173,14 @@
                 "neoforge": "net.minecraft.world.entity.Entity"
             },
             "methods": {
+                "blockPosition": {
+                    "names": {
+                        "vanilla": "blockPosition",
+                        "fabric": "blockPosition",
+                        "forge": "blockPosition",
+                        "neoforge": "blockPosition"
+                    }
+                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "distanceToSqr",
@@ -1968,7 +2010,35 @@
                 "forge": "net.minecraft.world.level.LevelReader",
                 "neoforge": "net.minecraft.world.level.LevelReader"
             },
-            "methods": {},
+            "methods": {
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "getBlockState",
+                        "fabric": "getBlockState",
+                        "forge": "getBlockState",
+                        "neoforge": "getBlockState"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/Block": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.Block",
+                "fabric": "net.minecraft.world.level.block.Block",
+                "forge": "net.minecraft.world.level.block.Block",
+                "neoforge": "net.minecraft.world.level.block.Block"
+            },
+            "methods": {
+                "getDescriptionId": {
+                    "names": {
+                        "vanilla": "getDescriptionId",
+                        "fabric": "getDescriptionId",
+                        "forge": "getDescriptionId",
+                        "neoforge": "getDescriptionId"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/ChestBlock": {

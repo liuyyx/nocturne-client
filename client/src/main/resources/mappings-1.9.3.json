@@ -810,6 +810,26 @@
                 "fabric": "net.minecraft.class_2338"
             },
             "methods": {
+                "above": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_10086"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lcl;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;"
+                    }
+                },
+                "east": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_10089"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lcl;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;"
+                    }
+                },
                 "getX": {
                     "names": {
                         "vanilla": "p",
@@ -839,9 +859,29 @@
                         "vanilla": "()I",
                         "fabric": "()I"
                     }
+                },
+                "south": {
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_10077"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lcl;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "above(int)": {
+                    "absent": true
+                },
+                "east(int)": {
+                    "absent": true
+                },
+                "south(int)": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/core/Direction": {
             "names": {
@@ -1013,6 +1053,16 @@
                 "fabric": "net.minecraft.class_1297"
             },
             "methods": {
+                "blockPosition": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_5654"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)Z",
+                        "fabric": "(DDD)Z"
+                    }
+                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "e",
@@ -1904,7 +1954,37 @@
                 "vanilla": "ahx",
                 "fabric": "net.minecraft.class_0_105"
             },
-            "methods": {},
+            "methods": {
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_0_484"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcl;)Lard;",
+                        "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_0_378;"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/Block": {
+            "names": {
+                "vanilla": "ajt",
+                "fabric": "net.minecraft.class_2248"
+            },
+            "methods": {
+                "getDescriptionId": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_9539"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/ChestBlock": {

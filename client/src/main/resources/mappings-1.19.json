@@ -1115,6 +1115,30 @@
                 "forge": "net.minecraft.core.BlockPos"
             },
             "methods": {
+                "above": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_10086",
+                        "forge": "m_6630_"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lgt;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/core/BlockPos;"
+                    }
+                },
+                "east": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_10089",
+                        "forge": "m_122030_"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lgt;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/core/BlockPos;"
+                    }
+                },
                 "getX": {
                     "names": {
                         "vanilla": "a",
@@ -1150,9 +1174,31 @@
                         "fabric": "(J)I",
                         "forge": "(J)I"
                     }
+                },
+                "south": {
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_10077",
+                        "forge": "m_122020_"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)Lgt;",
+                        "fabric": "(I)Lnet/minecraft/class_2338;",
+                        "forge": "(I)Lnet/minecraft/core/BlockPos;"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "above(int)": {
+                    "absent": true
+                },
+                "east(int)": {
+                    "absent": true
+                },
+                "south(int)": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/core/Direction": {
             "names": {
@@ -1356,6 +1402,18 @@
                 "forge": "net.minecraft.world.entity.Entity"
             },
             "methods": {
+                "blockPosition": {
+                    "names": {
+                        "vanilla": "db",
+                        "fabric": "blockPosition",
+                        "forge": "m_20183_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lgt;",
+                        "fabric": "()Lnet/minecraft/class_2338;",
+                        "forge": "()Lnet/minecraft/core/BlockPos;"
+                    }
+                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "h",
@@ -2526,7 +2584,42 @@
                 "fabric": "net.minecraft.class_4538",
                 "forge": "net.minecraft.world.level.LevelReader"
             },
-            "methods": {},
+            "methods": {
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "a_",
+                        "fabric": "method_8320",
+                        "forge": "m_8055_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lgt;)Lcur;",
+                        "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_2680;",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/Block": {
+            "names": {
+                "vanilla": "ciw",
+                "fabric": "net.minecraft.class_2248",
+                "forge": "net.minecraft.world.level.block.Block"
+            },
+            "methods": {
+                "getDescriptionId": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_9539",
+                        "forge": "m_7705_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/ChestBlock": {

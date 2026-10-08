@@ -1160,11 +1160,25 @@
                         "forge": "field_70173_aa"
                     }
                 },
+                "xRot": {
+                    "names": {
+                        "vanilla": "z",
+                        "fabric": "field_5965",
+                        "forge": "field_70125_A"
+                    }
+                },
                 "xRotO": {
                     "names": {
                         "vanilla": "B",
                         "fabric": "field_6004",
                         "forge": "field_70127_C"
+                    }
+                },
+                "yRot": {
+                    "names": {
+                        "vanilla": "y",
+                        "fabric": "field_6031",
+                        "forge": "field_70177_z"
                     }
                 },
                 "yRotO": {

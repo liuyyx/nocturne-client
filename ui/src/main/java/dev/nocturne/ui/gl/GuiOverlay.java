@@ -1,6 +1,12 @@
 package dev.nocturne.ui.gl;
 
+import dev.nocturne.client.NocturneClient;
+import dev.nocturne.client.module.Module;
 import dev.nocturne.client.module.ModuleRegistry;
+import dev.nocturne.client.render.CameraState;
+import dev.nocturne.client.render.OverlayDraw;
+import dev.nocturne.client.render.WorldOverlay;
+import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.runtime.FrameListener;
 import dev.nocturne.ui.clickgui.ClickGui;
 import dev.nocturne.ui.skija.SetsunaClickGui;
@@ -101,6 +107,13 @@ public final class GuiOverlay implements FrameListener {
     /** 平滑后的帧率；0 表示还没算出来。 */
     private float fps;
 
+    /** 世界覆盖层绘制面：把当前后端包成 client 侧接口（模块只认它）。 */
+    private final OverlayDraw overlayDraw;
+    /** 相机状态读取器；每帧刷新它持有的投影。 */
+    private final CameraState camera;
+    /** 世界覆盖层异常是否已记录过（限流，避免每帧刷屏）。 */
+    private boolean worldOverlayErrorLogged;
+
     /**
      * @param registry  模块注册表，GUI 据此列出各分类下的模块
      * @param renderer  绘制后端
@@ -149,6 +162,8 @@ public final class GuiOverlay implements FrameListener {
         this.renderer = renderer;
         this.input = input;
         this.toggleKey = toggleKey;
+        this.overlayDraw = new BackendOverlayDraw(renderer);
+        this.camera = new CameraState(new WorldProjection());
     }
 
     /** @return 被叠加的 GUI，供外部（如设置界面）直接操作 */
@@ -443,6 +458,8 @@ public final class GuiOverlay implements FrameListener {
                 // 编辑器只在前端为 Skija 时存在（见构造），此时 canvas 必然可用。
                 editor.render(renderer, canvas);
             } else {
+                // 世界覆盖物画在最底下：GUI 菜单要盖住它们，否则 ESP 的框会糊在面板上。
+                drawWorldOverlays();
                 if (hud != null && canvas != null) {
                     hud.render(canvas, width, height, fps);
                 }
@@ -454,6 +471,39 @@ public final class GuiOverlay implements FrameListener {
             }
         } finally {
             renderer.endFrame();
+        }
+    }
+
+    /**
+     * 世界覆盖层：把启用中的、实现了 {@link WorldOverlay} 的模块在当前绘制面与投影上画一遍。
+     *
+     * <p>为什么在这里而不是事件总线：{@code RenderEvent} 的投递点在帧回调里，那时后端还没
+     * {@code beginFrame}（甚至还没挑到绘制上下文），画下去只会落到空处。这里在 {@code beginFrame()}
+     * 之后、{@code endFrame()} 之前，与 HUD / ClickGUI 同一帧、同一后端。
+     *
+     * <p>相机读不到（玩家还没进世界、或该版本缺成员）时整帧跳过：拿一份零值相机去投，只会投出
+     * 一堆乱线。
+     */
+    private void drawWorldOverlays() {
+        NocturneClient client = NocturneClient.get();
+        if (client == null) {
+            return;
+        }
+        if (!camera.update(client.gameBridge(), renderer.width(), renderer.height())) {
+            return;
+        }
+        for (Module module : client.modules().all()) {
+            if (!module.isEnabled() || !(module instanceof WorldOverlay)) {
+                continue;
+            }
+            try {
+                ((WorldOverlay) module).drawWorldOverlay(overlayDraw, camera.projection());
+            } catch (Throwable t) {
+                if (!worldOverlayErrorLogged) {
+                    worldOverlayErrorLogged = true;
+                    System.out.println("[nocturne] world overlay '" + module.name() + "' failed: " + t);
+                }
+            }
         }
     }
 

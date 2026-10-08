@@ -149,6 +149,9 @@ net/minecraft/world/entity/Entity#isSprinting()
 net/minecraft/world/entity/Entity#position()
 net/minecraft/world/entity/Entity#setPos()
 net/minecraft/world/entity/Entity#setSprinting()
+# 朝向（世界覆盖层的投影要用）：现代是 yRot/xRot 字段，1.8.9 走别名桥 → rotationYaw/rotationPitch
+net/minecraft/world/entity/Entity#yRot
+net/minecraft/world/entity/Entity#xRot
 
 net/minecraft/world/entity/LivingEntity
 net/minecraft/world/entity/LivingEntity#fallDistance

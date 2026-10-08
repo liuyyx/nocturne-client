@@ -1137,12 +1137,18 @@
                         "forge": "field_70173_aa"
                     }
                 },
+                "xRot": {
+                    "absent": true
+                },
                 "xRotO": {
                     "names": {
                         "vanilla": "y",
                         "fabric": "field_6004",
                         "forge": "field_70127_C"
                     }
+                },
+                "yRot": {
+                    "absent": true
                 },
                 "yRotO": {
                     "names": {

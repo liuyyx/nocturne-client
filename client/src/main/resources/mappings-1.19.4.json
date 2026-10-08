@@ -1452,11 +1452,35 @@
                         "forge": "I"
                     }
                 },
+                "xRot": {
+                    "names": {
+                        "vanilla": "aF",
+                        "fabric": "field_5965",
+                        "forge": "f_19858_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
                 "xRotO": {
                     "names": {
                         "vanilla": "M",
                         "fabric": "field_6004",
                         "forge": "f_19860_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "yRot": {
+                    "names": {
+                        "vanilla": "aE",
+                        "fabric": "field_6031",
+                        "forge": "f_19857_"
                     },
                     "descriptors": {
                         "vanilla": "F",

@@ -1718,12 +1718,40 @@
                         "neoforge": "I"
                     }
                 },
+                "xRot": {
+                    "names": {
+                        "vanilla": "aH",
+                        "fabric": "field_5965",
+                        "forge": "f_19858_",
+                        "neoforge": "f_19858_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
                 "xRotO": {
                     "names": {
                         "vanilla": "N",
                         "fabric": "field_6004",
                         "forge": "f_19860_",
                         "neoforge": "f_19860_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "yRot": {
+                    "names": {
+                        "vanilla": "aG",
+                        "fabric": "field_6031",
+                        "forge": "f_19857_",
+                        "neoforge": "f_19857_"
                     },
                     "descriptors": {
                         "vanilla": "F",

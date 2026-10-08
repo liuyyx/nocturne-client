@@ -7,6 +7,9 @@ import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.Module;
+import dev.nocturne.client.render.OverlayDraw;
+import dev.nocturne.client.render.WorldOverlay;
+import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.ColorValue;
 import dev.nocturne.client.value.ModeValue;
@@ -25,7 +28,16 @@ import java.util.List;
  * 投影矩阵）尚未接入，当前先订阅 {@link RenderEvent} 做 per-frame 的实体收集、
  * 过滤与计数，实际画框待世界绘制挂钩落地后补齐。模块开关/参数/门逻辑现在即可验收。
  */
-public final class EspModule extends Module {
+public final class EspModule extends Module implements WorldOverlay {
+
+    /** 玩家实体高度（米）：投影头顶与脚下两点来定框的高度，不需要读包围盒（表里也没有）。 */
+    private static final double ENTITY_HEIGHT = 1.8d;
+    /** 框宽与框高的比例：玩家 hitbox 宽 0.6、高 1.8，约 1/3。 */
+    private static final float WIDTH_RATIO = 0.3f;
+
+    /** 投影结果复用（每帧几十个实体，避免逐点分配）。 */
+    private final WorldProjection.ScreenPoint topPoint = new WorldProjection.ScreenPoint();
+    private final WorldProjection.ScreenPoint bottomPoint = new WorldProjection.ScreenPoint();
 
     /** 玩家颜色。 */
     private final ColorValue playerColor = add(new ColorValue("Player Color", 0xFF249824));
@@ -187,23 +199,32 @@ public final class EspModule extends Module {
     /**
      * 统计可见玩家数（按 Invisibles / Hide Bots 开关过滤）。
      *
-     * <p>实现策略：走世界实体列表（ClientLevel#entitiesForRendering），只计数
-     * LivingEntity 实例、排除本地玩家；Bot 判定与隐身无装备判定待实体上下文落地后补齐，
-     * 当前按开关字面语义保守计数（Hide Bots 开时暂不扣减，避免误杀）。
+     * <p>Bot 判定与隐身无装备判定待实体上下文落地后补齐，当前按开关字面语义保守计数
+     * （Hide Bots 开时暂不扣减，避免误杀）。
+     */
+    private int countVisible(GameBridge bridge, Object level) {
+        return visibleEntities(bridge, level).size();
+    }
+
+    /**
+     * 收集可见玩家实体。
+     *
+     * <p>走世界实体列表（{@code ClientLevel#entitiesForRendering}），只留 LivingEntity 实例、
+     * 排除本地玩家。收集与绘制共用同一份列表，避免两处逻辑漂移。
      */
     @SuppressWarnings("unchecked")
-    private int countVisible(GameBridge bridge, Object level) {
+    private List<Object> visibleEntities(GameBridge bridge, Object level) {
         Object raw;
         try {
             raw = bridge.callMapped(level, ClassType.CLIENT_LEVEL, "entitiesForRendering");
         } catch (Throwable t) {
-            return 0;
+            return java.util.Collections.emptyList();
         }
         if (!(raw instanceof List)) {
-            return 0;
+            return java.util.Collections.emptyList();
         }
         Object self = bridge.player();
-        int count = 0;
+        List<Object> out = new java.util.ArrayList<Object>();
         for (Object entity : (List<Object>) raw) {
             if (entity == null || (self != null && self.equals(entity))) {
                 continue;
@@ -211,9 +232,77 @@ public final class EspModule extends Module {
             if (!isLiving(bridge, entity)) {
                 continue;
             }
-            count++;
+            out.add(entity);
         }
-        return count;
+        return out;
+    }
+
+    /**
+     * 世界覆盖层：把可见玩家投影成 2D 框（外加可选的名字）。
+     *
+     * <p>框高由**头顶与脚下两点**的投影差决定，框宽按固定比例取——这样不需要读包围盒（映射表里也
+     * 没有），远近自动缩放，而且与游戏的 FOV / 界面缩放天然一致（用的是同一套相机参数）。
+     */
+    @Override
+    public void drawWorldOverlay(OverlayDraw draw, WorldProjection projection) {
+        GameBridge bridge = bridge();
+        if (bridge == null || !hasEntityFace(bridge)) {
+            return;
+        }
+        Object level = level(bridge);
+        if (level == null) {
+            return;
+        }
+        int argb = playerColor.argb();
+        boolean box = showBoundingBox.get();
+        boolean name = showName.get();
+        float lineHeight = draw.textHeight();
+        for (Object entity : visibleEntities(bridge, level)) {
+            double[] pos = position(bridge, entity);
+            if (pos == null) {
+                continue;
+            }
+            projection.project(pos[0], pos[1] + ENTITY_HEIGHT, pos[2], topPoint);
+            projection.project(pos[0], pos[1], pos[2], bottomPoint);
+            if (!topPoint.visible || !bottomPoint.visible) {
+                continue;
+            }
+            float centerX = (topPoint.x + bottomPoint.x) / 2f;
+            float topY = Math.min(topPoint.y, bottomPoint.y);
+            float boxHeight = Math.max(2f, Math.abs(bottomPoint.y - topPoint.y));
+            float halfWidth = boxHeight * WIDTH_RATIO;
+            if (box) {
+                draw.outline(centerX - halfWidth, topY, halfWidth * 2f, boxHeight, 1f, argb);
+            }
+            if (name) {
+                String label = entityName(bridge, entity);
+                if (label != null) {
+                    draw.text(label, centerX - draw.textWidth(label) / 2f, topY - lineHeight - 1f, argb);
+                }
+            }
+        }
+    }
+
+    /** 读实体的世界坐标（{@code position()} → {@code Vec3#x/y/z}）；缺成员时返回 {@code null}。 */
+    private static double[] position(GameBridge bridge, Object entity) {
+        Object vec = bridge.callMapped(entity, ClassType.ENTITY, "position");
+        if (vec == null) {
+            return null;
+        }
+        Object x = bridge.readField(vec, ClassType.VEC3, "x");
+        Object y = bridge.readField(vec, ClassType.VEC3, "y");
+        Object z = bridge.readField(vec, ClassType.VEC3, "z");
+        if (!(x instanceof Number) || !(y instanceof Number) || !(z instanceof Number)) {
+            return null;
+        }
+        return new double[]{((Number) x).doubleValue(), ((Number) y).doubleValue(),
+                ((Number) z).doubleValue()};
+    }
+
+    /** 实体显示名；读不到时返回 {@code null}。 */
+    private static String entityName(GameBridge bridge, Object entity) {
+        Object name = bridge.callMapped(entity, ClassType.ENTITY, "getName");
+        return name instanceof String ? (String) name : null;
     }
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */

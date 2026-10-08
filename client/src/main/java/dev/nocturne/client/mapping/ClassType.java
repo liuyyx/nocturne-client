@@ -38,6 +38,8 @@ public enum ClassType {
     MOB_EFFECT_INSTANCE("net.minecraft.world.effect.MobEffectInstance"),
     /** 窗口句柄（来自 Blaze3D 平台层，非 Minecraft 命名空间）。 */
     WINDOW("com.mojang.blaze3d.platform.Window"),
+    /** 三维向量：相机眼位、实体坐标都从它上面读 x/y/z（世界覆盖层投影用）。 */
+    VEC3("net.minecraft.world.phys.Vec3"),
     /** 方块实体基类；StorageESP 遍历容器用。 */
     BLOCK_ENTITY("net.minecraft.world.level.block.entity.BlockEntity"),
     /** 箱子方块实体（含陷阱箱判定与开盖计数）。 */

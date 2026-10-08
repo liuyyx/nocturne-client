@@ -1241,6 +1241,9 @@
                         "fabric": "I"
                     }
                 },
+                "xRot": {
+                    "absent": true
+                },
                 "xRotO": {
                     "names": {
                         "vanilla": "y",
@@ -1251,6 +1254,9 @@
                         "vanilla": "F",
                         "fabric": "F"
                     }
+                },
+                "yRot": {
+                    "absent": true
                 },
                 "yRotO": {
                     "names": {

@@ -163,6 +163,18 @@ scope = "net/minecraft/entity/Entity"
 mcp = "getPositionVector"
 scope = "net/minecraft/entity/Entity"
 
+# 世界覆盖层要拿实体朝向做投影。现代是 yRot/xRot 字段（26.3 javap 实测存在）；
+# 1.8.9 的等价物是 rotationYaw/rotationPitch 字段（MCP 名），走别名桥接过去。
+[fields.yRot]
+mcp = "rotationYaw"
+scope = "net/minecraft/entity/Entity"
+note = "1.8.9 的实体朝向字段；现代改名 yRot（1.17+），语义相同"
+
+[fields.xRot]
+mcp = "rotationPitch"
+scope = "net/minecraft/entity/Entity"
+note = "1.8.9 的实体俯仰字段；现代改名 xRot（1.17+），语义相同"
+
 [methods.getEyePosition]
 mcp = "getPositionEyes"
 scope = "net/minecraft/entity/Entity"

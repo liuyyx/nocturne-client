@@ -1194,12 +1194,28 @@
                         "neoforge": "tickCount"
                     }
                 },
+                "xRot": {
+                    "names": {
+                        "vanilla": "xRot",
+                        "fabric": "xRot",
+                        "forge": "xRot",
+                        "neoforge": "xRot"
+                    }
+                },
                 "xRotO": {
                     "names": {
                         "vanilla": "xRotO",
                         "fabric": "xRotO",
                         "forge": "xRotO",
                         "neoforge": "xRotO"
+                    }
+                },
+                "yRot": {
+                    "names": {
+                        "vanilla": "yRot",
+                        "fabric": "yRot",
+                        "forge": "yRot",
+                        "neoforge": "yRot"
                     }
                 },
                 "yRotO": {

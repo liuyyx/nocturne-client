@@ -24,6 +24,8 @@ public enum ClassType {
     LIVING_ENTITY("net.minecraft.world.entity.LivingEntity"),
     /** 实体基类；模块读取 {@code isDead} 等字段时以此为宿主类。 */
     ENTITY("net.minecraft.world.entity.Entity"),
+    /** 掉落物实体：ItemEsp 的目标（它不是 LivingEntity，必须单独判）。 */
+    ITEM_ENTITY("net.minecraft.world.entity.item.ItemEntity"),
     /** 多人游戏模式。 */
     MULTI_PLAYER_GAME_MODE("net.minecraft.client.multiplayer.MultiPlayerGameMode"),
     /** 界面基类。 */

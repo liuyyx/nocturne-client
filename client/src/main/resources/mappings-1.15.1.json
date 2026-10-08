@@ -2034,6 +2034,15 @@
                 }
             }
         },
+        "net/minecraft/world/entity/item/ItemEntity": {
+            "names": {
+                "vanilla": "avy",
+                "fabric": "net.minecraft.class_1542",
+                "forge": "net.minecraft.entity.item.ItemEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "ayf",

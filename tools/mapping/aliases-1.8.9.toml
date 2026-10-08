@@ -587,6 +587,8 @@ reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
 #  table header, which TOML forbids.)
 "net/minecraft/client/player/RemotePlayer" = "net/minecraft/client/entity/EntityOtherPlayerMP"
 "net/minecraft/client/gui/FontRenderer" = "net/minecraft/client/gui/FontRenderer"
+# 1.8.9 的掉落物叫 EntityItem（1.11 起才改名 ItemEntity）；ItemEsp 的收集按规范名走这里。
+"net/minecraft/world/entity/item/ItemEntity" = "net/minecraft/entity/item/EntityItem"
 
 [methods.runGameLoop]
 mcp = "runGameLoop"

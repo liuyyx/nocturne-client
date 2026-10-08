@@ -2402,6 +2402,16 @@
                 }
             }
         },
+        "net/minecraft/world/entity/item/ItemEntity": {
+            "names": {
+                "vanilla": "cji",
+                "fabric": "net.minecraft.class_1542",
+                "forge": "net.minecraft.world.entity.item.ItemEntity",
+                "neoforge": "net.minecraft.world.entity.item.ItemEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "cmx",

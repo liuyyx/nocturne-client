@@ -1609,6 +1609,16 @@
                 }
             }
         },
+        "net/minecraft/world/entity/item/ItemEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.item.ItemEntity",
+                "fabric": "net.minecraft.world.entity.item.ItemEntity",
+                "forge": "net.minecraft.world.entity.item.ItemEntity",
+                "neoforge": "net.minecraft.world.entity.item.ItemEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "net.minecraft.world.entity.player.Inventory",

@@ -1748,6 +1748,12 @@
                 }
             }
         },
+        "net/minecraft/world/entity/item/ItemEntity": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "zr",

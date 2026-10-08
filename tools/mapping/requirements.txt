@@ -152,6 +152,8 @@ net/minecraft/world/entity/Entity#setSprinting()
 # 朝向（世界覆盖层的投影要用）：现代是 yRot/xRot 字段，1.8.9 走别名桥 → rotationYaw/rotationPitch
 net/minecraft/world/entity/Entity#yRot
 net/minecraft/world/entity/Entity#xRot
+# 掉落物（ItemEsp 的目标）：ItemEntity 不是 LivingEntity，必须单独判，否则永远收不到
+net/minecraft/world/entity/item/ItemEntity
 
 net/minecraft/world/entity/LivingEntity
 net/minecraft/world/entity/LivingEntity#fallDistance

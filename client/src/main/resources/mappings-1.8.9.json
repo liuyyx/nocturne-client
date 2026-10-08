@@ -1648,6 +1648,15 @@
                 }
             }
         },
+        "net/minecraft/world/entity/item/ItemEntity": {
+            "names": {
+                "vanilla": "uz",
+                "fabric": "net.minecraft.class_1542",
+                "forge": "net.minecraft.entity.item.EntityItem"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "wm",

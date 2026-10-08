@@ -1949,6 +1949,15 @@
                 }
             }
         },
+        "net/minecraft/world/entity/item/ItemEntity": {
+            "names": {
+                "vanilla": "atx",
+                "fabric": "net.minecraft.class_1542",
+                "forge": "net.minecraft.entity.item.ItemEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "awf",

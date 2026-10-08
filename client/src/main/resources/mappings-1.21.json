@@ -740,6 +740,56 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/multiplayer/ClientChunkCache": {
+            "names": {
+                "vanilla": "fzb",
+                "fabric": "net.minecraft.class_631",
+                "forge": "net.minecraft.client.multiplayer.ClientChunkCache",
+                "neoforge": "net.minecraft.client.multiplayer.ClientChunkCache"
+            },
+            "methods": {},
+            "fields": {
+                "storage": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_16246",
+                        "forge": "f_104410_",
+                        "neoforge": "storage"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lfzb$a;",
+                        "fabric": "Lnet/minecraft/class_631$class_3681;",
+                        "forge": "Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;",
+                        "neoforge": "Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/multiplayer/ClientChunkCache$Storage": {
+            "names": {
+                "vanilla": "fzb$a",
+                "fabric": "net.minecraft.class_631$class_3681",
+                "forge": "net.minecraft.client.multiplayer.ClientChunkCache$Storage",
+                "neoforge": "net.minecraft.client.multiplayer.ClientChunkCache$Storage"
+            },
+            "methods": {},
+            "fields": {
+                "chunks": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_16251",
+                        "forge": "f_104466_",
+                        "neoforge": "chunks"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ljava/util/concurrent/atomic/AtomicReferenceArray;",
+                        "fabric": "Ljava/util/concurrent/atomic/AtomicReferenceArray;",
+                        "forge": "Ljava/util/concurrent/atomic/AtomicReferenceArray;",
+                        "neoforge": "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+                    }
+                }
+            }
+        },
         "net/minecraft/client/multiplayer/ClientLevel": {
             "names": {
                 "vanilla": "fzf",
@@ -788,6 +838,20 @@
                         "fabric": "(II)Lnet/minecraft/class_2791;",
                         "forge": "(II)Lnet/minecraft/world/level/chunk/ChunkAccess;",
                         "neoforge": "(II)Lnet/minecraft/world/level/chunk/ChunkAccess;"
+                    }
+                },
+                "getChunkSource": {
+                    "names": {
+                        "vanilla": "i",
+                        "fabric": "method_2935",
+                        "forge": "m_7726_",
+                        "neoforge": "getChunkSource"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lfzb;",
+                        "fabric": "()Lnet/minecraft/class_631;",
+                        "forge": "()Lnet/minecraft/client/multiplayer/ClientChunkCache;",
+                        "neoforge": "()Lnet/minecraft/client/multiplayer/ClientChunkCache;"
                     }
                 }
             },
@@ -2905,6 +2969,26 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/ChestBlock": {
+            "names": {
+                "vanilla": "dhb",
+                "fabric": "net.minecraft.class_2281",
+                "forge": "net.minecraft.world.level.block.ChestBlock",
+                "neoforge": "net.minecraft.world.level.block.ChestBlock"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity": {
+            "names": {
+                "vanilla": "dpv",
+                "fabric": "net.minecraft.class_2609",
+                "forge": "net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/entity/BlockEntity": {
             "names": {
                 "vanilla": "dqh",
@@ -2940,12 +3024,52 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/entity/DispenserBlockEntity": {
+            "names": {
+                "vanilla": "dra",
+                "fabric": "net.minecraft.class_2601",
+                "forge": "net.minecraft.world.level.block.entity.DispenserBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.DispenserBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/DropperBlockEntity": {
+            "names": {
+                "vanilla": "drb",
+                "fabric": "net.minecraft.class_2608",
+                "forge": "net.minecraft.world.level.block.entity.DropperBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.DropperBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/entity/EnderChestBlockEntity": {
             "names": {
                 "vanilla": "drd",
                 "fabric": "net.minecraft.class_2611",
                 "forge": "net.minecraft.world.level.block.entity.EnderChestBlockEntity",
                 "neoforge": "net.minecraft.world.level.block.entity.EnderChestBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/HopperBlockEntity": {
+            "names": {
+                "vanilla": "drh",
+                "fabric": "net.minecraft.class_2614",
+                "forge": "net.minecraft.world.level.block.entity.HopperBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.HopperBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity": {
+            "names": {
+                "vanilla": "drr",
+                "fabric": "net.minecraft.class_2627",
+                "forge": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity"
             },
             "methods": {},
             "fields": {}
@@ -2957,7 +3081,22 @@
                 "forge": "net.minecraft.world.level.block.state.BlockState",
                 "neoforge": "net.minecraft.world.level.block.state.BlockState"
             },
-            "methods": {},
+            "methods": {
+                "getBlock": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_26204",
+                        "forge": "m_60734_",
+                        "neoforge": "getBlock"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ldfy;",
+                        "fabric": "()Lnet/minecraft/class_2248;",
+                        "forge": "()Lnet/minecraft/world/level/block/Block;",
+                        "neoforge": "()Lnet/minecraft/world/level/block/Block;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/chunk/LevelChunk": {

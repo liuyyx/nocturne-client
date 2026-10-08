@@ -446,6 +446,33 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/multiplayer/ClientChunkCache": {
+            "names": {
+                "vanilla": "bkn",
+                "fabric": "net.minecraft.class_631",
+                "forge": "net.minecraft.client.multiplayer.ChunkProviderClient"
+            },
+            "methods": {},
+            "fields": {
+                "storage": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_3678",
+                        "forge": "field_73236_b"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lol;",
+                        "fabric": "Lnet/minecraft/class_0_1702;"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/multiplayer/ClientChunkCache$Storage": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/ClientLevel": {
             "names": {
                 "vanilla": "bkr",
@@ -478,6 +505,18 @@
                         "vanilla": "(II)Lase;",
                         "fabric": "(II)Lnet/minecraft/class_2818;",
                         "forge": "(II)Lnet/minecraft/world/chunk/Chunk;"
+                    }
+                },
+                "getChunkSource": {
+                    "names": {
+                        "vanilla": "z",
+                        "fabric": "method_8398",
+                        "forge": "func_72863_F"
+                    },
+                    "signatures": {
+                        "vanilla": "()Larz;",
+                        "fabric": "()Lnet/minecraft/class_0_397;",
+                        "forge": "()Lnet/minecraft/world/chunk/IChunkProvider;"
                     }
                 }
             },
@@ -2119,6 +2158,24 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/ChestBlock": {
+            "names": {
+                "vanilla": "ake",
+                "fabric": "net.minecraft.class_2281",
+                "forge": "net.minecraft.block.BlockChest"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity": {
+            "names": {
+                "vanilla": "aqg",
+                "fabric": "net.minecraft.class_2609",
+                "forge": "net.minecraft.tileentity.TileEntityFurnace"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/entity/BlockEntity": {
             "names": {
                 "vanilla": "apv",
@@ -2150,6 +2207,24 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/entity/DispenserBlockEntity": {
+            "names": {
+                "vanilla": "aqb",
+                "fabric": "net.minecraft.class_2601",
+                "forge": "net.minecraft.tileentity.TileEntityDispenser"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/DropperBlockEntity": {
+            "names": {
+                "vanilla": "aqc",
+                "fabric": "net.minecraft.class_2608",
+                "forge": "net.minecraft.tileentity.TileEntityDropper"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/entity/EnderChestBlockEntity": {
             "names": {
                 "vanilla": "aqe",
@@ -2159,13 +2234,41 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/entity/HopperBlockEntity": {
+            "names": {
+                "vanilla": "aqi",
+                "fabric": "net.minecraft.class_2614",
+                "forge": "net.minecraft.tileentity.TileEntityHopper"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/state/BlockState": {
             "names": {
                 "vanilla": "arc",
                 "fabric": "net.minecraft.class_0_378",
                 "forge": "net.minecraft.block.state.IBlockState"
             },
-            "methods": {},
+            "methods": {
+                "getBlock": {
+                    "names": {
+                        "vanilla": "t",
+                        "fabric": "method_0_1225",
+                        "forge": "func_177230_c"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lajt;",
+                        "fabric": "()Lnet/minecraft/class_2248;",
+                        "forge": "()Lnet/minecraft/block/Block;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/chunk/LevelChunk": {

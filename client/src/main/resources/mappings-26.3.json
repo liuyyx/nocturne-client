@@ -543,6 +543,44 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/multiplayer/ClientChunkCache": {
+            "names": {
+                "vanilla": "net.minecraft.client.multiplayer.ClientChunkCache",
+                "fabric": "net.minecraft.client.multiplayer.ClientChunkCache",
+                "forge": "net.minecraft.client.multiplayer.ClientChunkCache",
+                "neoforge": "net.minecraft.client.multiplayer.ClientChunkCache"
+            },
+            "methods": {},
+            "fields": {
+                "storage": {
+                    "names": {
+                        "vanilla": "storage",
+                        "fabric": "storage",
+                        "forge": "storage",
+                        "neoforge": "storage"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/multiplayer/ClientChunkCache$Storage": {
+            "names": {
+                "vanilla": "net.minecraft.client.multiplayer.ClientChunkCache$Storage",
+                "fabric": "net.minecraft.client.multiplayer.ClientChunkCache$Storage",
+                "forge": "net.minecraft.client.multiplayer.ClientChunkCache$Storage",
+                "neoforge": "net.minecraft.client.multiplayer.ClientChunkCache$Storage"
+            },
+            "methods": {},
+            "fields": {
+                "chunks": {
+                    "names": {
+                        "vanilla": "chunks",
+                        "fabric": "chunks",
+                        "forge": "chunks",
+                        "neoforge": "chunks"
+                    }
+                }
+            }
+        },
         "net/minecraft/client/multiplayer/ClientLevel": {
             "names": {
                 "vanilla": "net.minecraft.client.multiplayer.ClientLevel",
@@ -573,6 +611,14 @@
                         "fabric": "getChunk",
                         "forge": "getChunk",
                         "neoforge": "getChunk"
+                    }
+                },
+                "getChunkSource": {
+                    "names": {
+                        "vanilla": "getChunkSource",
+                        "fabric": "getChunkSource",
+                        "forge": "getChunkSource",
+                        "neoforge": "getChunkSource"
                     }
                 }
             },
@@ -1938,6 +1984,26 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/ChestBlock": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.ChestBlock",
+                "fabric": "net.minecraft.world.level.block.ChestBlock",
+                "forge": "net.minecraft.world.level.block.ChestBlock",
+                "neoforge": "net.minecraft.world.level.block.ChestBlock"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/entity/BlockEntity": {
             "names": {
                 "vanilla": "net.minecraft.world.level.block.entity.BlockEntity",
@@ -1967,12 +2033,52 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/entity/DispenserBlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.DispenserBlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.DispenserBlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.DispenserBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.DispenserBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/DropperBlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.DropperBlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.DropperBlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.DropperBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.DropperBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/entity/EnderChestBlockEntity": {
             "names": {
                 "vanilla": "net.minecraft.world.level.block.entity.EnderChestBlockEntity",
                 "fabric": "net.minecraft.world.level.block.entity.EnderChestBlockEntity",
                 "forge": "net.minecraft.world.level.block.entity.EnderChestBlockEntity",
                 "neoforge": "net.minecraft.world.level.block.entity.EnderChestBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/HopperBlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.HopperBlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.HopperBlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.HopperBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.HopperBlockEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity"
             },
             "methods": {},
             "fields": {}
@@ -1984,7 +2090,16 @@
                 "forge": "net.minecraft.world.level.block.state.BlockState",
                 "neoforge": "net.minecraft.world.level.block.state.BlockState"
             },
-            "methods": {},
+            "methods": {
+                "getBlock": {
+                    "names": {
+                        "vanilla": "getBlock",
+                        "fabric": "getBlock",
+                        "forge": "getBlock",
+                        "neoforge": "getBlock"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/chunk/LevelChunk": {

@@ -104,7 +104,7 @@ version = "1.8.9"
 "net/minecraft/client/Camera" = { unsupported = "1.8.9 没有独立的 Camera 对象；相机状态是 EntityRenderer 的 cameraZoom/cameraPitch/cameraYaw 字段，视角由 renderViewEntity 推导" }
 "net/minecraft/client/OptionInstance" = { unsupported = "1.8.9 没有 OptionInstance；GameSettings 直接存放原始字段（GameSettings 项见 [overrides]）" }
 "net/minecraft/world/level/block/entity/BarrelBlockEntity" = { unsupported = "木桶是 1.14 加入的" }
-"net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity" = { unsupported = "潜影盒是 1.9 加入的" }
+"net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity" = "net/minecraft/tileentity/TileEntityShulkerBox"
 "net/minecraft/world/InteractionHand" = { unsupported = "EnumHand 是 1.9 加入的；1.8.9 交互方法不带手参数（PlayerControllerMP.onPlayerRightClick 无 EnumHand）" }
 "net/minecraft/world/item/component/SwingAnimation" = { unsupported = "SwingAnimation 是 26.3 加入的；1.8.9 是 EntityLivingBase.swingItem()" }
 "net/minecraft/world/inventory/ContainerInput" = { unsupported = "ClickType 是 1.19 加入的；1.8.9 用 Container.windowClick 的 int mode/button（0=PICKUP 1=QUICK_MOVE 2=SWAP）" }
@@ -228,6 +228,17 @@ note = "声明在 World（ClientLevel 的 1.8.9 名 WorldClient 继承自它）"
 mcp = "getBlockState"
 scope = "net/minecraft/world/World"
 
+# 已加载区块表（StorageEsp 遍历方块实体用）：1.12.2 把它改成了 Long2ObjectMap<Chunk>（MCP loadedChunks），
+# 1.8.9 是 List（chunkListing）——遍历代码两种形态都认。
+[fields.storage]
+mcp = "loadedChunks"
+scope = "net/minecraft/client/multiplayer/ChunkProviderClient"
+
+# 区块来源：1.12.2 是 World.getChunkProvider()。
+[methods.getChunkSource]
+mcp = "getChunkProvider"
+scope = "net/minecraft/world/World"
+
 [methods.getChunk]
 mcp = "getChunk"
 srg = "func_72964_e"
@@ -236,6 +247,11 @@ scope = "net/minecraft/world/World"
 [methods.getBlockEntities]
 mcp = "getTileEntityMap"
 scope = "net/minecraft/world/chunk/Chunk"
+
+# 方块状态 → 方块（StorageEsp 用它分陷阱箱/普通箱）：1.12.2 是 IBlockState.getBlock()。
+[methods.getBlock]
+mcp = "getBlock"
+scope = "net/minecraft/block/state/IBlockState"
 
 [methods.setFlyingSpeed]
 mcp = "setFlySpeed"
@@ -567,6 +583,16 @@ reason = "Direction::to_java() 用 self.jvm_name() 作为静态字段名"
 #  table header, which TOML forbids.)
 "net/minecraft/client/player/RemotePlayer" = "net/minecraft/client/entity/EntityOtherPlayerMP"
 "net/minecraft/client/gui/FontRenderer" = "net/minecraft/client/gui/FontRenderer"
+# 1.12.2 的区块缓存叫 ChunkProviderClient（LevelChunk 的别名已在 [classes] 里）。
+"net/minecraft/client/multiplayer/ClientChunkCache" = "net/minecraft/client/multiplayer/ChunkProviderClient"
+# 1.12.2 的已加载区块同样是 chunkListing（List<Chunk>），没有 Storage 内嵌类。
+"net/minecraft/client/multiplayer/ClientChunkCache$Storage" = { unsupported = "1.12.2 没有 ClientChunkCache$Storage；区块表是 chunkListing（List<Chunk>），直接用 List 路径遍历" }
+# 容器方块实体（StorageEsp 按类判定容器类型）；潜影盒 1.12.2 没有（见上方 unsupported）。
+"net/minecraft/world/level/block/entity/HopperBlockEntity" = "net/minecraft/tileentity/TileEntityHopper"
+"net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity" = "net/minecraft/tileentity/TileEntityFurnace"
+"net/minecraft/world/level/block/entity/DispenserBlockEntity" = "net/minecraft/tileentity/TileEntityDispenser"
+"net/minecraft/world/level/block/entity/DropperBlockEntity" = "net/minecraft/tileentity/TileEntityDropper"
+"net/minecraft/world/level/block/ChestBlock" = "net/minecraft/block/BlockChest"
 
 [methods.runGameLoop]
 mcp = "runGameLoop"

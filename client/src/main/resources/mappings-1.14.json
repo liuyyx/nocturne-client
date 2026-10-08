@@ -373,6 +373,25 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/multiplayer/ClientChunkCache": {
+            "names": {
+                "vanilla": "dhg",
+                "fabric": "net.minecraft.class_631",
+                "forge": "net.minecraft.client.multiplayer.ClientChunkProvider"
+            },
+            "methods": {},
+            "fields": {
+                "storage": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/client/multiplayer/ClientChunkCache$Storage": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/ClientLevel": {
             "names": {
                 "vanilla": "dhl",
@@ -388,6 +407,18 @@
                 },
                 "getChunk": {
                     "absent": true
+                },
+                "getChunkSource": {
+                    "names": {
+                        "vanilla": "E",
+                        "fabric": "method_8398",
+                        "forge": "func_72863_F"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbxb;",
+                        "fabric": "()Lnet/minecraft/class_2802;",
+                        "forge": "()Lnet/minecraft/world/chunk/AbstractChunkProvider;"
+                    }
                 }
             },
             "fields": {}
@@ -2049,6 +2080,24 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/ChestBlock": {
+            "names": {
+                "vanilla": "bna",
+                "fabric": "net.minecraft.class_2281",
+                "forge": "net.minecraft.block.ChestBlock"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity": {
+            "names": {
+                "vanilla": "btd",
+                "fabric": "net.minecraft.class_2609",
+                "forge": "net.minecraft.tileentity.AbstractFurnaceTileEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/entity/BlockEntity": {
             "names": {
                 "vanilla": "btm",
@@ -2080,11 +2129,47 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/block/entity/DispenserBlockEntity": {
+            "names": {
+                "vanilla": "btv",
+                "fabric": "net.minecraft.class_2601",
+                "forge": "net.minecraft.tileentity.DispenserTileEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/DropperBlockEntity": {
+            "names": {
+                "vanilla": "btw",
+                "fabric": "net.minecraft.class_2608",
+                "forge": "net.minecraft.tileentity.DropperTileEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/block/entity/EnderChestBlockEntity": {
             "names": {
                 "vanilla": "bty",
                 "fabric": "net.minecraft.class_2611",
                 "forge": "net.minecraft.tileentity.EnderChestTileEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/HopperBlockEntity": {
+            "names": {
+                "vanilla": "bub",
+                "fabric": "net.minecraft.class_2614",
+                "forge": "net.minecraft.tileentity.HopperTileEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity": {
+            "names": {
+                "vanilla": "buh",
+                "fabric": "net.minecraft.class_2627",
+                "forge": "net.minecraft.tileentity.ShulkerBoxTileEntity"
             },
             "methods": {},
             "fields": {}

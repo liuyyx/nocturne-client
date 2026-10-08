@@ -44,10 +44,32 @@ public enum ClassType {
     VEC3("net.minecraft.world.phys.Vec3"),
     /** 方块实体基类；StorageESP 遍历容器用。 */
     BLOCK_ENTITY("net.minecraft.world.level.block.entity.BlockEntity"),
+    /** 方块坐标（方块实体的位置读它上面的 getX/getY/getZ）。 */
+    BLOCK_POS("net.minecraft.core.BlockPos"),
     /** 箱子方块实体（含陷阱箱判定与开盖计数）。 */
     CHEST_BLOCK_ENTITY("net.minecraft.world.level.block.entity.ChestBlockEntity"),
     /** 末影箱方块实体。 */
-    ENDER_CHEST_BLOCK_ENTITY("net.minecraft.world.level.block.entity.EnderChestBlockEntity");
+    ENDER_CHEST_BLOCK_ENTITY("net.minecraft.world.level.block.entity.EnderChestBlockEntity"),
+    /** 漏斗方块实体。 */
+    HOPPER_BLOCK_ENTITY("net.minecraft.world.level.block.entity.HopperBlockEntity"),
+    /** 熔炉方块实体（1.14+ 是抽象基类，高炉/烟熏炉也继承它）。 */
+    FURNACE_BLOCK_ENTITY("net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity"),
+    /** 发射器方块实体（投掷器继承它，判定时必须先判投掷器）。 */
+    DISPENSER_BLOCK_ENTITY("net.minecraft.world.level.block.entity.DispenserBlockEntity"),
+    /** 投掷器方块实体。 */
+    DROPPER_BLOCK_ENTITY("net.minecraft.world.level.block.entity.DropperBlockEntity"),
+    /** 潜影盒方块实体；1.8.9/1.12.2 没有（表里 absent）。 */
+    SHULKER_BOX_BLOCK_ENTITY("net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity"),
+    /** 方块状态：陷阱箱与普通箱共用方块实体类，只能看方块来分。 */
+    BLOCK_STATE("net.minecraft.world.level.block.state.BlockState"),
+    /** 箱子方块；陷阱箱是它的子类（1.8.9/1.12.2 是 BlockChest / BlockTrappedChest）。 */
+    CHEST_BLOCK("net.minecraft.world.level.block.ChestBlock"),
+    /** 客户端区块缓存（StorageEsp 的遍历入口）。 */
+    CLIENT_CHUNK_CACHE("net.minecraft.client.multiplayer.ClientChunkCache"),
+    /** 区块缓存内部的块数组；1.8.9/1.12.2 无此类（走 List 路径）。 */
+    CLIENT_CHUNK_STORAGE("net.minecraft.client.multiplayer.ClientChunkCache$Storage"),
+    /** 区块（LevelChunk）；方块实体表挂在它上面。 */
+    LEVEL_CHUNK("net.minecraft.world.level.chunk.LevelChunk");
 
     /** Mojang 映射下的全限定类名。 */
     private final String canonicalName;

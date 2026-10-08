@@ -269,8 +269,29 @@ net/minecraft/world/phys/Vec3#x
 net/minecraft/world/phys/Vec3#y
 net/minecraft/world/phys/Vec3#z
 
-# --- 界面/绘制/输入（按代际；某个版本没有的会被写成 absent，这正是我们要的显式结果） ---
+# 容器方块实体（StorageEsp）：容器不是实体，实体列表里没有它们，得遍历已加载区块的方块实体表。
+# 1.8.9 走别名桥（ChunkProviderClient.chunkListing + Chunk.getTileEntityMap）。
+net/minecraft/client/multiplayer/ClientChunkCache
+net/minecraft/client/multiplayer/ClientChunkCache#storage
+net/minecraft/client/multiplayer/ClientLevel#getChunkSource()
+# 方块实体的坐标（StorageEsp 要投影它才知道画在哪）；1.8.9 走别名桥 → TileEntity.getPos
+net/minecraft/world/level/block/entity/BlockEntity#getBlockPos()
+# 已加载区块表在缓存内部：现代是 ClientChunkCache.storage.chunks（AtomicReferenceArray），
+# 1.8.9/1.12.2 是 ChunkProviderClient.chunkListing（List）——两种形态代码都要认。
+net/minecraft/client/multiplayer/ClientChunkCache$Storage
+net/minecraft/client/multiplayer/ClientChunkCache$Storage#chunks
+# 各容器方块实体（按类判定类型；1.8.9/1.12.2 无潜影盒，表里 absent）。
+net/minecraft/world/level/block/entity/HopperBlockEntity
+net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity
+net/minecraft/world/level/block/entity/DispenserBlockEntity
+net/minecraft/world/level/block/entity/DropperBlockEntity
+net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity
+# 陷阱箱与普通箱共用方块实体类，只能看方块：ClientLevel#getBlockState(pos) → BlockState#getBlock()
+# 再比类层次（陷阱箱是箱子方块的子类；1.8.9/1.12.2 是 BlockChest / BlockTrappedChest）。
+net/minecraft/world/level/block/state/BlockState#getBlock()
+net/minecraft/world/level/block/ChestBlock
 
+# --- 界面/绘制/输入（按代际；某个版本没有的会被写成 absent，这正是我们要的显式结果） ---
 # 代际 A：1.8.9 / 1.12.2 —— FontRenderer 自绘 + Gui.drawRect
 net/minecraft/client/gui/Gui#drawRect()
 net/minecraft/client/gui/Gui#renderGameOverlay()

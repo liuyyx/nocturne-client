@@ -7,6 +7,7 @@ import dev.nocturne.client.runtime.FrameListener;
 import dev.nocturne.client.runtime.NocturneRuntime;
 import dev.nocturne.ui.gl.ExtractorRenderer;
 import dev.nocturne.ui.gl.GlApi;
+import dev.nocturne.ui.gl.GameInput;
 import dev.nocturne.ui.gl.GuiOverlay;
 import dev.nocturne.ui.gl.InputSource;
 import dev.nocturne.ui.gl.MinecraftTextRenderer;
@@ -241,7 +242,13 @@ public final class OverlayBootstrap implements FrameListener {
         } else {
             backend = selectBackend(gl, gl11, font, bridge);
         }
-        InputSource input = ReflectiveInput.create(loader, backend::width, backend::height);
+        // 输入：鼠标优先取游戏自己的状态（映射后的 MouseHandler）。SDL 的 SDL_GetMouseState 只在
+        // 有鼠标焦点的窗口上给坐标，否则静默返回 0,0——26.3 实测的"点不中"就是它。键与滚轮仍由
+        // 逐代输入源（SDL/GLFW/LWJGL2）提供，game 源只接管鼠标。
+        InputSource fallbackInput = ReflectiveInput.create(loader, backend::width, backend::height);
+        InputSource gameInput = GameInput.create(bridge, loader, fallbackInput,
+                backend::width, backend::height);
+        InputSource input = gameInput == null ? fallbackInput : gameInput;
         // 诊断（diag1）：把输入源的真实类与它的类来源打出来。"input=none" 这类现象必须能区分
         // 「探测失败」与「运行时加载到了别处的旧类」——否则只在日志里猜，无法定位。
         System.out.println("[nocturne] overlay diag: input=" + input.getClass().getName()

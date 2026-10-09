@@ -65,6 +65,23 @@ class ExtractorRendererTest {
         }
     }
 
+    /** 绘制区尺寸报 0 的上下文：这一帧量不到尺寸时不得把已知尺寸改小。 */
+    public static final class ZeroExtractor {
+        public int guiWidth() {
+            return 0;
+        }
+
+        public int guiHeight() {
+            return 0;
+        }
+
+        public void fill(int x1, int y1, int x2, int y2, int argb) {
+        }
+
+        public void text(Object font, String value, int x, int y, int argb) {
+        }
+    }
+
     /** 缺 {@code fill} 的绘制上下文：签名不全时不得产出后端。 */
     public static final class IncompleteExtractor {
         public int guiWidth() {
@@ -103,12 +120,18 @@ class ExtractorRendererTest {
         return renderer;
     }
 
-    /** 绘制区尺寸直接来自 extractor；未喂上下文时不得谎报可绘制。 */
+    /**
+     * 绘制区尺寸来自 extractor，且**跨帧保留**。
+     *
+     * <p>保留是必须的：输入层在帧回调里要用它把鼠标坐标换算成逻辑坐标，而帧回调早于本帧的
+     * extract 阶段——清零会让换算读到 0、整个界面的点击落空（26.3 实测踩过）。
+     * {@code ready()} 仍然只在帧内为真：尺寸是窗口属性，上下文不是。
+     */
     @Test
-    void reportsSizeOnlyWhileAFrameIsSet() {
+    void keepsSizeAcrossFramesButNotReadiness() {
         ExtractorRenderer renderer = backend();
         assertFalse(renderer.ready(), "no draw context yet: must not claim to be ready");
-        assertEquals(0, renderer.width());
+        assertEquals(0, renderer.width(), "no measurement yet");
 
         renderer.setFrame(new FakeExtractor());
         renderer.beginFrame();
@@ -118,7 +141,23 @@ class ExtractorRendererTest {
 
         renderer.clearFrame();
         assertFalse(renderer.ready(), "after the frame is over the context is gone");
-        assertEquals(0, renderer.width());
+        assertEquals(320, renderer.width(), "the measured size must survive the frame");
+        assertEquals(240, renderer.height());
+    }
+
+    /** extractor 报 0 时保留上一次有效尺寸：0 是"这一帧没量到"，不是"窗口变成 0 宽"。 */
+    @Test
+    void keepsLastValidSizeWhenExtractorReportsZero() {
+        ExtractorRenderer renderer = backend();
+        renderer.setFrame(new FakeExtractor());
+        renderer.beginFrame();
+        assertEquals(320, renderer.width());
+
+        renderer.setFrame(new ZeroExtractor());
+        renderer.beginFrame();
+
+        assertEquals(320, renderer.width());
+        assertEquals(240, renderer.height());
     }
 
     /** 矩形：{@code fill} 收的是左上/右下两个角（不是左上 + 宽高），颜色按 ARGB 原样传。 */

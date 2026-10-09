@@ -41,6 +41,9 @@ final class ForeignScreenGuard implements FrameListener {
     /** 上一次下发的「游戏是否处理鼠标」期望值；null = 尚未成功下发过。 */
     private Boolean gameInputApplied;
 
+    /** 是否**由我们**放开了游戏的鼠标抓取（关闭界面时要还回去）。 */
+    private boolean mouseReleased;
+
     /** 「已关闭游戏鼠标处理」是否已提示过（只打一次）。 */
     private boolean loggedInputSuppression;
 
@@ -122,18 +125,93 @@ final class ForeignScreenGuard implements FrameListener {
     /**
      * 我们的界面打开期间让**游戏**停止处理鼠标。
      *
-     * <p>不这样做的话，拖动滑块 / 点按钮的同时视角也在转：1.8.9 只看
-     * {@code Minecraft.inGameHasFocus}，而我们的叠加层并不占用 {@code currentScreen}，
-     * 游戏因此照旧把鼠标位移喂给相机。（我们已把 LWJGL 的 {@code Mouse.setGrabbed(false)}
-     * 设为 false，但那个开关不足以让 1.8.9 停手——实测拖动时视角照样转。）
+     * <p>不这样做的话，拖动滑块 / 点按钮的同时视角也在转，而且**点不中**：游戏抓着鼠标时
+     * （SDL 相对模式 / GLFW 的 cursor disabled）系统光标被锁在窗口中心，指针查询拿不到真实位置，
+     * 我们的界面于是算不出鼠标在哪。26.3 实测就是这个症状。
      *
-     * <p>关闭界面时必须恢复，否则游戏彻底收不到鼠标。映射表里没有该字段的版本
-     * （现代版本改用 {@code MouseHandler} 的抓取 API）写会失败，这里静默跳过：
-     * 只做能做的事，绝不影响游戏本身。
+     * <p>两条路，按版本各走一条：
+     * <ul>
+     *   <li>现代（1.14.4+）：{@code MouseHandler.releaseMouse()} / {@code grabMouse()}。
+     *       <b>必须走游戏自己的 API</b>——只把 SDL/GLFW 的抓取状态改掉是没用的：游戏的
+     *       {@code mouseGrabbed} 仍为 true，它每帧/每次窗口状态变化都会再把抓取设回来
+     *       （26.3 实测：我们自己放开后又立刻被游戏抓回去，于是视角照转）。</li>
+     *   <li>1.8.9：写 {@code Minecraft.inGameHasFocus}（那时没有 MouseHandler）。</li>
+     * </ul>
+     *
+     * <p>每帧复查是必要的：玩家切出再切回来时游戏会自己重新抓取，只放开一次不够。放开过才还原，
+     * 否则「在主菜单（游戏本来就没抓）打开我们的界面再关掉」会把光标锁死。
      *
      * @param guiOpen 我们的界面是否打开
      */
     private void applyGameInputSuppression(boolean guiOpen) {
+        Object handler = mouseHandler();
+        Object grabbed = handler == null ? null
+                : bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "isMouseGrabbed");
+        boolean faceAvailable = grabbed instanceof Boolean;
+        boolean value = faceAvailable && ((Boolean) grabbed).booleanValue();
+        MouseAction action = decideMouseAction(guiOpen, faceAvailable, value, mouseReleased);
+        if (action == MouseAction.RELEASE) {
+            bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "releaseMouse");
+            mouseReleased = true;
+            if (!loggedInputSuppression) {
+                loggedInputSuppression = true;
+                System.out.println("[nocturne] game mouse released while our GUI is open"
+                        + " (MouseHandler.releaseMouse)");
+            }
+        } else if (action == MouseAction.GRAB) {
+            bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "grabMouse");
+            mouseReleased = false;
+        }
+        applyLegacyFocusFlag(guiOpen);
+    }
+
+    /** 一帧里对游戏鼠标抓取要做的事。 */
+    enum MouseAction {
+        /** 什么都不做。 */
+        NONE,
+        /** 放开鼠标（我们的界面需要用系统光标）。 */
+        RELEASE,
+        /** 把鼠标还给游戏。 */
+        GRAB
+    }
+
+    /**
+     * 决定这一帧要对游戏鼠标抓取做什么（把判定与副作用分开，便于钉契约）。
+     *
+     * @param guiOpen       我们的界面是否打开
+     * @param faceAvailable 该版本的鼠标面是否可用（现代才有 MouseHandler）
+     * @param grabbed       游戏当前是否抓着鼠标
+     * @param suppressed    之前是否**由我们**放开过
+     * @return 本帧要执行的动作
+     */
+    static MouseAction decideMouseAction(boolean guiOpen, boolean faceAvailable, boolean grabbed,
+                                         boolean suppressed) {
+        if (!faceAvailable) {
+            return MouseAction.NONE;
+        }
+        if (guiOpen) {
+            // 每帧复查：游戏会在窗口重新激活等时机再把鼠标抓回去。
+            return grabbed ? MouseAction.RELEASE : MouseAction.NONE;
+        }
+        return suppressed ? MouseAction.GRAB : MouseAction.NONE;
+    }
+
+    /** 取鼠标处理器；该版本没有（1.13 及更早）或读不到时返回 {@code null}。 */
+    private Object mouseHandler() {
+        Object minecraft = bridge.minecraft();
+        return minecraft == null ? null
+                : bridge.readField(minecraft, ClassType.MINECRAFT, "mouseHandler");
+    }
+
+    /**
+     * 1.8.9 那条路：写 {@code Minecraft.inGameHasFocus}。
+     *
+     * <p>现代版本没有这个字段（26.3 的表里是 {@code absent}），写失败就静默跳过——那条路由
+     * {@link #applyGameInputSuppression} 的 MouseHandler 分支负责。
+     *
+     * @param guiOpen 我们的界面是否打开
+     */
+    private void applyLegacyFocusFlag(boolean guiOpen) {
         boolean wantGameInput = !guiOpen;
         Boolean applied = gameInputApplied;
         if (applied != null && applied.booleanValue() == wantGameInput) {

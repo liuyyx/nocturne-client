@@ -241,6 +241,8 @@ public final class GuiOverlay implements FrameListener {
 
     /** 是否已打印过首帧输入诊断，保证只打印一次。 */
     private boolean loggedFirstInput;
+    /** 是否已打印过首次点击诊断，保证只打印一次。 */
+    private boolean loggedFirstClick;
     /** 上一帧是否有界面处于打开状态；用于识别指针捕获的交接沿。 */
     private boolean wasOpenForPointer;
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
@@ -399,6 +401,16 @@ public final class GuiOverlay implements FrameListener {
 
         boolean left = input.mouseDown(BUTTON_LEFT);
         boolean right = input.mouseDown(BUTTON_RIGHT);
+        if (!loggedFirstClick && (left || right)) {
+            loggedFirstClick = true;
+            // 「点了没反应」必须能定位到这一层的哪一半：指针坐标（由 SDL 原始坐标换算）
+            // 与按钮状态都在这里；grabbed 说明指针是否仍被游戏抓着（抓着时系统光标被锁死，
+            // 点击落不到界面上）。
+            System.out.println("[nocturne] overlay first click: mouse=" + Math.round(mx) + ","
+                    + Math.round(my) + " left=" + left + " right=" + right
+                    + " grabbed=" + input.isPointerGrabbed()
+                    + " surface=" + renderer.width() + "x" + renderer.height());
+        }
         double dx = mx - lastX;
         double dy = my - lastY;
         if (left && !leftWasDown) {

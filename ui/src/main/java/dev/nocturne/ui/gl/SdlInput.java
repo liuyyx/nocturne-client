@@ -44,8 +44,12 @@ public final class SdlInput implements InputSource {
     private final Method getKeyboardState;
     /** {@code SDL_GetMouseFocus()}：当前有鼠标焦点的窗口句柄。 */
     private final Method getMouseFocus;
+    /** {@code SDL_GetKeyboardFocus()}：键盘焦点窗口；鼠标焦点拿不到时的兜底。 */
+    private final Method getKeyboardFocus;
     /** {@code SDL_GetWindowSize(long, int* w, int* h)}：用于把窗口坐标换算到绘制坐标。 */
     private final Method getWindowSize;
+    /** {@code SDL_GetWindowSizeInPixels(long, int* w, int* h)}：物理像素尺寸；仅用于诊断。 */
+    private final Method getWindowSizeInPixels;
     /** {@code SDL_SetWindowRelativeMouseMode(long, boolean)}：指针捕获开关。 */
     private final Method setRelativeMouseMode;
     /** {@code SDL_GetWindowRelativeMouseMode(long)}：读取当前捕获状态；可能不存在。 */
@@ -62,16 +66,25 @@ public final class SdlInput implements InputSource {
     private long window;
     /** 最近一次设置的指针捕获状态（SDL 侧读取不可用时用它兜底）。 */
     private boolean pointerGrabbed;
+    /** 是否已打过首次读取日志（坐标口径只在首帧报一次）。 */
+    private boolean loggedFirstRead;
+    /** 是否已就「窗口尺寸未知、坐标退化 1:1」警告过（只打一次）。 */
+    private boolean loggedScaleFallback;
+    /** 是否已就「SDL 鼠标状态调用失败」报过一次（失败原因是输入层静默死亡的关键线索）。 */
+    private boolean loggedSdlFailure;
 
     private SdlInput(IntSupplier surfaceWidth, IntSupplier surfaceHeight,
                      Method getMouseState, Method getKeyboardState, Method getMouseFocus,
-                     Method getWindowSize, Method setRelativeMouseMode, Method getRelativeMouseMode) {
+                     Method getKeyboardFocus, Method getWindowSize, Method getWindowSizeInPixels,
+                     Method setRelativeMouseMode, Method getRelativeMouseMode) {
         this.surfaceWidth = surfaceWidth;
         this.surfaceHeight = surfaceHeight;
         this.getMouseState = getMouseState;
         this.getKeyboardState = getKeyboardState;
         this.getMouseFocus = getMouseFocus;
+        this.getKeyboardFocus = getKeyboardFocus;
         this.getWindowSize = getWindowSize;
+        this.getWindowSizeInPixels = getWindowSizeInPixels;
         this.setRelativeMouseMode = setRelativeMouseMode;
         this.getRelativeMouseMode = getRelativeMouseMode;
         this.mouseX = ByteBuffer.allocateDirect(Float.BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer();
@@ -101,8 +114,12 @@ public final class SdlInput implements InputSource {
         // 无参重载返回内部的按键状态缓冲；带 (IntBuffer) 的重载只是额外回报键数，用不上。
         Method getKeyboardState = Reflect.method(keyboard, "SDL_GetKeyboardState");
         Method getMouseFocus = Reflect.method(mouse, "SDL_GetMouseFocus");
+        Method getKeyboardFocus = Reflect.method(keyboard, "SDL_GetKeyboardFocus");
         Method getWindowSize = video == null ? null
                 : Reflect.method(video, "SDL_GetWindowSize", long.class, IntBuffer.class,
+                IntBuffer.class);
+        Method getWindowSizeInPixels = video == null ? null
+                : Reflect.method(video, "SDL_GetWindowSizeInPixels", long.class, IntBuffer.class,
                 IntBuffer.class);
         Method setRelative = video == null ? null
                 : Reflect.method(video, "SDL_SetWindowRelativeMouseMode", long.class, boolean.class);
@@ -112,7 +129,8 @@ public final class SdlInput implements InputSource {
             return null;
         }
         return new SdlInput(surfaceWidth, surfaceHeight, getMouseState, getKeyboardState,
-                getMouseFocus, getWindowSize, setRelative, getRelative);
+                getMouseFocus, getKeyboardFocus, getWindowSize, getWindowSizeInPixels,
+                setRelative, getRelative);
     }
 
     @Override
@@ -199,7 +217,30 @@ public final class SdlInput implements InputSource {
     private int readMouseState() {
         mouseX.clear();
         mouseY.clear();
-        Object mask = Reflect.call(getMouseState, null, mouseX, mouseY);
+        Object mask;
+        try {
+            mask = getMouseState.invoke(null, mouseX, mouseY);
+        } catch (Throwable t) {
+            // 以前这里走 Reflect.call，异常被吞成 null → 掩码 0、坐标 0：输入层静默死亡，
+            // 界面表现为「点不中、坐标恒 0,0」，日志里却没有任何线索。原生绑定缺失时就是这样。
+            if (!loggedSdlFailure) {
+                loggedSdlFailure = true;
+                Throwable cause = t.getCause() == null ? t : t.getCause();
+                System.out.println("[nocturne] SDL mouse state unavailable: " + cause);
+            }
+            return 0;
+        }
+        if (!loggedFirstRead && window != 0L) {
+            loggedFirstRead = true;
+            // 坐标口径必须可见：raw 是 SDL 的窗口坐标（与 SDL_GetWindowSize 同一口径），
+            // surface 是绘制坐标，两者不等时按比例换算（见 scaleX）。「点位对不上」时这行
+            // 能直接定位是换算还是别处的问题。
+            System.out.println("[nocturne] sdl input first read: raw=" + mouseX.get(0) + ","
+                    + mouseY.get(0) + " window=" + windowWidth() + "x" + windowHeight()
+                    + " pixels=" + pixelWidth() + "x" + pixelHeight()
+                    + " surface=" + (surfaceWidth == null ? -1 : surfaceWidth.getAsInt()) + "x"
+                    + (surfaceHeight == null ? -1 : surfaceHeight.getAsInt()));
+        }
         return mask instanceof Number ? ((Number) mask).intValue() : 0;
     }
 
@@ -208,28 +249,70 @@ public final class SdlInput implements InputSource {
         if (window != 0L) {
             return true;
         }
-        if (getMouseFocus == null) {
+        // 鼠标焦点优先，键盘焦点兜底：窗口失焦或指针被捕获时 SDL_GetMouseFocus 可能返回 0，
+        // 而 SDL_GetKeyboardFocus 在窗口仍是前台时可用。拿不到句柄的代价不是"少一个功能"：
+        // 窗口尺寸跟着拿不到，坐标换算退化成 1:1，界面坐标会整体错位（高 DPI 下点击全部落空）。
+        long resolved = focusHandle(getMouseFocus);
+        if (resolved == 0L) {
+            resolved = focusHandle(getKeyboardFocus);
+        }
+        if (resolved == 0L) {
             return false;
         }
-        Object focus = Reflect.call(getMouseFocus, null);
-        if (focus instanceof Number && ((Number) focus).longValue() != 0L) {
-            window = ((Number) focus).longValue();
-            return true;
+        window = resolved;
+        return true;
+    }
+
+    /**
+     * 调用一个「返回窗口句柄」的 SDL 函数。
+     *
+     * @param method {@code SDL_GetMouseFocus}/{@code SDL_GetKeyboardFocus}；可为 {@code null}
+     * @return 窗口句柄；函数缺失或返回 0 时返回 {@code 0}
+     */
+    private static long focusHandle(Method method) {
+        if (method == null) {
+            return 0L;
         }
-        return false;
+        Object focus = Reflect.call(method, null);
+        return focus instanceof Number ? ((Number) focus).longValue() : 0L;
     }
 
     /** 绘制区宽度 / 窗口宽度：高 DPI 或缩放窗口下两者不等，坐标必须按这个比例换算。 */
     private double scaleX() {
         int surface = surfaceWidth == null ? 0 : surfaceWidth.getAsInt();
         int client = windowWidth();
-        return client <= 0 ? 1d : (double) surface / client;
+        if (client <= 0) {
+            warnScaleFallback();
+            return 1d;
+        }
+        return (double) surface / client;
     }
 
     private double scaleY() {
         int surface = surfaceHeight == null ? 0 : surfaceHeight.getAsInt();
         int client = windowHeight();
-        return client <= 0 ? 1d : (double) surface / client;
+        if (client <= 0) {
+            warnScaleFallback();
+            return 1d;
+        }
+        return (double) surface / client;
+    }
+
+    /**
+     * 窗口尺寸拿不到、坐标换算只能退化成 1:1 时提示一次。
+     *
+     * <p>这里以前是静默的，代价很大：高 DPI 下界面坐标整体错位（点击全部落空），而日志里
+     * 只有一句 {@code first read ... window=0x0}，看不出与「点不中」的关系。
+     */
+    private void warnScaleFallback() {
+        if (loggedScaleFallback) {
+            return;
+        }
+        loggedScaleFallback = true;
+        System.out.println("[nocturne] WARNING: SDL window size unavailable; pointer coordinates"
+                + " fall back to 1:1 and will miss on a scaled window"
+                + " (surface=" + (surfaceWidth == null ? -1 : surfaceWidth.getAsInt()) + "x"
+                + (surfaceHeight == null ? -1 : surfaceHeight.getAsInt()) + ")");
     }
 
     private int windowWidth() {
@@ -248,6 +331,32 @@ public final class SdlInput implements InputSource {
         windowWidth.clear();
         windowHeight.clear();
         Reflect.call(getWindowSize, null, Long.valueOf(window), windowWidth, windowHeight);
+        return windowWidth.get(0) > 0 && windowHeight.get(0) > 0;
+    }
+
+    /** 窗口的物理像素宽度（诊断用）；拿不到时返回 -1。 */
+    private int pixelWidth() {
+        return readPixelSize() ? windowWidth.get(0) : -1;
+    }
+
+    /** 窗口的物理像素高度（诊断用）；拿不到时返回 -1。 */
+    private int pixelHeight() {
+        return readPixelSize() ? windowHeight.get(0) : -1;
+    }
+
+    /**
+     * 读物理像素尺寸（{@code SDL_GetWindowSizeInPixels}）；不可用时返回 {@code false}。
+     *
+     * <p>只用于诊断日志：用它对照窗口坐标就能算出驱动侧的缩放倍数。
+     * 复用同一组缓冲，因此调用方必须立即取值（见 {@link #pixelWidth()}）。
+     */
+    private boolean readPixelSize() {
+        if (getWindowSizeInPixels == null || !ensureWindow()) {
+            return false;
+        }
+        windowWidth.clear();
+        windowHeight.clear();
+        Reflect.call(getWindowSizeInPixels, null, Long.valueOf(window), windowWidth, windowHeight);
         return windowWidth.get(0) > 0 && windowHeight.get(0) > 0;
     }
 }

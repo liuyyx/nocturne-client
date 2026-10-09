@@ -2,6 +2,7 @@ package dev.nocturne.agent;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,5 +30,37 @@ class ForeignScreenGuardTest {
         assertFalse(ForeignScreenGuard.isForeignScreen("net.minecraft.client.gui.inventory.GuiChest"));
         assertFalse(ForeignScreenGuard.isForeignScreen("com.example.fpsmasterlike.Panel"));
         assertFalse(ForeignScreenGuard.isForeignScreen(null));
+    }
+
+    /**
+     * 鼠标抓取的判定契约。26.3 实测：界面开着时视角照转、点击落空——因为游戏仍抓着鼠标
+     * （SDL 相对模式下系统光标被锁死，我们的界面拿不到指针位置），而当时只写了
+     * {@code inGameHasFocus}（那个字段在现代版本根本不存在）。
+     */
+    @Test
+    void releasesTheGameMouseWhileOurGuiIsOpen() {
+        // 界面开着 + 游戏抓着鼠标（现代版本）→ 放开
+        assertEquals(ForeignScreenGuard.MouseAction.RELEASE,
+                ForeignScreenGuard.decideMouseAction(true, true, true, false));
+        // 每帧复查：游戏会把鼠标抓回去，所以要继续放开（此时我们已放开过，状态位为 true）
+        assertEquals(ForeignScreenGuard.MouseAction.RELEASE,
+                ForeignScreenGuard.decideMouseAction(true, true, true, true));
+        // 已经放开了就不重复调
+        assertEquals(ForeignScreenGuard.MouseAction.NONE,
+                ForeignScreenGuard.decideMouseAction(true, true, false, true));
+    }
+
+    @Test
+    void restoresTheMouseOnlyWhenWeReleasedIt() {
+        // 我们放开过 → 关闭界面时还给游戏
+        assertEquals(ForeignScreenGuard.MouseAction.GRAB,
+                ForeignScreenGuard.decideMouseAction(false, true, false, true));
+        // 游戏本来就没抓（例如在主菜单打开我们的界面）→ 关掉时什么都不做，
+        // 否则会把主菜单的光标锁死
+        assertEquals(ForeignScreenGuard.MouseAction.NONE,
+                ForeignScreenGuard.decideMouseAction(false, true, false, false));
+        // 没有鼠标面的版本（1.13 及更早）→ 一律不动，由 inGameHasFocus 那条路负责
+        assertEquals(ForeignScreenGuard.MouseAction.NONE,
+                ForeignScreenGuard.decideMouseAction(true, false, false, false));
     }
 }

@@ -127,11 +127,15 @@ public final class ExtractorRenderer implements UiBackend {
         this.frame = graphics;
     }
 
-    /** 释放本帧的绘制上下文（帧结束后调用）；此后 {@link #ready()} 为 {@code false}。 */
+    /**
+     * 释放本帧的绘制上下文（帧结束后调用）；此后 {@link #ready()} 为 {@code false}。
+     *
+     * <p>尺寸**不清零**：它是窗口属性（GUI 缩放后的逻辑尺寸），不是某帧的临时值。输入层在
+     * 帧回调里要拿它做鼠标坐标换算，而帧回调早于本帧的 extract 阶段——清零会让换算读到 0，
+     * 整个界面的点击都落空（26.3 实测踩过）。
+     */
     public void clearFrame() {
         this.frame = null;
-        this.width = 0;
-        this.height = 0;
     }
 
     @Override
@@ -142,8 +146,15 @@ public final class ExtractorRenderer implements UiBackend {
             height = 0;
             return;
         }
-        width = intOf(guiWidth, graphics, 0);
-        height = intOf(guiHeight, graphics, 0);
+        // 只在读到有效尺寸时更新：保留最近一次有效值（见 clearFrame 的说明）。
+        int measuredWidth = intOf(guiWidth, graphics, 0);
+        int measuredHeight = intOf(guiHeight, graphics, 0);
+        if (measuredWidth > 0) {
+            width = measuredWidth;
+        }
+        if (measuredHeight > 0) {
+            height = measuredHeight;
+        }
         ensureFont();
         // 首帧尺寸必须可见：绘制区尺寸为 0 时组件树按 0 布局，界面上一个像素都画不出来，
         // 而日志里此前只有一句"overlay attached"，看起来像装好了。

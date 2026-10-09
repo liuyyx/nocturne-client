@@ -121,7 +121,9 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   `text(Font,…)` 画字；圆角无原语，逐行内缩近似）、
   `SkijaBackend`（Skija 画布，Multi-Release JAR 在 Java 8 可用）。后两者当前都不在 LWJGL2 / 核心
   profile 路径上被 probe：Skia 直写外部帧缓冲会盖黑游戏（修法是纹理中转，未做）。
-- 输入三代：`ReflectiveInput` 绑 lwjgl2 / glfw（GLFW 滚轮走动态代理回调并转发被顶掉的旧回调）、
+- 输入四路：`ReflectiveInput` 绑 lwjgl2 / glfw（GLFW 滚轮走动态代理回调并转发被顶掉的旧回调）、
+  `GameInput`（SDL 世代：**鼠标取游戏自己的事件态**——`MouseHandler.xpos/ypos` + `activeButton`，
+  因为 `SDL_GetMouseState` 在"无鼠标焦点"时静默给 0,0；见 VERSION-MATRIX P5-C）、
   `SdlInput`（26.x SDL3：轮询 `SDL_GetMouseState` / `SDL_GetKeyboardState`；**SDL 的滚轮是事件驱动、
   没有轮询接口，仍为已知缺口**）；三代都解析不出时退化为 `NoInput`。
 - 组件树、主题、字体、动画、分类栏拖动、滚轮、右键设置面板、指针捕获交接。
@@ -204,7 +206,7 @@ MAGIC 'NTPK'(4) | VERSION(1) | nonce(12) | AES-256-GCM 密文 + 16B 标签
 | 1.8.9 | Java 8，MCP 名 | 映射表 + 帧钩子（`Display.update`）+ GL 固定管线 |
 | 1.12 – 1.21.x | 混淆 | 映射表（66 个 release 全部产出）+ 帧钩子（GLFW 交换点）+ 核心 profile 渲染 |
 | 26.1 – 26.2 | Java 21，无混淆，SDL3 | 反射解析 + 核心 profile 渲染（SDL 栈上未实机验证） |
-| 26.3 | Java 21，无混淆，SDL3 | **不注册帧钩子**；绘制走游戏自己的 `GuiGraphicsExtractor`，输入走 `SdlInput` |
+| 26.3 | Java 21，无混淆，SDL3 | **不注册帧钩子**；绘制走游戏自己的 `GuiGraphicsExtractor`，输入走 `GameInput`（鼠标取游戏事件态，键走 SDL 键盘状态） |
 
 ## 8. 阶段计划
 

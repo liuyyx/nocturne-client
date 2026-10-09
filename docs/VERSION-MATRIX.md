@@ -79,9 +79,27 @@
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`；Skija 包 fb0 直写盖黑游戏已实锤，LWJGL2 不再 probe Skija；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
 | 1.16.5 | ✅ **真机已实测**（`vanilla-1.16.5` + LWJGL3：attach → `agentmain` → `glfwSwapBuffers` 帧钩子 live → 叠加层 attach；`tmp/mc1165*.log`） | ✅ | ✅ 已产出 | ✅ 可见（`backend=gl-core`、`screen=ClickGui`，三列面板 + FullBright 行可点选；修过 `glLinkProgram` 缺失 + 视口回退游戏 Window；toggle 用扩展右 Shift；文字待复验） |
 | 26.2 | ⏳ | 未验 | ✅ 已产出 | ⏳ |
-| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=sdl`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转） |
+| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转） |
 
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
+
+
+> **P5-C 输入修正（2026-10-09，真机 26.3 通过）**：P4-C 记的"可点"不成立——点击一直落空，因为**鼠标状态取错了源**：
+> - `SDL_GetMouseState` 只在"有鼠标焦点的窗口"上给坐标，没焦点时静默返回 `0,0`、掩码 `0`（不报错）；
+>   同一环境里 `SDL_GetGlobalMouseState` 也恒为 `0,0`（`SDL_GetKeyboardState` 却是有效缓冲，说明 SDL 实例是活的）。
+>   游戏自己收到的事件坐标是真实的：`MouseHandler.xpos()=484,279`。
+> - `MouseHandler.isLeftPressed()` 只在"没有 screen、也没有 overlay"时更新（26.3 `onButton` 字节码），
+>   主菜单/聊天/背包打开时恒为 false——不能当按钮来源。
+>
+> 处置：新增输入源 **`GameInput`**（只在 SDL 世代接管，GLFW/LWJGL2 那条轮询路保持不动）。
+> 位置取 `MouseHandler.xpos/ypos`，按 `界面逻辑尺寸 / Window.getWidth()` 换算；按钮取
+> `MouseHandler.activeButton`（按下时无条件记录）→ `MouseButtonInfo.button()`（1=左 2=中 3=右）；
+> 键走 `InputConstants.isKeyDown(scancode)`；指针抓取仍走 `MouseHandler.releaseMouse/grabMouse`。
+> - 真机证据：`input=game`；按住左键时 `activeButton=MouseButtonInfo button=1`；
+>   `overlay first click: mouse=242,140 left=true ... surface=427x240`（484 × 427/854 = 242）；
+>   点击 `FullBright` / `Watermark` 状态翻转（面板区像素差 0.5M–1.2M，全屏 27M，含世界亮度变化）。
+> - 顺带修掉：`ExtractorRenderer` 帧间把绘制区尺寸清零，输入侧换算因此读到 0；现在保留最近一次有效值。
+> - 仍未做：滚轮（SDL 无轮询接口）。
 
 > **P4-C 正式实现（2026-10-07，真机 26.3 通过）**：叠加层在 SDL 栈上可用了。
 >

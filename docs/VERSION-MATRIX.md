@@ -84,6 +84,23 @@
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
 
 
+
+> **P5-D 输入穿透修复（2026-10-09，真机 26.3 通过）**：界面开着时，同一次点击/按键会**同时**打在后面的
+> 原生界面上（点模块顺带按到「回到游戏」、Esc 顺带打开暂停菜单）——因为我们的界面不是 vanilla
+> `Screen`，MC 的输入派发不知道我们吃掉了它。
+>
+> 处置：新增 **输入短路钩子**（`InputBlockTransformer` + bootstrap 层共享标志 `InputBlock`），
+> 界面开着时让游戏侧这些入口直接返回：
+> `KeyboardHandler#keyPress`、`KeyMapping#setAll/set/click`（移动、攻击、使用、单次动作）、
+> `ContainerEventHandler#mouseClicked`（屏幕的点击派发）。
+> - **不屏蔽** `MouseHandler#onButton`：它同时负责记录 `activeButton`/`isLeftPressed`，而我们的鼠标按钮
+>   正是从那里读的（`MouseButtonInfo` 里没有按下/抬起信息，那是单独的 int 形参），屏蔽它等于把自己的
+>   点击也砍掉。屏蔽屏幕的点击入口效果相同且不碰自身输入。
+> - 短路时布尔入口返回 `true`（"已处理"）：返回 `false` 会被调用方当成没处理，走到"点外面关界面"那类分支。
+> - 真机证据：世界里开着我们的界面按 Esc → 界面关闭、**不出现暂停菜单**；日志
+>   `input block registered on ...`（5 处）+ 单元测试把补丁后的类**真正定义并调用**（插入的是分支，
+>   栈帧写错就是 VerifyError，只断言字节码没有意义）。
+
 > **P5-C 输入修正（2026-10-09，真机 26.3 通过）**：P4-C 记的"可点"不成立——点击一直落空，因为**鼠标状态取错了源**：
 > - `SDL_GetMouseState` 只在"有鼠标焦点的窗口"上给坐标，没焦点时静默返回 `0,0`、掩码 `0`（不报错）；
 >   同一环境里 `SDL_GetGlobalMouseState` 也恒为 `0,0`（`SDL_GetKeyboardState` 却是有效缓冲，说明 SDL 实例是活的）。

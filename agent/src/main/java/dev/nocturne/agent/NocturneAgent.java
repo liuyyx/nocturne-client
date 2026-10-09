@@ -258,6 +258,7 @@ public final class NocturneAgent {
         String[] entries = {
                 "dev/nocturne/client/runtime/FrameDispatcher.class",
                 "dev/nocturne/client/runtime/FrameListener.class",
+                "dev/nocturne/client/runtime/InputBlock.class",
         };
         java.nio.file.Path jar = null;
         try {
@@ -335,6 +336,7 @@ public final class NocturneAgent {
         }
         // GUI 绘制钩子先注册（26.x 的 GUI 入口；其时机未必有有效 GL，但成本很低）。
         installGuiDrawHook(instrumentation);
+        installInputBlocks(instrumentation);
         EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
         if (isSdlStack(instrumentation, gameClassLoader(instrumentation))) {
             // SDL 栈（26.x）：**LWJGL 的 GL 绑定在整个进程里都不可用**——实测三处时机（帧回调的缓冲
@@ -412,6 +414,103 @@ public final class NocturneAgent {
                 HUD_DRAW_DESCRIPTOR, HUD_HOOK_METHOD);
         registerGuiDrawHook(instrumentation, asmLoader, SCREEN_DRAW_CLASS, SCREEN_DRAW_METHOD,
                 SCREEN_DRAW_DESCRIPTOR, SCREEN_HOOK_METHOD);
+    }
+
+    /** vanilla 屏幕的点击入口（默认方法，屏幕经它把点击派发给子控件）。 */
+    private static final String SCREEN_CLICK_CLASS =
+            "net.minecraft.client.gui.components.events.ContainerEventHandler";
+    /** 屏幕点击入口方法名。 */
+    private static final String SCREEN_CLICK_METHOD = "mouseClicked";
+    /** 屏幕点击入口描述符（返回 {@code boolean}：本转换器短路时返回 {@code true}＝已处理）。 */
+    private static final String SCREEN_CLICK_DESCRIPTOR =
+            "(Lnet/minecraft/client/input/MouseButtonEvent;Z)Z";
+    /** 键盘入口（26.3 起为 {@code keyPress(long, int, KeyEvent)}）。 */
+    private static final String KEY_PRESS_CLASS = "net.minecraft.client.KeyboardHandler";
+    /** 键盘入口方法名。 */
+    private static final String KEY_PRESS_METHOD = "keyPress";
+    /** 键盘入口描述符。 */
+    private static final String KEY_PRESS_DESCRIPTOR = "(JILnet/minecraft/client/input/KeyEvent;)V";
+    /** 按键绑定入口（游戏按它把"按住状态"变成动作：移动、攻击、使用）。 */
+    private static final String KEY_MAPPING_CLASS = "net.minecraft.client.KeyMapping";
+    /** 每刻轮询所有按键绑定。 */
+    private static final String KEY_MAPPING_SET_ALL = "setAll";
+    /** 按键绑定「按住状态」写入（鼠标攻击/使用走这条）。 */
+    private static final String KEY_MAPPING_SET_DESCRIPTOR =
+            "(Lcom/mojang/blaze3d/platform/InputConstants$Key;Z)V";
+    /** 按键绑定「单次触发」（点一下生效的动作走这条）。 */
+    private static final String KEY_MAPPING_CLICK_DESCRIPTOR =
+            "(Lcom/mojang/blaze3d/platform/InputConstants$Key;)V";
+
+    /** 输入短路钩子类内部名（bootstrap 层，游戏类与叠加层看到的是同一份）。 */
+    private static final String INPUT_BLOCK_OWNER = "dev/nocturne/client/runtime/InputBlock";
+    /** 短路判定方法名。 */
+    private static final String INPUT_BLOCK_METHOD = "shouldBlock";
+
+    /**
+     * 注册输入短路钩子：我们的界面开着时，游戏自己的鼠标/键盘入口直接返回。
+     *
+     * <p>为什么必须织入：叠加层不是 vanilla {@code Screen}，MC 的输入派发不知道我们吃掉了这次
+     * 点击/按键，于是同一次点击会**同时**打在后面的原生界面上（点模块顺带按到「回到游戏」、
+     * Esc 顺带打开暂停菜单）。26.3 真机由玩家报告。
+     *
+     * <p>描述符按 26.x 的签名精确匹配；其它版本签名不同就不插桩（游戏照旧，绝不因为插桩出错）。
+     * 命名空间差异（Forge/NeoForge 的 SRG 名）同样表现为"不命中"，即退化到今天的现状。
+     */
+    private static void installInputBlocks(Instrumentation instrumentation) {
+        EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
+        if (asmLoader == null) {
+            log("embedded ASM unavailable; input block hooks skipped");
+            return;
+        }
+        // 键盘与按键绑定：界面开着时游戏不该再响应按键（移动、攻击、使用、打字、Esc 开菜单）。
+        registerInputBlock(instrumentation, asmLoader, KEY_PRESS_CLASS, KEY_PRESS_METHOD,
+                KEY_PRESS_DESCRIPTOR);
+        registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, KEY_MAPPING_SET_ALL, "()V");
+        registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, "set",
+                KEY_MAPPING_SET_DESCRIPTOR);
+        registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, "click",
+                KEY_MAPPING_CLICK_DESCRIPTOR);
+        // 鼠标：屏蔽 vanilla 屏幕的点击入口（屏幕背后的一切都不该被点到）。
+        // 为什么不屏蔽 MouseHandler#onButton：那个方法同时负责记录 activeButton/isLeftPressed，
+        // 而我们的鼠标按钮正是从那里读的（MouseButtonInfo 里没有按下/抬起信息，另起事件源代价更大）。
+        // 屏蔽屏幕的点击入口效果相同，且完全不碰我们自己的输入路径。
+        registerInputBlock(instrumentation, asmLoader, SCREEN_CLICK_CLASS, SCREEN_CLICK_METHOD,
+                SCREEN_CLICK_DESCRIPTOR);
+    }
+
+    /**
+     * 注册一个输入短路钩子，并在目标类已加载时立即重转换。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader       内嵌 ASM 子加载器
+     * @param targetClass     目标类（点号形式）
+     * @param method          目标方法名
+     * @param descriptor      目标方法描述符（返回类型须为 {@code V}）
+     */
+    private static void registerInputBlock(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
+                                           String targetClass, String method, String descriptor) {
+        ClassFileTransformer transformer = asmLoader.createInputBlockTransformer(targetClass, method,
+                descriptor, INPUT_BLOCK_OWNER, INPUT_BLOCK_METHOD);
+        if (transformer == null) {
+            return;
+        }
+        try {
+            instrumentation.addTransformer(transformer, true);
+        } catch (Throwable t) {
+            log("could not register input block on " + targetClass + ": " + t);
+            return;
+        }
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            if (targetClass.equals(loaded.getName())) {
+                try {
+                    instrumentation.retransformClasses(loaded);
+                } catch (Throwable t) {
+                    log("retransform " + targetClass + " for input block failed: " + t);
+                }
+                break;
+            }
+        }
+        log("input block registered on " + targetClass + "." + method);
     }
 
     /**

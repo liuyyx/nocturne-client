@@ -1,6 +1,7 @@
 package dev.nocturne.ui.gl;
 
 import dev.nocturne.client.NocturneClient;
+import dev.nocturne.client.input.KeyMap;
 import dev.nocturne.client.module.Module;
 import dev.nocturne.client.module.ModuleRegistry;
 import dev.nocturne.client.render.CameraState;
@@ -8,6 +9,7 @@ import dev.nocturne.client.render.OverlayDraw;
 import dev.nocturne.client.render.WorldOverlay;
 import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.runtime.FrameListener;
+import dev.nocturne.client.runtime.InputBlock;
 import dev.nocturne.ui.clickgui.ClickGui;
 import dev.nocturne.ui.skija.SetsunaClickGui;
 import dev.nocturne.ui.skija.SetsunaHud;
@@ -113,6 +115,10 @@ public final class GuiOverlay implements FrameListener {
     private final CameraState camera;
     /** 世界覆盖层异常是否已记录过（限流，避免每帧刷屏）。 */
     private boolean worldOverlayErrorLogged;
+    /** 游戏内相机读不到时是否已记过（只记一次）。 */
+    private boolean worldOverlaySkipLogged;
+    /** 首次真的画出覆盖层时是否已记过（只记一次）。 */
+    private boolean worldOverlayDrawLogged;
 
     /**
      * @param registry  模块注册表，GUI 据此列出各分类下的模块
@@ -243,6 +249,10 @@ public final class GuiOverlay implements FrameListener {
     private boolean loggedFirstInput;
     /** 是否已打印过首次点击诊断，保证只打印一次。 */
     private boolean loggedFirstClick;
+    /** 是否已打印过「开关键被按下」诊断，保证只打印一次。 */
+    private boolean loggedToggleSeen;
+    /** 是否已打印过左右 Shift 探针，保证只打印一次。 */
+    private boolean loggedShiftProbe;
     /** 上一帧是否有界面处于打开状态；用于识别指针捕获的交接沿。 */
     private boolean wasOpenForPointer;
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
@@ -283,7 +293,24 @@ public final class GuiOverlay implements FrameListener {
         double my = input.mouseY();
         updateFps(System.nanoTime());
 
+        // 我们的界面开着时短路游戏自己的输入入口：否则同一次点击/按键会同时打在后面的原生界面上
+        //（点模块顺带按到「回到游戏」、Esc 顺带打开暂停菜单）。状态放在 bootstrap 层，游戏类看得到。
+        InputBlock.setBlocked(active().isOpen());
         boolean toggleDown = input.keyDown(toggleKey);
+        if (!loggedShiftProbe && (input.keyDown(KeyMap.VK_LEFT_SHIFT)
+                || input.keyDown(KeyMap.VK_RIGHT_SHIFT))) {
+            loggedShiftProbe = true;
+            // 一次性诊断：左右 Shift 在输入层是"看得见"还是"看不见"，决定"开关键没反应"往哪查。
+            System.out.println("[nocturne] shift probe: left=" + input.keyDown(KeyMap.VK_LEFT_SHIFT)
+                    + " right=" + input.keyDown(KeyMap.VK_RIGHT_SHIFT)
+                    + " toggleKey=" + toggleKey + " backend=" + input.describe());
+        }
+        if (toggleDown && !loggedToggleSeen) {
+            loggedToggleSeen = true;
+            // 一次性诊断：开关键"按了没反应"要先分清是"键没到输入层"还是"开关逻辑没跑"。
+            System.out.println("[nocturne] toggle key seen down: vk=" + toggleKey
+                    + " backend=" + input.describe());
+        }
         if (!loggedFirstInput) {
             loggedFirstInput = true;
             // 首次进入叠加层时把输入侧的真实状态打出来：按键「没反应」时，
@@ -451,7 +478,10 @@ public final class GuiOverlay implements FrameListener {
     private void drawFrame() {
         boolean editorOpen = editor != null && editor.isOpen();
         boolean guiOpen = gui.isOpen() && !editorOpen;
-        if (hud == null && !guiOpen && !editorOpen) {
+        // 世界覆盖层（ESP/Tracers/NameTags/StorageESP…）与 GUI/HUD 无关，必须单独计入：
+        // 26.x 没有 Skija 画布（hud == null），关掉 GUI 后本方法此前直接 return，于是 beginFrame()
+        // 根本不执行、覆盖层一帧都不画——世界里什么都看不到，日志里也没有半句线索。
+        if (hud == null && !guiOpen && !editorOpen && !hasWorldOverlays()) {
             return;
         }
         renderer.beginFrame();
@@ -487,6 +517,27 @@ public final class GuiOverlay implements FrameListener {
     }
 
     /**
+     * 是否存在启用中的世界覆盖层模块。
+     *
+     * <p>用来决定「这一帧还有没有必要开绘制面」：没有它，{@code hud == null && !guiOpen} 时整帧
+     * 直接跳过，覆盖层永远画不出来（26.x 实测）。
+     *
+     * @return 任一启用中的模块实现了 {@link WorldOverlay} 时返回 {@code true}
+     */
+    private static boolean hasWorldOverlays() {
+        NocturneClient client = NocturneClient.get();
+        if (client == null) {
+            return false;
+        }
+        for (Module module : client.modules().all()) {
+            if (module.isEnabled() && module instanceof WorldOverlay) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 世界覆盖层：把启用中的、实现了 {@link WorldOverlay} 的模块在当前绘制面与投影上画一遍。
      *
      * <p>为什么在这里而不是事件总线：{@code RenderEvent} 的投递点在帧回调里，那时后端还没
@@ -502,14 +553,25 @@ public final class GuiOverlay implements FrameListener {
             return;
         }
         if (!camera.update(client.gameBridge(), renderer.width(), renderer.height())) {
+            // 这条早退以前是静默的：世界里"什么都没有"时无从判断是相机没就绪、视口是 0，
+            // 还是没有模块被启用。一次性报出三者的真值。
+            // 主菜单里读不到相机是正常的，不值得记；**游戏内**读不到才是问题。
+            if (client.gameBridge() != null && client.gameBridge().inWorld() && !worldOverlaySkipLogged) {
+                worldOverlaySkipLogged = true;
+                logWorldOverlay("skipped in world: camera/viewport not ready (viewport="
+                        + renderer.width() + "x" + renderer.height() + ", enabled=["
+                        + enabledOverlayNames(client) + "])");
+            }
             return;
         }
+        int drawn = 0;
         for (Module module : client.modules().all()) {
             if (!module.isEnabled() || !(module instanceof WorldOverlay)) {
                 continue;
             }
             try {
                 ((WorldOverlay) module).drawWorldOverlay(overlayDraw, camera.projection());
+                drawn++;
             } catch (Throwable t) {
                 if (!worldOverlayErrorLogged) {
                     worldOverlayErrorLogged = true;
@@ -517,6 +579,40 @@ public final class GuiOverlay implements FrameListener {
                 }
             }
         }
+        // 首次真的画出覆盖层时报一次：这是"覆盖层到底画没画"的唯一正面证据。
+        if (drawn > 0 && !worldOverlayDrawLogged) {
+            worldOverlayDrawLogged = true;
+            logWorldOverlay("drawing (" + renderer.width() + "x" + renderer.height() + "): "
+                    + drawn + " module(s), enabled=[" + enabledOverlayNames(client) + "]");
+        }
+    }
+
+    /**
+     * 打一条世界覆盖层诊断。
+     *
+     * @param detail 具体状态，例如相机是否就绪、启用了哪些模块
+     */
+    private void logWorldOverlay(String detail) {
+        System.out.println("[nocturne] world overlay: " + detail);
+    }
+
+    /**
+     * 启用中的世界覆盖层模块名（诊断用）。
+     *
+     * @param client 客户端实例
+     * @return 以逗号分隔的模块名；一个都没有时返回空串
+     */
+    private static String enabledOverlayNames(NocturneClient client) {
+        StringBuilder names = new StringBuilder();
+        for (Module module : client.modules().all()) {
+            if (module.isEnabled() && module instanceof WorldOverlay) {
+                if (names.length() > 0) {
+                    names.append(',');
+                }
+                names.append(module.name());
+            }
+        }
+        return names.toString();
     }
 
     /**

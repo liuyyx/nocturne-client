@@ -1,7 +1,12 @@
 package dev.nocturne.client.render;
 
 import dev.nocturne.client.game.GameBridge;
+import dev.nocturne.client.game.Reflect;
 import dev.nocturne.client.mapping.ClassType;
+
+import java.lang.reflect.Method;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 相机状态读取：把游戏里的眼位 / 朝向 / FOV 反射出来，喂给 {@link WorldProjection}。
@@ -66,7 +71,7 @@ public final class CameraState {
         Object options = minecraft == null
                 ? null
                 : bridge.readField(minecraft, ClassType.MINECRAFT, "options");
-        Double fov = options == null ? null : number(bridge.readField(options, ClassType.OPTIONS, "fov"));
+        Double fov = options == null ? null : fovOf(bridge.readField(options, ClassType.OPTIONS, "fov"));
         if (fov == null) {
             return missing(bridge, "Options#fov");
         }
@@ -81,9 +86,30 @@ public final class CameraState {
     }
 
     /** 把读到的值转成 {@code Double}；不是数字（含 {@code null}）时返回 {@code null}。 */
-    private static Double number(Object value) {
+    static Double number(Object value) {
         return value instanceof Number ? Double.valueOf(((Number) value).doubleValue()) : null;
     }
+
+    /**
+     * 读视场角：1.8.9–1.16.4 的 {@code Options#fov} 是 {@code int}，1.16.5 起是
+     * {@code OptionInstance<Integer>}。后者直接当数字读会拿到 {@code null}——覆盖层于是整帧不画，
+     * 而日志只留一句"cannot read Options#fov"（26.3 实测就是这个）。
+     *
+     * @param raw {@code Options#fov} 的原始读数（可能是数字，也可能是 {@code OptionInstance}）
+     * @return 视场角；两种形态都取不到时返回 {@code null}
+     */
+    static Double fovOf(Object raw) {
+        Double direct = number(raw);
+        if (direct != null || raw == null) {
+            return direct;
+        }
+        Method getter = getters.computeIfAbsent(raw.getClass(),
+                type -> Optional.ofNullable(Reflect.method(type, "get"))).orElse(null);
+        return getter == null ? null : number(Reflect.call(getter, raw));
+    }
+
+    /** {@code OptionInstance.get()} 按运行期类缓存（{@code Optional.empty()} = 该类没有 get()）。 */
+    private static final ConcurrentHashMap<Class<?>, Optional<Method>> getters = new ConcurrentHashMap<>();
 
     /**
      * 缺成员时的统一处理：打一次诊断并返回 {@code false}。

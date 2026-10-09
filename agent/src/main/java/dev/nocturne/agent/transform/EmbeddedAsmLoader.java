@@ -51,6 +51,9 @@ public final class EmbeddedAsmLoader extends ClassLoader {
 
     /** 转换器类名与钩子目标，与 {@link FrameHookTransformer} 的契约一致。 */
     private static final String TRANSFORMER_CLASS = "dev.nocturne.agent.transform.FrameHookTransformer";
+    /** 在目标方法开头插入「占用输入时直接返回」的转换器实现类。 */
+    private static final String INPUT_BLOCK_TRANSFORMER_CLASS =
+            "dev.nocturne.agent.transform.InputBlockTransformer";
     /** 首参回调转换器类名（与 {@link CallbackHookTransformer} 的契约一致）。 */
     private static final String CALLBACK_TRANSFORMER_CLASS =
             "dev.nocturne.agent.transform.CallbackHookTransformer";
@@ -132,6 +135,37 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         } catch (Throwable t) {
             log("could not create callback hook transformer for " + targetInternalName + "." + method
                     + ": " + t + "; callback hook disabled");
+            return null;
+        }
+    }
+
+    /**
+     * 创建一个「占用输入时短路」的转换器：目标 {@code void} 方法开头插入
+     * {@code if (hook()) return;}。
+     *
+     * <p>与上两个的区别：它会**改变控制流**（前两个只插一次调用），用来吃掉游戏自己的输入处理——
+     * 我们的界面不是 vanilla {@code Screen}，不这样会点一次触发两处。
+     *
+     * @param targetInternalName 目标类内部名（斜杠形式）
+     * @param method             目标方法名
+     * @param descriptor         目标方法描述符（返回类型须为 {@code V}）
+     * @param hookOwner          钩子类内部名（斜杠形式）
+     * @param hookMethod         钩子方法名（无参、返回 {@code boolean}）
+     * @return 转换器；内嵌 ASM 缺失或类加载失败时返回 {@code null}
+     */
+    public ClassFileTransformer createInputBlockTransformer(String targetInternalName, String method,
+                                                            String descriptor, String hookOwner,
+                                                            String hookMethod) {
+        try {
+            Class<?> transformerClass = loadClass(INPUT_BLOCK_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, String.class);
+            Object instance = constructor.newInstance(targetInternalName, method, descriptor,
+                    hookOwner, hookMethod);
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create input block transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; input block disabled");
             return null;
         }
     }

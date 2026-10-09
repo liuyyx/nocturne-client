@@ -121,6 +121,9 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   `text(Font,…)` 画字；圆角无原语，逐行内缩近似）、
   `SkijaBackend`（Skija 画布，Multi-Release JAR 在 Java 8 可用）。后两者当前都不在 LWJGL2 / 核心
   profile 路径上被 probe：Skia 直写外部帧缓冲会盖黑游戏（修法是纹理中转，未做）。
+- 输入占用：界面开着时由 `InputBlock`（bootstrap 层共享标志）让游戏侧入口短路
+  （`KeyboardHandler#keyPress`、`KeyMapping#setAll/set/click`、`ContainerEventHandler#mouseClicked`），
+  否则同一次点击/按键会同时打在后面的原生界面上。我们自己的输入不经过这些入口，不受影响。
 - 输入四路：`ReflectiveInput` 绑 lwjgl2 / glfw（GLFW 滚轮走动态代理回调并转发被顶掉的旧回调）、
   `GameInput`（SDL 世代：**鼠标取游戏自己的事件态**——`MouseHandler.xpos/ypos` + `activeButton`，
   因为 `SDL_GetMouseState` 在"无鼠标焦点"时静默给 0,0；见 VERSION-MATRIX P5-C）、

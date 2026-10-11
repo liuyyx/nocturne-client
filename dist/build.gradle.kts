@@ -180,6 +180,47 @@ val distJar = tasks.register<Jar>("distJar") {
     }
 }
 
+// ---------------------------------------------------------------------------
+// 类名随机化：官方二进制的必经过道。
+//
+// 作用对象必须是**合并后的最终 jar**——各模块若在编译期各自改名，合并之后跨模块引用就
+// 对不上了，所以这一步只能挂在 distJar 之后，而不是各模块的编译期。
+//
+// 随机化由 tools/randomize/randomize.py 完成（与 tools/mapping 同一套构建期 Python 约定）。
+// 它写完会立刻自校验悬空引用并以非 0 退出：引用对不上时构建期就红，不留到目标 JVM 里
+// 变成「类找不到」的静默失效。
+// ---------------------------------------------------------------------------
+val randomizedJar = tasks.register<Exec>("randomizedJar") {
+    group = "build"
+    description = "Produces the class-name-randomized delivery jar (the official binary)."
+    dependsOn(distJar)
+
+    // 解释器名可覆盖：Windows 上通常是 python，其余平台是 python3。
+    val python = (findProperty("python") as? String) ?: "python3"
+    // 脚本在根项目下，dist 子项目要显式指回根。
+    val script = rootProject.layout.projectDirectory.file("tools/randomize/randomize.py").asFile
+    val srcJar = distJar.flatMap { it.archiveFile }
+    val outJar = layout.buildDirectory.file("libs/nocturne-${project.version}-randomized.jar")
+
+    inputs.file(script)
+    inputs.files(srcJar)
+    outputs.file(outJar)
+
+    doFirst {
+        outJar.get().asFile.parentFile.mkdirs()
+        val args = mutableListOf(python, script.absolutePath,
+            "--in", srcJar.get().asFile.absolutePath,
+            "--out", outJar.get().asFile.absolutePath,
+            "--prefix", "dev/nocturne")
+        // 不给 --salt 时工具自行取随机种子（每次官方构建都不同）；
+        // CI 传 -PclassSalt=<固定值> 即可得到可复现产物。
+        (findProperty("classSalt") as? String)?.takeIf { it.isNotBlank() }?.let {
+            args += listOf("--salt", it)
+        }
+        commandLine(args)
+    }
+}
+
 tasks.named("assemble") {
     dependsOn(distJar)
 }

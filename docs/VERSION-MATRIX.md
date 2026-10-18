@@ -135,6 +135,32 @@
 >   钩子失效无从发现。
 
 
+> **P4-F 固定管线代崩溃 / 字号 / 中文（2026-10-18，真机 1.12.2 通过）**
+>
+> **① 注入后 15–60 秒崩溃（1.8.9 + 1.12.2）**：三次崩溃栈完全一致，落在 MC 自己的
+> `EntityRenderer.updateCameraAndRender`，解引用的是 `Minecraft.player`（`LocalPlayer` stub 为
+> `bew`/`bud`，经本项目映射表确认）。根因是 `ForeignScreenGuard.applyLegacyFocusFlag`：
+> 它每帧按 `!guiOpen` 写 `Minecraft.inGameHasFocus`，**主菜单也照写 → 把游戏置成"在游戏中"**，
+> 而主菜单里 `player` 是 null。修法：只在「界面打开 **且** 在世界里」时压制，并且先记下游戏
+> 原值、关闭时恢复到原值（主菜单原本是 false，绝不能被写成 true）。
+> A/B：修前两次运行均在 15–60 s 内崩；修后同一流程持续存活、无新崩溃报告。
+> 对照实验另证：注入但不安装叠加层（钩子照旧）时也稳定 → 崩溃由叠加层触发，钩子无关。
+>
+> **② 字号太小**：`GlRenderer` 自动缩放用 `round(min(w,h)/320)`，854×480 的窗口被算成 2 倍
+> （逻辑 427×240），设计缩放掉到 0.41、字约 4px。改为 `floor(min(w,h)/540)`（540 = 设计稿高度）、
+> 下限 1 倍：同窗口逻辑 854×480、设计缩放 0.86（字约 8.4px）。手动 `=` / `-` 仍然可调。
+>
+> **③ 中文化**：新增 `fatality/FaStrings`（英文→中文对照，只作用于**显示层**；模块名/参数名
+> 仍是英文键，不动注册表/搜索/持久化契约）。翻译挂在 `FaDraw` 的三个对齐变体（先翻译再量宽，
+> 保证右对齐/居中不偏）与 `BackendFaDraw.text`；搜索框输入中文会先映射回英文名再匹配。
+> 正文/标签字体本来就是 MiSans（含中文），无需额外字体回退。
+>
+> **④ 审计带来的附加修复**：`ModernGlApi` 混合因子查询常量 0x0C30–0x0C33 → 0x80C9/0x80C8/0x80CB/0x80CA
+> （核心 profile 下旧值是 GL_INVALID_ENUM，还原会用到垃圾因子）；`NocturneRuntime.onFrame` 给
+> `driveModules()` 加兜底（帧钩子里的异常会直接逃进 `Display.update` 打崩游戏）；
+> `GlRenderer.deleteTexture` 补 `id<=0` 契约；`GuiOverlay.dispatchKeys` 补派发
+> Backspace/Enter/Delete/Tab/方向键（此前文本框能输入、能粘贴，但删不掉也提交不了）。
+
 > **P4-E `gl-core` 纹理上传崩溃修复（2026-10-18，真机 1.21.11 通过，含 A/B 因果与算式证明）**：
 > 新界面第一次在真实 `gl-core`（1.21.11 + Fabric 0.19.5 + LWJGL 3.3.3 + NVIDIA 610.74）上跑，
 > 首个纹理上传就把 JVM 打崩：`EXCEPTION_ACCESS_VIOLATION`，problematic frame `nvoglv64.dll`，

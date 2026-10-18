@@ -24,6 +24,9 @@ import java.util.Map;
  */
 public final class NocturneRuntime {
 
+    /** 上次打印 driveModules 失败的时间（毫秒）；限流用，避免每帧刷屏。 */
+    private static long lastDriveFailureLogAt;
+
     /** bootstrap 层分发器的全限定名。 */
     private static final String DISPATCHER_CLASS = "dev.nocturne.client.runtime.FrameDispatcher";
 
@@ -256,7 +259,17 @@ public final class NocturneRuntime {
         // P6-2：每帧广播一次渲染事件（ESP/Tracers 这类世界叠加绘制的触发点）。
         // 广播异常由 EventBus 限流隔离，不会打断 tick；客户端尚未 boot 时静默跳过。
         postRenderEvent();
-        driveModules();
+        try {
+            driveModules();
+        } catch (Throwable t) {
+            // 帧钩子插在 Display.update()/glfwSwapBuffers 的第一条指令前：这里抛出去的异常会
+            // 直接逃进游戏交换点把游戏打崩。每个被调方内部都有隔离，但这一层必须自己兜住。
+            long now = System.currentTimeMillis();
+            if (now - lastDriveFailureLogAt > 5000L) {
+                lastDriveFailureLogAt = now;
+                System.out.println("[nocturne] driveModules failed: " + t);
+            }
+        }
     }
 
     /** 广播 {@link dev.nocturne.client.event.RenderEvent}；客户端未就绪时无副作用。 */

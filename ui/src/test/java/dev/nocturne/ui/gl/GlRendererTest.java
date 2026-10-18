@@ -175,12 +175,12 @@ class GlRendererTest {
         FakeGl.viewport = new int[]{0, 0, 1280, 720};
         renderer.beginFrame();
 
-        // 物理 1280x720 → uiScale=2（按基准高度 400 取整）→ 逻辑 640x360。
+        // 物理 1280x720 → uiScale=1（按设计高度 540 向下取整：720/540=1）→ 逻辑 1280x720。
         // width()/height() 返回的是**逻辑**尺寸：它与 ortho、与所有绘制坐标同源，
         // 输入层的鼠标换算（surface/window）也因此自动跟随，不需要各自处理缩放。
-        assertEquals(2, renderer.scale());
-        assertEquals(640, renderer.width());
-        assertEquals(360, renderer.height());
+        assertEquals(1, renderer.scale());
+        assertEquals(1280, renderer.width());
+        assertEquals(720, renderer.height());
         // 投影矩阵被压入并重置后切回模型视图，两次切换说明矩阵栈确实被接管
         assertEquals(2, FakeGl.matrixModeCalls);
         assertEquals(GlApi.GL_MODELVIEW, FakeGl.lastMatrixMode);
@@ -198,7 +198,7 @@ class GlRendererTest {
         assertTrue(FakeGl.hasEvent("loadIdentity@" + GlApi.GL_MODELVIEW),
                 "model view matrix must be reset after switching back");
         // 下边界 = 逻辑高、上边界 = 0：y 轴因此向下增长，与屏幕坐标一致
-        assertArrayEquals(new double[]{0d, 640d, 360d, 0d, -1d, 1d}, FakeGl.lastOrtho, 1e-6);
+        assertArrayEquals(new double[]{0d, 1280d, 720d, 0d, -1d, 1d}, FakeGl.lastOrtho, 1e-6);
 
         renderer.endFrame();
         // 还原同样切换两次（投影 + 模型视图），累计四次
@@ -223,9 +223,9 @@ class GlRendererTest {
 
         FakeGl.viewport = new int[]{0, 0, 2560, 1440};
         renderer.beginFrame();
-        assertEquals(5, renderer.scale(), "2K/1440p 放大 5 倍（基准 320）");
-        assertEquals(512, renderer.width());
-        assertEquals(288, renderer.height());
+        assertEquals(2, renderer.scale(), "1440p 放大 2 倍（设计高度 540 向下取整）");
+        assertEquals(1280, renderer.width());
+        assertEquals(720, renderer.height());
         renderer.endFrame();
     }
 
@@ -239,8 +239,8 @@ class GlRendererTest {
     void scaleOverrideReplacesAutomaticValue() {
         FakeGl.viewport = new int[]{0, 0, 1280, 720};
         renderer.beginFrame();
-        assertEquals(2, renderer.scale(), "自动值：1280x720 按基准 320 得 2");
-        assertEquals(640, renderer.width());
+        assertEquals(1, renderer.scale(), "自动值：1280x720 按设计高度 540 向下取整得 1");
+        assertEquals(1280, renderer.width());
         renderer.endFrame();
 
         renderer.setScaleOverride(6);
@@ -257,8 +257,8 @@ class GlRendererTest {
 
         renderer.setScaleOverride(0);
         renderer.beginFrame();
-        assertEquals(2, renderer.scale(), "0 = 回到自动");
-        assertEquals(640, renderer.width());
+        assertEquals(1, renderer.scale(), "0 = 回到自动（设计高度 540 向下取整）");
+        assertEquals(1280, renderer.width());
         renderer.endFrame();
     }
 
@@ -346,10 +346,10 @@ class GlRendererTest {
 
         renderer.pushClip(10f, 20f, 100f, 50f);
         assertEquals(1, FakeGl.scissorCalls);
-        // GUI 坐标是逻辑坐标（800x600 物理 → uiScale=2 → 逻辑 400x300）：
-        // scissor 用的是窗口物理像素，因此先 ×2 得 (20,40,200,100)，
-        // GUI 的 y=40..140 在 600 高的物理视口里对应 GL 的 y=460..560。
-        assertArrayEquals(new int[]{20, 460, 200, 100}, FakeGl.lastScissor);
+        // GUI 坐标是逻辑坐标（800x600 物理 → uiScale=1 → 逻辑 800x600）：
+        // scissor 用的是窗口物理像素，因此坐标不变即 (10,20,100,50)，
+        // GUI 的 y=20..70 在 600 高的物理视口里对应 GL 的 y=530..580。
+        assertArrayEquals(new int[]{10, 530, 100, 50}, FakeGl.lastScissor);
 
         renderer.popClip();
         renderer.endFrame();
@@ -370,7 +370,7 @@ class GlRendererTest {
         assertTrue(FakeGl.isCapEnabled(GlApi.GL_SCISSOR_TEST));
         assertEquals(1, FakeGl.enableCount(GlApi.GL_SCISSOR_TEST));
         // scissor 矩形必须先下发，再打开裁剪测试（坐标同上：逻辑 × uiScale）
-        int scissor = FakeGl.indexOf("scissor:20,460,200,100", 0);
+        int scissor = FakeGl.indexOf("scissor:10,530,100,50", 0);
         int enable = FakeGl.indexOf("enable:" + GlApi.GL_SCISSOR_TEST, 0);
         assertTrue(scissor >= 0 && enable > scissor, "scissor box must be set before enabling the test");
 

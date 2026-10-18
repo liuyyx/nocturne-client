@@ -62,6 +62,7 @@ public final class NocturneAgent {
      */
     private static volatile String mcVersion = "unknown";
 
+
     private NocturneAgent() {
         // 纯静态工具类，禁止实例化
     }

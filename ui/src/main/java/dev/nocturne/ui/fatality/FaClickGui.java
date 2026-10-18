@@ -1035,6 +1035,11 @@ public final class FaClickGui implements OverlayGui {
     /** 应用搜索词：收窄卡片与行。 */
     private void setQuery(String text) {
         String next = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        // 中文界面下按中文名搜索：先把输入映射回英文名再匹配（数据侧键始终是英文）。
+        String mapped = FaStrings.searchKey(next);
+        if (!mapped.equals(next)) {
+            next = mapped.toLowerCase(Locale.ROOT);
+        }
         boolean changed = !next.equals(query);
         query = next;
         if (query.isEmpty()) {

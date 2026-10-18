@@ -136,12 +136,15 @@ abstract class FaDraw {
 
     /** 右对齐、垂直居中。 */
     final void textRightMid(String text, float right, float centerY, FaFont font, int argb) {
-        textMid(text, right - font.width(text), centerY, font, argb);
+        // 先翻译再量宽：对齐必须基于**实际画出来的字**，否则右对齐会偏。
+        String shown = FaStrings.t(text);
+        textMid(shown, right - font.width(shown), centerY, font, argb);
     }
 
     /** 水平垂直居中。 */
     final void textCenter(String text, float centerX, float centerY, FaFont font, int argb) {
-        textMid(text, centerX - font.width(text) * 0.5f, centerY, font, argb);
+        String shown = FaStrings.t(text);
+        textMid(shown, centerX - font.width(shown) * 0.5f, centerY, font, argb);
     }
 
     /** 以 (centerX, centerY) 为中心画一个图标字形。 */

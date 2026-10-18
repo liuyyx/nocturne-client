@@ -107,6 +107,21 @@ public final class GuiOverlay implements FrameListener {
 
     /** 可打印键上一帧是否按下，下标与 {@link KeyChars#keys()} 对齐。 */
     private final boolean[] charWasDown;
+    /**
+     * 不可打印但界面必须收到的键（删除/提交/方向）。
+     *
+     * <p>这些键既不在 {@link KeyChars#keys()} 里、也不会合成字符，早先因此从来没被派发：
+     * 搜索框/数值输入/HEX 输入能打字、能粘贴，但**退格删不掉、回车提交不了**。
+     */
+    private static final int[] SPECIAL_KEYS = {
+            8,   // VK_BACK_SPACE
+            10,  // VK_ENTER
+            127, // VK_DELETE
+            9,   // VK_TAB
+            37, 38, 39, 40, // 方向键
+    };
+    /** 特殊键上一帧是否按下，下标与 {@link #SPECIAL_KEYS} 对齐。 */
+    private final boolean[] specialWasDown = new boolean[SPECIAL_KEYS.length];
     /** 打印过一次的字符合成诊断是否已输出。 */
     private boolean loggedFirstChar;
 
@@ -234,28 +249,6 @@ public final class GuiOverlay implements FrameListener {
         //（点模块顺带按到「回到游戏」、Esc 顺带打开暂停菜单）。状态放在 bootstrap 层，游戏类看得到。
         InputBlock.setBlocked(gui.isOpen());
         boolean toggleDown = input.keyDown(toggleKey);
-        if (!loggedShiftProbe && (input.keyDown(KeyMap.VK_LEFT_SHIFT)
-                || input.keyDown(KeyMap.VK_RIGHT_SHIFT))) {
-            loggedShiftProbe = true;
-            // 一次性诊断：左右 Shift 在输入层是"看得见"还是"看不见"，决定"开关键没反应"往哪查。
-            System.out.println("[nocturne] shift probe: left=" + input.keyDown(KeyMap.VK_LEFT_SHIFT)
-                    + " right=" + input.keyDown(KeyMap.VK_RIGHT_SHIFT)
-                    + " toggleKey=" + toggleKey + " backend=" + input.describe());
-        }
-        if (toggleDown && !loggedToggleSeen) {
-            loggedToggleSeen = true;
-            // 一次性诊断：开关键"按了没反应"要先分清是"键没到输入层"还是"开关逻辑没跑"。
-            System.out.println("[nocturne] toggle key seen down: vk=" + toggleKey
-                    + " backend=" + input.describe());
-        }
-        if (!loggedFirstInput) {
-            loggedFirstInput = true;
-            // 首次进入叠加层时把输入侧的真实状态打出来：按键「没反应」时，
-            // 这行能直接区分「输入源没解析出来」与「键没被按下」。
-            System.out.println("[nocturne] overlay first frame: input=" + input.describe()
-                    + " mouse=" + Math.round(mx) + "," + Math.round(my)
-                    + " toggleKey=" + toggleKey + " down=" + toggleDown);
-        }
         if (toggleDown && !toggleWasDown) {
             gui.toggle();
             if (gui.isOpen()) {
@@ -417,6 +410,15 @@ public final class GuiOverlay implements FrameListener {
      * @param modifiers 本帧修饰位
      */
     private void dispatchKeys(int modifiers) {
+        // 先派发不可打印键：退格/回车/方向键走 keyPressed，不参与字符合成。
+        for (int i = 0; i < SPECIAL_KEYS.length; i++) {
+            boolean down = input.keyDown(SPECIAL_KEYS[i]);
+            boolean fresh = down && !specialWasDown[i];
+            specialWasDown[i] = down;
+            if (fresh) {
+                gui.keyPressed(SPECIAL_KEYS[i], modifiers);
+            }
+        }
         int[] keys = KeyChars.keys();
         boolean shift = (modifiers & MOD_SHIFT) != 0;
         boolean control = (modifiers & MOD_CTRL) != 0;

@@ -172,7 +172,8 @@ final class BackendFaDraw extends FaDraw {
         if (value == null || value.isEmpty() || alpha() == 0 || font == null) {
             return;
         }
-        font.draw(renderer, value, gx(x), gy(y), modulate(argb));
+        // 显示层统一翻译（幂等：词条键是英文，中文再查一次查不到，原样返回）。
+        font.draw(renderer, FaStrings.t(value), gx(x), gy(y), modulate(argb));
     }
 
     @Override

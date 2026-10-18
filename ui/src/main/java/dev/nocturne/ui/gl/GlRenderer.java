@@ -37,13 +37,14 @@ public final class GlRenderer implements UiBackend {
     private boolean clipOverflowWarned;
 
     /**
-     * UI 缩放的基准高度（物理像素）。
+     * UI 缩放的基准高度（物理像素）＝ 当前界面设计稿的高度。
      *
-     * <p>屏幕越高，UI 按越大的整数倍放大。取值使 854×480 这类小窗保持 1 倍（不缩小），
-     * 而 1080p 得到 3 倍、1440p/2K 得到 4~5 倍——界面元素都是固定像素尺寸写的，
-     * 不缩放就会在高分屏上"十分小"。
+     * <p>界面按 744×540 的设计尺寸写，自身还会按绘制区再等比缩一次（见
+     * {@code FaClickGui.updateScale}）。所以自动缩放要做的是「把逻辑尺寸放到接近 540 高」，
+     * 而不是把小窗再除一遍——旧值 320 + 四舍五入会把 854×480 的窗口算成 2 倍（逻辑 427×240），
+     * 设计缩放随之掉到 0.41，字只有 4px（真机反馈「字太小」）。
      */
-    private static final int UI_BASE_HEIGHT = 320;
+    private static final int UI_BASE_HEIGHT = 540;
 
     /** 自动缩放上限：再大会让 1px 描边与圆角显得过粗。 */
     private static final int UI_MAX_SCALE = 8;
@@ -360,6 +361,9 @@ public final class GlRenderer implements UiBackend {
 
     @Override
     public void deleteTexture(int id) {
+        if (id <= 0) {
+            return;   // 契约：id<=0 忽略（与另外两个后端一致）
+        }
         gl.deleteTexture(id);
     }
 
@@ -472,7 +476,8 @@ public final class GlRenderer implements UiBackend {
      */
     private static int computeUiScale(int rawWidth, int rawHeight) {
         int shorter = Math.min(rawWidth, rawHeight);
-        int scale = Math.max(1, Math.round(shorter / (float) UI_BASE_HEIGHT));
+        // 向下取整：宁可让界面保持设计尺寸（并在绘制区里等比缩小一点），也不要把字缩到看不清。
+        int scale = Math.max(1, shorter / UI_BASE_HEIGHT);
         return Math.min(scale, UI_MAX_SCALE);
     }
 

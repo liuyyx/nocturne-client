@@ -38,8 +38,14 @@ final class ForeignScreenGuard implements FrameListener {
     /** 只记一次"顶替了谁"的日志：每帧都打会把游戏日志刷爆。 */
     private boolean loggedOnce;
 
-    /** 上一次下发的「游戏是否处理鼠标」期望值；null = 尚未成功下发过。 */
-    private Boolean gameInputApplied;
+    /**
+     * 我们改动 {@code inGameHasFocus} **之前**游戏自己的值；null = 我们没改过它。
+     *
+     * <p>必须是"改前的原值"而不是"我们想要的期望值"：主菜单里游戏的值本来就是 false，
+     * 早先按 {@code !guiOpen} 写回 true，等于把游戏强行置成"在游戏中"——此时 {@code player}
+     * 为 null，EntityRenderer 一帧后就在 {@code mc.player} 上 NPE（1.8.9/1.12.2 实测崩溃）。
+     */
+    private Boolean savedFocus;
 
     /** 是否**由我们**放开了游戏的鼠标抓取（关闭界面时要还回去）。 */
     private boolean mouseReleased;
@@ -212,23 +218,36 @@ final class ForeignScreenGuard implements FrameListener {
      * @param guiOpen 我们的界面是否打开
      */
     private void applyLegacyFocusFlag(boolean guiOpen) {
-        boolean wantGameInput = !guiOpen;
-        Boolean applied = gameInputApplied;
-        if (applied != null && applied.booleanValue() == wantGameInput) {
-            return;   // 期望值没变，不重复写
-        }
         Object minecraft = bridge.minecraft();
         if (minecraft == null) {
             return;
         }
-        if (!bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus", wantGameInput)) {
-            return;   // 该版本没有这个字段（或写失败）：维持原状
+        boolean suppress = guiOpen && bridge.inWorld();
+        if (suppress) {
+            if (savedFocus == null) {
+                Object current = bridge.readField(minecraft, ClassType.MINECRAFT, "inGameHasFocus");
+                if (!(current instanceof Boolean)) {
+                    return;   // 该版本没有这个字段：交给 MouseHandler 那条路
+                }
+                savedFocus = (Boolean) current;
+            }
+            if (!Boolean.TRUE.equals(savedFocus)) {
+                return;       // 游戏本来就没在处理输入，不需要压制
+            }
+            if (bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus", false)
+                    && !loggedInputSuppression) {
+                loggedInputSuppression = true;
+                System.out.println("[nocturne] game mouse handling suppressed while our GUI is open"
+                        + " (Minecraft.inGameHasFocus=false)");
+            }
+            return;
         }
-        gameInputApplied = wantGameInput;
-        if (!wantGameInput && !loggedInputSuppression) {
-            loggedInputSuppression = true;
-            System.out.println("[nocturne] game mouse handling suppressed while our GUI is open"
-                    + " (Minecraft.inGameHasFocus=false)");
+        // 只在"确实由我们压过"时才恢复，而且恢复到**改前的原值**：
+        // 主菜单（原本就是 false）绝不能因此被置成 true。
+        if (savedFocus != null) {
+            bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus",
+                    savedFocus.booleanValue());
+            savedFocus = null;
         }
     }
 
@@ -252,13 +271,13 @@ final class ForeignScreenGuard implements FrameListener {
                 }
                 mouseReleased = false;
             }
-            if (Boolean.FALSE.equals(gameInputApplied)) {
+            if (savedFocus != null) {
                 Object minecraft = bridge.minecraft();
-                if (minecraft != null
-                        && bridge.writeField(minecraft, ClassType.MINECRAFT,
-                                "inGameHasFocus", true)) {
-                    gameInputApplied = Boolean.TRUE;
+                if (minecraft != null) {
+                    bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus",
+                            savedFocus.booleanValue());
                 }
+                savedFocus = null;
             }
         } catch (Throwable ignored) {
             // 尽力而为：恢复失败也不该影响 panic 的其余步骤

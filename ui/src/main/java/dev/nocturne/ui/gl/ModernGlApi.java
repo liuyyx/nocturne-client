@@ -730,7 +730,10 @@ public final class ModernGlApi {
         if (getIntegervBuffer != null && viewportStaging != null) {
             // GL_BLEND_SRC_RGB / GL_BLEND_DST_RGB / GL_BLEND_SRC_ALPHA / GL_BLEND_DST_ALPHA
             // 一次 getIntegerv 只能查一个平面；这里用四个单独查询（视口以内）。查不到就返回 null。
-            int[][] queries = {{0x0C30, 0x0C31}, {0x0C32, 0x0C33}};
+            // GL_BLEND_SRC_RGB=0x80C9, GL_BLEND_DST_RGB=0x80C8, GL_BLEND_SRC_ALPHA=0x80CB,
+            // GL_BLEND_DST_ALPHA=0x80CA。旧值 0x0C30-0x0C33 是 pre-1.4 的 token（核心 profile 下
+            // glGetIntegerv 直接 GL_INVALID_ENUM 且不写值），会让还原用到垃圾因子。
+            int[][] queries = {{0x80C9, 0x80C8}, {0x80CB, 0x80CA}};
             int[] prev = new int[4];
             for (int i = 0; i < 4; i++) {
                 int[] read = getInteger(queries[i / 2][i % 2], 1);

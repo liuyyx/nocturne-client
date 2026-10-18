@@ -56,6 +56,8 @@ public final class ReflectiveInput implements InputSource {
     private final Method mouseGetDWheel;
     private final Method mouseSetGrabbed;
     private final Method keyboardIsKeyDown;
+    /** LWJGL2 的 {@code Keyboard.poll()}：刷新 isKeyDown 读取的按键缓冲。 */
+    private final Method keyboardPoll;
     private final Method displayGetWidth;
     private final Method displayGetHeight;
 
@@ -142,7 +144,8 @@ public final class ReflectiveInput implements InputSource {
             this.mouseIsButtonDown = mIsButtonDown;
             this.mouseGetDWheel = mGetDWheel;
             this.mouseSetGrabbed = mSetGrabbed;
-            this.keyboardIsKeyDown = kIsKeyDown;
+                this.keyboardIsKeyDown = kIsKeyDown;
+            this.keyboardPoll = keyboard == null ? null : Reflect.method(keyboard, "poll");
             this.displayGetWidth = dGetWidth;
             this.displayGetHeight = dGetHeight;
             this.glfwGetCursorPos = null;
@@ -224,6 +227,7 @@ public final class ReflectiveInput implements InputSource {
         this.mouseGetDWheel = null;
         this.mouseSetGrabbed = null;
         this.keyboardIsKeyDown = null;
+        this.keyboardPoll = null;
         this.displayGetWidth = null;
         this.displayGetHeight = null;
         this.glfwGetCursorPos = gCursorPos;
@@ -351,6 +355,7 @@ public final class ReflectiveInput implements InputSource {
         return Double.longBitsToDouble(bits);
     }
 
+
     @Override
     public boolean keyDown(int key) {
         // 对外键码是 AWT VK，先翻译到本后端的键码；未映射返回 -1。
@@ -359,6 +364,10 @@ public final class ReflectiveInput implements InputSource {
             if (code < 0) {
                 return false;
             }
+            // LWJGL2 的 isKeyDown 读的是 `Keyboard.poll()` 刷新的缓冲，而 MC 只在它自己消费
+            // 键盘事件时才 poll；我们每帧在帧钩子里读，可能读到上一帧甚至更早的状态。这里补一次
+            // poll（只读设备状态，无副作用），保证读的是「此刻」。
+            Reflect.call(keyboardPoll, null);
             Object down = Reflect.call(keyboardIsKeyDown, null, code);
             return Boolean.TRUE.equals(down);
         }

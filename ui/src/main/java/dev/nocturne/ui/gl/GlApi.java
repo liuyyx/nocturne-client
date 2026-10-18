@@ -69,6 +69,15 @@ public final class GlApi {
     public static final int GL_RGBA = 6408;
     /** 像素分量类型：每通道 8 位无符号。 */
     public static final int GL_UNSIGNED_BYTE = 5121;
+    /**
+     * {@code glGetIntegerv} 的参数：当前绑定的 2D 纹理句柄（{@code GL_TEXTURE_BINDING_2D}）。
+     *
+     * <p>用它来「帧末把真实绑定恢复成游戏以为的那个」：游戏 {@code GlStateManager} 缓存着
+     * 自己的绑定 id，我们直接 {@code glBindTexture} 会跳过缓存 → 游戏之后不再重绑，
+     * 于是采样到我们的图集（1.8.9 实测：整个背景变白）。
+     */
+    public static final int GL_TEXTURE_BINDING_2D = 0x8069;
+
     /** {@code glPixelStorei} 的参数：解包时的行对齐字节数。 */
     public static final int GL_UNPACK_ALIGNMENT = 3317;
     /**
@@ -710,6 +719,24 @@ public final class GlApi {
         Reflect.call(texImage2D, null, GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                 GL_RGBA, GL_UNSIGNED_BYTE, buffer);
         return true;
+    }
+
+    /** @return 当前绑定的 2D 纹理；查询失败时返回 {@code -1} */
+    public int boundTexture() {
+        int[] out = new int[1];
+        if (getIntegerv != null) {
+            // LWJGL2 的形态：glGetInteger(int, IntBuffer)（1.8.9/1.12.2 实测只有这一种）。
+            Reflect.call(getIntegerv, null, GL_TEXTURE_BINDING_2D, out);
+            return out[0];
+        }
+        if (getIntegervBuffer != null) {
+            viewportBuffer.clear();
+            viewportBuffer.limit(1);
+            Reflect.call(getIntegervBuffer, null, GL_TEXTURE_BINDING_2D, viewportBuffer);
+            viewportBuffer.flip();
+            return viewportBuffer.remaining() > 0 ? viewportBuffer.get(0) : -1;
+        }
+        return -1;
     }
 
     /** 设置纹理采样参数（对应 {@code glTexParameteri}）。 */

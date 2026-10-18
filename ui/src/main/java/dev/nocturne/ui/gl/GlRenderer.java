@@ -31,6 +31,14 @@ public final class GlRenderer implements UiBackend {
     private boolean statePushed;
     /** 嵌套裁剪的矩形栈，元素为 {@code {x, y, width, height}}（GL 坐标系，原点左下）。 */
     private final int[][] clipStack = new int[MAX_CLIP_DEPTH][];
+    /**
+     * 本帧开始时游戏绑定的 2D 纹理（-1 = 未取到）。
+     *
+     * <p>我们的图集绑定是直接 {@code glBindTexture}，绕过了游戏 {@code GlStateManager} 的绑定缓存；
+     * 若不还原，游戏会认为它自己的纹理仍绑定着、跳过重绑，随后所有绘制都采样我们的图集。
+     * 1.8.9 真机症状：一开界面整个背景变白。
+     */
+    private int savedTextureBinding = -1;
     /** 当前裁剪嵌套深度（含因栈满被忽略的层）；为 0 表示未启用裁剪。 */
     private int clipDepth;
     /** 裁剪栈溢出是否已提示过；保证只打印一次，避免每帧刷屏。 */
@@ -230,6 +238,8 @@ public final class GlRenderer implements UiBackend {
         gl.disable(GlApi.GL_TEXTURE_2D);
         gl.enable(GlApi.GL_BLEND);
         gl.blendFunc(GlApi.GL_SRC_ALPHA, GlApi.GL_ONE_MINUS_SRC_ALPHA);
+        // 绑定也必须还原（见 savedTextureBinding）：GL 的绑定与游戏缓存是两套状态。
+        savedTextureBinding = gl.boundTexture();
         statePushed = true;
     }
 
@@ -246,6 +256,12 @@ public final class GlRenderer implements UiBackend {
             gl.popMatrix();
             gl.matrixMode(GlApi.GL_MODELVIEW);
             gl.popMatrix();
+            // 把真实绑定还原成游戏以为的那个：游戏缓存从不参与我们的 glBindTexture，
+            // 恢复真实状态等于让两套状态重新对齐（否则背景变白/纹理错乱）。
+            if (savedTextureBinding >= 0) {
+                gl.bindTexture2D(savedTextureBinding);
+                savedTextureBinding = -1;
+            }
             // 这里**不再** popAttrib：状态改动都经 GlStateManager（缓存同步），
             // 属性栈回滚只会把真实状态与缓存再拆开一次（见 beginFrame 的说明）。
             statePushed = false;
@@ -376,20 +392,25 @@ public final class GlRenderer implements UiBackend {
         gl.bindTexture2D(texture);
         // 纹理开关经 GlStateManager（缓存同步）；画完必须关掉，否则后续无纹理坐标的图元会去采样图集
         //（游戏字体渲染器与我们的 fillRect 都假设它可以是开的，但只有我们自己会开它）。
+        // 用 try/finally：组件树中途抛异常也不能把 GL_TEXTURE_2D 留在开启态——那会让游戏后面
+        // 所有无纹理图元都去采样我们的图集，整屏发白且界面不显示。
         gl.enable(GlApi.GL_TEXTURE_2D);
-        gl.color(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f, (argb & 0xFF) / 255f,
-                ((argb >>> 24) & 0xFF) / 255f);
-        gl.begin(GlApi.GL_QUADS);
-        gl.texCoord(u0, v0);
-        gl.vertex(x, y);
-        gl.texCoord(u1, v0);
-        gl.vertex(x + width, y);
-        gl.texCoord(u1, v1);
-        gl.vertex(x + width, y + height);
-        gl.texCoord(u0, v1);
-        gl.vertex(x, y + height);
-        gl.end();
-        gl.disable(GlApi.GL_TEXTURE_2D);
+        try {
+            gl.color(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f, (argb & 0xFF) / 255f,
+                    ((argb >>> 24) & 0xFF) / 255f);
+            gl.begin(GlApi.GL_QUADS);
+            gl.texCoord(u0, v0);
+            gl.vertex(x, y);
+            gl.texCoord(u1, v0);
+            gl.vertex(x + width, y);
+            gl.texCoord(u1, v1);
+            gl.vertex(x + width, y + height);
+            gl.texCoord(u0, v1);
+            gl.vertex(x, y + height);
+            gl.end();
+        } finally {
+            gl.disable(GlApi.GL_TEXTURE_2D);
+        }
     }
 
     @Override

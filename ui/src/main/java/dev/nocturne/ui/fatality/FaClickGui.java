@@ -177,11 +177,15 @@ public final class FaClickGui implements OverlayGui {
         float maxScroll;
     }
 
+    /** 顶部语言芯片的矩形（设计坐标，{@code x,y,w,h}）；绘制时更新，点击时命中测试。 */
+    private final float[] langChip = {0.0f, 0.0f, 0.0f, 0.0f};
+
     /**
      * @param registry 模块注册表；界面据此列出各分类的模块
      */
     public FaClickGui(final ModuleRegistry registry) {
         this.registry = registry;
+        FaStrings.setChinese(LayoutStore.savedChinese());
         search.onChange(new java.util.function.Consumer<String>() {
             @Override
             public void accept(String text) {
@@ -778,7 +782,22 @@ public final class FaClickGui implements OverlayGui {
             }
         }
 
-        draw.textRightMid(statusText(), wx + ww - 18.0f, mid, FaTheme.small(), FaTheme.MUTED);
+        String status = statusText();
+        draw.textRightMid(status, wx + ww - 18.0f, mid, FaTheme.small(), FaTheme.MUTED);
+        // 语言开关：右侧状态文本左边一枚小芯片，点一下中/英切换。
+        float chipW = 26.0f;
+        float chipH = 13.0f;
+        float chipX = wx + ww - 18.0f - FaTheme.small().width(status) - 10.0f - chipW;
+        float chipY = mid - chipH * 0.5f;
+        langChip[0] = chipX;
+        langChip[1] = chipY;
+        langChip[2] = chipW;
+        langChip[3] = chipH;
+        boolean chipHover = FaContext.inside(ctx.mouseX, ctx.mouseY, chipX, chipY, chipW, chipH);
+        draw.rect(chipX, chipY, chipW, chipH, 3.0f,
+                FaTheme.mix(FaTheme.TAB_ACTIVE, FaTheme.TAB_TEXT_HOVER, chipHover ? 0.35f : 0.0f));
+        draw.textCenter(FaStrings.isChinese() ? "中" : "EN", chipX + chipW * 0.5f, mid + 0.5f,
+                FaTheme.small(), chipHover ? FaTheme.TAB_TEXT_ACTIVE : FaTheme.TAB_TEXT);
     }
 
     /** @return 内容区左边缘 */
@@ -1130,6 +1149,13 @@ public final class FaClickGui implements OverlayGui {
                     return true;
                 }
             }
+            if (button == 0 && FaContext.inside(mx, my, langChip[0], langChip[1],
+                    langChip[2], langChip[3])) {
+                FaStrings.setChinese(!FaStrings.isChinese());
+                LayoutStore.saveChinese(FaStrings.isChinese());
+                layoutKey = "";
+                return true;
+            }
             if (button == 0) {
                 drag = 1;
                 dragOffsetX = (float) mx - wx;
@@ -1173,7 +1199,13 @@ public final class FaClickGui implements OverlayGui {
         }
         category = next;
         contentFade.snap(0.0f);
-        view().selected = null;
+        View view = view();
+        view.selected = null;
+        // 换分类必须复位滚动：否则新分类继承旧分类的滚动量，卡片从中间开始、半张被裁掉。
+        view.scroll = 0.0f;
+        view.scrollMotion.snap(0.0f);
+        view.sideScroll = 0.0f;
+        view.sideScrollMotion.snap(0.0f);
         layoutKey = "";
     }
 

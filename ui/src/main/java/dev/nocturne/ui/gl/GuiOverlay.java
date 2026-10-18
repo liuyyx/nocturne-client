@@ -168,16 +168,20 @@ public final class GuiOverlay implements FrameListener {
      * @param open 界面当前是否打开
      */
     private void handleScaleKeys(boolean open) {
-        boolean up = open && (input.keyDown(KEY_SCALE_UP) || input.keyDown(KEY_SCALE_UP_KEYPAD));
-        boolean down = open && (input.keyDown(KEY_SCALE_DOWN) || input.keyDown(KEY_SCALE_DOWN_KEYPAD));
+        // 沿检测必须按**原始按下状态**记录：若界面关着时把状态写成 false，
+        // 「关着按住缩放键、再打开界面」会在第一帧被误判成新按下，界面一开就跳一档。
+        boolean upRaw = input.keyDown(KEY_SCALE_UP) || input.keyDown(KEY_SCALE_UP_KEYPAD);
+        boolean downRaw = input.keyDown(KEY_SCALE_DOWN) || input.keyDown(KEY_SCALE_DOWN_KEYPAD);
+        boolean up = open && upRaw;
+        boolean down = open && downRaw;
         if (up && !scaleUpWasDown) {
             stepScale(1);
         }
         if (down && !scaleDownWasDown) {
             stepScale(-1);
         }
-        scaleUpWasDown = up;
-        scaleDownWasDown = down;
+        scaleUpWasDown = upRaw;
+        scaleDownWasDown = downRaw;
     }
 
     /**
@@ -234,6 +238,8 @@ public final class GuiOverlay implements FrameListener {
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
             escapeWasDown = input.keyDown(KEY_ESCAPE);
+            // 开关键也要取样：否则「用外部方式打开时开关键正按着」会在下一帧被当成新按下而立刻关掉界面。
+            toggleWasDown = input.keyDown(toggleKey);
             java.util.Arrays.fill(charWasDown, false);
         }
     }

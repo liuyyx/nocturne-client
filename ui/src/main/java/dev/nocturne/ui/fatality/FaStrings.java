@@ -17,6 +17,9 @@ import java.util.Map;
  */
 final class FaStrings {
 
+    /** 是否输出中文（默认中文；界面上可切换，并持久化到 clickgui.properties）。 */
+    private static volatile boolean chinese = true;
+
     /** 英文 → 中文。键必须与数据侧一模一样（区分大小写）。 */
     private static final Map<String, String> ZH = new HashMap<String, String>();
 
@@ -110,6 +113,12 @@ final class FaStrings {
         put("Close", "关闭");
         put("(empty)", "（空）");
         put("No results", "无结果");
+        put("Whitelist Only", "仅白名单");
+        put("Trajectory Color", "轨迹颜色");
+        put("Target Color", "目标颜色");
+        put("Use tracers", "使用追踪线");
+        put("Visible Color", "可见颜色");
+        put("Render Trapped Chests", "渲染陷阱箱");
         put("No modules", "无模块");
         put("Search modules and settings", "搜索模块与设置");
     }
@@ -123,6 +132,20 @@ final class FaStrings {
         EN.put(chinese, english);
     }
 
+    /** @return 当前是否为中文 */
+    static boolean isChinese() {
+        return chinese;
+    }
+
+    /**
+     * 切换界面语言。
+     *
+     * @param value {@code true} 中文、{@code false} 英文
+     */
+    static void setChinese(boolean value) {
+        chinese = value;
+    }
+
     /**
      * 把显示串翻成中文。
      *
@@ -131,6 +154,9 @@ final class FaStrings {
      */
     static String t(String text) {
         if (text == null || text.isEmpty()) {
+            return text;
+        }
+        if (!chinese) {
             return text;
         }
         String translated = ZH.get(text);

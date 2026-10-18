@@ -30,6 +30,8 @@ final class LayoutStore {
     private static float height = Float.NaN;
     /** 上次选中的分类名。 */
     private static String category = "";
+    /** 界面语言：{@code true} 中文、{@code false} 英文。 */
+    private static boolean chinese = true;
     /** 是否已从磁盘读过一次。 */
     private static boolean loaded;
     /** 读写失败是否已记过日志。 */
@@ -65,6 +67,18 @@ final class LayoutStore {
         return category == null ? "" : category;
     }
 
+    /** @return 上次选择的界面语言（默认中文） */
+    static boolean savedChinese() {
+        load();
+        return chinese;
+    }
+
+    /** 记录界面语言并写盘。 */
+    static void saveChinese(boolean value) {
+        chinese = value;
+        store();
+    }
+
     /** 记录窗口布局（内存），并写盘。 */
     static void save(float x, float y, float w, float h, String categoryName) {
         ratioX = x;
@@ -97,6 +111,7 @@ final class LayoutStore {
         width = parseFloat(properties.getProperty("width"), width);
         height = parseFloat(properties.getProperty("height"), height);
         category = properties.getProperty("category", category);
+        chinese = !"false".equalsIgnoreCase(properties.getProperty("chinese", "true"));
     }
 
     /** 写盘；失败只记一次日志。 */
@@ -108,6 +123,7 @@ final class LayoutStore {
         properties.setProperty("width", Float.toString(width));
         properties.setProperty("height", Float.toString(height));
         properties.setProperty("category", category == null ? "" : category);
+        properties.setProperty("chinese", Boolean.toString(chinese));
         try {
             Path parent = path.getParent();
             if (parent != null) {

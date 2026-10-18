@@ -64,16 +64,18 @@ public final class LogPane extends JPanel {
     public LogPane() {
         super(new BorderLayout());
         setOpaque(false);
+        // 日志是整条构图的最后一段：顶缘发丝线把它与操作坞分开，不再套卡片。
+        setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, AppTheme.BORDER_SOFT));
 
         area.setEditable(false);
         area.setOpaque(true);
-        area.setBackground(AppTheme.PANEL);
+        area.setBackground(AppTheme.BACKGROUND);
         // 等宽族，字号继承自 L&F 基础字体（绝不用绝对磅值），并随运行时缩放更新。
         AppTheme.bindMonospacedFont(area, AppTheme.TYPE_MONO);
-        area.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
+        area.setBorder(BorderFactory.createEmptyBorder(10, 24, 10, 24));
         area.setDragEnabled(false);
 
-        // 禁止横向滚动：卡片宽度有限，横向滚动条会挤掉边框。JTextPane 默认按宽度折行。
+        // 禁止横向滚动：行宽由窗口决定，横向滚动条会挤掉底缘。JTextPane 默认按宽度折行。
         scroll = new JScrollPane(area);
         scroll.setOpaque(false);
         scroll.setBorder(BorderFactory.createEmptyBorder());
@@ -81,15 +83,8 @@ public final class LogPane extends JPanel {
         scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
 
-        // 圆角画在卡片上：viewport 是矩形且不透明的，画在滚动面板上会被内容盖住。
-        JPanel card = new JPanel(new BorderLayout());
-        card.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
-                "arc: " + AppTheme.RADIUS_CARD + "; border: 1,1,1,1,#1E2B45");
-        card.setBackground(AppTheme.PANEL);
-        card.add(scroll, BorderLayout.CENTER);
-
         attachContextMenu();
-        add(card, BorderLayout.CENTER);
+        add(scroll, BorderLayout.CENTER);
     }
 
     /**

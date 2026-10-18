@@ -5,7 +5,6 @@ import dev.nocturne.core.attach.Attacher;
 import dev.nocturne.core.attach.CurrentProcess;
 import dev.nocturne.core.attach.ProcessScanner;
 import dev.nocturne.core.attach.TargetHints;
-import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.BorderFactory;
@@ -36,19 +35,22 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 /**
- * 主窗口：左侧边栏、进程列表、操作按钮与底部状态栏。
+ * 主窗口：单栏指挥台构图——工具栏、全宽进程列表、操作坞、日志条，四段共用边缘。
  *
- * <p>所有布局都用 MigLayout；所有尺寸都由 {@link WindowGeometry} 以「逻辑像素」推导。扫描与
- * 注入都跑在 {@link SwingWorker} 上，因此整个过程界面保持可响应。
+ * <p>视觉为「夜航信标」：暖石墨底盘 + 钠灯琥珀强调。刻意不用任何内嵌卡片：窗口底色就是唯一的
+ * 面板色，进程表格直接坐在上面成为视觉主角，分段只靠 1px 发丝线。所有布局都用 MigLayout；
+ * 所有尺寸都由 {@link WindowGeometry} 以「逻辑像素」推导。扫描与注入都跑在 {@link SwingWorker}
+ * 上，因此整个过程界面保持可响应。
  *
- * <p>状态机：{@code scanButton} 在扫描或注入进行中禁用；{@code injectButton} 需要「有扫描结果」且
- * 「有选中行」且「既不在扫描也不在注入中」才可用，由 {@link #updateButtons()} 统一推导。列表区域在
- * {@link CardLayout} 上于骨架屏（{@link #CARD_SKELETON}）与表格（{@link #CARD_TABLE}）之间切换。
+ * <p>状态机：「扫描游戏」在扫描或注入进行中禁用；「注入」需要「有扫描结果」且「有选中行」且
+ * 「既不在扫描也不在注入中」才可用，由 {@link #updateButtons()} 统一推导。列表区域在
+ * {@link CardLayout} 上于空态（{@link #CARD_EMPTY}）、骨架屏（{@link #CARD_SKELETON}）与
+ * 表格（{@link #CARD_TABLE}）之间切换。
  */
 public final class MainWindow extends JFrame {
 
 
-    /** 显示在标题栏与状态栏的版本号。 */
+    /** 显示在标题栏与版本章的版本号。 */
     public static final String VERSION = "v0.1.0";
 
 
@@ -68,46 +70,49 @@ public final class MainWindow extends JFrame {
     /** 用户偏好；设置对话框直接原地修改它，关闭时落盘。 */
     private final AppConfig config;
 
-    /** 底部日志面板，仅追加。 */
+    /** 底部日志条，仅追加。 */
     private final LogPane log = new LogPane();
 
     /** 进程表格的数据模型，持有当前扫描结果。 */
     private final ProcessTableModel model = new ProcessTableModel();
 
-    /** 进程表格本体。 */
+    /** 进程表格本体，整个窗口的视觉主角。 */
     private final JTable table = new JTable(model);
 
-    /** 列表区域的卡片布局，用于在骨架屏与表格之间切换。 */
+    /** 列表区域的卡片布局，用于在空态/骨架屏/表格之间切换。 */
     private final CardLayout listCards = new CardLayout();
 
-    /** 承载上面两个卡片的容器。 */
+    /** 承载上面三个卡片的容器；直接坐在窗口底色上，无内嵌卡片。 */
     private final JPanel listArea = new JPanel(listCards);
 
-    /** 「扫描游戏」按钮。 */
+    /** 「扫描游戏」按钮（操作坞）。 */
     private final JButton scanButton = new JButton("扫描游戏");
 
     /** 「注入」按钮，初始禁用。 */
     private final JButton injectButton = new JButton("注入");
 
-    /** 错误提示行；用单个空格占位，避免切换文字时布局跳动。 */
+    /** 空状态里的主操作按钮：零结果/首次进入时把下一步动作直接摆到眼前。 */
+    private final JButton emptyScanButton = new JButton("扫描游戏");
+
+    /** 操作坞左侧的错误提示行；用单个空格占位，避免切换文字时布局跳动。 */
     private final JLabel errorLabel = new JLabel(" ");
 
-    /** 状态栏右侧的状态指示点。 */
+    /** 工具栏右侧的状态指示点。 */
     private final StatusDot statusDot = new StatusDot();
 
-    /** 状态栏里状态点旁的文字说明（空闲/扫描中…/注入成功 等）。 */
+    /** 工具栏里状态点旁的文字说明（空闲/扫描中…/注入成功 等）。 */
     private final JLabel statusText = new JLabel("空闲");
 
-    /** 内容区标题右侧的结果计数（「3 个进程」），无结果时为空。 */
+    /** 列表标题行右侧的结果计数（「3 个进程」），无结果时为空。 */
     private final JLabel countLabel = new JLabel(" ");
 
-    /** 空状态卡片的主标题。 */
+    /** 空状态的主标题。 */
     private final JLabel emptyTitle = new JLabel("尚未扫描");
 
-    /** 空状态卡片的提示行。 */
+    /** 空状态的提示行。 */
     private final JLabel emptyHint = new JLabel("点击「扫描游戏」查找正在运行的 Minecraft");
 
-    /** 扫描/注入进行中的不定态进度条；空闲时隐藏（布局用 hidemode 3 收掉它的高度）。 */
+    /** 扫描/注入进行中的不定态进度条；全宽贴在工具栏下沿，空闲时收起高度。 */
     private final javax.swing.JProgressBar progress = new javax.swing.JProgressBar();
 
     /** 鼠标当前悬停的表格行；{@code -1} 表示没有。只影响绘制，不影响选中态。 */
@@ -135,13 +140,23 @@ public final class MainWindow extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         // 尺寸与位置由逻辑分辨率推导，跨缩放比例表现一致。
         setBounds(WindowGeometry.initialBounds());
-        setMinimumSize(new Dimension(640, 440));
+        setMinimumSize(new Dimension(640, 460));
 
-        // 布局分两列两行：左列侧边栏 + 内容区，底部状态栏横跨两列。
-        setLayout(new MigLayout("insets 0, fill", "[232!][grow,fill]", "[grow,fill][40!]"));
-        add(buildSidebar(), "growy");
-        add(buildContent(), "grow");
-        add(buildStatusBar(), "newline, span 2, growx");
+        // 单栏四段：工具栏 / 进度条 / 列表 / 操作坞 / 日志条，全部共用窗口边缘。
+        // gap 0 0：段与段之间不允许出现默认间隙，发丝线必须互相贴合。
+        setLayout(new MigLayout("insets 0, fill, wrap 1, gap 0 0",
+                "[grow,fill]", "[56!][3!][grow,fill][64!][118!]"));
+        add(buildToolbar(), "grow");
+        add(buildProgressTrack(), "grow");
+        add(listArea, "grow");
+        add(buildDock(), "grow");
+        add(log, "grow");
+
+        // 添加顺序即默认卡片顺序；实际显示哪个由 listCards.show 决定。
+        listArea.setOpaque(false);
+        listArea.add(buildEmptyState(), CARD_EMPTY);
+        listArea.add(buildTableCard(), CARD_TABLE);
+        listArea.add(buildSkeletonCard(), CARD_SKELETON);
 
         // 初始进入空状态而不是空表格：零行表格会让用户误以为程序坏了。
         listCards.show(listArea, CARD_EMPTY);
@@ -165,166 +180,125 @@ public final class MainWindow extends JFrame {
                 + " configuredZoom=" + config.uiScale + "%");
     }
 
-    // ------------------------------------------------------------------ sidebar
+    // ------------------------------------------------------------------ toolbar
 
-    /** 构建左侧边栏：品牌标识、副标题与设置按钮。 */
-    private JPanel buildSidebar() {
-        JPanel sidebar = new JPanel(new MigLayout(
-                "insets " + AppTheme.SPACE_XL + " " + AppTheme.SPACE_L + " "
-                        + AppTheme.SPACE_XL + " " + AppTheme.SPACE_L + ", fillx, wrap 1",
-                "[grow,fill]", "[]6[]push[]"));
-        sidebar.setBackground(AppTheme.PANEL);
-        // 右侧一条 1px 竖线作为与内容区的分界，避免用额外面板撑开。
-        sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, AppTheme.BORDER_SOFT));
+    /**
+     * 构建进度条轨道：恒定 3px 高的空槽，进度条藏在槽内。
+     *
+     * <p>必须保持轨道常驻可见而不是隐藏进度条本身：MigLayout 对 hidemode 隐藏的组件会连同其行
+     * 约束一起从网格里抽掉，后续组件顺次吃掉前面的行规格（列表吃掉进度行的 3px、操作坞吃掉
+     * grow 行），整版布局随即错位。常驻轨道让「可见组件数 == 行规格数」恒成立。
+     */
+    private JPanel buildProgressTrack() {
+        JPanel track = new JPanel(new BorderLayout());
+        track.setOpaque(false);
+        progress.setIndeterminate(true);
+        progress.setVisible(false);
+        progress.setBorder(BorderFactory.createEmptyBorder());
+        track.add(progress, BorderLayout.CENTER);
+        return track;
+    }
 
-        // 品牌行：强调色方块标记 + 名称，形成明确的视觉锚点。
-        JPanel brand = new JPanel(new MigLayout("insets 0", "[]10[]", "[center]"));
-        brand.setOpaque(false);
-        brand.add(new BrandMark(), "h 18!, w 18!");
+    /**
+     * 构建顶部工具栏：左侧品牌（新月 + 字标 + 版本章），右侧状态读数与设置。
+     *
+     * <p>底缘一条发丝线把四段中的第一段剥出来。
+     */
+    private JPanel buildToolbar() {
+        JPanel bar = new JPanel(new MigLayout(
+                "insets 0 " + AppTheme.SPACE_XL + " 0 " + AppTheme.SPACE_XL + ", fillx",
+                "[]10[]12[]push[]8[]12[]", "[center]"));
+        bar.setBackground(AppTheme.BACKGROUND);
+        bar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, AppTheme.BORDER_SOFT));
+
+        bar.add(new CrescentMark(), "h 20!, w 20!");
         JLabel title = new JLabel("Nocturne");
         AppTheme.bindFont(title, Font.BOLD, AppTheme.TYPE_HERO);
         title.setForeground(AppTheme.TEXT);
-        brand.add(title, "aligny center");
+        bar.add(title);
 
-        JLabel subtitle = new JLabel("<html>开源的多版本<br>注入式客户端</html>");
-        AppTheme.bindFont(subtitle, Font.PLAIN, AppTheme.TYPE_CAPTION);
-        subtitle.setForeground(AppTheme.TEXT_MUTED);
+        JPanel chip = new JPanel(new MigLayout("insets 3 10 3 10", "[]", "[]"));
+        AppTheme.styleChip(chip);
+        JLabel chipText = new JLabel(VERSION);
+        AppTheme.bindFont(chipText, Font.BOLD, AppTheme.TYPE_CAPTION);
+        chipText.setForeground(AppTheme.ACCENT);
+        chip.add(chipText);
+        bar.add(chip);
+
+        AppTheme.bindFont(statusText, Font.PLAIN, AppTheme.TYPE_CAPTION);
+        statusText.setForeground(AppTheme.TEXT_MUTED);
+        bar.add(statusText);
+
+        bar.add(statusDot, "h 14!, w 14!");
 
         JButton settings = new JButton("设置");
         settings.addActionListener(e -> openSettings());
-        styleSecondaryButton(settings);
-
-        sidebar.add(brand, "growx");
-        sidebar.add(subtitle);
-        sidebar.add(settings, "growx, h 36!");
-        return sidebar;
+        AppTheme.styleSecondaryButton(settings);
+        bar.add(settings, "h 30!, w 76!");
+        return bar;
     }
 
-    /** 品牌标记：一个带柔和光晕的强调色圆角方块。 */
-    private static final class BrandMark extends javax.swing.JComponent {
-        /** 绘制光晕与方块本体。 */
+    /**
+     * 品牌标记：一弯钠灯琥珀色的新月。
+     *
+     * <p>先画正圆，再用工具栏底色切掉右上一块——切口的圆心与外圆偏移量决定月牙的粗细。
+     * 「夜曲」的「夜」收在这一弯月里。
+     */
+    private static final class CrescentMark extends javax.swing.JComponent {
+        /** 绘制新月。 */
         @Override
         protected void paintComponent(java.awt.Graphics g) {
             java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
             g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
                     java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
             int size = Math.min(getWidth(), getHeight());
-            g2.setColor(new Color(AppTheme.ACCENT.getRed(), AppTheme.ACCENT.getGreen(),
-                    AppTheme.ACCENT.getBlue(), 45));
-            g2.fillRoundRect(-2, -2, size + 4, size + 4, 10, 10);
             g2.setColor(AppTheme.ACCENT);
-            g2.fillRoundRect(0, 0, size, size, 7, 7);
+            g2.fillOval(0, 0, size, size);
+            // 切口圆略大于外圆、向右上偏移：月牙下缘厚、上缘尖。
+            g2.setColor(AppTheme.BACKGROUND);
+            g2.fillOval(size * 9 / 16, -size / 6, size + 2, size + 2);
             g2.dispose();
         }
     }
 
-    /** 主按钮（注入）：实心强调色，禁用态回落到抬升面板色。 */
-    private static void stylePrimaryButton(JButton button) {
-        button.putClientProperty(FlatClientProperties.STYLE,
-                "background: #3D7BFF; foreground: #FFFFFF"
-                        + "; hoverBackground: #5A90FF; pressedBackground: #3D7BFF"
-                        + "; disabledBackground: #1A2744; disabledText: #55678A");
-    }
-
-    /** 次按钮（扫描/设置）：抬升底 + 描边，悬停时描边变为强调色。 */
-    private static void styleSecondaryButton(JButton button) {
-        button.putClientProperty(FlatClientProperties.STYLE,
-                "background: #151F36; foreground: #D6E2F5"
-                        + "; borderColor: #1E2B45; hoverBorderColor: #3D7BFF"
-                        + "; disabledText: #55678A");
-    }
-
-    // ------------------------------------------------------------------ content
+    // ------------------------------------------------------------------ list
 
     /**
-     * 构建右侧内容区：区块标题行、进行中进度条、列表卡片（空态/骨架屏/表格）、底部操作与日志。
+     * 构建进程表格段：列表标题行 + 全宽表格，直接坐在窗口底色上。
      *
-     * @return 内容面板；只被构造函数调用一次
+     * <p>没有内嵌卡片：表格区与窗口融为一体，行与行之间靠渲染器的发丝线分隔。
      */
-    private JPanel buildContent() {
-        // hidemode 3：隐藏的进度条不占用布局高度。
-        JPanel content = new JPanel(new MigLayout(
-                "insets " + AppTheme.SPACE_XL + " " + AppTheme.SPACE_XL + " " + AppTheme.SPACE_L
-                        + " " + AppTheme.SPACE_XL + ", fill, hidemode 3",
-                "[grow,fill]", "[]4[]12[grow,fill]16[pref!]"));
-        content.setBackground(AppTheme.BACKGROUND);
+    private JPanel buildTableCard() {
+        JPanel card = new JPanel(new MigLayout(
+                "insets 0 " + AppTheme.SPACE_XL + " 0 " + AppTheme.SPACE_XL + ", fill, wrap 1",
+                "[grow,fill]", "[44!]0[grow,fill]"));
+        card.setOpaque(false);
 
-        // 添加顺序即默认卡片顺序；实际显示哪个由 listCards.show 决定。
-        listArea.setOpaque(false);
-        listArea.add(buildEmptyState(), CARD_EMPTY);
-        listArea.add(buildTable(), CARD_TABLE);
-        // 骨架屏也套同款圆角卡片：三张卡片外观一致，切换时只是内容在变。
-        JPanel skeletonCard = new JPanel(new BorderLayout());
-        skeletonCard.putClientProperty(FlatClientProperties.STYLE,
-                "arc: " + AppTheme.RADIUS_CARD + "; border: 1,1,1,1,#1E2B45");
-        skeletonCard.setBackground(AppTheme.PANEL);
-        skeletonCard.add(new SkeletonPanel(), BorderLayout.CENTER);
-        listArea.add(skeletonCard, CARD_SKELETON);
-
-        progress.setIndeterminate(true);
-        progress.setVisible(false);
-        progress.setBorder(BorderFactory.createEmptyBorder());
-
-        // 每个组件独占一行：不带 wrap 时 MigLayout 会把后续组件排到同一行的下一列。
-        content.add(buildContentHeader(), "growx, wrap");
-        content.add(progress, "growx, h 4!, wrap");
-        content.add(listArea, "grow, wrap");
-        content.add(buildBottom(), "growx");
-        return content;
-    }
-
-    /**
-     * 构建内容区标题行：左侧区块标题，右侧结果计数。
-     *
-     * @return 标题行面板；只被 {@link #buildContent()} 调用一次
-     */
-    private JPanel buildContentHeader() {
         JPanel header = new JPanel(new MigLayout("insets 0 4 0 4, fillx", "[]push[]", "[]"));
         header.setOpaque(false);
-
         JLabel heading = new JLabel("进程列表");
         AppTheme.bindFont(heading, Font.BOLD, AppTheme.TYPE_TITLE);
         heading.setForeground(AppTheme.TEXT);
-
         AppTheme.bindFont(countLabel, Font.PLAIN, AppTheme.TYPE_CAPTION);
         countLabel.setForeground(AppTheme.TEXT_FAINT);
-
         header.add(heading);
-        header.add(countLabel);
-        return header;
+        header.add(countLabel, "aligny center");
+
+        card.add(header, "growx");
+        card.add(buildTable(), "grow");
+        return card;
     }
 
     /**
-     * 构建空状态卡片：首次启动与扫描无结果时取代空表格，告诉用户下一步该做什么。
+     * 构建进程表格本体。
      *
-     * @return 空状态面板；只被 {@link #buildContent()} 调用一次
+     * <p>只被 {@link #buildTableCard()} 调用；列宽偏好值是
+     * {@link JTable#AUTO_RESIZE_ALL_COLUMNS} 的初始分配比例。
      */
-    private JPanel buildEmptyState() {
-        JPanel empty = new JPanel(new MigLayout("insets 24, fill", "[center]", "[]8[]"));
-        empty.putClientProperty(FlatClientProperties.STYLE,
-                "arc: " + AppTheme.RADIUS_CARD + "; border: 1,1,1,1,#1E2B45");
-        empty.setBackground(AppTheme.PANEL);
-
-        AppTheme.bindFont(emptyTitle, Font.BOLD, AppTheme.TYPE_TITLE);
-        emptyTitle.setForeground(AppTheme.TEXT_MUTED);
-        AppTheme.bindFont(emptyHint, Font.PLAIN, AppTheme.TYPE_CAPTION);
-        emptyHint.setForeground(AppTheme.TEXT_FAINT);
-
-        empty.add(emptyTitle);
-        empty.add(emptyHint);
-        return empty;
-    }
-
-    /**
-     * 构建进程表格及其外层圆角卡片。
-     *
-     * <p>只被 {@link #buildContent()} 调用；列宽偏好值是 {@link JTable#AUTO_RESIZE_ALL_COLUMNS}
-     * 的初始分配比例。
-     */
-    private JPanel buildTable() {
-        table.setRowHeight(36);
+    private JScrollPane buildTable() {
+        table.setRowHeight(40);
         table.setFillsViewportHeight(true);
-        // 去掉网格线：行与行之间靠留白与悬停态区分，不靠描边。
+        // 网格线整体关掉：水平分隔交给渲染器的发丝线，垂直方向只靠留白。
         table.setShowVerticalLines(false);
         table.setShowHorizontalLines(false);
         table.setIntercellSpacing(new Dimension(0, 0));
@@ -337,13 +311,15 @@ public final class MainWindow extends JFrame {
         table.setDefaultRenderer(Object.class, new RowRenderer());
         table.getTableHeader().setReorderingAllowed(false);
         AppTheme.bindFont(table.getTableHeader(), Font.PLAIN, AppTheme.TYPE_CAPTION);
-        table.getTableHeader().setBackground(AppTheme.PANEL_RAISED);
+        // 表头与窗口同色：栏目名只是列表的注脚，不是另一块面板。
+        table.getTableHeader().setBackground(AppTheme.BACKGROUND);
         table.getTableHeader().setForeground(AppTheme.TEXT_MUTED);
-        table.getTableHeader().setPreferredSize(new Dimension(0, 34));
-        // 表头左对齐，与下方单元格文字基线一致（FlatLaf 默认居中）。
+        table.getTableHeader().setPreferredSize(new Dimension(0, 36));
+        // 表头左对齐，内垫与单元格文字对齐（FlatLaf 默认居中）。
         javax.swing.table.DefaultTableCellRenderer headerRenderer =
                 (javax.swing.table.DefaultTableCellRenderer) table.getTableHeader().getDefaultRenderer();
         headerRenderer.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
+        headerRenderer.setBorder(BorderFactory.createEmptyBorder(0, 11, 0, 0));
         table.getColumnModel().getColumn(0).setPreferredWidth(320);
         table.getColumnModel().getColumn(1).setPreferredWidth(80);
         table.getColumnModel().getColumn(2).setPreferredWidth(120);
@@ -371,31 +347,100 @@ public final class MainWindow extends JFrame {
                 table.repaint();
             }
         });
-        table.getSelectionModel().addListSelectionListener(e -> {
-            // 只在拖动结束时响应：拖动过程中会连续触发，频繁刷新按钮状态没有意义。
-            if (!e.getValueIsAdjusting()) {
-                updateInjectButton();
-            }
-        });
 
         JScrollPane scroll = new JScrollPane(table);
         scroll.setOpaque(false);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getViewport().setOpaque(false);
         table.setOpaque(false);
+        return scroll;
+    }
 
-        // 圆角画在卡片上而不是滚动面板上：
-        // viewport 是矩形且不透明的，圆角画在滚动面板上会被内部内容盖住。
-        JPanel card = new JPanel(new BorderLayout());
-        card.putClientProperty(FlatClientProperties.STYLE,
-                "arc: " + AppTheme.RADIUS_CARD + "; border: 1,1,1,1,#1E2B45");
-        card.setBackground(AppTheme.PANEL);
-        card.add(scroll, BorderLayout.CENTER);
+    /**
+     * 构建空态：雷达标记 + 标题 + 提示 + 覆盖范围 + 主按钮，整体垂直居中。
+     *
+     * <p>空态同样不套卡片：提示文字直接坐在窗口底色上，由上下两段弹性空白推到视口正中。
+     */
+    private JPanel buildEmptyState() {
+        JPanel empty = new JPanel(new MigLayout(
+                "insets 0 " + AppTheme.SPACE_XL + " 0 " + AppTheme.SPACE_XL
+                        + ", fill, wrap 1", "[center]", "[push][]14[]6[]10[][push]"));
+        empty.setOpaque(false);
+
+        AppTheme.bindFont(emptyTitle, Font.BOLD, AppTheme.TYPE_TITLE);
+        emptyTitle.setForeground(AppTheme.TEXT);
+        AppTheme.bindFont(emptyHint, Font.PLAIN, AppTheme.TYPE_CAPTION);
+        emptyHint.setForeground(AppTheme.TEXT_FAINT);
+
+        JLabel coverage = new JLabel("支持 1.8.9 \u2013 26.3 \u00b7 66 个版本");
+        AppTheme.bindFont(coverage, Font.PLAIN, AppTheme.TYPE_CAPTION);
+        coverage.setForeground(AppTheme.TEXT_FAINT);
+
+        emptyScanButton.addActionListener(e -> startScan());
+        AppTheme.stylePrimaryButton(emptyScanButton);
+
+        empty.add(new RadarMark(), "h 48!, w 48!");
+        empty.add(emptyTitle);
+        empty.add(emptyHint);
+        empty.add(coverage);
+        empty.add(emptyScanButton, "h 36!, w 136!");
+        return empty;
+    }
+
+    /**
+     * 构建骨架屏卡片：扫描进行中替代列表的三条呼吸条，同样无卡片。
+     */
+    private JPanel buildSkeletonCard() {
+        JPanel card = new JPanel(new MigLayout(
+                "insets " + AppTheme.SPACE_XL + " " + AppTheme.SPACE_XL + " 0 " + AppTheme.SPACE_XL
+                        + ", fillx, wrap 1", "[grow,fill]", "[]20[]20[]"));
+        card.setOpaque(false);
+        card.add(new SkeletonPanel(), "growx");
         return card;
     }
 
     /**
-     * 行渲染器：按列分配字体层级与语义色，并负责选中/悬停背景与选中强调条。
+     * 空状态/骨架屏的雷达标记：双环 + 60° 扫描扇面 + 中心信标点。
+     *
+     * <p>不带动画：空态出现的时间很短，动效反而显得焦躁；琥珀信标点与全局状态点呼应。
+     */
+    private static final class RadarMark extends javax.swing.JComponent {
+        /** 固定 48×48，让扇面与圆环的相对比例不受布局压缩影响。 */
+        private RadarMark() {
+            Dimension size = new Dimension(48, 48);
+            setPreferredSize(size);
+            setMinimumSize(size);
+        }
+
+        /** 绘制圆环、扫描扇面与中心点。 */
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                    java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            int size = Math.min(getWidth(), getHeight());
+            int x = (getWidth() - size) / 2;
+            int y = (getHeight() - size) / 2;
+            // 扫描扇面：低透明度琥珀，压在圆环下层。
+            g2.setColor(new Color(AppTheme.ACCENT.getRed(), AppTheme.ACCENT.getGreen(),
+                    AppTheme.ACCENT.getBlue(), 34));
+            g2.fillArc(x, y, size, size, 30, 60);
+            // 外环用常规描边色，内环用更暗的发丝线，形成远近两层。
+            g2.setColor(AppTheme.BORDER);
+            g2.drawOval(x, y, size - 1, size - 1);
+            int inset = size / 4;
+            g2.setColor(AppTheme.BORDER_SOFT);
+            g2.drawOval(x + inset, y + inset, size - inset * 2 - 1, size - inset * 2 - 1);
+            // 中心信标点：唯一的实心琥珀。
+            int dot = Math.max(5, size / 7);
+            g2.setColor(AppTheme.ACCENT);
+            g2.fillOval(x + (size - dot) / 2, y + (size - dot) / 2, dot, dot);
+            g2.dispose();
+        }
+    }
+
+    /**
+     * 行渲染器：按列分配字体层级与语义色，并负责选中/悬停背景、选中强调条与行底发丝线。
      *
      * <p>内部类，直接访问外层的 {@link AppTheme} 常量、{@code table} 与 {@code hoveredRow}。
      */
@@ -405,7 +450,7 @@ public final class MainWindow extends JFrame {
          *
          * @param selected 该行是否被选中，决定强调色竖条与选中底色
          * @param focused  固定传 {@code false}：单元格自己画焦点态，避免与行选中态打架
-         * @param column   列索引：进程名用正文样式，PID 用等宽弱化，版本未知时用占位样式
+         * @param column   列索引：进程名用正文样式，PID/版本用等宽弱化，版本未知时用占位样式
          * @return 已配置好的 {@link JLabel}
          */
         @Override
@@ -419,98 +464,68 @@ public final class MainWindow extends JFrame {
             }
             JLabel label = (JLabel) super.getTableCellRendererComponent(
                     source, text, selected, false, row, column);
-            if (column == 1) {
-                // PID 用等宽字体：数字列等宽后上下行自然对齐。
+            if (column == 1 || column == 2) {
+                // PID 与版本是数据列：等宽字体让上下行按列对齐，读数感更强。
                 label.setFont(new Font(Font.MONOSPACED, Font.PLAIN,
                         Math.max(1, Math.round(AppTheme.baseFont().getSize() * AppTheme.TYPE_MONO))));
             } else {
                 label.setFont(AppTheme.scaled(Font.PLAIN, AppTheme.TYPE_BODY));
             }
-            // 选中指示器只画在**进程列**的左边缘，作为"整行选中"的视觉锚点。
-            // MatteBorder 四个方向都会上色，右垫必须放在内层 EmptyBorder，否则列右缘会多一条蓝边。
+            // 选中指示条只画在**进程列**的左边缘，作为"整行选中"的视觉锚点。
+            // MatteBorder 四个方向都会上色，内垫必须放在内层 EmptyBorder，否则列内缘会多出一条琥珀边。
             boolean indicator = selected && column == 0;
-            label.setBorder(indicator
-                    ? BorderFactory.createCompoundBorder(
-                            BorderFactory.createMatteBorder(0, 3, 0, 0, AppTheme.ACCENT),
-                            BorderFactory.createEmptyBorder(0, 8, 0, 8))
-                    : BorderFactory.createEmptyBorder(0, 11, 0, 8));
+            label.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, AppTheme.BORDER_SOFT),
+                    indicator
+                            ? BorderFactory.createCompoundBorder(
+                                    BorderFactory.createMatteBorder(0, 2, 0, 0, AppTheme.ACCENT),
+                                    BorderFactory.createEmptyBorder(0, 8, 0, 8))
+                            : BorderFactory.createEmptyBorder(0, 10, 0, 8)));
             if (unknownVersion) {
                 label.setForeground(AppTheme.TEXT_FAINT);
             } else if (column == 1) {
                 label.setForeground(AppTheme.TEXT_MUTED);
+            } else if (column == 2) {
+                // 识别到的版本是整行唯一「读数」：用琥珀点出，扫一眼就能核对目标版本。
+                label.setForeground(AppTheme.ACCENT);
             } else {
                 label.setForeground(AppTheme.TEXT);
             }
             label.setOpaque(true);
+            // 未选中行就是窗口底色：列表与窗口融为一体，「色块」在这里必须无缝。
             label.setBackground(selected ? AppTheme.ACCENT_SOFT
-                    : (row == hoveredRow ? AppTheme.PANEL_HOVER : AppTheme.PANEL));
+                    : (row == hoveredRow ? AppTheme.PANEL_HOVER : AppTheme.BACKGROUND));
             return label;
         }
     }
 
+    // ------------------------------------------------------------------ dock & log
+
     /**
-     * 构建底部区域：错误提示行 + 扫描/注入按钮（次/主分明）+ 横跨整宽的日志面板。
+     * 构建操作坞：左侧错误提示行，右侧扫描/注入按钮（次/主分明）。
      *
-     * <p>只被 {@link #buildContent()} 调用。
+     * <p>顶缘一条发丝线把它从列表上剥出来；按钮垂直居中，整段高 64。
      */
-    private JPanel buildBottom() {
-        JPanel bottom = new JPanel(new MigLayout("insets 0, fillx", "[grow,fill]12[]", "[]12[]"));
-        bottom.setOpaque(false);
+    private JPanel buildDock() {
+        JPanel dock = new JPanel(new MigLayout(
+                "insets 0 " + AppTheme.SPACE_XL + " 0 " + AppTheme.SPACE_XL + ", fillx",
+                "[grow,fill]12[]8[]", "[64!]"));
+        dock.setOpaque(false);
+        dock.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, AppTheme.BORDER_SOFT));
 
         errorLabel.setForeground(AppTheme.DANGER);
         AppTheme.bindFont(errorLabel, Font.PLAIN, AppTheme.TYPE_CAPTION);
         errorLabel.setText(" ");
 
-        styleSecondaryButton(scanButton);
-        stylePrimaryButton(injectButton);
+        AppTheme.styleSecondaryButton(scanButton);
+        AppTheme.stylePrimaryButton(injectButton);
         scanButton.addActionListener(e -> startScan());
         injectButton.addActionListener(e -> startInject());
 
-        bottom.add(errorLabel, "growx, aligny center");
-        bottom.add(scanButton, "h 36!, w 132!");
-        bottom.add(injectButton, "h 36!, w 132!, wrap");
-        bottom.add(log, "span 3, growx, h 150!");
-        return bottom;
-    }
-
-    /**
-     * 构建底部状态栏：左侧版本号，右侧状态文字 + 状态指示点。
-     *
-     * <p>只被构造函数调用一次。
-     */
-    private JPanel buildStatusBar() {
-        JPanel bar = new JPanel(new MigLayout(
-                "insets 0 " + AppTheme.SPACE_XL + " 0 " + AppTheme.SPACE_XL + ", fillx",
-                "[]push[]8[]", "[]"));
-        bar.setBackground(AppTheme.PANEL);
-        // 顶部 1px 分隔线把状态栏从内容区里剥出来。
-        bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, AppTheme.BORDER_SOFT));
-
-        JLabel version = new JLabel(VERSION);
-        AppTheme.bindFont(version, Font.PLAIN, AppTheme.TYPE_CAPTION);
-        version.setForeground(AppTheme.TEXT_FAINT);
-
-        AppTheme.bindFont(statusText, Font.PLAIN, AppTheme.TYPE_CAPTION);
-        statusText.setForeground(AppTheme.TEXT_MUTED);
-
-        bar.add(version, "growx");
-        bar.add(statusText);
-        bar.add(statusDot, "h 16!, w 16!");
-        return bar;
-    }
-
-    /**
-     * 同时更新状态点颜色与状态文字。
-     *
-     * <p>必须在 EDT 上调用。
-     *
-     * @param color 状态点颜色（取自 {@link AppTheme} 的语义色）
-     * @param text  状态点旁的中文说明
-     */
-    private void setStatus(Color color, String text) {
-        statusDot.setState(color);
-        statusText.setText(text);
-        statusText.setForeground(color);
+        dock.add(errorLabel, "growx, aligny center");
+        dock.add(scanButton, "h 38!, w 128!, aligny center");
+        dock.add(injectButton, "h 38!, w 128!, aligny center");
+        return dock;
     }
 
     // --------------------------------------------------------------- behaviour
@@ -533,13 +548,30 @@ public final class MainWindow extends JFrame {
     }
 
     /**
+     * 同时更新状态点颜色与状态文字。
+     *
+     * <p>必须在 EDT 上调用。
+     *
+     * @param color 状态点颜色（取自 {@link AppTheme} 的语义色）
+     * @param text  状态点旁的中文说明
+     */
+    private void setStatus(Color color, String text) {
+        statusDot.setState(color);
+        statusText.setText(text);
+        statusText.setForeground(color);
+    }
+
+    /**
      * 依据「是否扫描/注入中、是否有结果、是否有选中行」推导两个按钮的可用状态。
      *
      * <p>把推导集中在一处，避免像旧实现那样把 {@code isEnabled()} 当成与条件——那样一旦置为
      * 禁用就再也无法恢复（例如注入成功后按钮永久锁死）。
      */
     private void updateButtons() {
-        scanButton.setEnabled(!scanning && !injecting);
+        boolean idle = !scanning && !injecting;
+        scanButton.setEnabled(idle);
+        // 空态里的扫描按钮与操作坞的扫描按钮同生共死，避免一处可点一处灰着的割裂感。
+        emptyScanButton.setEnabled(idle);
         // 进行中反馈：不定态进度条随扫描/注入显隐（布局用 hidemode 3 收掉隐藏时的高度）。
         progress.setVisible(scanning || injecting);
         updateInjectButton();
@@ -620,6 +652,8 @@ public final class MainWindow extends JFrame {
                         // 默认选中第一行：多数场景用户就是要注入第一个进程。
                         loadVersions();
                     }
+                    // 扫过一次之后，空态里的主按钮就改称「重新扫描」——文案与后果一致。
+                    emptyScanButton.setText("重新扫描");
                 } catch (Exception e) {
                     // 失败时列表保持清空状态，不能展示上一轮的过期行。
                     model.clear();

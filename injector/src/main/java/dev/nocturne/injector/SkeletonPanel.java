@@ -115,7 +115,7 @@ public final class SkeletonPanel extends JPanel {
                     AppTheme.PANEL_HOVER.getGreen(),
                     AppTheme.PANEL_HOVER.getBlue(),
                     alpha));
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
             g2.dispose();
         }
     }

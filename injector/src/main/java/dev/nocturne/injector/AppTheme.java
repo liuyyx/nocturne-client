@@ -2,7 +2,9 @@ package dev.nocturne.injector;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.FlatClientProperties;
 
+import javax.swing.AbstractButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.UIManager;
@@ -14,57 +16,69 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * 主题安装入口。
+ * 主题安装入口：色板、间距、圆角、字体层级与常用控件样式。
  *
- * <p>配色由 FlatDarkLaf 负责，本类只覆写设计稿指定的少数几个颜色。没有自绘、没有手写的
+ * <p>视觉方向「夜航信标」：暖石墨近黑底盘 + 单一钠灯琥珀强调色，仪表式密排数据界面。
+ * 配色由 FlatDarkLaf 负责，本类只覆写设计稿指定的少数几个颜色；没有自绘、没有手写的
  * Look &amp; Feel——控件外观全部交给 FlatLaf，这样它才能继续把系统 DPI 缩放应用到字体与尺寸上。
+ *
+ * <p>所有颜色都收敛为本类的常量（token），控件样式字符串一律经 {@link #hex(Color)} 从 token
+ * 生成，禁止在业务代码里写死 hex 值。
  */
 public final class AppTheme {
 
-    /** 窗口底色，最深的一层背景。 */
-    public static final Color BACKGROUND = new Color(0x0B, 0x12, 0x20);
+    // ---- 色板（暖石墨 + 钠灯琥珀；任何控件不得引用色板之外的散值） ----
+
+    /** 窗口底色，最深的一层背景（暖近黑，刻意回避冷蓝黑）。 */
+    public static final Color BACKGROUND = new Color(0x13, 0x13, 0x15);
 
     /** 卡片/面板底色，比 {@link #BACKGROUND} 略亮。 */
-    public static final Color PANEL = new Color(0x11, 0x1A, 0x2E);
-
-    /** 悬停与选中态底色。 */
-    public static final Color PANEL_HOVER = new Color(0x16, 0x22, 0x3A);
-
-    /** 主文字色。 */
-    public static final Color TEXT = new Color(0xD6, 0xE2, 0xF5);
-
-    /** 次要文字色（副标题、版本号等）。 */
-    public static final Color TEXT_MUTED = new Color(0x7A, 0x8B, 0xA8);
-
-    /** 主强调色，同时用作焦点色。 */
-    public static final Color ACCENT = new Color(0x3D, 0x7B, 0xFF);
-
-    /** 强调色的悬停态。 */
-    public static final Color ACCENT_HOVER = new Color(0x5A, 0x90, 0xFF);
-
-    /** 错误/危险语义色。 */
-    public static final Color DANGER = new Color(0xE8, 0x4C, 0x4C);
-
-    /** 成功语义色。 */
-    public static final Color SUCCESS = new Color(0x3F, 0xD0, 0x8A);
-
-    /** 信息/进行中语义色，比 {@link #ACCENT} 略亮以便在深底上可读。 */
-    public static final Color INFO = new Color(0x6E, 0xA8, 0xFF);
+    public static final Color PANEL = new Color(0x1A, 0x1A, 0x1D);
 
     /** 抬升面板底色（输入框、表头等），介于 {@link #PANEL} 与 {@link #PANEL_HOVER} 之间。 */
-    public static final Color PANEL_RAISED = new Color(0x15, 0x1F, 0x36);
+    public static final Color PANEL_RAISED = new Color(0x20, 0x20, 0x24);
+
+    /** 悬停与选中态底色。 */
+    public static final Color PANEL_HOVER = new Color(0x26, 0x26, 0x2B);
+
+    /** 主文字色（暖纸白）。 */
+    public static final Color TEXT = new Color(0xEC, 0xE9, 0xE1);
+
+    /** 次要文字色（副标题、版本号等）。 */
+    public static final Color TEXT_MUTED = new Color(0x9C, 0x97, 0x8B);
 
     /** 弱文字色（占位符、未知值、禁用态）。 */
-    public static final Color TEXT_FAINT = new Color(0x55, 0x67, 0x8A);
+    public static final Color TEXT_FAINT = new Color(0x62, 0x5E, 0x55);
 
-    /** 选中态底色：{@link #ACCENT} 以约 18% 叠在 {@link #PANEL} 上预混合出的不透明色。 */
-    public static final Color ACCENT_SOFT = new Color(0x1A, 0x27, 0x44);
+    /** 主强调色（钠灯琥珀）：品牌、主操作、进行中态一色三用。 */
+    public static final Color ACCENT = new Color(0xE8, 0xA3, 0x3D);
+
+    /** 强调色的悬停态。 */
+    public static final Color ACCENT_HOVER = new Color(0xF2, 0xB6, 0x5A);
+
+    /** 强调色的按下态，比 {@link #ACCENT} 暗约 8%。 */
+    public static final Color ACCENT_PRESSED = new Color(0xD5, 0x96, 0x38);
+
+    /** 强调色之上的文字/图标色（暖墨，保证在琥珀底上的对比度）。 */
+    public static final Color ON_ACCENT = new Color(0x17, 0x14, 0x10);
+
+    /** 选中态底色：{@link #ACCENT} 以约 16% 叠在 {@link #PANEL} 上预混合出的不透明色。 */
+    public static final Color ACCENT_SOFT = new Color(0x31, 0x29, 0x1B);
+
+    /** 错误/危险语义色（去饱和砖红）。 */
+    public static final Color DANGER = new Color(0xD9, 0x6A, 0x57);
+
+    /** 成功语义色（去饱和鼠尾草绿）。 */
+    public static final Color SUCCESS = new Color(0x7F, 0xB8, 0x7A);
+
+    /** 信息/进行中语义色，与 {@link #ACCENT} 同族、略亮，深底上更易读。 */
+    public static final Color INFO = new Color(0xEF, 0xB0, 0x4B);
 
     /** 常规描边色。 */
-    public static final Color BORDER = new Color(0x1E, 0x2B, 0x45);
+    public static final Color BORDER = new Color(0x2B, 0x2B, 0x31);
 
-    /** 弱描边/分隔线色。 */
-    public static final Color BORDER_SOFT = new Color(0x18, 0x24, 0x3C);
+    /** 弱描边/分隔线色（发丝线）。 */
+    public static final Color BORDER_SOFT = new Color(0x22, 0x22, 0x27);
 
     // ---- 间距刻度（逻辑像素；所有 insets/gap 一律从这里取值，杜绝随手写数字） ----
 
@@ -84,9 +98,9 @@ public final class AppTheme {
     // ---- 圆角 ----
 
     /** 卡片/面板圆角。 */
-    public static final int RADIUS_CARD = 12;
+    public static final int RADIUS_CARD = 10;
     /** 控件（按钮、输入框）圆角。 */
-    public static final int RADIUS_CONTROL = 10;
+    public static final int RADIUS_CONTROL = 8;
 
     // ---- 字体层级（相对基础字号的倍数，配合 bindFont/scaled 使用；绝不写绝对磅值） ----
 
@@ -100,8 +114,77 @@ public final class AppTheme {
     public static final float TYPE_CAPTION = 0.85f;
     /** 等宽日志。 */
     public static final float TYPE_MONO = 0.95f;
+
     /** 工具类，不允许实例化。 */
     private AppTheme() {
+    }
+
+    /**
+     * 把颜色格式化为 {@code #RRGGBB}，供 FlatLaf 样式字符串使用。
+     *
+     * @param color 色板中的某个 token
+     * @return 大写十六进制颜色串
+     */
+    static String hex(Color color) {
+        return String.format("#%02X%02X%02X", color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    /**
+     * 主按钮样式（如「注入」「完成」）：实心琥珀底 + 暖墨文字，禁用态回落到抬升灰。
+     *
+     * @param button 目标按钮
+     */
+    static void stylePrimaryButton(AbstractButton button) {
+        button.putClientProperty(FlatClientProperties.STYLE,
+                "background: " + hex(ACCENT) + "; foreground: " + hex(ON_ACCENT)
+                        + "; hoverBackground: " + hex(ACCENT_HOVER)
+                        + "; pressedBackground: " + hex(ACCENT_PRESSED)
+                        + "; disabledBackground: #2A2A2E; disabledText: " + hex(TEXT_FAINT));
+    }
+
+    /**
+     * 次按钮样式（如「扫描游戏」「设置」）：抬升底 + 发丝描边，悬停时描边变为琥珀。
+     *
+     * @param button 目标按钮
+     */
+    static void styleSecondaryButton(AbstractButton button) {
+        button.putClientProperty(FlatClientProperties.STYLE,
+                "background: " + hex(PANEL_RAISED) + "; foreground: " + hex(TEXT)
+                        + "; hoverBackground: " + hex(PANEL_HOVER)
+                        + "; borderColor: " + hex(BORDER) + "; hoverBorderColor: " + hex(ACCENT)
+                        + "; disabledText: " + hex(TEXT_FAINT));
+    }
+
+    /**
+     * 卡片样式：统一圆角 + 1px 发丝描边，底色用 {@link #PANEL}。
+     *
+     * @param component 目标面板
+     */
+    static void styleCard(JComponent component) {
+        component.putClientProperty(FlatClientProperties.STYLE,
+                "arc: " + RADIUS_CARD + "; border: 1,1,1,1," + hex(BORDER));
+    }
+
+    /**
+     * 输入框样式：抬升底 + 发丝描边，聚焦描边为琥珀。
+     *
+     * @param component 目标输入组件
+     */
+    static void styleField(JComponent component) {
+        component.putClientProperty(FlatClientProperties.STYLE,
+                "background: " + hex(PANEL_RAISED)
+                        + "; borderColor: " + hex(BORDER)
+                        + "; focusedBorderColor: " + hex(ACCENT));
+    }
+
+    /**
+     * 版本章样式：胶囊形（arc 999），琥珀柔光底 + 琥珀文字，用在工具栏字标旁。
+     *
+     * @param component 目标面板（内放一个 JLabel）
+     */
+    static void styleChip(JComponent component) {
+        component.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 999; background: " + hex(ACCENT_SOFT));
     }
 
     /**
@@ -129,7 +212,7 @@ public final class AppTheme {
         UIManager.put("Component.background", PANEL);
         UIManager.put("Component.foreground", TEXT);
         // 边框色是全局 1px 描边的基础色；innerFocusWidth=1 让焦点框更克制。
-        UIManager.put("Component.borderColor", new Color(0x1E, 0x2B, 0x45));
+        UIManager.put("Component.borderColor", BORDER);
         UIManager.put("Component.focusColor", ACCENT);
         UIManager.put("Component.innerFocusWidth", 1);
         UIManager.put("Component.accentColor", ACCENT);
@@ -151,7 +234,6 @@ public final class AppTheme {
         UIManager.put("ProgressBar.foreground", ACCENT);
         UIManager.put("ProgressBar.arc", 999);
 
-
         UIManager.put("Label.foreground", TEXT);
         UIManager.put("Label.disabledForeground", TEXT_MUTED);
 
@@ -160,23 +242,23 @@ public final class AppTheme {
         UIManager.put("Button.hoverBackground", PANEL_HOVER);
         UIManager.put("Button.pressedBackground", PANEL_HOVER);
         UIManager.put("Button.default.background", ACCENT);
-        UIManager.put("Button.default.foreground", Color.WHITE);
+        UIManager.put("Button.default.foreground", ON_ACCENT);
         UIManager.put("Button.default.hoverBackground", ACCENT_HOVER);
-        UIManager.put("Button.default.pressedBackground", ACCENT);
+        UIManager.put("Button.default.pressedBackground", ACCENT_PRESSED);
 
         UIManager.put("Table.background", BACKGROUND);
         // 表格区：网格线用比边框更暗的颜色，避免与卡片描边抢视觉。
         UIManager.put("Table.foreground", TEXT);
         UIManager.put("Table.selectionBackground", PANEL_HOVER);
         UIManager.put("Table.selectionForeground", TEXT);
-        UIManager.put("Table.gridColor", new Color(0x18, 0x24, 0x3C));
+        UIManager.put("Table.gridColor", BORDER_SOFT);
         UIManager.put("TableHeader.background", PANEL);
         UIManager.put("TableHeader.foreground", TEXT_MUTED);
         UIManager.put("TableHeader.separatorColor", BORDER_SOFT);
         UIManager.put("TableHeader.bottomSeparatorColor", BORDER_SOFT);
 
-        UIManager.put("ScrollBar.thumb", new Color(0x2A, 0x3A, 0x58));
-        UIManager.put("ScrollBar.thumbHover", new Color(0x36, 0x4A, 0x70));
+        UIManager.put("ScrollBar.thumb", new Color(0x2E, 0x2E, 0x34));
+        UIManager.put("ScrollBar.thumbHover", new Color(0x3B, 0x3B, 0x43));
         UIManager.put("ScrollBar.track", BACKGROUND);
         UIManager.put("ScrollBar.width", 10);
 
@@ -187,8 +269,13 @@ public final class AppTheme {
         UIManager.put("TextField.caretForeground", TEXT);
 
         UIManager.put("Slider.thumbColor", ACCENT);
-        UIManager.put("Slider.trackColor", new Color(0x1E, 0x2B, 0x45));
-        UIManager.put("Slider.focusColor", ACCENT);
+        UIManager.put("Slider.trackColor", BORDER);
+        // FlatLaf 3.5 的已填充轨读的是 trackValueColor（旧版 progressColor 键已不存在）；
+        // 不设置时回落到 LAF 自带的蓝色 trackValueColor。
+        UIManager.put("Slider.trackValueColor", ACCENT);
+        UIManager.put("Slider.hoverThumbColor", ACCENT_HOVER);
+        UIManager.put("Slider.pressedThumbColor", ACCENT_PRESSED);
+        UIManager.put("Slider.focusedColor", ACCENT);
 
         UIManager.put("Dialog.background", BACKGROUND);
         UIManager.put("OptionPane.background", BACKGROUND);
@@ -197,7 +284,7 @@ public final class AppTheme {
         UIManager.put("MenuItem.background", PANEL);
         UIManager.put("MenuItem.foreground", TEXT);
         UIManager.put("MenuItem.selectionBackground", ACCENT);
-        UIManager.put("MenuItem.selectionForeground", Color.WHITE);
+        UIManager.put("MenuItem.selectionForeground", ON_ACCENT);
     }
 
     /** 应用任何缩放之前捕获的 L&amp;F 基础字体；为 {@code null} 表示尚未初始化。 */

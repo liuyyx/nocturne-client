@@ -20,7 +20,8 @@ import java.util.function.Consumer;
 /**
  * 设置对话框：GUI 快捷键录制 + 三个滑块。
  *
- * <p>拖动过程中改动实时生效，关闭对话框时才落盘（见 {@link #dispose()}）。
+ * <p>视觉与主窗口同一套「夜航信标」token：分区用发丝线小标题，录制框是抬升底 + 琥珀聚焦描边，
+ * 收尾的「完成」用主按钮样式。拖动过程中改动实时生效，关闭对话框时才落盘（见 {@link #dispose()}）。
  */
 public final class SettingsDialog extends JDialog {
 
@@ -80,9 +81,7 @@ public final class SettingsDialog extends JDialog {
         JButton close = new JButton("完成");
         close.addActionListener(e -> dispose());
         // 唯一的收尾动作用主按钮样式，与主窗口的「注入」保持同一视觉权重。
-        close.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
-                "background: #3D7BFF; foreground: #FFFFFF"
-                        + "; hoverBackground: #5A90FF; pressedBackground: #3D7BFF");
+        AppTheme.stylePrimaryButton(close);
         add(close, "right, gaptop 12, h 34!, w 108!");
 
         // pack() 让窗口贴合控件尺寸，避免固定尺寸在 150% 缩放下溢出。
@@ -103,7 +102,7 @@ public final class SettingsDialog extends JDialog {
         JLabel label = new JLabel(text);
         AppTheme.bindFont(label, Font.BOLD, AppTheme.TYPE_CAPTION);
         label.setForeground(AppTheme.TEXT_MUTED);
-        // 底部 1px 分隔线让分区边界清晰可见，而不用卡片把对话框切碎。
+        // 底部 1px 发丝线让分区边界清晰可见，而不用卡片把对话框切碎。
         label.setBorder(javax.swing.BorderFactory.createCompoundBorder(
                 javax.swing.BorderFactory.createMatteBorder(0, 0, 1, 0, AppTheme.BORDER_SOFT),
                 javax.swing.BorderFactory.createEmptyBorder(0, 0, 6, 0)));
@@ -125,9 +124,8 @@ public final class SettingsDialog extends JDialog {
         bindField.setText(config.guiBind);
         AppTheme.bindFont(bindField, Font.BOLD, AppTheme.TYPE_BODY);
         bindField.setToolTipText("点击后按下要绑定的按键");
-        // 抬升底色 + 强调色聚焦描边，让录制框看起来就是个「可点的控件」。
-        bindField.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
-                "background: #151F36; borderColor: #1E2B45; focusedBorderColor: #3D7BFF");
+        // 抬升底色 + 琥珀聚焦描边，让录制框看起来就是个「可点的控件」。
+        AppTheme.styleField(bindField);
 
         // 改键提示：快捷键由注入器在 attach 时写死，改完必须重新注入才会传到游戏。
         bindHint.setForeground(AppTheme.INFO);
@@ -135,10 +133,11 @@ public final class SettingsDialog extends JDialog {
 
         bindField.addFocusListener(new FocusAdapter() {
             @Override
-            // 获得焦点即进入录制态，此时字段内容变为提示文案而不是真实绑定值。
+            // 获得焦点**不**进入录制态：对话框打开时的自动聚焦、以及 Tab 导航到本字段都会触发
+            // focusGained，而那时用户根本没打算改键——自动录制会把第一个路过的按键（Tab、Shift…）
+            // 静默绑上并落盘。进入录制只由点击发起（见文件末尾的 mousePressed）。
             public void focusGained(FocusEvent e) {
-                recording = true;
-                bindField.setText("按下按键…");
+                // 不进入录制、也不改文案，保持显示当前绑定值
             }
 
             @Override
@@ -153,6 +152,12 @@ public final class SettingsDialog extends JDialog {
             // 非录制态的按键（如 Tab 切换焦点）必须放行，否则用户无法离开该字段。
             public void keyPressed(KeyEvent e) {
                 if (!recording) {
+                    return;
+                }
+                if (isModifierOnly(e.getKeyCode())) {
+                    // 单独按下的修饰键不是绑定目标：用户往往只是想按组合键，静默把它绑上去
+                    // 等于白吃掉一个按键。等真正的键。
+                    e.consume();
                     return;
                 }
                 e.consume();
@@ -174,9 +179,9 @@ public final class SettingsDialog extends JDialog {
             }
         });
 
-        // 输入框已有焦点时点击不会再次触发 focusGained，
-        // 因此监听器无条件进入录制态；再延迟一个事件循环请求焦点，
-        // 因为此刻鼠标仍按在输入框上，立即请求会被这次点击吃掉。
+        // 进入录制的唯一入口是**点击**这个字段：focusGained 不再进入录制（见上），
+        // 所以这里无条件进入；再延迟一个事件循环请求焦点，因为此刻鼠标仍按在输入框上，
+        // 立即请求会被这次点击吃掉。
         bindField.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
@@ -211,6 +216,30 @@ public final class SettingsDialog extends JDialog {
             combo.append("ALT+");
         }
         return combo.append(key).toString();
+    }
+
+    /**
+     * 该按键是否只是一个修饰键（单独按下时不该当作绑定目标）。
+     *
+     * <p>用户按 Ctrl/Shift 往往是想接一个组合键，把第一个按下的修饰键直接绑上去等于白吃掉一个键。
+     * 这里只排除"纯修饰键"本身；{@code SHIFT+A} 这类组合仍然可以被录下来（keyPressed 收到的
+     * 事件里 keyCode 是 A、修饰位为真）。
+     *
+     * @param keyCode AWT 键码
+     * @return 是纯修饰键时返回 {@code true}
+     */
+    static boolean isModifierOnly(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.VK_SHIFT:
+            case KeyEvent.VK_CONTROL:
+            case KeyEvent.VK_ALT:
+            case KeyEvent.VK_ALT_GRAPH:
+            case KeyEvent.VK_META:
+            case KeyEvent.VK_WINDOWS:
+                return true;
+            default:
+                return false;
+        }
     }
 
     /**

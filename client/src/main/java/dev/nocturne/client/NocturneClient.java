@@ -168,7 +168,9 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.ItemEspModule());
         modules.register(new dev.nocturne.client.module.modules.TrajectoriesModule());
         modules.register(new dev.nocturne.client.module.modules.ChamsModule());
-        modules.register(new dev.nocturne.client.module.modules.XrayModule());
+        // Xray 暂不注册：它尚未接入方块渲染管线（没有区块重绘拦截，Opacity / Cave Mode 两个设置
+        // 也没有任何读取点），注册出去只会是个"开了没反应"的开关——比不提供更糟。
+        // 接入渲染管线后在这里重新注册（类与门逻辑保留在 XrayModule）。
         modules.register(new dev.nocturne.client.module.modules.SearchModule());
         modules.register(new dev.nocturne.client.module.modules.PanicModule());
     }
@@ -230,6 +232,9 @@ public final class NocturneClient {
         panicked = true;
         shutdown();
         modules.setActive(false);
+        // 输入占用必须显式停：blocked 由叠加层每帧刷新，清空分发器后没人再刷新它——若那一刻界面
+        // 正开着，游戏侧输入入口就被永久短路（点不动、按不动、滚不动）。
+        dev.nocturne.client.runtime.InputBlock.disable();
         NocturneRuntime.shutdown();
         log("panic: client disabled — no GUI, no modules, no per-frame work;"
                 + " restart the game to bring it back");

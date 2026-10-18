@@ -47,6 +47,8 @@ public final class NocturneRuntime {
     private static Method setDrawContextMethod;
     /** {@code FrameDispatcher.clear()}；未解析时为 null。 */
     private static Method clearMethod;
+    /** {@code FrameDispatcher.addShutdown(Runnable)}；未解析时为 null。 */
+    private static Method addShutdownMethod;
 
     /** 工具类，禁止实例化。 */
     private NocturneRuntime() {
@@ -73,6 +75,7 @@ public final class NocturneRuntime {
                     java.util.function.Consumer.class);
             setDrawContextMethod = dispatcher.getMethod("setDrawContext", Object.class);
             clearMethod = dispatcher.getMethod("clear");
+            addShutdownMethod = dispatcher.getMethod("addShutdown", Runnable.class);
             return true;
         } catch (Throwable t) {
             System.out.println("[nocturne] bootstrap dispatcher unavailable: " + t);
@@ -192,6 +195,25 @@ public final class NocturneRuntime {
     }
 
     /**
+     * 注册一个"自销毁前执行"的恢复动作；转发到 bootstrap 分发器。
+     *
+     * <p>必须走 bootstrap：注册方在 agent 侧（游戏的隔离加载器），执行发生在自销毁路径上——只写本类的
+     * 静态字段会各存一份，注册进去的动作在自销毁时根本不会被跑。
+     *
+     * @param action 恢复动作；为 {@code null} 或分发器不可用时无副作用
+     */
+    public static void addShutdown(Runnable action) {
+        if (action == null || !bindDispatcher()) {
+            return;
+        }
+        try {
+            addShutdownMethod.invoke(null, action);
+        } catch (Throwable t) {
+            System.out.println("[nocturne] addShutdown failed: " + t);
+        }
+    }
+
+    /**
      * 自销毁：清空 bootstrap 层分发器的全部每帧动作与绘制上下文汇。
      *
      * <p>清空之后注入的字节码仍会每帧调到这里，但分发器列表是空的——一次空遍历，不绘制、不轮询输入、
@@ -216,6 +238,13 @@ public final class NocturneRuntime {
      * （单个监听器抛出的 Throwable 不会传播回被补丁的游戏方法）；之后按 20Hz 折算驱动模块 tick。
      */
     public static void onFrame() {
+        // 自销毁后不再做任何每帧工作：分发器确实已被清空，但本方法后半段的 RenderEvent 广播与模块
+        // tick 既不经过分发器、也不看驱动闸门——其中 driveModules 还会按"是否在世界里"把闸门重新
+        // 置回 true，于是 panic 关掉的闸门会在 50ms 内自动翻回来并永久保持（模块照 tick）。
+        NocturneClient client = NocturneClient.get();
+        if (client != null && client.isPanicked()) {
+            return;
+        }
         if (bindDispatcher()) {
             try {
                 dispatchMethod.invoke(null);

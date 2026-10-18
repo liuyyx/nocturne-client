@@ -67,12 +67,27 @@ public final class Attacher {
      * @throws AttachException 所有策略都失败时抛出，携带已尝试的策略名与最后一个失败原因
      */
     public static String attach(int pid, File agentJar, String options) throws AttachException {
+        return attachWith(STRATEGIES, pid, agentJar, options);
+    }
+
+    /**
+     * 用给定的策略链尝试注入（包可见：测试要在不改静态链的前提下验证失败语义）。
+     *
+     * @param strategies 按顺序尝试的策略列表
+     * @param pid        目标进程 id
+     * @param agentJar   agent jar 路径
+     * @param options    传给 {@code agentmain} 的参数字串，可为 {@code null}
+     * @return 实际成功的那条策略名
+     * @throws AttachException 所有策略都失败时抛出
+     */
+    static String attachWith(List<AttachStrategy> strategies, int pid, File agentJar,
+                             String options) throws AttachException {
         List<String> attempted = new ArrayList<String>();
         Throwable last = null;
-        for (AttachStrategy strategy : STRATEGIES) {
+        for (AttachStrategy strategy : strategies) {
             attempted.add(strategy.name());
             // 单个策略失败（类缺失、权限不足等）不应中断后续策略；
-            // 但 Error（OOM、LinkageError 等）与中断必须向上传播，不能被吞成「普通失败」。
+            // 但 VM 级错误（OOM、LinkageError 之外的内部错误）与中断必须向上传播。
             try {
                 strategy.attach(pid, agentJar, options);
                 return strategy.name();
@@ -81,6 +96,17 @@ public final class Attacher {
                 last = e;
                 break;
             } catch (Exception e) {
+                last = e;
+            } catch (Error e) {
+                // "这条策略在本机走不通"的 Error 也要继续尝试后面的策略：裁剪过的 JRE 上原生库
+                // 加载失败抛 UnsatisfiedLinkError，JDK attach API 不在 classpath 时抛
+                // NoClassDefFoundError。放它们逃出去，一次正常的多策略回退就变成整个工具崩掉，
+                // 连"试试 tools.jar"这类可操作提示都打不出来（Nocturne 只捕 AttachException）。
+                if (e instanceof VirtualMachineError || e instanceof ThreadDeath) {
+                    // OOM / StackOverflow / InternalError / ThreadDeath：工具自身的问题或调用方
+                    // 的终止请求，必须原样传播，否则会被伪装成"目标注入失败"。
+                    throw e;
+                }
                 last = e;
             }
         }

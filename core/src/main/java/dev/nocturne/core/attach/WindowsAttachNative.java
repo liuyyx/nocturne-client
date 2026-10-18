@@ -83,12 +83,19 @@ public final class WindowsAttachNative {
      *
      * @param pipeName 形如 {@code \\.\pipe\javatool<pid>-<随机数>} 的全名
      * @return 已建好的服务端（调用方负责等待连入与关闭）
-     * @throws IOException 建管道失败时抛出
+     * @throws IOException 建管道失败时抛出（异常文本携带 Win32 错误码）
      */
     public static WindowsAttachStrategy.PipeServer createPipeServer(String pipeName)
             throws IOException {
         ensureLoaded();
         long pipeHandle = nCreatePipeServer(pipeName);
+        if (pipeHandle == 0L) {
+            // 必须在这里变成 IOException：调用方按 IOException 重试换一个管道名，而
+            // new NativePipeServer(0) 抛的是 IllegalArgumentException——它逃出那个 catch，
+            // 于是"管道名碰撞重试"成了死代码，且 Win32 错误码全丢。
+            throw new IOException("cannot create attach pipe " + pipeName
+                    + " (win32 error " + nLastWin32Error() + ")");
+        }
         return new NativePipeServer(pipeHandle);
     }
 
@@ -119,6 +126,9 @@ public final class WindowsAttachNative {
     private static native void nCloseProcess(long handle);
 
     private static native long nCreatePipeServer(String pipeName);
+
+    /** 最近一次 native 调用失败时的 Win32 错误码（0 表示无）。 */
+    private static native int nLastWin32Error();
 
     private static native int nEnqueueOperation(long handle, byte[] request, String pipeName);
 }

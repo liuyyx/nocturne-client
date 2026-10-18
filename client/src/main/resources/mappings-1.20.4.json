@@ -1689,6 +1689,20 @@
                         "neoforge": "(DDD)D"
                     }
                 },
+                "getDeltaMovement": {
+                    "names": {
+                        "vanilla": "dp",
+                        "fabric": "method_18798",
+                        "forge": "m_20184_",
+                        "neoforge": "getDeltaMovement"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lelt;",
+                        "fabric": "()Lnet/minecraft/class_243;",
+                        "forge": "()Lnet/minecraft/world/phys/Vec3;",
+                        "neoforge": "()Lnet/minecraft/world/phys/Vec3;"
+                    }
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "j",
@@ -1729,6 +1743,20 @@
                         "fabric": "()Lnet/minecraft/class_2561;",
                         "forge": "()Lnet/minecraft/network/chat/Component;",
                         "neoforge": "()Lnet/minecraft/network/chat/Component;"
+                    }
+                },
+                "isInvisible": {
+                    "names": {
+                        "vanilla": "ce",
+                        "fabric": "method_5767",
+                        "forge": "m_20145_",
+                        "neoforge": "isInvisible"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
                     }
                 },
                 "isShiftKeyDown": {

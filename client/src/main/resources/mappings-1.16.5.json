@@ -1423,6 +1423,18 @@
                         "forge": "(DDD)D"
                     }
                 },
+                "getDeltaMovement": {
+                    "names": {
+                        "vanilla": "cC",
+                        "fabric": "method_18798",
+                        "forge": "m_20184_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ldcn;",
+                        "fabric": "()Lnet/minecraft/class_243;",
+                        "forge": "()Lnet/minecraft/world/phys/Vec3;"
+                    }
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "j",
@@ -1457,6 +1469,18 @@
                         "vanilla": "()Lnr;",
                         "fabric": "()Lnet/minecraft/class_2561;",
                         "forge": "()Lnet/minecraft/network/chat/Component;"
+                    }
+                },
+                "isInvisible": {
+                    "names": {
+                        "vanilla": "bF",
+                        "fabric": "method_5767",
+                        "forge": "m_20145_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
                     }
                 },
                 "isShiftKeyDown": {

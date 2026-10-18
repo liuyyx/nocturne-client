@@ -321,6 +321,73 @@ public final class GlRenderer implements UiBackend {
         return text.height(size);
     }
 
+    /**
+     * 固定管线的纹理支路：上传/采样走 {@link GlApi}（它在本代同时负责把
+     * {@code GL_UNPACK_ALIGNMENT} 与采样参数设成固定值）。
+     *
+     * <p>{@link #texturedQuad} 用立即模式画四边形，{@code argb} 走 {@code glColor4f} 调制；
+     * 混合是 {@code SRC_ALPHA / ONE_MINUS_SRC_ALPHA}（非预乘），因此上传的像素必须是非预乘 ARGB
+     * ——{@code FontRasterizer} 的白化字形与 {@code RasterTextures} 的 alpha 场都遵守这一约定。
+     */
+    @Override
+    public boolean supportsTextures() {
+        return gl.hasTextures();
+    }
+
+    @Override
+    public int uploadTexture(int id, int width, int height, int[] argb) {
+        if (!gl.hasTextures() || width <= 0 || height <= 0 || argb == null) {
+            return id;
+        }
+        int handle = id > 0 ? id : gl.genTexture();
+        if (handle <= 0) {
+            return id;
+        }
+        gl.bindTexture2D(handle);
+        gl.texParameteri(GlApi.GL_TEXTURE_2D, GlApi.GL_TEXTURE_MIN_FILTER, GlApi.GL_NEAREST);
+        gl.texParameteri(GlApi.GL_TEXTURE_2D, GlApi.GL_TEXTURE_MAG_FILTER, GlApi.GL_NEAREST);
+        gl.texParameteri(GlApi.GL_TEXTURE_2D, GlApi.GL_TEXTURE_WRAP_S, GlApi.GL_CLAMP_TO_EDGE);
+        gl.texParameteri(GlApi.GL_TEXTURE_2D, GlApi.GL_TEXTURE_WRAP_T, GlApi.GL_CLAMP_TO_EDGE);
+        if (!gl.uploadTexture(width, height, argb)) {
+            if (handle != id) {
+                // 新建失败：把刚生成的句柄还回去，避免句柄泄漏。
+                gl.deleteTexture(handle);
+            }
+            return id;
+        }
+        return handle;
+    }
+
+    @Override
+    public void deleteTexture(int id) {
+        gl.deleteTexture(id);
+    }
+
+    @Override
+    public void texturedQuad(int texture, float x, float y, float width, float height,
+                             float u0, float v0, float u1, float v1, int argb) {
+        if (texture <= 0 || width <= 0f || height <= 0f || (argb >>> 24) == 0) {
+            return;
+        }
+        gl.bindTexture2D(texture);
+        // 纹理开关经 GlStateManager（缓存同步）；画完必须关掉，否则后续无纹理坐标的图元会去采样图集
+        //（游戏字体渲染器与我们的 fillRect 都假设它可以是开的，但只有我们自己会开它）。
+        gl.enable(GlApi.GL_TEXTURE_2D);
+        gl.color(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f, (argb & 0xFF) / 255f,
+                ((argb >>> 24) & 0xFF) / 255f);
+        gl.begin(GlApi.GL_QUADS);
+        gl.texCoord(u0, v0);
+        gl.vertex(x, y);
+        gl.texCoord(u1, v0);
+        gl.vertex(x + width, y);
+        gl.texCoord(u1, v1);
+        gl.vertex(x + width, y + height);
+        gl.texCoord(u0, v1);
+        gl.vertex(x, y + height);
+        gl.end();
+        gl.disable(GlApi.GL_TEXTURE_2D);
+    }
+
     @Override
     public void pushClip(float x, float y, float width, float height) {
         if (!gl.hasScissor()) {

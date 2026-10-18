@@ -16,10 +16,20 @@
  */
 #include <windows.h>
 #include <jni.h>
+#include <sddl.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <tlhelp32.h>
+
+/* 管道安全描述符走 ConvertStringSecurityDescriptorToSecurityDescriptorW（advapi32）。 */
+#pragma comment(lib, "advapi32.lib")
+
+/* PIPE_REJECT_REMOTE_CLIENTS 在 SDK 头里受 _WIN32_WINNT 版本宏保护；本文件只用这一个标志，
+ * 直接给值，免得为它把整个翻译单元的 WINVER 抬高。 */
+#ifndef PIPE_REJECT_REMOTE_CLIENTS
+#define PIPE_REJECT_REMOTE_CLIENTS 0x00000008
+#endif
 /* ---- 远线程桩（x64，自包含机器码） ----
  *
  * 语义：桩被注入目标进程后执行一次，按 Win64 调用约定调用目标 jvm.dll 的
@@ -138,6 +148,17 @@ Java_dev_nocturne_core_attach_WindowsAttachNative_nCloseProcess(
     }
 }
 
+/* 最近一次 native 调用的 Win32 错误码：管道/进程操作失败时 Java 侧要把它带进异常文本，
+ * 否则排障只能看到"失败"两个字（错误码本该是最直接的线索）。 */
+static DWORD g_lastError = 0;
+
+JNIEXPORT jint JNICALL
+Java_dev_nocturne_core_attach_WindowsAttachNative_nLastWin32Error(
+        JNIEnv* env, jclass ignored) {
+    (void)env; (void)ignored;
+    return (jint)g_lastError;
+}
+
 JNIEXPORT jlong JNICALL
 Java_dev_nocturne_core_attach_WindowsAttachNative_nCreatePipeServer(
         JNIEnv* env, jclass ignored, jstring pipeName) {
@@ -145,17 +166,37 @@ Java_dev_nocturne_core_attach_WindowsAttachNative_nCreatePipeServer(
     WCHAR* name = JstringToUtf16(env, pipeName, &nameLen);
     if (name == NULL || nameLen == 0) {
         free(name);
+        g_lastError = ERROR_INVALID_PARAMETER;
         return 0;
     }
+    /* 只允许创建者（本用户）与 SYSTEM 访问，并拒绝远程客户端。
+     *
+     * 传 NULL 时管道继承默认安全描述符：同机其它用户也能打开这个可预测名字的管道，
+     * 于是可以抢先占住名字（单实例管道 → 我们之后连不上，或对方伪装成目标写入伪造回复），
+     * 也能从另一台机器发起远程连接。SDDL：受保护 DACL，Owner 与 SYSTEM 全权。 */
+    SECURITY_ATTRIBUTES attributes;
+    PSECURITY_DESCRIPTOR descriptor = NULL;
+    attributes.nLength = sizeof(attributes);
+    attributes.lpSecurityDescriptor = NULL;
+    attributes.bInheritHandle = FALSE;
+    if (ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:P(A;;GA;;;OW)(A;;GA;;;SY)", SDDL_REVISION_1, &descriptor, NULL)) {
+        attributes.lpSecurityDescriptor = descriptor;
+    }
+
     /* 单实例、字节流、阻塞模式：目标连入一次、读完回复即关，符合单命令语义。 */
     HANDLE pipe = CreateNamedPipeW(name,
-        PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
+        PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED | PIPE_REJECT_REMOTE_CLIENTS,
         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
         1,          /* 单实例：本次命令专用 */
         4096, 4096,
-        0, NULL);
+        0, &attributes);
+    if (descriptor != NULL) {
+        LocalFree(descriptor);
+    }
     free(name);
     if (pipe == INVALID_HANDLE_VALUE) {
+        g_lastError = GetLastError();
         return 0;
     }
     return (jlong)(intptr_t)pipe;
@@ -192,7 +233,12 @@ Java_dev_nocturne_core_attach_NativePipeIo_nAwaitConnection(
                 error = 0;
             }
         } else {
+            /* 超时或等待失败：发起取消，并且**必须等取消真正完成**再返回。
+             * CancelIo 是异步的；若直接返回，内核随后仍会往这个栈上的 OVERLAPPED 写完成状态，
+             * 而那时栈帧已经失效——典型的越界写。CancelIo 只影响本线程发起的 I/O，
+             * 也就是上面这次 ConnectNamedPipe，语义正好。 */
             CancelIo(pipe);
+            WaitForSingleObject(overlapped.hEvent, 5000);
             error = (waitResult == WAIT_TIMEOUT) ? 1460 /* ERROR_TIMEOUT */ : GetLastError();
         }
     } else if (connected) {
@@ -588,11 +634,15 @@ Java_dev_nocturne_core_attach_WindowsAttachNative_nEnqueueOperation(
     DWORD exitCode = 0;
     if (waitResult == WAIT_OBJECT_0) {
         GetExitCodeThread(thread, &exitCode);
+        CloseHandle(thread);
+        /* 桩线程已结束：可以安全回收它在目标里占用的远内存。 */
+        VirtualFreeEx(process, stubAt, 0, MEM_RELEASE);
+        return 0;
     }
+    /* 超时：远线程很可能**仍在执行**桩代码。这时释放 stubAt 会让目标在自己的线程里跑一段
+     * 已被回收的内存（use-after-free，直接把目标 JVM 打崩，且崩在目标而不是发起端，极难定位）。
+     * 宁可泄漏这一块远内存，也不释放：线程句柄照常关闭（只泄漏一个句柄计数），内存留到目标
+     * 进程退出时由内核回收。 */
     CloseHandle(thread);
-    VirtualFreeEx(process, stubAt, 0, MEM_RELEASE);
-    if (waitResult != WAIT_OBJECT_0) {
-        return 1460; /* ERROR_TIMEOUT：目标 attach 监听器 10s 内未执行操作 */
-    }
-    return 0;
+    return 1460; /* ERROR_TIMEOUT：目标 attach 监听器 10s 内未执行完操作 */
 }

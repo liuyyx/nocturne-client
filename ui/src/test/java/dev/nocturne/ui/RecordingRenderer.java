@@ -63,6 +63,11 @@ public final class RecordingRenderer implements Renderer {
     public void clear() {
         calls.clear();
         drawCalls.clear();
+        uploadCalls = 0;
+        deleteCalls = 0;
+        quadCalls = 0;
+        quadTextures.clear();
+        uploadedPixels.clear();
     }
 
     /**
@@ -186,5 +191,61 @@ public final class RecordingRenderer implements Renderer {
     public void popClip() {
         calls.add("popClip");
         drawCalls.add(new DrawCall("popClip", 0f, 0f, 0f, 0f, 0f, 0f, 0f, null, null));
+    }
+
+    // ---- 纹理 ----
+
+    /** {@link #supportsTextures()} 的返回值；默认支持纹理。 */
+    public boolean textures = true;
+    /** {@code uploadTexture} 调用次数。 */
+    public int uploadCalls;
+    /** {@code deleteTexture} 调用次数。 */
+    public int deleteCalls;
+    /** {@code texturedQuad} 调用次数。 */
+    public int quadCalls;
+    /** 下一个待分配的纹理句柄。 */
+    private int nextHandle = 1;
+    /** 当前"存活"的纹理句柄。 */
+    public final List<Integer> liveTextures = new ArrayList<Integer>();
+    /** 每次 {@code texturedQuad} 的纹理句柄。 */
+    public final List<Integer> quadTextures = new ArrayList<Integer>();
+    /** 最近一次上传的像素；用于断言上传内容。 */
+    public final List<int[]> uploadedPixels = new ArrayList<int[]>();
+
+    @Override
+    public boolean supportsTextures() {
+        return textures;
+    }
+
+    @Override
+    public int uploadTexture(int id, int width, int height, int[] argb) {
+        uploadCalls++;
+        if (width <= 0 || height <= 0 || argb == null) {
+            return id;
+        }
+        uploadedPixels.add(argb.clone());
+        int handle = id > 0 ? id : nextHandle++;
+        if (!liveTextures.contains(handle)) {
+            liveTextures.add(handle);
+        }
+        return handle;
+    }
+
+    @Override
+    public void deleteTexture(int id) {
+        if (id <= 0) {
+            return;
+        }
+        deleteCalls++;
+        liveTextures.remove((Integer) id);
+    }
+
+    @Override
+    public void texturedQuad(int texture, float x, float y, float width, float height,
+                             float u0, float v0, float u1, float v1, int argb) {
+        quadCalls++;
+        quadTextures.add(texture);
+        drawCalls.add(new DrawCall("texturedQuad", x, y, width, height, 0f, 0f, 0f,
+                Color.of(argb), null));
     }
 }

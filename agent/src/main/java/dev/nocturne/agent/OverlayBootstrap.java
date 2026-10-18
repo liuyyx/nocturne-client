@@ -14,10 +14,8 @@ import dev.nocturne.ui.gl.MinecraftTextRenderer;
 import dev.nocturne.ui.gl.ModernGlApi;
 import dev.nocturne.ui.gl.ModernRenderer;
 import dev.nocturne.ui.gl.ReflectiveInput;
-import dev.nocturne.ui.gl.SkijaBackend;
 import dev.nocturne.ui.gl.TextRenderer;
 import dev.nocturne.ui.gl.UiBackend;
-import dev.nocturne.ui.skija.SkijaHudSink;
 
 import java.lang.instrument.Instrumentation;
 
@@ -156,12 +154,15 @@ public final class OverlayBootstrap implements FrameListener {
         if (client == null) {
             return;
         }
-        // SDL 栈（26.x）走另一条绘制路径：GL 全进程不可用——帧回调（缓冲交换点）、GUI 绘制路径与
-        // 游戏自己的呈现入口三处调用 GL 都会让 LWJGL FATAL ERROR 终止 JVM（native abort，捕获不到），
-        // 因此这里既不绑 GL 也不碰 GL，改把绘制交给游戏自己的 GuiGraphicsExtractor。
-        // 判定必须用 Instrumentation 的**已加载类现查**：按名字探会漏判，而漏判的代价正是
-        // "注册了帧钩子 → 帧回调里做 GL → 崩游戏"（实测如此）。
-        Class<?> extractorType = isSdlStack() ? resolveLoaded(EXTRACTOR_CLASS) : null;
+        // 26.x（有 GuiGraphicsExtractor）走另一条绘制路径：那里**不能碰 LWJGL 的 GL 绑定**。
+        // 两个真机实测的坑都指向同一结论：
+        //   - 26.3（SDL 栈）：帧回调 / GUI 绘制路径 / 游戏自己的呈现入口三处调用 GL 都会让 LWJGL
+        //     FATAL ERROR 终止 JVM；
+        //   - 26.2（GLFW + Vulkan，尚未跑通）：帧回调是 `GlSurface.present`，**当时没有 current GL
+        //     上下文**，在那里 `glCreateShader` 同样直接 native abort（实测：JVM 整个挂掉）。
+        // 因此判定条件取「有没有 GuiGraphicsExtractor」而不是「是不是 SDL 栈」——26.1/26.2 的 GL
+        // 上下文只在游戏自己的调用序列里有效，我们只能在它交给我们的绘制上下文里提交绘制。
+        Class<?> extractorType = resolveLoaded(EXTRACTOR_CLASS);
         boolean sdl = extractorType != null;
         Class<?> gl11 = null;
         GlApi gl = null;
@@ -178,8 +179,9 @@ public final class OverlayBootstrap implements FrameListener {
         }
         attempts++;
 
-        // 注：SDL 栈下帧钩子**不再注册**（见 NocturneAgent.installFrameHook），帧回调只由 GUI 绘制
-        // 钩子驱动——那时绘制上下文有效（见 GuiDrawHook）。所以这里不必再拦截安装：它只在安全时机发生。
+        // 注：SDL 栈（26.3）下帧钩子**不再注册**，帧回调只由 GUI 绘制钩子驱动（见 GuiDrawHook）；
+        // 26.1/26.2 上帧钩子照旧存在（GLFW 交换点），它只负责输入轮询与重绘时机——绘制本身全部提交给
+        // extractor，帧回调里一次 GL 调用都不发生（这正是上面那条实测结论的落地）。
 
         ClassLoader loader = sdl ? gameLoader
                 : (gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader);
@@ -193,7 +195,7 @@ public final class OverlayBootstrap implements FrameListener {
         if (!gameReady && attempts <= GAME_WAIT_ATTEMPTS) {
             return;
         }
-        // SDL 栈不建 MinecraftTextRenderer：26.x 的 Font 没有画字方法，文字由 extractor 后端自己画。
+        // extractor 栈不建 MinecraftTextRenderer：26.x 的 Font 没有画字方法，文字由后端自己画。
         TextRenderer font = sdl ? null : MinecraftTextRenderer.bind(bridge);
         // bind 不再因"字体晚到"返回 null（改为绘制时晚绑定），所以这里只需报告是否已就绪。
         if (!gameReady) {
@@ -221,15 +223,17 @@ public final class OverlayBootstrap implements FrameListener {
                 // 绘制 API 签名不认识（这个版本的 extractor 换了形状）：报一次，之后仍按上限重试。
                 if (!sdlReported) {
                     sdlReported = true;
-                    log("SDL render stack: GuiGraphicsExtractor signatures not recognised;"
+                    log("extractor stack: GuiGraphicsExtractor signatures not recognised;"
                             + " the overlay cannot draw on this version");
                 }
                 return;
             }
             if (!sdlReported) {
                 sdlReported = true;
-                log("SDL render stack: drawing through the game's GuiGraphicsExtractor"
-                        + " (LWJGL GL bindings are unusable here)");
+                log("extractor stack (Minecraft 26.x): drawing through the game's GuiGraphicsExtractor;"
+                        + " the overlay never calls LWJGL GL"
+                        + (isSdlStack() ? " (SDL-managed context)" : " (context is only current inside"
+                                + " the game's own call sequence)"));
             }
             // 钩子每帧从这里取后端，把当帧的绘制上下文喂进去（见 setDrawContext）。
             extractorBackend = extractor;
@@ -249,19 +253,28 @@ public final class OverlayBootstrap implements FrameListener {
         InputSource gameInput = GameInput.create(bridge, loader, fallbackInput,
                 backend::width, backend::height);
         InputSource input = gameInput == null ? fallbackInput : gameInput;
+        // 剪贴板：与输入栈同源（LWJGL2 / GLFW / SDL 各有一套读写入口），界面里的文本框与颜色 HEX
+        // 输入都走它。未注入时读写退化为空操作，界面依旧可用。
+        final InputSource clipboardSource = input;
+        dev.nocturne.ui.fatality.Clipboard.install(new dev.nocturne.ui.fatality.Clipboard.Source() {
+            @Override
+            public String get() {
+                return clipboardSource.clipboard();
+            }
+
+            @Override
+            public void set(String value) {
+                clipboardSource.setClipboard(value);
+            }
+        });
         // 诊断（diag1）：把输入源的真实类与它的类来源打出来。"input=none" 这类现象必须能区分
         // 「探测失败」与「运行时加载到了别处的旧类」——否则只在日志里猜，无法定位。
         System.out.println("[nocturne] overlay diag: input=" + input.getClass().getName()
                 + " from=" + codeSourceOf(input.getClass())
                 + " backendClass=" + backend.getClass().getName()
                 + " from=" + codeSourceOf(backend.getClass()) + " mark=diag1");
-        // HUD 行汇：模块只面向 HudSink 发布文本行，接住它们的实现必须由 UI 侧提供。此前没有任何
-        // 实现，模块的发布全部落到空处——HUD 上永远看不到模块文本，而模块自身毫无察觉。
-        SkijaHudSink hudSink = backend instanceof SkijaBackend ? new SkijaHudSink() : null;
-        if (hudSink != null) {
-            client.setHudSink(hudSink);
-        }
-        GuiOverlay overlay = new GuiOverlay(client.modules(), backend, input, toggleKey, hudSink);
+        // HUD 行汇：已随旧 UI 库一并删除（用户确认）。client 侧的 HudSink 接口保留，暂不注入实现。
+        GuiOverlay overlay = new GuiOverlay(client.modules(), backend, input, toggleKey);
         NocturneRuntime.addListener(overlay);
         if (openGuiOnInstall) {
             overlay.setOpen(true);
@@ -269,7 +282,11 @@ public final class OverlayBootstrap implements FrameListener {
         }
         // 我们界面打开时，顶掉已知外部客户端（FPSMaster 等）用 MC screen 机制弹出的界面：
         // 它们是真正的 currentScreen，会盖住并吃掉输入，看起来像我们没生效。
-        NocturneRuntime.addListener(new ForeignScreenGuard(bridge, overlay::isOpen));
+        ForeignScreenGuard guard = new ForeignScreenGuard(bridge, overlay::isOpen);
+        NocturneRuntime.addListener(guard);
+        // 自销毁前还原本守护改过的游戏状态（鼠标抓取 / inGameHasFocus）：清空分发器之后它再也不会
+        // 被驱动，不还原就把 1.8.9–1.12 的鼠标视角永久留在失效状态。
+        NocturneRuntime.addShutdown(guard::restore);
 
         installed = true;
         // 安装完成即退场：之后每帧的开销全部留给真正的叠加层。
@@ -388,18 +405,13 @@ public final class OverlayBootstrap implements FrameListener {
      */
     private static UiBackend selectBackend(GlApi fixed, Class<?> gl11, TextRenderer font,
                                           GameBridge bridge) {
-        // LWJGL2（≤1.12）直接走固定管线，不 probe Skija：Skia 包 fb0 直写会盖黑游戏
-        // （wrap/make、samples、flush/submit、colorspace 已逐项排除，机制层面不兼容），
-        // 正确修法是纹理中转（另开任务）。固定管线在 1.8.9 已验证游戏 + overlay 全正常。
+        // LWJGL2（≤1.12）只有固定管线：立即模式 + 无着色器，用 GlRenderer。
         if (!isModernRenderStack(gl11)) {
-            System.out.println("[nocturne] backend: fixed pipeline (LWJGL2; skija disabled:"
-                    + " direct fb0 writes black out the game)");
+            System.out.println("[nocturne] backend: fixed pipeline (LWJGL2, 1.8.9-1.12.2)");
             return new dev.nocturne.ui.gl.GlRenderer(fixed, font);
         }
-        // 1.13+（core profile）暂时直接走 ModernRenderer，不 probe Skija：Skia 包外部帧缓冲
-        // 直写会盖黑游戏（1.8.9 与 1.16.5 真机均已实锤；make/wrap、samples、flush/submit、
-        // colorspace、reset 逐项排除无解），正确修法是纹理中转（另开任务）。ModernRenderer 若
-        // 绑定失败再按原逻辑回落（1.13+ 上固定管线画不出，会告警）。
+        // 1.13+（core profile）：立即模式已被移除，必须走 VBO + 着色器的 ModernRenderer。
+        // 绑定失败说明这个 LWJGL3 栈缺核心 profile 入口，回落固定管线只会告警（见下）。
         ModernGlApi modern = ModernGlApi.bind(gl11.getClassLoader());
         if (modern != null) {
             return new ModernRenderer(modern, font, bridge);

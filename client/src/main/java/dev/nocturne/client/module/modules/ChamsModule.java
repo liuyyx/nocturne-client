@@ -36,7 +36,7 @@ public final class ChamsModule extends Module {
     private final ColorValue occludedColor = add(new ColorValue("Invisible Color", 0xFFFFFF00));
 
     /** RenderEvent 订阅句柄；禁用时退订。 */
-    private EventBus.Subscription renderSubscription;
+    private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
     private boolean gateLogged;
 
@@ -68,7 +68,9 @@ public final class ChamsModule extends Module {
     /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上）。 */
     @Override
     public void onTick() {
-        if (renderSubscription == null) {
+        if (isEnabled() && renderSubscription == null) {
+            // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
+            // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
             subscribe();
         }
     }

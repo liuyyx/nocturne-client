@@ -57,7 +57,6 @@ class AppConfigTest {
         AppConfig config = new AppConfig();
         config.uiScale = 120;
         config.animationSpeed = 150;
-        config.blurStrength = 70;
         config.guiBind = "F5";
         config.save();
 
@@ -66,7 +65,6 @@ class AppConfigTest {
         AppConfig loaded = AppConfig.load();
         assertEquals(120, loaded.uiScale);
         assertEquals(150, loaded.animationSpeed);
-        assertEquals(70, loaded.blurStrength);
         assertEquals("F5", loaded.guiBind);
     }
 
@@ -107,12 +105,11 @@ class AppConfigTest {
     @Test
     void brokenFieldFallsBackAloneWhileOthersSurvive() throws IOException {
         writeRaw("{\"version\":1,\"uiScale\":\"oops\",\"animationSpeed\":150,"
-                + "\"blurStrength\":\"nope\",\"guiBind\":\"F5\"}");
+                + "\"guiBind\":\"F5\"}");
 
         AppConfig loaded = AppConfig.load();
         assertEquals(100, loaded.uiScale, "malformed uiScale falls back to its default");
         assertEquals(150, loaded.animationSpeed, "a healthy sibling must survive");
-        assertEquals(50, loaded.blurStrength, "malformed blurStrength falls back to its default");
         assertEquals("F5", loaded.guiBind, "a healthy string field must survive");
     }
 
@@ -124,19 +121,17 @@ class AppConfigTest {
         AppConfig loaded = AppConfig.load();
         assertEquals(100, loaded.uiScale);
         assertEquals(100, loaded.animationSpeed);
-        assertEquals(50, loaded.blurStrength);
         assertEquals("RSHIFT", loaded.guiBind, "blank bind must fall back to RSHIFT");
     }
 
     /** 文件里的越界值必须被归一化，而不是原样生效 */
     @Test
     void outOfRangeValuesAreClampedOnLoad() throws IOException {
-        writeRaw("{\"uiScale\":9999,\"animationSpeed\":-5,\"blurStrength\":500}");
+        writeRaw("{\"uiScale\":9999,\"animationSpeed\":-5}");
 
         AppConfig loaded = AppConfig.load();
         assertEquals(150, loaded.uiScale);
         assertEquals(0, loaded.animationSpeed);
-        assertEquals(100, loaded.blurStrength);
     }
 
     /** M-99：损坏 JSON 不得抛异常，退回默认值 */
@@ -146,7 +141,6 @@ class AppConfigTest {
 
         AppConfig loaded = AppConfig.load();
         assertEquals(100, loaded.uiScale);
-        assertEquals(50, loaded.blurStrength);
         assertEquals("RSHIFT", loaded.guiBind);
     }
 

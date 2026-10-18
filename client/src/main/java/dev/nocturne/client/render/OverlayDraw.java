@@ -5,7 +5,7 @@ package dev.nocturne.client.render;
  *
  * <p>为什么单独定一个接口而不是直接用 ui 的 {@code Renderer}：依赖方向是 {@code ui → client}，
  * client 侧看不到 ui 的类型。接口只收 {@code int argb} 与 {@code float}，不引入任何 ui 类型，
- * 于是同一份模块代码在四个后端（gl-fixed / gl-core / gui-extractor / skija）上都能画。
+ * 于是同一份模块代码在三个后端（gl-fixed / gl-core / gui-extractor）上都能画。
  *
  * <p>坐标是**屏幕逻辑像素**（与 {@link WorldProjection} 的输出、以及后端的
  * {@code width()/height()} 同一口径）。

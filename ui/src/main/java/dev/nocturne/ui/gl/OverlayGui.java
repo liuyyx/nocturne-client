@@ -2,21 +2,14 @@ package dev.nocturne.ui.gl;
 
 import dev.nocturne.ui.render.Renderer;
 
-import io.github.humbleui.skija.Canvas;
-
 /**
  * 叠加层可驱动的界面契约。
  *
- * <p>存在两个实现，对应两套绘制方式：
- * <ul>
- *   <li>{@link dev.nocturne.ui.clickgui.ClickGui}——面向 {@link Renderer} 抽象（矩形 + 文字原语），
- *       任何后端都能画，但表达不出模糊、发光、图标字体等效果；</li>
- *   <li>{@link dev.nocturne.ui.skija.SetsunaClickGui}——直接用 Skija {@link Canvas} 绘制，
- *       能完整复刻移植来的视觉语言，仅在 Skija 后端可用时启用。</li>
- * </ul>
+ * <p>当前实现是 {@link dev.nocturne.ui.fatality.FaClickGui}——移植自 FatalityClickGui 的
+ * 三列瀑布流界面。它完全建立在 {@link Renderer} 抽象（矩形 / 圆角 / 描边 / 纹理 / 文字原语）
+ * 之上，因此三个后端（{@code gl-fixed} / {@code gl-core} / {@code gui-extractor}）都能画。
  *
- * <p>叠加层只依赖本接口做输入派发；渲染时把两条通道都传下去，由实现各自取用（见
- * {@link #render(Renderer, Canvas)}）。
+ * <p>叠加层只依赖本接口做输入派发，绘制时把 {@link Renderer} 传下去（见 {@link #render(Renderer)}）。
  */
 public interface OverlayGui {
 
@@ -51,15 +44,25 @@ public interface OverlayGui {
     /** @param keyCode AWT VK 码 */
     boolean keyPressed(int keyCode, int modifiers);
 
+    /**
+     * 派发一个已输入的字符。
+     *
+     * <p>键盘事件只给出键码，拿不到"按了哪个字符"（要结合键盘布局与 Shift），所以文本框必须靠
+     * 本入口拿到真实字符。派发源（{@link GuiOverlay}）在轮询模型下没有字符事件，只有
+     * {@link dev.nocturne.ui.gl.OverlayGui} 的实现自己按需从输入源补充。
+     *
+     * @param c 输入字符
+     * @return 消费返回 {@code true}
+     */
+    boolean charTyped(char c);
+
     /** 复位全树交互态（关闭界面时调用，避免丢失的释放事件让拖动状态残留）。 */
     void cancelInteractions();
 
     /**
      * 渲染一帧。
      *
-     * @param renderer 抽象绘制面（所有实现都可用）
-     * @param canvas   Skija 画布；非 Skija 后端或本帧不可绘制时为 {@code null}。
-     *                 需要 Canvas 的实现应在为 {@code null} 时跳过绘制。
+     * @param renderer 绘制面（所有后端都实现它）
      */
-    void render(Renderer renderer, Canvas canvas);
+    void render(Renderer renderer);
 }

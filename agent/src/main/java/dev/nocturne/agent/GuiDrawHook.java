@@ -26,7 +26,7 @@ import java.lang.reflect.Method;
  * <p>为什么需要它（而不是继续用帧钩子）：Minecraft 26.x 起改用 SDL 管理 GL 上下文，而 LWJGL 的
  * GL 绑定在其中不可用——**在帧回调里调用任何 GL 函数（哪怕只是 glGetIntegerv 读视口）都会让 LWJGL
  * 直接 {@code FATAL ERROR} 终止整个 JVM**，且是 native abort，Java 侧捕获不到。实测就是那样崩的：
- * {@code SDL_GL_SwapWindow → 帧钩子 → SkijaBackend.beginFrame → glGetIntegerv → JVM abort}。
+ * {@code SDL_GL_SwapWindow → 帧钩子 → ExtractorRenderer.beginFrame → glGetIntegerv → JVM abort}。
  *
  * <p><b>本类不持有任何静态状态</b>：它由游戏的隔离类加载器加载（注入的字节码在游戏方法里），而叠加层
  * 后端由 agent 的加载器持有——同一个类在两处各有一份，静态字段互不可见。因此绘制上下文与帧回调一律

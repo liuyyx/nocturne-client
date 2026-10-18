@@ -116,6 +116,14 @@ public final class FakeGl {
         capDisableCounts.clear();
         enabledCaps.clear();
         currentMatrixMode = -1;
+        genTextureCalls = 0;
+        lastGenTexture = 0;
+        deletedTexture = -1;
+        failTextures = false;
+        lastTexImage = null;
+        lastTexParameter = null;
+        lastTexPixels = null;
+        texParameters.clear();
     }
 
     /** 清空仅与裁剪相关的观察，便于 beginFrame 之后单独断言 pushClip 的行为 */
@@ -316,5 +324,68 @@ public final class FakeGl {
 
     /** 绑定纹理；无操作 */
     public static void glBindTexture(int target, int texture) {
+    }
+
+    // ---- 纹理支路（供 GlRenderer 的纹理回归使用）----
+
+    /** {@code glGenTextures(int[])} 被调用次数 */
+    public static int genTextureCalls;
+    /** 最近一次生成的纹理句柄；{@link #failTextures} 为 true 时写 0 */
+    public static int lastGenTexture;
+    /** {@code glDeleteTextures(int[])} 收到的句柄；未删除为 -1 */
+    public static int deletedTexture = -1;
+    /** 模拟纹理对象创建失败 */
+    public static boolean failTextures;
+    /** 最近一次 {@code glTexImage2D} 的参数：width, height, internalFormat, format, type, 像素字节数 */
+    public static int[] lastTexImage;
+    /** 最近一次 {@code glTexParameteri} 的参数：target, pname, param */
+    public static int[] lastTexParameter;
+    /** 纹理上传时的像素快照（按 RGBA 字节序展开） */
+    public static byte[] lastTexPixels;
+    /** 每个采样参数名最后一次被设置的取值；测试据此断言过滤/环绕模式。 */
+    public static final Map<Integer, Integer> texParameters = new HashMap<Integer, Integer>();
+
+    /** 记录一次纹理句柄生成。 */
+    public static void glGenTextures(int[] ids) {
+        genTextureCalls++;
+        if (ids != null && ids.length > 0) {
+            ids[0] = failTextures ? 0 : 31;
+            lastGenTexture = ids[0];
+        }
+    }
+
+    /** 记录一次纹理删除。 */
+    public static void glDeleteTextures(int[] ids) {
+        if (ids != null && ids.length > 0) {
+            deletedTexture = ids[0];
+        }
+    }
+
+    /**
+     * 记录一次纹理上传，并快照像素。
+     *
+     * <p>替身保留像素是为了钉住「上传的就是非预乘 RGBA、行优先」这一约定：字形图集与阴影纹理
+     * 全靠它与混合模式对齐，传错字节序只会表现为"颜色不对"，在计数器上看不出来。
+     */
+    public static void glTexImage2D(int target, int level, int internalFormat, int width, int height,
+                                    int border, int format, int type, java.nio.ByteBuffer pixels) {
+        lastTexImage = new int[]{width, height, internalFormat, format, type,
+                pixels == null ? 0 : pixels.remaining()};
+        if (pixels != null) {
+            java.nio.ByteBuffer copy = pixels.duplicate();
+            byte[] bytes = new byte[copy.remaining()];
+            copy.get(bytes);
+            lastTexPixels = bytes;
+        }
+    }
+
+    /** 记录一次采样参数设置。 */
+    public static void glTexParameteri(int target, int pname, int param) {
+        lastTexParameter = new int[]{target, pname, param};
+        texParameters.put(pname, param);
+    }
+
+    /** 像素存储模式；无操作（对齐由调用方保证） */
+    public static void glPixelStorei(int pname, int param) {
     }
 }

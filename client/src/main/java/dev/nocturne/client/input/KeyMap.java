@@ -61,6 +61,8 @@ public final class KeyMap {
     private static final int SDL_A = 4;
     /** {@code SDL_SCANCODE_1}：数字段起点（1..9 连续；0 在 39）。 */
     private static final int SDL_1 = 30;
+    /** {@code SDL_SCANCODE_RSHIFT}：右 Shift（左 Shift 是 225）。 */
+    private static final int SDL_RSHIFT = 229;
 
     /** 规范键码，升序排列，供二分查找。 */
     private static final int[] CANONICAL = {
@@ -142,6 +144,12 @@ public final class KeyMap {
      * @return SDL scancode；无对应项时返回 {@link #NONE}
      */
     public static int sdl(int vk) {
+        if (vk == VK_RIGHT_SHIFT) {
+            // 54 与字符 '6' 的 ASCII 相同，必须先判：本项目按 K1 契约把 54 当"右 Shift"
+            // （AWT 侧没有独立的右 Shift 常量，取的是 LWJGL2 的码）。代价是 SDL 世代里数字键 6
+            // 会被读成右 Shift——界面不读数字键，换来默认开关键可用，划算。
+            return SDL_RSHIFT;
+        }
         if (vk >= 'A' && vk <= 'Z') {
             return SDL_A + (vk - 'A');            // SDL_SCANCODE_A(4) .. Z(29)
         }
@@ -167,17 +175,18 @@ public final class KeyMap {
             case 38: return 82;                   // UP
             case 39: return 79;                   // RIGHT
             case 40: return 81;                   // DOWN
-            case 44: return 70;                   // PRINTSCREEN
+            case 44: return 54;                   // COMMA（AWT 44 = ','；PrintScreen 是 154）
             case 45: return 45;                   // MINUS（缩小界面）
             case 46: return 55;                   // PERIOD
             case 47: return 56;                   // SLASH
             case 48: return 39;                   // 0
+            case 59: return 51;                   // SEMICOLON
             case 61: return 46;                   // EQUALS（放大界面；键帽印的是 +）
+            case 91: return 47;                   // LEFTBRACKET
+            case 92: return 49;                   // BACKSLASH
+            case 93: return 48;                   // RIGHTBRACKET
+            case 154: return 70;                  // PRINTSCREEN
             case 155: return 73;                  // INSERT
-            case 54: return 229;                  // RSHIFT（本项目的开关键）
-            case 91: case 524: return 227;        // LGUI / WIN
-            case 92: return 231;                  // RGUI
-            case 93: return 101;                  // APPLICATION (MENU)
             case 96: return 98;                   // KP_0
             case 97: return 89;                   // KP_1
             case 98: return 90;                   // KP_2
@@ -199,20 +208,16 @@ public final class KeyMap {
             case 157: return 228;                 // RCTRL
             case 184: return 230;                 // RALT
             case 192: return 53;                  // GRAVE
-            case 220: return 231;                 // RWIN
+            case 220: return 231;                 // RWIN（契约值，AWT 无对应）
             case 222: return 52;                  // APOSTROPHE
+            case 524: return 227;                 // WIN（AWT VK_WINDOWS）
+            case 525: return 101;                 // APPLICATION（AWT VK_CONTEXT_MENU）
             case 65406: return 230;               // ALTGRAPH
             default: break;
         }
-        // F1..F12 在 SDL 里是 58..69，与规范键码 59..68 一一对应（差 1）
-        if (vk >= 59 && vk <= 68) {
-            return 57 + (vk - 59 + 1);
-        }
-        if (vk == 112) {
-            return 68;                            // F11
-        }
-        if (vk == 113) {
-            return 69;                            // F12
+        // AWT 的 F1..F12 是 112..123，SDL 的 F1..F12 是 58..69（两段都连续，差 54）
+        if (vk >= 112 && vk <= 123) {
+            return 58 + (vk - 112);
         }
         return NONE;
     }

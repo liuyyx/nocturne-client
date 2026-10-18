@@ -36,17 +36,11 @@ public final class ItemEspModule extends Module implements WorldOverlay {
 
     /** 显示距离。 */
     private final BooleanValue showDistance = add(new BooleanValue("Distance", false));
-    /** 近距物品分组合并。 */
-    private final BooleanValue groupItems = add(new BooleanValue("Group Items", false));
-    /** 按距离自动缩放标签。 */
-    private final BooleanValue autoScale = add(new BooleanValue("Auto Scale", true));
-    /** 标签缩放系数。 */
-    private final NumberValue scale = add(new NumberValue("Scale", 1.0, 0.1, 1.5, 0.1));
     /** 仅渲染白名单物品（名单值缺失时保守实现，见类注释）。 */
     private final BooleanValue whitelistOnly = add(new BooleanValue("Whitelist Only", false));
 
     /** RenderEvent 订阅句柄；禁用时退订。 */
-    private EventBus.Subscription renderSubscription;
+    private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
     private boolean gateLogged;
     /** 上一帧收集到的掉落物组数（HUD/诊断用）。 */
@@ -82,7 +76,9 @@ public final class ItemEspModule extends Module implements WorldOverlay {
     /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上）。 */
     @Override
     public void onTick() {
-        if (renderSubscription == null) {
+        if (isEnabled() && renderSubscription == null) {
+            // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
+            // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
             subscribe();
         }
     }
@@ -184,10 +180,11 @@ public final class ItemEspModule extends Module implements WorldOverlay {
         } catch (Throwable t) {
             return out;
         }
-        if (!(raw instanceof List)) {
+        // 1.15+ 返回 Iterable（1.8.9–1.12.2 才是 List）：只认 List 会让中间版本静默零输出。
+        if (!(raw instanceof Iterable)) {
             return out;
         }
-        for (Object entity : (List<Object>) raw) {
+        for (Object entity : (Iterable<Object>) raw) {
             if (entity != null && isItemEntity(bridge, entity)) {
                 out.add(entity);
             }
@@ -232,15 +229,16 @@ public final class ItemEspModule extends Module implements WorldOverlay {
 
     /** 标签文本：物品名（+ 距离）；名字读不到时返回 {@code null}。 */
     private static String label(GameBridge bridge, Object entity, boolean withDistance) {
-        Object name = bridge.callMapped(entity, ClassType.ENTITY, "getName");
-        if (!(name instanceof String)) {
+        // getName 返回的是聊天组件而不是字符串，必须经映射表读文本（见 GameBridge#componentText）。
+        String name = bridge.componentText(bridge.callMapped(entity, ClassType.ENTITY, "getName"));
+        if (name == null) {
             return null;
         }
         if (!withDistance) {
-            return (String) name;
+            return name;
         }
         double dist = distanceTo(bridge, bridge.player(), entity);
-        return dist >= 0 ? name + " " + Math.round(dist) + "m" : (String) name;
+        return dist >= 0 ? name + " " + Math.round(dist) + "m" : name;
     }
 
     /** 是否为掉落物（按 {@code ItemEntity} 映射类判定，不写版本分支）。 */
@@ -256,7 +254,7 @@ public final class ItemEspModule extends Module implements WorldOverlay {
      * 这样同一份代码在四种安装上都不需要版本分支。
      */
     private static Class<?> resolveMapped(GameBridge bridge, ClassType type, ClassLoader loader) {
-        ClassLoader effective = loader != null ? loader : ItemEspModule.class.getClassLoader();
+        ClassLoader effective = loader != null ? loader : bridge.gameLoader();
         for (String mapped : bridge.mapping().classNameCandidates(type)) {
             try {
                 return Class.forName(mapped, false, effective);

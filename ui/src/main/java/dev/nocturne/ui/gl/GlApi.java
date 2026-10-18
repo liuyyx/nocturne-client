@@ -53,6 +53,35 @@ public final class GlApi {
     public static final int GL_ALL_ATTRIB_BITS = 0x000FFFFF;
     /** 裁剪测试开关，配合 {@code glScissor} 实现矩形裁剪。 */
     public static final int GL_SCISSOR_TEST = 3089;
+    /** {@code glTexParameteri} 的过滤参数：缩小过滤。 */
+    public static final int GL_TEXTURE_MIN_FILTER = 10241;
+    /** {@code glTexParameteri} 的过滤参数：放大过滤。 */
+    public static final int GL_TEXTURE_MAG_FILTER = 10240;
+    /** 过滤模式：最近邻；UI 字形与图标都按像素尺寸栅格，线性过滤只会糊掉。 */
+    public static final int GL_NEAREST = 9728;
+    /** 纹理环绕参数：S 轴。 */
+    public static final int GL_TEXTURE_WRAP_S = 10242;
+    /** 纹理环绕参数：T 轴。 */
+    public static final int GL_TEXTURE_WRAP_T = 10243;
+    /** 环绕模式：夹取到边缘；图集边缘采样越界会串到相邻字形。 */
+    public static final int GL_CLAMP_TO_EDGE = 33071;
+    /** 纹理像素通道布局：RGBA。 */
+    public static final int GL_RGBA = 6408;
+    /** 像素分量类型：每通道 8 位无符号。 */
+    public static final int GL_UNSIGNED_BYTE = 5121;
+    /** {@code glPixelStorei} 的参数：解包时的行对齐字节数。 */
+    public static final int GL_UNPACK_ALIGNMENT = 3317;
+    /**
+     * {@code glPixelStorei} 的参数：解包时每行读取的像素数（3314）。上传前必须归零。
+     *
+     * <p>与 {@code ModernGlApi} 同一个坑：游戏上传图集时会把它设成图集宽度，驱动随后按那个
+     * 宽度读我们的小缓冲会读越界（1.21.11 真机实测 {@code nvoglv64} ACCESS_VIOLATION）。
+     */
+    public static final int GL_UNPACK_ROW_LENGTH = 3314;
+    /** {@code glPixelStorei} 的参数：解包时跳过的行数（3315），同样必须归零。 */
+    public static final int GL_UNPACK_SKIP_ROWS = 3315;
+    /** {@code glPixelStorei} 的参数：解包时跳过的像素数（3316），同样必须归零。 */
+    public static final int GL_UNPACK_SKIP_PIXELS = 3316;
 
     /** 已解析的 {@code glColor4f}，设置当前顶点颜色。 */
     private final Method color4f;
@@ -114,6 +143,26 @@ public final class GlApi {
     /** 已解析的 {@code glScissor}，设置裁剪矩形。 */
     private final Method scissor;
 
+    /** 已解析的 {@code glGenTextures(int[])}（LWJGL3 形态）；LWJGL2 只有缓冲形态。 */
+    private final Method genTexturesArray;
+    /** 已解析的 {@code glGenTextures(int, IntBuffer)} / {@code glGenTextures(IntBuffer)}（LWJGL2 形态）。 */
+    private final Method genTexturesBuffer;
+    /** 已解析的 {@code glDeleteTextures(int[])}（LWJGL3 形态）。 */
+    private final Method deleteTexturesArray;
+    /** 已解析的 {@code glDeleteTextures(int, IntBuffer)} / {@code glDeleteTextures(IntBuffer)}。 */
+    private final Method deleteTexturesBuffer;
+    /** 已解析的 {@code glTexImage2D}（两代签名一致）。 */
+    private final Method texImage2D;
+    /** 已解析的 {@code glTexParameteri}。 */
+    private final Method texParameteri;
+    /** 已解析的 {@code glPixelStorei}。 */
+    private final Method pixelStorei;
+
+    /** 纹理句柄读写用的复用直接缓冲（GL 要求直接缓冲 + 本地字节序）。 */
+    private final IntBuffer textureBuffer;
+    /** 像素上传用的复用直接缓冲；不足时按需扩容，禁止每帧分配。 */
+    private ByteBuffer pixelBuffer;
+
     /** 游戏的 GlStateManager 桥；为 {@code null} 时状态类调用直接走 GL11。 */
     private final StateManager state;
 
@@ -128,6 +177,9 @@ public final class GlApi {
                   Method translatef, Method scalef, Method lineWidth, Method texCoord2f,
                   Method bindTexture, Method matrixMode, Method loadIdentity, Method ortho,
                   Method getIntegerv, Method getIntegervBuffer, Method scissor,
+                  Method genTexturesArray, Method genTexturesBuffer, Method deleteTexturesArray,
+                  Method deleteTexturesBuffer, Method texImage2D, Method texParameteri,
+                  Method pixelStorei,
                   StateManager state) {
         this.color4f = color4f;
         this.begin = begin;
@@ -154,6 +206,16 @@ public final class GlApi {
                 .order(ByteOrder.nativeOrder())
                 .asIntBuffer();
         this.scissor = scissor;
+        this.genTexturesArray = genTexturesArray;
+        this.genTexturesBuffer = genTexturesBuffer;
+        this.deleteTexturesArray = deleteTexturesArray;
+        this.deleteTexturesBuffer = deleteTexturesBuffer;
+        this.texImage2D = texImage2D;
+        this.texParameteri = texParameteri;
+        this.pixelStorei = pixelStorei;
+        this.textureBuffer = ByteBuffer.allocateDirect(16 * Integer.BYTES)
+                .order(ByteOrder.nativeOrder())
+                .asIntBuffer();
         this.state = state;
     }
 
@@ -348,6 +410,20 @@ public final class GlApi {
                 orElse(Reflect.method(gl, "glGetInteger", int.class, IntBuffer.class),
                         Reflect.method(gl, "glGetIntegerv", int.class, IntBuffer.class)),
                 Reflect.method(gl, "glScissor", int.class, int.class, int.class, int.class),
+                // 纹理：glGenTextures / glDeleteTextures 在两代 LWJGL 上签名不同——
+                // LWJGL2 只有缓冲形态（glGenTextures(int, IntBuffer) / (IntBuffer)），
+                // LWJGL3 用数组形态（glGenTextures(int[])），同时保留 (int, IntBuffer)。
+                Reflect.method(gl, "glGenTextures", int[].class),
+                orElse(Reflect.method(gl, "glGenTextures", int.class, IntBuffer.class),
+                        Reflect.method(gl, "glGenTextures", IntBuffer.class)),
+                Reflect.method(gl, "glDeleteTextures", int[].class),
+                orElse(Reflect.method(gl, "glDeleteTextures", int.class, IntBuffer.class),
+                        Reflect.method(gl, "glDeleteTextures", IntBuffer.class)),
+                // glTexImage2D 两代签名一致（最后一段都是 ByteBuffer）。
+                Reflect.method(gl, "glTexImage2D", int.class, int.class, int.class, int.class,
+                        int.class, int.class, int.class, int.class, ByteBuffer.class),
+                Reflect.method(gl, "glTexParameteri", int.class, int.class, int.class),
+                Reflect.method(gl, "glPixelStorei", int.class, int.class),
                 // 状态类调用优先走游戏的 GlStateManager（缓存一致），解析不到时为 null。
                 StateManager.resolve(gl.getClassLoader()));
     }
@@ -527,6 +603,136 @@ public final class GlApi {
      */
     public void scissor(int x, int y, int width, int height) {
         Reflect.call(scissor, null, x, y, width, height);
+    }
+
+    // ------------------------------------------------------------------ 纹理
+
+    /**
+     * 是否具备纹理上传所需的最小句柄集。
+     *
+     * <p>三项缺一都传不了纹理：生成句柄（{@code glGenTextures} 的数组或缓冲形态任一）、
+     * 上传像素（{@code glTexImage2D}）、设置采样参数（{@code glTexParameteri}）。
+     *
+     * @return 可用返回 {@code true}
+     */
+    public boolean hasTextures() {
+        return (genTexturesArray != null || genTexturesBuffer != null)
+                && texImage2D != null && texParameteri != null;
+    }
+
+    /** @return 新建的纹理句柄；不可用或失败时为 0 */
+    public int genTexture() {
+        if (genTexturesArray != null) {
+            int[] ids = new int[1];
+            Reflect.call(genTexturesArray, null, ids);
+            return ids[0];
+        }
+        if (genTexturesBuffer != null) {
+            textureBuffer.clear();
+            textureBuffer.limit(1);
+            // LWJGL2 的 (int, IntBuffer) 形态带 count；只有 (IntBuffer) 重载时传 null 也不影响（按缓冲余量）。
+            if (hasParameter(genTexturesBuffer, int.class)) {
+                Reflect.call(genTexturesBuffer, null, 1, textureBuffer);
+            } else {
+                Reflect.call(genTexturesBuffer, null, textureBuffer);
+            }
+            return textureBuffer.get(0);
+        }
+        return 0;
+    }
+
+    /** 删除一个纹理句柄；{@code id <= 0} 或不可用时为空操作。 */
+    public void deleteTexture(int id) {
+        if (id <= 0) {
+            return;
+        }
+        if (deleteTexturesArray != null) {
+            Reflect.call(deleteTexturesArray, null, new int[]{id});
+            return;
+        }
+        if (deleteTexturesBuffer != null) {
+            textureBuffer.clear();
+            textureBuffer.limit(1);
+            textureBuffer.put(0, id);
+            if (hasParameter(deleteTexturesBuffer, int.class)) {
+                Reflect.call(deleteTexturesBuffer, null, 1, textureBuffer);
+            } else {
+                Reflect.call(deleteTexturesBuffer, null, textureBuffer);
+            }
+        }
+    }
+
+    /** 绑定二维纹理到 {@link #GL_TEXTURE_2D}。 */
+    public void bindTexture2D(int id) {
+        bindTexture(GL_TEXTURE_2D, id);
+    }
+
+    /**
+     * 上传一张 RGBA 纹理的全量像素。
+     *
+     * <p>像素格式固定为非预乘 {@code 0xAARRGGBB}、行优先、左上原点——与本类的
+     * {@code SRC_ALPHA / ONE_MINUS_SRC_ALPHA} 混合约定一致（见 {@link #uploadTexture}）。
+     * 复用内部直接缓冲，不在热路径上分配。
+     *
+     * @param width  宽度（像素）
+     * @param height 高度（像素）
+     * @param argb   像素；长度不足时为安全起见按 0 补齐
+     * @return 下发成功返回 {@code true}
+     */
+    public boolean uploadTexture(int width, int height, int[] argb) {
+        if (texImage2D == null || width <= 0 || height <= 0 || argb == null) {
+            return false;
+        }
+        int needed = width * height * 4;
+        ByteBuffer buffer = pixelBuffer;
+        if (buffer == null || buffer.capacity() < needed) {
+            buffer = ByteBuffer.allocateDirect(needed).order(ByteOrder.nativeOrder());
+            pixelBuffer = buffer;
+        }
+        buffer.clear();
+        for (int i = 0; i < width * height; i++) {
+            int pixel = argb[i];
+            buffer.put((byte) ((pixel >> 16) & 0xFF)); // R
+            buffer.put((byte) ((pixel >> 8) & 0xFF));  // G
+            buffer.put((byte) (pixel & 0xFF));         // B
+            buffer.put((byte) ((pixel >>> 24) & 0xFF)); // A
+        }
+        buffer.flip();
+        if (pixelStorei != null) {
+            // 行对齐：RGBA 每行字节数必然是 4 的倍数，显式设为 4 以免游戏把全局值改过。
+            Reflect.call(pixelStorei, null, GL_UNPACK_ALIGNMENT, 4);
+            // 行长度/跳过量必须归零：游戏上传图集时会改这些全局值，驱动按旧值读我们的小缓冲
+            // 会读越界（1.21.11 真机：nvoglv64 ACCESS_VIOLATION；固定管线同一套驱动）。
+            Reflect.call(pixelStorei, null, GL_UNPACK_ROW_LENGTH, 0);
+            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_ROWS, 0);
+            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_PIXELS, 0);
+        }
+        Reflect.call(texImage2D, null, GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+        return true;
+    }
+
+    /** 设置纹理采样参数（对应 {@code glTexParameteri}）。 */
+    public void texParameteri(int target, int pname, int param) {
+        Reflect.call(texParameteri, null, target, pname, param);
+    }
+
+    /** 设置像素存储模式（对应 {@code glPixelStorei}）。 */
+    public void pixelStorei(int pname, int param) {
+        Reflect.call(pixelStorei, null, pname, param);
+    }
+
+    /** @return 给定方法句柄是否接受指定类型的参数（用于在同义重载间分派） */
+    private static boolean hasParameter(Method method, Class<?> parameter) {
+        if (method == null) {
+            return false;
+        }
+        for (Class<?> type : method.getParameterTypes()) {
+            if (type == parameter) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

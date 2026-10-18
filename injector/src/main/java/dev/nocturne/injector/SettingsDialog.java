@@ -29,6 +29,8 @@ public final class SettingsDialog extends JDialog {
     private final AppConfig config;
     /** 关闭时的回调，参数即已修改并保存过的 {@link #config}。 */
     private final Consumer<AppConfig> onApply;
+    /** 动画速度拖动中的实时回调，让状态点/骨架的动效随滑块即时变化。 */
+    private final Consumer<Integer> onAnimationSpeed;
 
     /** 快捷键录制输入框；不可编辑，只用于显示与接收按键事件。 */
     private final JTextField bindField = new JTextField();
@@ -47,11 +49,14 @@ public final class SettingsDialog extends JDialog {
      * @param owner 父窗口，用于模态绑定与相对定位
      * @param config 被修改的偏好对象，通常与主窗口共享同一实例
      * @param onApply 关闭对话框后触发的回调
+     * @param onAnimationSpeed 动画速度拖动中的实时回调；可为 {@code null}
      */
-    public SettingsDialog(java.awt.Window owner, AppConfig config, Consumer<AppConfig> onApply) {
+    public SettingsDialog(java.awt.Window owner, AppConfig config, Consumer<AppConfig> onApply,
+                          Consumer<Integer> onAnimationSpeed) {
         super(owner, "设置", Dialog.ModalityType.APPLICATION_MODAL);
         this.config = config;
         this.onApply = onApply;
+        this.onAnimationSpeed = onAnimationSpeed;
 
         // 右上角 X 走的是窗口关闭事件：默认 HIDE_ON_CLOSE 会绕过 dispose() 导致设置不落盘、
         // 对话框也永不回收。改为 DISPOSE_ON_CLOSE，让 X 与「完成」走同一条保存路径。
@@ -65,11 +70,13 @@ public final class SettingsDialog extends JDialog {
         add(buildBindRow(), "growx");
 
         add(sectionLabel("动画速度"), "growx");
-        add(slider(0, 200, config.animationSpeed, value -> config.animationSpeed = value), "growx");
-        // 动画速度与模糊强度目前只写入配置，供注入端读取；这里不改变界面表现。
-
-        add(sectionLabel("模糊强度"), "growx");
-        add(slider(0, 100, config.blurStrength, value -> config.blurStrength = value), "growx");
+        // 动画速度即时作用于注入器自身的两处动效：状态点颜色过渡与扫描骨架的呼吸。
+        add(slider(0, 200, config.animationSpeed, value -> {
+            config.animationSpeed = value;
+            if (onAnimationSpeed != null) {
+                onAnimationSpeed.accept(value);
+            }
+        }), "growx");
 
         add(sectionLabel("界面缩放"), "growx");
         add(slider(80, 150, config.uiScale, value -> {

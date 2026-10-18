@@ -27,6 +27,28 @@ class ModernGlApiTest {
         GL30.reset();
     }
 
+    /**
+     * 回归（High-4）：缓冲形态的 {@code glGetIntegerv} 必须能读出真实视口。
+     *
+     * <p>旧实现读完就 {@code flip()}：GL 是按原生地址写缓冲区的、Java 侧 position 一直停在 0，
+     * 于是 flip() 把 limit 置成 0，remaining()==0 被当成"GL 没写入"而返回 null——视口永远退回
+     * 窗口尺寸推算，混合因子恢复也成了死代码。替身补上缓冲形态后这条分支才有覆盖。
+     */
+    @Test
+    void viewportIsReadThroughTheBufferForm() {
+        ModernGlApi api = ModernGlApi.bind(getClass().getClassLoader());
+        assertNotNull(api);
+
+        int[] viewport = api.getInteger(ModernGlApi.GL_VIEWPORT, 4);
+
+        assertNotNull(viewport, "the buffer form must return what GL wrote, not null");
+        assertEquals(0, viewport[0]);
+        assertEquals(0, viewport[1]);
+        assertEquals(100, viewport[2], "width must come from glGetIntegerv");
+        assertEquals(100, viewport[3], "height must come from glGetIntegerv");
+        assertEquals(1, GL30.getIntegervBufferCalls, "the buffer form must be preferred");
+    }
+
     /** genBuffer 必须按 LWJGL 的单参数组签名调用，并取回非零 id */
     @Test
     void genBufferUsesTheSingleArgumentSignature() {

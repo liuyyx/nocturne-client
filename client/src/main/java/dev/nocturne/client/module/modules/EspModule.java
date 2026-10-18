@@ -12,21 +12,18 @@ import dev.nocturne.client.render.WorldOverlay;
 import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.ColorValue;
-import dev.nocturne.client.value.ModeValue;
-import dev.nocturne.client.value.NumberValue;
 
 import java.util.List;
 
 /**
- * 玩家透视：按模式（3D 包围盒 / 2D 投影框 / 骨骼连线）高亮其他玩家。
+ * 玩家透视：把其他玩家投影成 2D 框（外加可选的名字）。
  *
- * <p>行为对齐 OpenVape ESP（只搬行为，不搬代码）：玩家颜色、隐身显示、Bot 隐藏、
- * 3D 包围盒开关、2D 框 + 血条 + 名字；版本门走表驱动（1.17+ 只有 3D/2D，
- * 1.12.2+ 才有骨骼，描边仅 1.12.2 之前——缺成员版本对应模式自动不可用）。
+ * <p>行为对齐 OpenVape ESP（只搬行为，不搬代码）：玩家颜色、隐身显示、框 + 名字。
+ * 版本门走表驱动——实体面缺失的版本一次性日志 + 跳过。
  *
- * <p>绘制挂钩说明：世界空间 3D 盒 / 屏幕空间 2D 框的真正投递点（世界渲染 pass +
- * 投影矩阵）尚未接入，当前先订阅 {@link RenderEvent} 做 per-frame 的实体收集、
- * 过滤与计数，实际画框待世界绘制挂钩落地后补齐。模块开关/参数/门逻辑现在即可验收。
+ * <p>绘制：由 {@link WorldOverlay} 每帧在叠加层上画二维投影框，投影用 {@link WorldProjection}
+ * 自算（四代通用）。对方的三维包围盒 / 骨骼连线需要世界渲染 pass 与实体渲染拦截，管线未接，
+ * 因此不提供对应模式——宁可没有这个开关，也不放一个拨了没反应的档位（见 High-28）。
  */
 public final class EspModule extends Module implements WorldOverlay {
 
@@ -43,23 +40,13 @@ public final class EspModule extends Module implements WorldOverlay {
     private final ColorValue playerColor = add(new ColorValue("Player Color", 0xFF249824));
     /** 显示隐身玩家。 */
     private final BooleanValue showInvisibles = add(new BooleanValue("Invisibles", false));
-    /** 隐藏 Bot。 */
-    private final BooleanValue hideBots = add(new BooleanValue("Hide Bots", false));
-    /** 3D 模式显示扩展 hitbox。 */
-    private final BooleanValue showExpandedHitbox = add(new BooleanValue("Hitbox", false));
-    /** 3D 模式显示真实 hitbox。 */
-    private final BooleanValue showNormalHitbox = add(new BooleanValue("Show Normal", false));
-    /** 2D 模式显示包围框。 */
+    /** 显示包围框。 */
     private final BooleanValue showBoundingBox = add(new BooleanValue("Bounding Box", true));
-    /** 2D 模式显示血条。 */
-    private final BooleanValue healthBar = add(new BooleanValue("Health Bar", false));
-    /** 2D 模式显示名字。 */
+    /** 显示名字。 */
     private final BooleanValue showName = add(new BooleanValue("Name", false));
-    /** 渲染模式：3D / 2D / Skeleton（缺成员版本自动降级，见 {@link #effectiveModes()}）。 */
-    private final ModeValue mode = add(new ModeValue("Mode", "3D", "3D", "2D", "Skeleton"));
 
     /** RenderEvent 订阅句柄；禁用时退订。 */
-    private EventBus.Subscription renderSubscription;
+    private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
     private boolean gateLogged;
     /** 上一帧收集到的可见玩家数（HUD/诊断用）。 */
@@ -95,7 +82,9 @@ public final class EspModule extends Module implements WorldOverlay {
     /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上）。 */
     @Override
     public void onTick() {
-        if (renderSubscription == null) {
+        if (isEnabled() && renderSubscription == null) {
+            // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
+            // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
             subscribe();
         }
     }
@@ -103,17 +92,6 @@ public final class EspModule extends Module implements WorldOverlay {
     /** @return 上一帧收集到的可见玩家数（绘制挂钩落地前供验收用）。 */
     public int lastVisibleCount() {
         return lastVisibleCount;
-    }
-
-    /**
-     * 当前版本实际可用的渲染模式（表驱动降级）。
-     *
-     * <p>对方版本门：1.17+ 只有 3D/2D；1.12.2+ 才有 Skeleton；Outline 仅 1.12.2 之前。
-     * 我方实现只提供 3D/2D/Skeleton 三档（Outline 依赖实体渲染拦截，管线未到不提供），
-     * Skeleton 在 LivingEntity 面缺失的版本自动不可用（回退 3D + 一次性日志）。
-     */
-    public String[] effectiveModes() {
-        return new String[]{"3D", "2D", "Skeleton"};
     }
 
     /** 订阅渲染事件；总线未就绪时返回不抛，由 onTick 重试。 */
@@ -220,21 +198,37 @@ public final class EspModule extends Module implements WorldOverlay {
         } catch (Throwable t) {
             return java.util.Collections.emptyList();
         }
-        if (!(raw instanceof List)) {
+        // 1.15+ 这个方法返回 Iterable（1.8.9–1.12.2 才是 List）：只认 List 会让中间版本静默零输出
+        // ——模块开着、计数器为零、屏幕上一个框都没有。
+        if (!(raw instanceof Iterable)) {
             return java.util.Collections.emptyList();
         }
         Object self = bridge.player();
         List<Object> out = new java.util.ArrayList<Object>();
-        for (Object entity : (List<Object>) raw) {
+        for (Object entity : (Iterable<Object>) raw) {
             if (entity == null || (self != null && self.equals(entity))) {
                 continue;
             }
             if (!isLiving(bridge, entity)) {
                 continue;
             }
+            if (!showInvisibles.get() && isInvisible(bridge, entity)) {
+                continue;
+            }
             out.add(entity);
         }
         return out;
+    }
+
+    /**
+     * 实体是否隐身。
+     *
+     * <p>{@code Entity#isInvisible} 目前不在映射表里：未混淆版本按规范名直接能调到，混淆版本读不到
+     * 就一律当作"可见"——宁可在老版本上多画几个框，也不因为读不到而一个都不画。
+     */
+    private static boolean isInvisible(GameBridge bridge, Object entity) {
+        Object value = bridge.callMapped(entity, ClassType.ENTITY, "isInvisible");
+        return value instanceof Boolean && ((Boolean) value).booleanValue();
     }
 
     /**
@@ -301,8 +295,9 @@ public final class EspModule extends Module implements WorldOverlay {
 
     /** 实体显示名；读不到时返回 {@code null}。 */
     private static String entityName(GameBridge bridge, Object entity) {
-        Object name = bridge.callMapped(entity, ClassType.ENTITY, "getName");
-        return name instanceof String ? (String) name : null;
+        // getName 返回的是聊天组件而不是字符串（1.8.9 IChatComponent / 1.13+ Component），
+        // 直接 instanceof String 会永远判为"没有名字"。文本必须经映射表读。
+        return bridge.componentText(bridge.callMapped(entity, ClassType.ENTITY, "getName"));
     }
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */

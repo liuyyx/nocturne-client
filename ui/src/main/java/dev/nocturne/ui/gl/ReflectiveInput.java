@@ -102,6 +102,14 @@ public final class ReflectiveInput implements InputSource {
     private boolean pointerGrabLast;
     /** LWJGL2 的 {@code Mouse.isGrabbed()}；不可用时为 {@code null}。 */
     private Method mouseIsGrabbed;
+    /** LWJGL2 的 {@code Display.getClipboardString()}；不可用时为 {@code null}。 */
+    private Method displayGetClipboard;
+    /** LWJGL2 的 {@code Display.setClipboardString(CharSequence)}；不可用时为 {@code null}。 */
+    private Method displaySetClipboard;
+    /** GLFW 的 {@code glfwGetClipboardString(long)}；不可用时为 {@code null}。 */
+    private Method glfwGetClipboard;
+    /** GLFW 的 {@code glfwSetClipboardString(long, CharSequence)}；不可用时为 {@code null}。 */
+    private Method glfwSetClipboard;
     /** 上一帧窗口是否获得焦点；用于在焦点重新获得时重发光标模式（失焦会被 GLFW 重置）。 */
     private boolean lastFocused;
 
@@ -123,6 +131,10 @@ public final class ReflectiveInput implements InputSource {
         Method kIsKeyDown = keyboard == null ? null : Reflect.method(keyboard, "isKeyDown", int.class);
         Method dGetWidth = display == null ? null : Reflect.method(display, "getWidth");
         Method dGetHeight = display == null ? null : Reflect.method(display, "getHeight");
+        // 剪贴板：LWJGL2 把它挂在 Display 上（GLFW 那套在上面另行绑定）。
+        Method dGetClipboard = display == null ? null : Reflect.method(display, "getClipboardString");
+        Method dSetClipboard = display == null ? null
+                : Reflect.method(display, "setClipboardString", CharSequence.class);
         if (mGetX != null && mGetY != null && mIsButtonDown != null && kIsKeyDown != null
                 && dGetWidth != null && dGetHeight != null) {
             this.mouseGetX = mGetX;
@@ -145,6 +157,10 @@ public final class ReflectiveInput implements InputSource {
             this.scrollCallbackType = null;
             this.scrollCallbackInvoke = null;
             this.mouseIsGrabbed = mIsGrabbed;
+            this.displayGetClipboard = dGetClipboard;
+            this.displaySetClipboard = dSetClipboard;
+            this.glfwGetClipboard = null;
+            this.glfwSetClipboard = null;
             this.backend = "lwjgl2";
             return;
         }
@@ -173,6 +189,10 @@ public final class ReflectiveInput implements InputSource {
                 : Reflect.method(callback, "invoke", long.class, double.class, double.class);
         Method gSetScroll = callback == null ? null
                 : Reflect.method(glfw, "glfwSetScrollCallback", long.class, callback);
+        Method gGetClipboard = glfw == null ? null
+                : Reflect.method(glfw, "glfwGetClipboardString", long.class);
+        Method gSetClipboard = glfw == null ? null
+                : Reflect.method(glfw, "glfwSetClipboardString", long.class, CharSequence.class);
 
         if (glfw != null && gCursorPos == null) {
             // 类找到了却解析不出方法时，把「类本身长什么样」打出来：加载器、方法总数、
@@ -215,6 +235,10 @@ public final class ReflectiveInput implements InputSource {
         this.glfwGetInputMode = gGetInputMode;
         this.glfwGetWindowAttrib = gGetWindowAttrib;
         this.glfwSetScrollCallback = gSetScroll;
+        this.glfwGetClipboard = gGetClipboard;
+        this.glfwSetClipboard = gSetClipboard;
+        this.displayGetClipboard = null;
+        this.displaySetClipboard = null;
         this.scrollCallbackType = callback;
         this.scrollCallbackInvoke = callbackInvoke;
 
@@ -510,6 +534,34 @@ public final class ReflectiveInput implements InputSource {
         }
         Reflect.call(glfwGetWindowSize, null, glfwWindow, windowSizeOut, windowSizeOutY);
         return windowSizeOutY[0];
+    }
+
+    @Override
+    public String clipboard() {
+        if ("lwjgl2".equals(backend)) {
+            Object text = Reflect.call(displayGetClipboard, null);
+            return text == null ? "" : text.toString();
+        }
+        if (glfwGetClipboard != null && ensureGlfwWindow()) {
+            Object text = Reflect.call(glfwGetClipboard, null, Long.valueOf(glfwWindow));
+            return text == null ? "" : text.toString();
+        }
+        return "";
+    }
+
+    @Override
+    public void setClipboard(String value) {
+        String text = value == null ? "" : value;
+        if ("lwjgl2".equals(backend)) {
+            // setClipboardString 是 void：句柄存在即视为已下发（与 applyPointerGrab 的取舍一致）。
+            if (displaySetClipboard != null) {
+                Reflect.call(displaySetClipboard, null, text);
+            }
+            return;
+        }
+        if (glfwSetClipboard != null && ensureGlfwWindow()) {
+            Reflect.call(glfwSetClipboard, null, Long.valueOf(glfwWindow), text);
+        }
     }
 
     /** @return 绘制区域宽度 / 窗口宽度；任一未知时退化为 1（即不做缩放） */

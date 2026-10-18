@@ -22,6 +22,11 @@ public enum ClassType {
     PLAYER("net.minecraft.world.entity.player.Player"),
     /** 生物实体基类。 */
     LIVING_ENTITY("net.minecraft.world.entity.LivingEntity"),
+    /**
+     * 怪物基类（{@code Mob}）：除玩家外的"活物"几乎都继承它，用来把实体分成
+     * 玩家 / 怪物 / 其它三类（世界覆盖层按类别选色）。
+     */
+    MOB("net.minecraft.world.entity.Mob"),
     /** 实体基类；模块读取 {@code isDead} 等字段时以此为宿主类。 */
     ENTITY("net.minecraft.world.entity.Entity"),
     /** 掉落物实体：ItemEsp 的目标（它不是 LivingEntity，必须单独判）。 */
@@ -75,7 +80,15 @@ public enum ClassType {
     /** 区块缓存内部的块数组；1.8.9/1.12.2 无此类（走 List 路径）。 */
     CLIENT_CHUNK_STORAGE("net.minecraft.client.multiplayer.ClientChunkCache$Storage"),
     /** 区块（LevelChunk）；方块实体表挂在它上面。 */
-    LEVEL_CHUNK("net.minecraft.world.level.chunk.LevelChunk");
+    LEVEL_CHUNK("net.minecraft.world.level.chunk.LevelChunk"),
+    /**
+     * 聊天组件：{@code Entity#getName} 之类的成员返回它而不是 {@code String}。
+     *
+     * <p>读文本走 {@code getString()}——运行期名由映射表给出（1.8.9 是 {@code IChatComponent}，
+     * 表里 {@code getString} 对应 {@code d}/{@code method_10865}/{@code func_150254_d}）。
+     * 用 {@code instanceof String} 判组件永远是"读不到"，这正是标签类模块一个字符都画不出来的原因。
+     */
+    CHAT_COMPONENT("net.minecraft.network.chat.Component");
 
     /** Mojang 映射下的全限定类名。 */
     private final String canonicalName;

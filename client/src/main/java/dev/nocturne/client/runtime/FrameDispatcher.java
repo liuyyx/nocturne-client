@@ -17,7 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * {@link NocturneRuntime} 通过 {@code Class.forName(..., true, null)} **强制从 bootstrap** 取用——
  * 这样无论调用方来自哪个加载器，拿到的都是同一个类对象。
  *
- * <p><b>只依赖 JDK</b>：它会被放进 bootstrap 层，看不到 Skija / ASM / gson，也看不到本项目其它类。
+ * <p><b>只依赖 JDK</b>：它会被放进 bootstrap 层，看不到 ASM / gson，也看不到本项目其它类。
  * 对外只接受 {@link Runnable}——JDK 类型在两个加载器眼里天然是同一个，避免跨加载器传自定义接口。
  */
 public final class FrameDispatcher {
@@ -40,6 +40,10 @@ public final class FrameDispatcher {
 
     /** 是否已打印过首帧存活日志。 */
     private static volatile boolean firstFrameLogged;
+
+    /** 自销毁前要执行的恢复动作：修那些由监听器施加、但监听器列表清空后就没人能修的外部状态。 */
+    private static final CopyOnWriteArrayList<Runnable> SHUTDOWN_ACTIONS =
+            new CopyOnWriteArrayList<Runnable>();
 
     /** 异常日志的限流窗口（毫秒）。 */
     private static final long ERROR_LOG_INTERVAL_MS = 5000L;
@@ -120,8 +124,34 @@ public final class FrameDispatcher {
      * ——GUI 不再绘制、开关键不再响应、模块不再 tick，行为上与"没注入过"一致。
      */
     public static void clear() {
+        // 先跑恢复动作、再清列表：这些动作修的是"我们改过、但不在监听器列表里"的外部状态
+        // （放开游戏鼠标抓取、1.8.9 的 inGameHasFocus）。清完列表就再没有任何每帧回调，
+        // 那时想恢复也没人能做——顺序反了，输入会被永久卡住。
+        for (Runnable action : SHUTDOWN_ACTIONS) {
+            try {
+                action.run();
+            } catch (Throwable ignored) {
+                // 恢复是尽力而为：一个失败不该挡住其余的
+            }
+        }
+        SHUTDOWN_ACTIONS.clear();
         LISTENERS.clear();
         DRAW_CONTEXT_SINK = null;
+    }
+
+    /**
+     * 注册一个"自销毁前执行"的恢复动作。
+     *
+     * <p>用途：某些副作用由每帧监听器施加（放开游戏鼠标抓取、改写 {@code inGameHasFocus}），但监听器
+     * 本身不在 {@link #clear()} 的可见范围内——自销毁后它们再也不会被驱动，副作用就永久留在那里。
+     * 想被恢复的东西必须在这里登记。只接受 {@link Runnable}（JDK 类型），跨加载器传参安全。
+     *
+     * @param action 恢复动作；为 {@code null} 时忽略
+     */
+    public static void addShutdown(Runnable action) {
+        if (action != null) {
+            SHUTDOWN_ACTIONS.addIfAbsent(action);
+        }
     }
 
     /**

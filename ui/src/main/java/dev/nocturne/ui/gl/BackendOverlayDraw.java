@@ -8,10 +8,10 @@ import dev.nocturne.ui.render.Renderer;
  * 把 ui 的 {@link Renderer} 适配成 client 侧的 {@link OverlayDraw}。
  *
  * <p>世界覆盖层模块只认 {@code OverlayDraw}（client 侧接口，避免 client 依赖 ui），而实际绘制能力在
- * {@link Renderer} 上——四个后端都实现了它，所以适配器一份就够，模块不用关心当前是固定管线、
- * 核心 profile、26.x 的 extractor 还是 Skija。
+ * {@link Renderer} 上——三个后端都实现了它，所以适配器一份就够，模块不用关心当前是固定管线、
+ * 核心 profile，还是 26.x 的 extractor。
  *
- * <p>字号固定为 {@value #TEXT_SIZE}：这是游戏字体的原生行高，四个后端在无缩放控制时都按它绘制，
+ * <p>字号固定为 {@value #TEXT_SIZE}：这是游戏字体的原生行高，三个后端在无缩放控制时都按它绘制，
  * 于是 {@link #textWidth} 与 {@link #text} 口径一致，标签不会错位。
  */
 public final class BackendOverlayDraw implements OverlayDraw {

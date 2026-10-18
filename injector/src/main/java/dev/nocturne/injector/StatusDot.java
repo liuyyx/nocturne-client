@@ -19,14 +19,14 @@ public final class StatusDot extends JComponent {
     /** 颜色过渡的定时器间隔（毫秒）；16ms 约合 60fps。 */
     private static final int FRAME_MS = 16;
 
-    /** 每帧向目标色靠近的比例；0.25 约 4 帧走完大半过渡。 */
-    private static final float STEP = 0.25f;
-
     /** 当前显示色；默认取次要文字色，表示「空闲/尚未操作」。 */
     private Color color = AppTheme.TEXT_MUTED;
 
     /** 目标状态色；{@link #color} 会逐帧向其收敛。 */
     private Color target = AppTheme.TEXT_MUTED;
+
+    /** 颜色过渡时长（毫秒）；由动画速度百分比推导，0 表示立即切换。 */
+    private int durationMs = 150;
 
     /** 驱动颜色过渡的定时器；到达目标后自动停止。 */
     private final Timer timer;
@@ -48,14 +48,42 @@ public final class StatusDot extends JComponent {
      */
     public void setState(Color state) {
         target = state != null ? state : AppTheme.TEXT_MUTED;
+        if (durationMs <= 0) {
+            // 动画速度为 0：立即切换，不启动定时器。
+            color = target;
+            repaint();
+            return;
+        }
         if (!timer.isRunning()) {
             timer.start();
         }
     }
 
+    /**
+     * 应用动画速度百分比（0–200）：100 为标准速度（过渡约 150ms），200 翻倍，0 关闭动画。
+     *
+     * <p>由设置对话框实时调用。
+     *
+     * @param percent 动画速度百分比；非正数立即切换
+     */
+    public void setSpeedPercent(int percent) {
+        durationMs = percent <= 0 ? 0 : Math.max(1, Math.round(150f * 100f / percent));
+    }
+
+    /** 当前过渡时长（毫秒）；包级可见仅供测试断言。 */
+    int transitionDurationMs() {
+        return durationMs;
+    }
+
     /** 推进一帧颜色过渡；足够接近时吸附到目标色并停止定时器。 */
     private void step() {
-        color = blend(color, target, STEP);
+        if (durationMs <= 0) {
+            color = target;
+            timer.stop();
+            repaint();
+            return;
+        }
+        color = blend(color, target, Math.min(1f, (float) FRAME_MS / durationMs));
         if (Math.abs(color.getRed() - target.getRed()) <= 2
                 && Math.abs(color.getGreen() - target.getGreen()) <= 2
                 && Math.abs(color.getBlue() - target.getBlue()) <= 2) {

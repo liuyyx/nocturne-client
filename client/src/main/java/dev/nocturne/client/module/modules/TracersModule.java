@@ -32,6 +32,9 @@ public final class TracersModule extends Module implements WorldOverlay {
     /** 连线终点取实体身体中部：脚点会贴着地面、头点会飘在头顶，取 1 米高最贴近"人"的位置。 */
     private static final double TRACER_HEIGHT = 1.0d;
 
+    /** 准星判定半径：以视口半宽/半高为基准的比例（0.08 ≈ 中央 16% 见方的范围）。 */
+    private static final float FOCUS_RADIUS = 0.08f;
+
     /** 投影结果复用（每帧几十个实体，避免逐点分配）。 */
     private final WorldProjection.ScreenPoint point = new WorldProjection.ScreenPoint();
 
@@ -55,7 +58,7 @@ public final class TracersModule extends Module implements WorldOverlay {
     private final NumberValue maxDistance = add(new NumberValue("Max Distance", 32.0, 0.0, 256.0, 1.0));
 
     /** RenderEvent 订阅句柄；禁用时退订。 */
-    private EventBus.Subscription renderSubscription;
+    private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
     private boolean gateLogged;
     /** 上一帧收集到的可见实体数（HUD/诊断用）。 */
@@ -91,7 +94,9 @@ public final class TracersModule extends Module implements WorldOverlay {
     /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上）。 */
     @Override
     public void onTick() {
-        if (renderSubscription == null) {
+        if (isEnabled() && renderSubscription == null) {
+            // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
+            // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
             subscribe();
         }
     }
@@ -192,39 +197,42 @@ public final class TracersModule extends Module implements WorldOverlay {
     }
 
     /**
-     * 收集可见实体（三组开关 + 距离上限过滤）。
+     * 收集可见实体（分类开关 + 距离检查 + 隐身过滤）。
      *
      * <p>收集与绘制共用同一份列表，避免两处过滤逻辑漂移。
      */
     @SuppressWarnings("unchecked")
     private List<Object> visibleEntities(GameBridge bridge, Object level) {
         List<Object> out = new java.util.ArrayList<Object>();
-        if (!(renderPlayers.get() || renderMobs.get() || renderAnimals.get())) {
-            return out;
-        }
         Object raw;
         try {
             raw = bridge.callMapped(level, ClassType.CLIENT_LEVEL, "entitiesForRendering");
         } catch (Throwable t) {
             return out;
         }
-        if (!(raw instanceof List)) {
+        // 1.15+ 这个方法返回 Iterable（1.8.9–1.12.2 才是 List）。只认 List 会让中间版本
+        // 静默零输出：开关开着、计数器不涨、屏幕上一根线都没有。
+        if (!(raw instanceof Iterable)) {
             return out;
         }
         Object self = bridge.player();
-        boolean checkDistance = playerDistanceCheck.get() || mobDistanceCheck.get()
-                || animalDistanceCheck.get();
-        double maxDist = maxDistance.get();
-        for (Object entity : (List<Object>) raw) {
+        for (Object entity : (Iterable<Object>) raw) {
             if (entity == null || (self != null && self.equals(entity))) {
                 continue;
             }
             if (!isLiving(bridge, entity)) {
                 continue;
             }
-            if (checkDistance && maxDist > 0) {
+            Kind kind = kindOf(bridge, entity);
+            if (!kindEnabled(kind)) {
+                continue;
+            }
+            if (!showInvisibles.get() && isInvisible(bridge, entity)) {
+                continue;
+            }
+            if (kindDistanceCheck(kind) && maxDistance.get() > 0) {
                 double dist = distanceTo(bridge, self, entity);
-                if (dist >= 0 && dist > maxDist) {
+                if (dist >= 0 && dist > maxDistance.get()) {
                     continue;
                 }
             }
@@ -237,6 +245,8 @@ public final class TracersModule extends Module implements WorldOverlay {
      * 世界覆盖层：从屏幕底部中心向每个可见实体画一条线。
      *
      * <p>终点取实体上方 1 米处（身体中部）——直接用脚点会让线头贴在地上、用头点会飘在头顶。
+     * 颜色按实体类别取，{@code Color by distance} 再按远近衰减透明度，
+     * {@code Highlight if focusing} 把准星附近的线提亮。
      */
     @Override
     public void drawWorldOverlay(OverlayDraw draw, WorldProjection projection) {
@@ -248,9 +258,12 @@ public final class TracersModule extends Module implements WorldOverlay {
         if (level == null) {
             return;
         }
+        Object self = bridge.player();
         float originX = draw.width() / 2f;
         float originY = draw.height();
-        int argb = playerColor.argb();
+        boolean distanceColors = colorByDistance.get();
+        boolean highlight = highlightFocusing.get();
+        double maxDist = Math.max(1.0d, maxDistance.get());
         for (Object entity : visibleEntities(bridge, level)) {
             double[] pos = position(bridge, entity);
             if (pos == null) {
@@ -260,8 +273,42 @@ public final class TracersModule extends Module implements WorldOverlay {
             if (!point.visible) {
                 continue;
             }
+            int argb = kindColor(kindOf(bridge, entity));
+            if (distanceColors) {
+                // 近处实、远处淡：一眼看出远近，不必逐条读数字。
+                double dist = distanceTo(bridge, self, entity);
+                if (dist >= 0) {
+                    argb = withScaledAlpha(argb, 1.0d - Math.min(1.0d, dist / maxDist));
+                }
+            }
+            if (highlight && isFocusing(point, draw)) {
+                argb = brighten(argb);
+            }
             draw.line(originX, originY, point.x, point.y, 1.5f, argb);
         }
+    }
+
+    /** 端点是否落在准星附近（准星在视口中心）。 */
+    private static boolean isFocusing(WorldProjection.ScreenPoint point, OverlayDraw draw) {
+        float halfWidth = draw.width() / 2f;
+        float halfHeight = draw.height() / 2f;
+        return Math.abs(point.x - halfWidth) <= halfWidth * FOCUS_RADIUS
+                && Math.abs(point.y - halfHeight) <= halfHeight * FOCUS_RADIUS;
+    }
+
+    /** 按比例缩放 alpha 通道（保持 RGB）。 */
+    private static int withScaledAlpha(int argb, double factor) {
+        double clamped = factor < 0d ? 0d : (factor > 1d ? 1d : factor);
+        int alpha = (int) Math.round(((argb >>> 24) & 0xFF) * clamped);
+        return (alpha << 24) | (argb & 0x00FFFFFF);
+    }
+
+    /** 颜色整体提亮（保持色相，不改变 alpha）。 */
+    private static int brighten(int argb) {
+        int red = Math.min(255, ((argb >> 16) & 0xFF) + 64);
+        int green = Math.min(255, ((argb >> 8) & 0xFF) + 64);
+        int blue = Math.min(255, (argb & 0xFF) + 64);
+        return (argb & 0xFF000000) | (red << 16) | (green << 8) | blue;
     }
 
     /** 读实体的世界坐标（{@code position()} → {@code Vec3#x/y/z}）；缺成员时返回 {@code null}。 */
@@ -296,6 +343,97 @@ public final class TracersModule extends Module implements WorldOverlay {
         double dy = a[1] - b[1];
         double dz = a[2] - b[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /** 实体分类：决定用哪个开关、哪个颜色、哪条距离检查。 */
+    private enum Kind {
+        /** 玩家（含其它玩家）。 */
+        PLAYER,
+        /** 怪物（{@code Mob} 及其子类，含动物）。 */
+        MOB,
+        /** 其它活物（既不是玩家也不是 Mob）。 */
+        OTHER
+    }
+
+    /**
+     * 按映射类判定实体分类，不写版本分支。
+     *
+     * <p>游戏侧的真实层次是 {@code Entity < LivingEntity < Mob < Animal/Monster…}，而
+     * {@code Player} 直接挂在 {@code LivingEntity} 下。映射表里只有 {@code Player} 与
+     * {@code Mob} 两面，所以动物与怪物暂时合并为 {@code MOB}：比"全部用玩家颜色"精确得多，
+     * 等 Animal 面进表后再细分。
+     */
+    private static Kind kindOf(GameBridge bridge, Object entity) {
+        if (isInstanceOf(bridge, entity, ClassType.PLAYER)) {
+            return Kind.PLAYER;
+        }
+        if (isInstanceOf(bridge, entity, ClassType.MOB)) {
+            return Kind.MOB;
+        }
+        return Kind.OTHER;
+    }
+
+    /** 按映射表候选名判定实体是否为某规范类的实例（候选名逐个试，第一个能加载的胜出）。 */
+    private static boolean isInstanceOf(GameBridge bridge, Object entity, ClassType type) {
+        ClassLoader loader = entity.getClass().getClassLoader() != null
+                ? entity.getClass().getClassLoader()
+                : TracersModule.class.getClassLoader();
+        for (String mapped : bridge.mapping().classNameCandidates(type)) {
+            try {
+                return Class.forName(mapped, false, loader).isInstance(entity);
+            } catch (Throwable t) {
+                // 该候选名在当前加载器里不可用：继续尝试下一个。
+            }
+        }
+        return false;
+    }
+
+    /** 该分类的渲染开关是否打开。 */
+    private boolean kindEnabled(Kind kind) {
+        switch (kind) {
+            case PLAYER:
+                return renderPlayers.get();
+            case MOB:
+                return renderMobs.get();
+            default:
+                return renderAnimals.get();
+        }
+    }
+
+    /** 该分类的连线颜色。 */
+    private int kindColor(Kind kind) {
+        switch (kind) {
+            case PLAYER:
+                return playerColor.argb();
+            case MOB:
+                return mobColor.argb();
+            default:
+                return animalColor.argb();
+        }
+    }
+
+    /** 该分类的距离检查是否打开。 */
+    private boolean kindDistanceCheck(Kind kind) {
+        switch (kind) {
+            case PLAYER:
+                return playerDistanceCheck.get();
+            case MOB:
+                return mobDistanceCheck.get();
+            default:
+                return animalDistanceCheck.get();
+        }
+    }
+
+    /**
+     * 实体是否隐身。
+     *
+     * <p>{@code Entity#isInvisible} 目前不在映射表里：未混淆版本（26.x）按规范名直接就能调到，
+     * 混淆版本读不到就一律当作"可见"——宁可在老版本上多画几根线，也不因为读不到而把实体
+     * 全滤掉（那正是"开了没反应"的另一种写法）。
+     */
+    private static boolean isInvisible(GameBridge bridge, Object entity) {
+        Object value = bridge.callMapped(entity, ClassType.ENTITY, "isInvisible");
+        return value instanceof Boolean && ((Boolean) value).booleanValue();
     }
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */

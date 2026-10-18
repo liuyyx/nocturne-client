@@ -20,7 +20,7 @@
 | P2 注入点 | 帧交换钩子 + **绘制上下文钩子**（含行为测试） | ✅ 已完成 |
 | P3 映射表生成器 | `tools/mapping/` 流水线；**66 个 release（1.8.9–26.3）的表全部入库**，每版本四套命名空间；`--check` 绿、`--javap` 逐版本对真实 client jar 校验通过 | ✅ 完成，收尾见 P3-R |
 | P4 绘制后端 | A（1.8.9/1.12.2 固定管线）✅ 真机可用；B（1.16.5 gl-core）✅ 真机可用（linkProgram 缺失 + 视口回退 Window 已修，界面可见可点）；C（26.x SDL 栈）✅ 真机可用（`ExtractorRenderer` 走游戏自己的 `GuiGraphicsExtractor`，界面可见可点） | ✅ 全部关闭 |
-| P5 输入 | 右 Shift 唤出 / Esc 关闭 / 鼠标在 A 代际可用；滚轮：LWJGL2 轮询 `getDWheel`、GLFW 回调 `setScrollCallback`，派发链走读无断点（合成事件进不了游戏队列，待真人验收）；26.x 走 `GameInput`（**鼠标取游戏自己的事件态**：`MouseHandler.xpos/ypos` + `activeButton`；`SDL_GetMouseState` 在无鼠标焦点时静默给 0,0，26.3 实测点击全部落空。界面已能开、能点、模块可切换；**SDL 滚轮无轮询接口，仍是缺口**；界面开着时游戏侧输入入口已短路（Esc 不再穿透出暂停菜单）） | 部分，见 P5 |
+| P5 输入 | 右 Shift 唤出 / Esc 关闭 / 鼠标在 A 代际可用；滚轮：LWJGL2 轮询 `getDWheel`、GLFW 回调 `setScrollCallback`，派发链走读无断点（合成事件进不了游戏队列，待真人验收）；26.x 走 `GameInput`（**鼠标取游戏自己的事件态**：`MouseHandler.xpos/ypos` + `activeButton`；`SDL_GetMouseState` 在无鼠标焦点时静默给 0,0，26.3 实测点击全部落空。界面已能开、能点、模块可切换；**SDL 滚轮已落地**：事件钩子挂 `SDLEventHandler.handleMouseWheelEvent` → bootstrap 层 `ScrollState` → `GameInput` 每帧取走，26.3 实测钩子织入 + 事件解析 + 跨加载器中转 + 界面平移全链通过（物理滚轮待真人确认）；界面开着时游戏侧输入入口已短路（Esc 不再穿透出暂停菜单）） | 基本收尾，见 P5 |
 | P6 模块 | 4 个模块入库；Tick/Packet/Render/Input 四事件已立类型并接生产（Tick 广播+直调、Render 每帧广播）；FullBright 对齐 OpenVape（Mode/Fade/夜视，1.8.9 真机启用+设置面板已验）；**世界覆盖层已落地**（`WorldProjection` 自算投影 + `OverlayDraw`/`WorldOverlay` 接口 + 叠加层同帧回调），ESP 已按此画 2D 框/名字，其余渲染模块同一模式待铺；**自销毁（Panic）已落地**：GUI 里打开即停用全部模块 + 关驱动闸门 + 清空 bootstrap 分发器，不可逆 | 部分，见 P6 |
 | P7 自实现 attach | **已收尾**：Windows 原生通道实测（官方 1.8.9 真机 / JDK 8 靶 / 裁剪 JRE 注入成功，全程不碰 `jdk.attach`）；Linux/macOS 域套接字通道已实现（WSL `gcc -Werror` 编译校验 + 单测，未实机）；`PayloadPack` 已接入生产（内嵌 ASM 改为加密载荷，1.8.9 真机帧钩子 live 证明解包生效） | ✅ 已完成 |
 
@@ -70,14 +70,25 @@ RenderPearl 管线（`fill` / `outline` / `enableScissor` / `text`）。
 - 验收：26.3 真机注入后界面可见可点（`backend=gui-extractor`、`input=sdl`、`screen=ClickGui`；
   三列面板 + 模块名正常，点击 `FullBright` 状态翻转）；结论写进 VERSION-MATRIX 与 ARCHITECTURE。
 - 未做（另开）：HUD 常显（要 Skija 画布）、`ForeignScreenGuard` 在 26.x 的等价判据（它依赖的
-  `Minecraft.inGameHasFocus` 在 26.3 不存在）、滚轮（见 P5）。
+  `Minecraft.inGameHasFocus` 在 26.3 不存在）。滚轮见 P5（已落地）。
 
-### P5 输入收尾
+### P5 输入收尾 —— SDL 滚轮已落地（2026-10-10 真机 26.3 验证）
 
-- 核对滚轮现状：`CallbackHookTransformer` 目前只交首个**引用**形参，滚轮是 `double` 形参——
-  查一下最近几轮滚轮修复（视口同步那几笔提交）之后，滚动到底通没通；没通则扩展 transformer 或另设签名。
-- 26.3 输入栈按 P4-C 结论定：绘制都没通就不用做输入。
-- 验收：1.8.9 与 1.16.5 真机：右 Shift 唤出、Esc 关闭、鼠标点选、滚轮滚动，四项全过；commit + push。
+- 原先的判断（"轮询不到的滚轮要靠扩展 transformer 接 `double` 形参"）**不成立**：滚轮是事件驱动的，
+  游戏自己的事件分发用 `lookupswitch` 按类型分流，滚轮走 `SDLEventHandler.handleMouseWheelEvent(SDL_Event)`
+  ——**事件对象本身就是首个引用形参**，现将就用现有的 `CallbackHookTransformer`，无需新签名。
+  （先前的失败是把钩子挂在 `Window.handleEvent` 上：那是 `default` 分支，滚轮永远不到那里。）
+- 落点三段：`ScrollHook`（agent，反射读 `type/wheel().y()`，常量取 `SDLEvents.SDL_EVENT_MOUSE_WHEEL`）
+  → `ScrollState`（bootstrap 层中转，写方在游戏类加载器、读方在叠加层，放别处会各持一份状态）
+  → `GameInput.scrollDelta()` 每帧取走。顺带把游戏自己的 `MouseHandler.onScroll` 一起短路，否则界面
+  开着时滚轮会顺带切快捷栏。
+- 验收（26.3 真机，`tmp/mc263.log`）：`callback hook woven: ...SDLEventHandler.handleMouseWheelEvent`
+  → 真实 `SDL_Event` 结构喂进钩子后 `scroll wheel event seen: y=4.0` → `scroll delta consumed: 4.0`
+  → 面板整体平移（截图对比）。**合成鼠标输入在这台机器上进不了 SDL 队列**（独立 SDL3 探针实测：
+  `SendInput` 与 `PostMessage(WM_MOUSEWHEEL)` 都收不到滚轮），故"物理滚轮"一项留给真人按一下确认。
+- 1.8.9 / 1.16.5 的滚轮（`getDWheel` / `setScrollCallback`）链路未改，仍待真人验收。
+- 顺带加了两条一次性现场日志：钩子侧 `scroll wheel event seen`、消费侧 `scroll delta consumed`；
+  `CallbackHookTransformer` 现在也会打印"织入成功 / 目标未命中"（此前静默，钩子失效无从发现）。
 
 ### P6 OpenVape 全模块移植（替代原"模块与事件接线"，范围扩大）
 
@@ -175,7 +186,8 @@ Blink / Backtrack / InvWalk / Phase …）、功能 20（AutoArmor / AutoTool / 
 
 ## 待办里容易忘的两条
 
-- **滚轮**：见 P5。若 transformer 扩展后滚轮仍为 0，记得现在是「打一次日志说明」而不是静默。
+- **滚轮**：SDL 世代已落地（见 P5）；1.8.9/1.16.5 仍等真人验收。失效时先看两条一次性日志
+  （`scroll wheel event seen` / `scroll delta consumed`）分辨断点是钩子还是消费侧。
 - **26.1 与 26.2/26.3 的 HUD 入口不兼容**（形参 vs 字段），属绘制代际 C 内部的两个子形态——
   按表里的入口描述分别处理，织入代码不能共用。P4-C spike 时一并确认。
 

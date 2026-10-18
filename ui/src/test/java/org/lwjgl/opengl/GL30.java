@@ -15,6 +15,8 @@ public final class GL30 {
 
     /** 为 true 时 {@code glGenBuffers}/{@code glGenVertexArrays} 写入 0（模拟创建失败） */
     public static boolean failIds;
+    /** {@code glGetIntegerv(int, IntBuffer)} 被调用次数 */
+    public static int getIntegervBufferCalls;
     /** {@code glGenBuffers} 被调用次数 */
     public static int genBufferCalls;
     /** 最近一次 {@code glGenBuffers} 收到的数组长度；用于钉死「单参签名」 */
@@ -29,11 +31,19 @@ public final class GL30 {
     /** 重置全部观察状态 */
     public static void reset() {
         failIds = false;
+        getIntegervBufferCalls = 0;
         genBufferCalls = 0;
         lastGenBufferArrayLength = -1;
         genVertexArrayCalls = 0;
         deletedBuffer = -1;
         deletedVertexArray = -1;
+        genTextureCalls = 0;
+        lastGenTexture = 0;
+        deletedTexture = -1;
+        lastTexImage = null;
+        lastTexParameter = null;
+        lastActiveTexture = -1;
+        lastUniform1i = null;
     }
 
     private GL30() {
@@ -166,5 +176,85 @@ public final class GL30 {
             out[2] = 100;
             out[3] = 100;
         }
+    }
+
+    /**
+     * LWJGL3 的真实形态：{@code glGetIntegerv(int, IntBuffer)}。
+     *
+     * <p>写入时用绝对下标而不是 {@code put(...)}：真实 GL 是按原生地址写缓冲区的，Java 侧的
+     * position 始终停在 0；替身若用相对写入，被测代码"读 position 之后的元素"就会假成功。
+     */
+    public static void glGetIntegerv(int name, java.nio.IntBuffer out) {
+        getIntegervBufferCalls++;
+        if (out == null || out.limit() < 4) {
+            return;
+        }
+        out.put(0, 0);
+        out.put(1, 0);
+        out.put(2, 100);
+        out.put(3, 100);
+    }
+
+    // ---- 纹理支路（供 ModernGlApi 的纹理绑定与 ModernRenderer 的纹理回归使用）----
+
+    /** {@code glGenTextures(int[])} 被调用次数 */
+    public static int genTextureCalls;
+    /** 最近一次生成的纹理句柄 */
+    public static int lastGenTexture;
+    /** {@code glDeleteTextures(int[])} 收到的句柄；未删除为 -1 */
+    public static int deletedTexture = -1;
+    /** 最近一次 {@code glTexImage2D} 的参数：width, height, internalFormat, format, type, 字节数 */
+    public static int[] lastTexImage;
+    /** 最近一次 {@code glTexParameteri} 的参数：target, pname, param */
+    public static int[] lastTexParameter;
+    /** 最近一次 {@code glActiveTexture} 的纹理单元 */
+    public static int lastActiveTexture = -1;
+    /** 最近一次 {@code glUniform1i} 的参数：location, value */
+    public static int[] lastUniform1i;
+
+    /** 记录一次纹理句柄生成。 */
+    public static void glGenTextures(int[] ids) {
+        genTextureCalls++;
+        if (ids != null && ids.length > 0) {
+            ids[0] = 55;
+            lastGenTexture = ids[0];
+        }
+    }
+
+    /** 记录一次纹理删除。 */
+    public static void glDeleteTextures(int[] ids) {
+        if (ids != null && ids.length > 0) {
+            deletedTexture = ids[0];
+        }
+    }
+
+    /** 绑定纹理；无操作 */
+    public static void glBindTexture(int target, int texture) {
+    }
+
+    /** 记录一次纹理上传。 */
+    public static void glTexImage2D(int target, int level, int internalFormat, int width, int height,
+                                    int border, int format, int type, java.nio.ByteBuffer pixels) {
+        lastTexImage = new int[]{width, height, internalFormat, format, type,
+                pixels == null ? 0 : pixels.remaining()};
+    }
+
+    /** 记录一次采样参数设置。 */
+    public static void glTexParameteri(int target, int pname, int param) {
+        lastTexParameter = new int[]{target, pname, param};
+    }
+
+    /** 像素存储模式；无操作。 */
+    public static void glPixelStorei(int pname, int param) {
+    }
+
+    /** 记录一次纹理单元选择。 */
+    public static void glActiveTexture(int unit) {
+        lastActiveTexture = unit;
+    }
+
+    /** 记录一次整型 uniform 下发（{@code uTexture} 开关与采样器绑定）。 */
+    public static void glUniform1i(int location, int value) {
+        lastUniform1i = new int[]{location, value};
     }
 }

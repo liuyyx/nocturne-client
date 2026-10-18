@@ -76,9 +76,10 @@
 
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
-| 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`；Skija 包 fb0 直写盖黑游戏已实锤，LWJGL2 不再 probe Skija；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
+| 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`（旧界面）；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
 | 1.16.5 | ✅ **真机已实测**（`vanilla-1.16.5` + LWJGL3：attach → `agentmain` → `glfwSwapBuffers` 帧钩子 live → 叠加层 attach；`tmp/mc1165*.log`） | ✅ | ✅ 已产出 | ✅ 可见（`backend=gl-core`、`screen=ClickGui`，三列面板 + FullBright 行可点选；修过 `glLinkProgram` 缺失 + 视口回退游戏 Window；toggle 用扩展右 Shift；文字待复验） |
-| 26.2 | ⏳ | 未验 | ✅ 已产出 | ⏳ |
+| 26.2 | ✅ **真机已实测**（修复后） | ✅ 帧钩子按设计不注册（GLFW 交换点只驱动输入轮询） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor; input=glfw`；`GuiDrawHook` 织入成功；截图 `docs/research/fatality-26.2-fixed.png`） |
+| 26.2（Vulkan） | ⏳ | 未验 | ✅ 已产出 | ⏳ 待真机（26.2 的图形 API 需在游戏设置里手动切换，本次实测的是 OpenGL 路径） |
 | 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转） |
 
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
@@ -116,7 +117,43 @@
 >   `overlay first click: mouse=242,140 left=true ... surface=427x240`（484 × 427/854 = 242）；
 >   点击 `FullBright` / `Watermark` 状态翻转（面板区像素差 0.5M–1.2M，全屏 27M，含世界亮度变化）。
 > - 顺带修掉：`ExtractorRenderer` 帧间把绘制区尺寸清零，输入侧换算因此读到 0；现在保留最近一次有效值。
-> - 仍未做：滚轮（SDL 无轮询接口）。
+> - 滚轮：SDL 世代已落地（见下方 P5-D）；L2/GLFW 世代仍待真人验收。
+
+> **P5-D SDL 滚轮落地（2026-10-10，真机 26.3 验证）**：此前 `GameInput` 在 SDL 世代给不出滚轮
+> （SDL 没有轮询接口），界面能开能点但滚不动。
+>
+> - 落点：`ScrollHook`（agent，织入 `SDLEventHandler#handleMouseWheelEvent`——游戏的事件分发用
+>   `lookupswitch` 按类型分流，滚轮**不会**走到 `Window.handleEvent`，那是 `default` 分支）
+>   → `ScrollState`（bootstrap 层中转：写方在游戏类加载器、读方在叠加层）→ `GameInput.scrollDelta()`
+>   每帧取走；同时短路 `MouseHandler#onScroll`，否则界面开着时滚轮会顺带切快捷栏。
+> - 真机证据：`callback hook woven: ...SDLEventHandler.handleMouseWheelEvent`；把一个真实 `SDL_Event`
+>   结构喂进钩子后 `scroll wheel event seen: y=4.0` → `scroll delta consumed: 4.0` → 面板整体平移
+>   （前后截图对比）。
+> - 合成鼠标输入在这台机器上进不了 SDL 队列（独立 SDL3 探针实测：`SendInput` 与
+>   `PostMessage(WM_MOUSEWHEEL)` 都收不到滚轮），因此"物理滚轮"一项留给真人按一下确认。
+> - 顺带：`CallbackHookTransformer` 现在打印"织入成功 / 目标未命中"——此前目标对不上时静默返回，
+>   钩子失效无从发现。
+
+
+> **P4-E `gl-core` 纹理上传崩溃修复（2026-10-18，真机 1.21.11 通过，含 A/B 因果与算式证明）**：
+> 新界面第一次在真实 `gl-core`（1.21.11 + Fabric 0.19.5 + LWJGL 3.3.3 + NVIDIA 610.74）上跑，
+> 首个纹理上传就把 JVM 打崩：`EXCEPTION_ACCESS_VIOLATION`，problematic frame `nvoglv64.dll`，
+> Java 栈帧落在 `ModernRenderer.createWhiteTexture()` → `ModernGlApi.uploadTexture()` →
+> `GL11C.nglTexImage2D`。
+> - **实测状态**（在 `uploadTexture` 里插一次性 `glGetIntegerv` 探针读到）：游戏上传完图集**没有还原**
+>   `GL_UNPACK_SKIP_ROWS=864`、`GL_UNPACK_ROW_LENGTH=1152`、`GL_UNPACK_SKIP_PIXELS=288`。
+> - **算式**：GL 的像素源地址 = `base + ((SKIP_ROWS*ROW_LENGTH)+SKIP_PIXELS)*bpp`
+>   = `base + 3,982,464`，而白纹理缓冲只有 4 字节 → 驱动读未映射内存。
+> - **证明**（独立 GL 上下文探针，`docs/research/probes/TexUploadProbe.java`）：把红像素放在该偏移处，
+>   以相同解包状态上传 1×1 后读回 `0xFF0000FF` → 偏移确实生效；而 `ROW_LENGTH=4096` 单独一项、
+>   绑定 PBO 一项都不崩（PBO 项返回 `GL_INVALID_OPERATION`）——必要条件是 `SKIP_ROWS` 非 0。
+> - **A/B**：去掉修复重跑 → 崩（复现 1 次）；加回修复 → 不崩（连续 3 次）。
+> - **修复**：上传前把 `GL_UNPACK_ROW_LENGTH/SKIP_ROWS/SKIP_PIXELS` 归零，`gl-core` 与 `gl-fixed`
+>   两条路径都改（固定管线走同一套驱动，旧界面没有纹理上传所以从未暴露）。
+> - 证据：`docs/research/glcore-texture-upload-crash.md`、崩溃日志 `1.21.11-glcore-crash{,-hs_err}.log`、
+>   正常运行截图 `fatality-1.21.11-glcore.png`。
+> **P4-D 26.2 提取器修复（2026-10-18，真机 26.2 通过）**：此前 26.2 注入时 因为 `OverlayBootstrap.selectBackend()` 只在 `isSdlStack()`（`SDLVideo` 类存在）时选
+> `gui-extractor`，但 26.2 运行的是 GLFW（无 SDL）→ 被误判为 `gl-core` → 帧回调里 `glCreateShader` 在无当前 GL 上下文情况下直接 `FATAL ERROR` / JVM abort（实测：进程 24996 直接挂掉，`FATAL ERROR` 写入日志）。修法两处：① 判定条件改为 `resolveLoaded(EXTRACTOR_CLASS)!=null`（只要 `GuiGraphicsExtractor` 在，任何 26.x 都走 extractor）；② `ExtractorRenderer.supportsTextures()` 报**能力**（`textureSupport`），不再依赖 `frame!=null`，并在 `uploadTexture()` 里加 `frame==null` 自保（帧外拒绝执行），这样 26.2 的帧回调（`glfwSwapBuffers` 里）不再触发 GL 调用，绘制只在 `GuiDrawHook` 提交的真实绘制上下文里发生。截图已存 `docs/research/fatality-26.2-fixed.png`。
 
 > **P4-C 正式实现（2026-10-07，真机 26.3 通过）**：叠加层在 SDL 栈上可用了。
 >
@@ -135,8 +172,8 @@
 > - **真机证据**：注入后 `backend=gui-extractor; input=sdl`，随后
 >   `extractor backend first frame: 427x240, font=Font`；三列面板（MOVEMENT / RENDER / PLAYER）与模块名
 >   正常显示，点击 `FullBright` 行状态翻转（前后截图对比）。
-> - **仍未做**：HUD 常显（`SetsunaHud` 要 Skija 画布，SDL 栈下没有）；`ForeignScreenGuard` 依赖的
->   `Minecraft.inGameHasFocus` 在 26.3 不存在（该守卫在 26.x 上不生效，待换等价判据）；滚轮（见 P5）。
+> - **仍未做**：HUD 常显（旧 UI 库连同 HUD 一起删除，当前没有 HUD）；`ForeignScreenGuard` 依赖的
+>   `Minecraft.inGameHasFocus` 在 26.3 不存在（该守卫在 26.x 上不生效，待换等价判据）；滚轮见 P5-D。
 
 > **P4-C spike 结论（2026-10-06，真机 26.3 通过）**：SDL 栈下**游戏自己的绘制 API 可用**——
 > `Screen.extractRenderState(GuiGraphicsExtractor,int,int,float)` 每帧调用（主菜单/世界内都调），
@@ -155,7 +192,7 @@
 > `glEnable(GL_TEXTURE_2D)`（同样的缓存失配会让字形采不到字体图集，退化成色块）。
 
 > **1.16.5（代际 B）现状（2026-10-06 真机已关闭）**：注入、帧钩子、输入层与叠加层装载全部正常，
-> `backend=skija; input=glfw`、`screen=SetsunaClickGui`，右 Shift 开 GUI 后 NOCTURNE 面板可见、
+> `backend=gl-core; input=glfw`，右 Shift 开 GUI 后 NOCTURNE 面板可见（当时为旧界面）、
 > 字号正常（Skija 不分代，gl-core 画不出的问题被绕过）。`ModernGlApi.getInteger` 的余量校验
 > （`flip()` 后查 `remaining()`）已修，不再有每帧 `BufferUnderflowException`。
 > **注（后续订正）**：其后 Skija 路径因"直写外部帧缓冲会盖黑游戏"（1.8.9 与 1.16.5 真机实锤）
@@ -166,3 +203,46 @@
 > 真实 LWJGL2 + 真实 OpenGL 4.6，320×240 空白窗口，120 帧 `Display.update()`），**靶内没有 Minecraft**。
 > 它证明的是 attach → `agentmain` → 帧钩子 → 叠加层这条链路在 Java 8 栈上成立；**不证明**任何
 > Minecraft 相关行为（FontRenderer / `Gui.drawRect` / Options / player / world / 界面可见性）。
+
+---
+
+## 附：Fatality ClickGUI 移植（本轮，代码已落地，真机待验）
+
+把界面从「Skija 直绘 + 移植自 Setsuna 的控件」换成「自绘 Fatality 风格 ClickGUI」，并**删除整个旧 UI 库**。
+代码与离屏验证已完成，**真机矩阵未重跑**——下面这张表就是待验清单（每格要求：注入成功 →
+`[nocturne] ... backend=<name>` 日志行 + 一张截图）。
+
+| 版本 | loader | 期望后端 | 状态 |
+|---|---|---|---|
+| 1.8.9 | 原版 / Forge | `gl-fixed` | ⏳ 待真机（旧界面在该格已验过注入链路） |
+| 1.12.2 | Forge | `gl-fixed` | ⏳ 待真机 |
+| 1.16.5 | Forge | `gl-core` | ⏳ 待真机 |
+| 1.20.1 | Forge / Fabric | `gl-core` | ⏳ 待真机 |
+| 1.21.8 | Fabric / NeoForge | `gl-core` | ⏳ 待真机 |
+| 1.21.11 | Fabric | `gl-core` | ✅ **已实测**（Fabric 0.19.5 + LWJGL 3.3.3 + NVIDIA 610.74：注入 → `backend=gl-core; input=glfw` → `overlay active; screen=FaClickGui`，新界面三列渲染正常、颜色 chip/滑条/图集文字都在；截图 `docs/research/fatality-1.21.11-glcore.png`。**首轮注入直接 `nvoglv64` ACCESS_VIOLATION 崩 JVM**，根因与修复见下方 P4-E） |
+| 26.1 | Fabric / NeoForge | `gui-extractor` | ⏳ 待真机 |
+| 26.2 | Fabric / NeoForge | `gui-extractor` | ⏳ 待真机（OpenGL 与 Vulkan 各一次） |
+| 26.3 | Fabric / NeoForge | `gui-extractor` | ⏳ 待真机（OpenGL 已移除，只有 Vulkan） |
+
+**已完成的验证**（可复现，证据在仓库内）：
+
+- `ui` 模块 65 项单测全绿（`gradle :ui:test`）：`GlApi`/`ModernGlApi`/`ExtractorRenderer` 绑定、
+  纹理上传的格式与字节序（`TextureUploadTest`）、字形图集复用与失效（`FontRasterizerTest`）、
+  `Value` → 控件映射与搜索收窄（`FaGroupMappingTest`）、窗口尺寸/列数/瀑布流不越界（`FaLayoutTest`）。
+- 离屏光栅截图：`docs/research/fatality-ui-1.png`（默认界面）、`fatality-ui-2-popup.png`（下拉浮层），
+  生成器 `docs/research/LabFatalityGui.java`（用真实 `FaClickGui` + 一个 Java2D 版 `Renderer`）。
+- 26.x 自定义纹理支路的签名逐条核对（用 JDK 25 的 `javap` 对 26.1.2 / 26.2 / 26.3 的客户端 jar）：
+  `GuiGraphicsExtractor.blit(RenderPipeline, Identifier, int x, int y, float u, float v, int w, int h,
+  int uWidth, int vHeight, int texW, int texH, int color)`、`DynamicTexture(String,int,int,boolean)`、
+  `TextureManager.register/release`、`Identifier.fromNamespaceAndPath`、`NativeImage.getPointer/setPixel`、
+  `MemoryUtil.memByteBuffer`、`RenderPipelines.GUI_TEXTURED`。**注意 26.3 把 RenderPipeline 的包名**
+  从 `com.mojang.blaze3d.pipeline` 改成了 `com.mojang.renderpearl.api.pipeline`——按签名形状而非类型名绑定，
+  才能三个版本共用一份代码。
+
+**未实现且已降级的部分**：
+
+| 项 | 现状 | 缺什么 |
+|---|---|---|
+| 3D 玩家预览（Render 分类的 Preview 卡片） | 卡片、拖拽旋转、ESP/Nametags 开关都在，**模型不画**，卡片显示 "Preview unavailable" 占位 | 映射表里没有实体渲染面（`RenderManager` / `EntityRenderDispatcher` / `RenderTarget` / 皮肤纹理类的 `methods`/`fields` 为空），需要先扩 `tools/mapping` 的表；26.x 另有一条硬约束——SDL 栈上任何 LWJGL GL 调用都会让 JVM abort，所以**必须**走游戏自己的 PiP/`GuiRenderState` 提交，不能自建 FBO |
+| 物品图标（预览卡的装备行）、原版槽位选择器、按键绑定行、子设置抽屉、文本/区间/槽位设置行 | 未移植 | 本项目没有对应的 `Value` 类型（无 TextValue / BoundsNumberValue / SlotValue / KeyValue / GroupValue / MultiBoolValue），也没有物品渲染通路 |
+| HUD / HUD 编辑器 | 已随旧 UI 库删除 | 用户确认删除；需要时按新绘制层重写 |

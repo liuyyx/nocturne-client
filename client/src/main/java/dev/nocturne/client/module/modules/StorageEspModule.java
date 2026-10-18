@@ -70,7 +70,7 @@ public final class StorageEspModule extends Module implements WorldOverlay {
     private final ColorValue shulkerColor = add(new ColorValue("Shulker Color", 0x64FFFFFF));
 
     /** RenderEvent 订阅句柄；禁用时退订。 */
-    private EventBus.Subscription renderSubscription;
+    private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
     private boolean gateLogged;
     /** 区块表读不到时的门日志（每个版本只报一次）。 */
@@ -129,7 +129,9 @@ public final class StorageEspModule extends Module implements WorldOverlay {
     /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上）。 */
     @Override
     public void onTick() {
-        if (renderSubscription == null) {
+        if (isEnabled() && renderSubscription == null) {
+            // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
+            // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
             subscribe();
         }
     }
@@ -454,7 +456,7 @@ public final class StorageEspModule extends Module implements WorldOverlay {
      * 返回 {@code null}（调用方据此跳过）。
      */
     private static Class<?> resolveMapped(GameBridge bridge, ClassType type, ClassLoader loader) {
-        ClassLoader effective = loader != null ? loader : StorageEspModule.class.getClassLoader();
+        ClassLoader effective = loader != null ? loader : bridge.gameLoader();
         for (String mapped : bridge.mapping().classNameCandidates(type)) {
             try {
                 return Class.forName(mapped, false, effective);

@@ -20,9 +20,10 @@ import java.util.function.IntSupplier;
  * {@code SDL_GetMouseState} / {@code SDL_GetKeyboardState} 正好支持这种用法，也省掉了注册回调、
  * 处理事件队列与线程模型的差异。
  *
- * <p><b>已知缺口</b>：SDL 的滚轮是事件驱动的，没有轮询接口，因此 {@link #scrollDelta()} 恒为 0
- * ——界面能打开、能点击，但列表暂时滚不动。补齐它要在 {@code SDL_AddEventWatch} 上挂监听、把增量
- * 累加进原子值（与 GLFW 路径同样的做法），属于独立一步。
+ * <p><b>滚轮</b>：SDL 的滚轮是事件驱动的，没有轮询接口，所以 {@link #scrollDelta()} 恒为 0——
+ * 真正供滚轮的是 {@link dev.nocturne.client.runtime.ScrollState}：注入器在游戏自己的滚轮事件入口
+ * （{@code SDLEventHandler#handleMouseWheelEvent}）上挂钩子把增量攒进去，{@link GameInput} 每帧取走。
+ * 这里保留 {@code 0} 只是「本输入源没有轮询能力」的诚实答复，不再意味着功能缺口。
  *
  * <p>所有 GL/系统调用都走反射：本模块编译期不依赖任何一代 LWJGL，且目标 JVM 里存在哪一代由游戏决定。
  */
@@ -54,6 +55,10 @@ public final class SdlInput implements InputSource {
     private final Method setRelativeMouseMode;
     /** {@code SDL_GetWindowRelativeMouseMode(long)}：读取当前捕获状态；可能不存在。 */
     private final Method getRelativeMouseMode;
+    /** {@code SDL_GetClipboardText()}：读系统剪贴板；可能不存在。 */
+    private final Method getClipboardText;
+    /** {@code SDL_SetClipboardText(CharSequence)}：写系统剪贴板；可能不存在。 */
+    private final Method setClipboardText;
 
     /** 坐标输出缓冲：SDL 要求原生直连缓冲，复用避免每帧分配。 */
     private final FloatBuffer mouseX;
@@ -76,7 +81,8 @@ public final class SdlInput implements InputSource {
     private SdlInput(IntSupplier surfaceWidth, IntSupplier surfaceHeight,
                      Method getMouseState, Method getKeyboardState, Method getMouseFocus,
                      Method getKeyboardFocus, Method getWindowSize, Method getWindowSizeInPixels,
-                     Method setRelativeMouseMode, Method getRelativeMouseMode) {
+                     Method setRelativeMouseMode, Method getRelativeMouseMode,
+                     Method getClipboardText, Method setClipboardText) {
         this.surfaceWidth = surfaceWidth;
         this.surfaceHeight = surfaceHeight;
         this.getMouseState = getMouseState;
@@ -87,6 +93,8 @@ public final class SdlInput implements InputSource {
         this.getWindowSizeInPixels = getWindowSizeInPixels;
         this.setRelativeMouseMode = setRelativeMouseMode;
         this.getRelativeMouseMode = getRelativeMouseMode;
+        this.getClipboardText = getClipboardText;
+        this.setClipboardText = setClipboardText;
         this.mouseX = ByteBuffer.allocateDirect(Float.BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer();
         this.mouseY = ByteBuffer.allocateDirect(Float.BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer();
         this.windowWidth = ByteBuffer.allocateDirect(Integer.BYTES).order(ByteOrder.nativeOrder()).asIntBuffer();
@@ -125,12 +133,18 @@ public final class SdlInput implements InputSource {
                 : Reflect.method(video, "SDL_SetWindowRelativeMouseMode", long.class, boolean.class);
         Method getRelative = video == null ? null
                 : Reflect.method(video, "SDL_GetWindowRelativeMouseMode", long.class);
+        // 剪贴板在 SDLClipboard 上（SDL3 的 C API 就是独立模块，与窗口/输入分开）。
+        Class<?> clipboard = Reflect.loadWithoutInit("org.lwjgl.sdl.SDLClipboard", loader);
+        Method getClipboardText = clipboard == null ? null
+                : Reflect.method(clipboard, "SDL_GetClipboardText");
+        Method setClipboardText = clipboard == null ? null
+                : Reflect.method(clipboard, "SDL_SetClipboardText", CharSequence.class);
         if (getMouseState == null || getKeyboardState == null) {
             return null;
         }
         return new SdlInput(surfaceWidth, surfaceHeight, getMouseState, getKeyboardState,
                 getMouseFocus, getKeyboardFocus, getWindowSize, getWindowSizeInPixels,
-                setRelative, getRelative);
+                setRelative, getRelative, getClipboardText, setClipboardText);
     }
 
     @Override
@@ -169,7 +183,8 @@ public final class SdlInput implements InputSource {
     /**
      * SDL 没有滚轮轮询接口（滚轮是事件驱动的），因此这里恒为 0。
      *
-     * <p>界面因此能打开、能点击，但列表滚动暂不可用——见类注释里的补齐方案。
+     * <p>滚轮不由本输入源提供：增量攒在 {@link dev.nocturne.client.runtime.ScrollState} 里，
+     * {@link GameInput#scrollDelta()} 先取它，取不到才退到这里；详见类注释。
      */
     @Override
     public double scrollDelta() {
@@ -200,6 +215,18 @@ public final class SdlInput implements InputSource {
         }
         Reflect.call(setRelativeMouseMode, null, Long.valueOf(window), Boolean.valueOf(grabbed));
         pointerGrabbed = grabbed;
+    }
+
+    @Override
+    public String clipboard() {
+        Object text = Reflect.call(getClipboardText, null);
+        return text == null ? "" : text.toString();
+    }
+
+    @Override
+    public void setClipboard(String value) {
+        // SDL 只在有窗口的应用里生效；句柄缺失时静默跳过（界面仍可编辑文本）。
+        Reflect.call(setClipboardText, null, value == null ? "" : value);
     }
 
     @Override

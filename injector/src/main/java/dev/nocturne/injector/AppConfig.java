@@ -37,11 +37,8 @@ public final class AppConfig {
     /** 界面缩放百分比，取值 80–150。 */
     public int uiScale = 100;
 
-    /** 动画速度百分比，100 表示正常。 */
+    /** 动画速度百分比，100 表示正常；0 关闭注入器自身动效，200 翻倍。 */
     public int animationSpeed = 100;
-
-    /** 背景模糊强度百分比，取值 0–100。 */
-    public int blurStrength = 50;
 
     /** 打开游戏内 GUI 的快捷键，命名见 {@link KeyCodes}，例如 {@code RSHIFT}。 */
     public String guiBind = "RSHIFT";
@@ -87,7 +84,6 @@ public final class AppConfig {
         config.version = intField(object, "version", config.version);
         config.uiScale = intField(object, "uiScale", config.uiScale);
         config.animationSpeed = intField(object, "animationSpeed", config.animationSpeed);
-        config.blurStrength = intField(object, "blurStrength", config.blurStrength);
         config.guiBind = stringField(object, "guiBind", config.guiBind);
         config.normalise();
         return config;
@@ -194,7 +190,6 @@ public final class AppConfig {
     private void normalise() {
         uiScale = clamp(uiScale, 80, 150);
         animationSpeed = clamp(animationSpeed, 0, 200);
-        blurStrength = clamp(blurStrength, 0, 100);
         // 快捷键为空串或空白时退回默认值，避免注入端拿到无法解析的绑定。
         if (guiBind == null || guiBind.trim().isEmpty()) {
             guiBind = "RSHIFT";

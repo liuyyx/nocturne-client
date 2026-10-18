@@ -12,31 +12,49 @@ import dev.nocturne.ui.render.Renderer;
  * 颜色走 uniform 而非逐顶点，是因为 UI 画的都是平涂——在这个规模上，
  * 为渐变去做批处理的成本大于收益。
  *
- * <p>它是三个可互换后端之一（另见 {@link GlRenderer} 与 {@link SkijaBackend}，
+ * <p>它是三个可互换后端之一（另见 {@link GlRenderer} 与 {@link ExtractorRenderer}，
  * 由 {@code OverlayBootstrap} 按运行环境选择）。
  */
 public final class ModernRenderer implements UiBackend {
 
-    /** 顶点着色器：把二维屏幕坐标乘以正交投影矩阵后输出裁剪空间坐标。 */
+    /** 顶点着色器：把二维屏幕坐标乘以正交投影矩阵后输出裁剪空间坐标，纹理坐标直接透传。 */
     private static final String VERTEX_SHADER =
             "#version 150 core\n"
                     + "in vec2 aPos;\n"
+                    + "in vec2 aUV;\n"
                     + "uniform mat4 uProjection;\n"
+                    + "out vec2 vUV;\n"
                     + "void main() {\n"
+                    + "    vUV = aUV;\n"
                     + "    gl_Position = uProjection * vec4(aPos, 0.0, 1.0);\n"
                     + "}\n";
 
-    /** 片元着色器：输出常量颜色，对应 UI 的平涂风格。 */
+    /**
+     * 片元着色器：平涂颜色，或按纹理采样后再乘以颜色（字形图集、阴影、渐变块都走后者）。
+     *
+     * <p>{@code uTexture} 是 uniform 分支而非两个程序：UI 的绘制调用里两种模式交替出现，
+     * 每次切换 program 都会让驱动重新验证状态；用一个分支把开销留在片元里更划算。
+     *
+     * <p><b>纯色路径也必须绑定一张纹理</b>（1×1 白色）：有些驱动对「采样器未绑定」的着色器
+     * 采样结果未定义，而 uniform 分支在 spec 上并不保证跳过采样。
+     */
     private static final String FRAGMENT_SHADER =
             "#version 150 core\n"
                     + "uniform vec4 uColor;\n"
+                    + "uniform sampler2D uSampler;\n"
+                    + "uniform bool uTexture;\n"
+                    + "in vec2 vUV;\n"
                     + "out vec4 fragColor;\n"
                     + "void main() {\n"
-                    + "    fragColor = uColor;\n"
+                    + "    fragColor = uTexture ? texture(uSampler, vUV) * uColor : uColor;\n"
                     + "}\n";
 
     /** 顶点属性 {@code aPos} 在着色器中的固定位置；链接前用 glBindAttribLocation 绑定。 */
     private static final int ATTRIB_POSITION = 0;
+    /** 顶点属性 {@code aUV} 的位置。 */
+    private static final int ATTRIB_UV = 1;
+    /** 每个顶点占用的 float 数（x, y, u, v）。 */
+    private static final int FLOATS_PER_VERTEX = 4;
 
     /** 每个 90° 圆角细分的段数；与固定管线后端保持一致，保证两条路径观感相同。 */
     private static final int CORNER_SEGMENTS = 6;
@@ -61,6 +79,12 @@ public final class ModernRenderer implements UiBackend {
     private int projectionLocation;
     /** {@code uColor} uniform 的位置。 */
     private int colorLocation;
+    /** {@code uSampler} uniform 的位置。 */
+    private int samplerLocation;
+    /** {@code uTexture} uniform 的位置。 */
+    private int textureFlagLocation;
+    /** 1×1 白色纹理：纯色绘制时也绑着它，避免"采样器未绑定"的未定义采样。 */
+    private int whiteTexture;
     /** 着色器与缓冲是否已创建成功；未就绪时所有绘制调用都会被跳过。 */
     private boolean ready;
     /** 初始化失败计数；达到上限后停止重试（避免无限重试的产生与清理泄漏）。 */
@@ -180,7 +204,8 @@ public final class ModernRenderer implements UiBackend {
         // 顶点属性位置必须在链接前绑定：驱动默认可以把它分配到 0 以外的位置，
         // 而下面的 glVertexAttribPointer 固定按索引 0 描述布局。绑定句柄缺失
         // 即按初始化失败处理（P5），不能带着错乱的位置继续。
-        if (!gl.bindAttribLocation(program, ATTRIB_POSITION, "aPos")) {
+        if (!gl.bindAttribLocation(program, ATTRIB_POSITION, "aPos")
+                || !gl.bindAttribLocation(program, ATTRIB_UV, "aUV")) {
             System.err.println("[nocturne] glBindAttribLocation unavailable; attribute layout uncertain");
             gl.deleteProgram(program);
             program = 0;
@@ -203,9 +228,13 @@ public final class ModernRenderer implements UiBackend {
 
         projectionLocation = gl.uniformLocation(program, "uProjection");
         colorLocation = gl.uniformLocation(program, "uColor");
-        if (projectionLocation < 0 || colorLocation < 0) {
+        samplerLocation = gl.uniformLocation(program, "uSampler");
+        textureFlagLocation = gl.uniformLocation(program, "uTexture");
+        if (projectionLocation < 0 || colorLocation < 0 || samplerLocation < 0
+                || textureFlagLocation < 0) {
             System.err.println("[nocturne] shader uniforms missing: uProjection=" + projectionLocation
-                    + " uColor=" + colorLocation);
+                    + " uColor=" + colorLocation + " uSampler=" + samplerLocation
+                    + " uTexture=" + textureFlagLocation);
             gl.deleteProgram(program);
             program = 0;
             recordInitFailure();
@@ -231,10 +260,43 @@ public final class ModernRenderer implements UiBackend {
         gl.bindVertexArray(vertexArray);
         gl.bindArrayBuffer(vertexBuffer);
         gl.enableVertexAttrib(ATTRIB_POSITION);
-        gl.vertexAttribPointer(ATTRIB_POSITION, 2, 8, 0);
+        gl.vertexAttribPointer(ATTRIB_POSITION, 2, FLOATS_PER_VERTEX * 4, 0);
+        gl.enableVertexAttrib(ATTRIB_UV);
+        gl.vertexAttribPointer(ATTRIB_UV, 2, FLOATS_PER_VERTEX * 4, 2 * 4);
+        if (whiteTexture == 0) {
+            whiteTexture = createWhiteTexture();
+            if (whiteTexture == 0) {
+                System.err.println("[nocturne] could not create the 1x1 white texture;"
+                        + " core-profile texturing unavailable");
+            }
+        }
 
         ready = true;
         return true;
+    }
+
+    /** 建一张 1×1 的不透明白色纹理；失败返回 0（此时纹理路径整体不可用）。 */
+    private int createWhiteTexture() {
+        int handle = gl.genTexture();
+        if (handle == 0) {
+            return 0;
+        }
+        gl.activeTexture(ModernGlApi.GL_TEXTURE0);
+        gl.bindTexture2D(handle);
+        gl.texParameteri(ModernGlApi.GL_TEXTURE_2D, ModernGlApi.GL_TEXTURE_MIN_FILTER,
+                ModernGlApi.GL_NEAREST);
+        gl.texParameteri(ModernGlApi.GL_TEXTURE_2D, ModernGlApi.GL_TEXTURE_MAG_FILTER,
+                ModernGlApi.GL_NEAREST);
+        gl.texParameteri(ModernGlApi.GL_TEXTURE_2D, ModernGlApi.GL_TEXTURE_WRAP_S,
+                ModernGlApi.GL_CLAMP_TO_EDGE);
+        gl.texParameteri(ModernGlApi.GL_TEXTURE_2D, ModernGlApi.GL_TEXTURE_WRAP_T,
+                ModernGlApi.GL_CLAMP_TO_EDGE);
+        if (!gl.uploadTexture(1, 1, new int[]{0xFFFFFFFF})) {
+            gl.deleteTexture(handle);
+            return 0;
+        }
+        gl.bindTexture2D(0);
+        return handle;
     }
 
     /**
@@ -276,6 +338,10 @@ public final class ModernRenderer implements UiBackend {
         if (vertexArray != 0) {
             gl.deleteVertexArray(vertexArray);
             vertexArray = 0;
+        }
+        if (whiteTexture != 0) {
+            gl.deleteTexture(whiteTexture);
+            whiteTexture = 0;
         }
         ready = false;
     }
@@ -330,6 +396,10 @@ public final class ModernRenderer implements UiBackend {
         gl.disableDepthTest();
         // 投影含 -2/h 的 Y 翻转，所有三角形按绕序都是「背面」；不关剔除整个 GUI 会被剔光。
         gl.disableCullFace();
+        // 采样器固定指向纹理单元 0，纯色绘制也绑定一张白纹理（见片元着色器的说明）。
+        gl.activeTexture(ModernGlApi.GL_TEXTURE0);
+        gl.uniform1i(samplerLocation, 0);
+        gl.bindTexture2D(whiteTexture);
     }
 
     /**
@@ -423,6 +493,9 @@ public final class ModernRenderer implements UiBackend {
             gl.bindVertexArray(0);
             gl.bindArrayBuffer(0);
             gl.useProgram(0);
+            // 顶层纹理也解绑：1.13+ 的状态管理器会缓存纹理绑定，留着我们的图集会让游戏
+            // 「以为已经绑好了」而跳过真实绑定，后续绘制采到字形图集。
+            gl.bindTexture2D(0);
         }
     }
 
@@ -442,22 +515,16 @@ public final class ModernRenderer implements UiBackend {
         if (width <= 0f || height <= 0f || color == null || !ready) {
             return;
         }
-        ensureCapacity(12);
+        ensureCapacity(6 * FLOATS_PER_VERTEX);
         int i = 0;
         // 两个三角形：(x,y) (x+w,y) (x+w,y+h) / (x,y) (x+w,y+h) (x,y+h)
-        scratch[i++] = x;
-        scratch[i++] = y;
-        scratch[i++] = x + width;
-        scratch[i++] = y;
-        scratch[i++] = x + width;
-        scratch[i++] = y + height;
-        scratch[i++] = x;
-        scratch[i++] = y;
-        scratch[i++] = x + width;
-        scratch[i++] = y + height;
-        scratch[i++] = x;
-        scratch[i++] = y + height;
-        draw(scratch, i, color);
+        i = vertex(i, x, y);
+        i = vertex(i, x + width, y);
+        i = vertex(i, x + width, y + height);
+        i = vertex(i, x, y);
+        i = vertex(i, x + width, y + height);
+        i = vertex(i, x, y + height);
+        drawSolid(scratch, i, color);
     }
 
     @Override
@@ -522,6 +589,85 @@ public final class ModernRenderer implements UiBackend {
     @Override
     public float textHeight(float size) {
         return text.height(size);
+    }
+
+    /**
+     * 核心 profile 的纹理支路。
+     *
+     * <p>纯色与纹理共用同一套顶点布局（{@code x, y, u, v}）与同一个着色器：纹理绘制只是把
+     * {@code uTexture} 打开并绑定目标纹理。{@code RasterTextures}/{@code GlyphAtlas} 上传的是
+     * 非预乘 ARGB，与本后端的 {@code SRC_ALPHA / ONE_MINUS_SRC_ALPHA} 混合一致。
+     */
+    @Override
+    public boolean supportsTextures() {
+        return ready && whiteTexture != 0 && gl.hasTextures();
+    }
+
+    @Override
+    public int uploadTexture(int id, int width, int height, int[] argb) {
+        if (!gl.hasTextures() || width <= 0 || height <= 0 || argb == null) {
+            return id;
+        }
+        int handle = id > 0 ? id : gl.genTexture();
+        if (handle <= 0) {
+            return id;
+        }
+        gl.activeTexture(ModernGlApi.GL_TEXTURE0);
+        gl.bindTexture2D(handle);
+        gl.texParameteri(ModernGlApi.GL_TEXTURE_2D, ModernGlApi.GL_TEXTURE_MIN_FILTER,
+                ModernGlApi.GL_NEAREST);
+        gl.texParameteri(ModernGlApi.GL_TEXTURE_2D, ModernGlApi.GL_TEXTURE_MAG_FILTER,
+                ModernGlApi.GL_NEAREST);
+        gl.texParameteri(ModernGlApi.GL_TEXTURE_2D, ModernGlApi.GL_TEXTURE_WRAP_S,
+                ModernGlApi.GL_CLAMP_TO_EDGE);
+        gl.texParameteri(ModernGlApi.GL_TEXTURE_2D, ModernGlApi.GL_TEXTURE_WRAP_T,
+                ModernGlApi.GL_CLAMP_TO_EDGE);
+        if (!gl.uploadTexture(width, height, argb)) {
+            if (handle != id) {
+                gl.deleteTexture(handle);
+            }
+            // 失败后把绑定还原成白纹理：本后端假设「帧内总有一张纹理绑着」。
+            gl.bindTexture2D(whiteTexture);
+            return id;
+        }
+        gl.bindTexture2D(whiteTexture);
+        return handle;
+    }
+
+    @Override
+    public void deleteTexture(int id) {
+        if (id <= 0 || id == whiteTexture) {
+            return;
+        }
+        gl.deleteTexture(id);
+    }
+
+    @Override
+    public void texturedQuad(int texture, float x, float y, float width, float height,
+                             float u0, float v0, float u1, float v1, int argb) {
+        if (!ready || texture <= 0 || width <= 0f || height <= 0f || (argb >>> 24) == 0) {
+            return;
+        }
+        ensureCapacity(6 * FLOATS_PER_VERTEX);
+        int i = 0;
+        i = vertex(i, x, y, u0, v0);
+        i = vertex(i, x + width, y, u1, v0);
+        i = vertex(i, x + width, y + height, u1, v1);
+        i = vertex(i, x, y, u0, v0);
+        i = vertex(i, x + width, y + height, u1, v1);
+        i = vertex(i, x, y + height, u0, v1);
+        gl.uniform1i(textureFlagLocation, 1);
+        gl.activeTexture(ModernGlApi.GL_TEXTURE0);
+        gl.bindTexture2D(texture);
+        gl.bindArrayBuffer(vertexBuffer);
+        gl.uploadArrayBuffer(scratch, i);
+        gl.uniformMatrix4fv(projectionLocation, projection);
+        gl.uniform4f(colorLocation, ((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f,
+                (argb & 0xFF) / 255f, ((argb >>> 24) & 0xFF) / 255f);
+        gl.drawTriangles(0, i / FLOATS_PER_VERTEX);
+        // 复位：下一条纯色绘制假设绑着白纹理。
+        gl.bindTexture2D(whiteTexture);
+        gl.uniform1i(textureFlagLocation, 0);
     }
 
     @Override
@@ -610,7 +756,7 @@ public final class ModernRenderer implements UiBackend {
      * @param color    平涂颜色
      */
     private void corner(float cx, float cy, float radius, float startDeg, float endDeg, Color color) {
-        ensureCapacity((CORNER_SEGMENTS + 1) * 6);
+        ensureCapacity((CORNER_SEGMENTS + 1) * 3 * FLOATS_PER_VERTEX);
         int i = 0;
         for (int segment = 0; segment < CORNER_SEGMENTS; segment++) {
             double a0 = Math.toRadians(startDeg + (endDeg - startDeg) * segment / (double) CORNER_SEGMENTS);
@@ -620,14 +766,11 @@ public final class ModernRenderer implements UiBackend {
             float x1 = cx + (float) Math.cos(a1) * radius;
             float y1 = cy + (float) Math.sin(a1) * radius;
             // 三角形：圆心、p0、p1
-            scratch[i++] = cx;
-            scratch[i++] = cy;
-            scratch[i++] = x0;
-            scratch[i++] = y0;
-            scratch[i++] = x1;
-            scratch[i++] = y1;
+            i = vertex(i, cx, cy);
+            i = vertex(i, x0, y0);
+            i = vertex(i, x1, y1);
         }
-        draw(scratch, i, color);
+        drawSolid(scratch, i, color);
     }
 
     /** 按需扩容暂存顶点缓冲；容量翻倍以免频繁重分配。 */
@@ -637,17 +780,38 @@ public final class ModernRenderer implements UiBackend {
         }
     }
 
+    /** 写入一个没有纹理坐标的顶点，返回下一个写入位置。 */
+    private int vertex(int index, float x, float y) {
+        scratch[index] = x;
+        scratch[index + 1] = y;
+        scratch[index + 2] = 0f;
+        scratch[index + 3] = 0f;
+        return index + FLOATS_PER_VERTEX;
+    }
+
+    /** 写入一个带纹理坐标的顶点，返回下一个写入位置。 */
+    private int vertex(int index, float x, float y, float u, float v) {
+        scratch[index] = x;
+        scratch[index + 1] = y;
+        scratch[index + 2] = u;
+        scratch[index + 3] = v;
+        return index + FLOATS_PER_VERTEX;
+    }
+
     /**
-     * 上传暂存顶点并绘制。
+     * 上传暂存顶点并绘制纯色几何。
      *
      * <p>只上传恰好用到的前 {@code length} 个元素（{@code uploadArrayBuffer} 的定长重载），
      * 因此无需像旧实现那样每次绘制都 {@code new float[length]} 复制一份，避免逐帧短命数组。
      */
-    private void draw(float[] data, int length, Color color) {
-        int vertices = length / 2;
+    private void drawSolid(float[] data, int length, Color color) {
+        int vertices = length / FLOATS_PER_VERTEX;
         if (vertices == 0) {
             return;
         }
+        gl.uniform1i(textureFlagLocation, 0);
+        // 纯色也绑白纹理：uniform 分支不保证跳过采样（见片元着色器）。
+        gl.bindTexture2D(whiteTexture);
         gl.bindArrayBuffer(vertexBuffer);
         gl.uploadArrayBuffer(data, length);
         gl.uniformMatrix4fv(projectionLocation, projection);

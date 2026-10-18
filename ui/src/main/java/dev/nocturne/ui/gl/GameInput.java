@@ -4,6 +4,7 @@ import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.game.Reflect;
 import dev.nocturne.client.input.KeyMap;
 import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.runtime.ScrollState;
 
 import java.lang.reflect.Method;
 import java.util.function.IntSupplier;
@@ -60,6 +61,8 @@ public final class GameInput implements InputSource {
     private boolean loggedScaleFallback;
     /** 是否已就「鼠标状态读取失败」报过一次。 */
     private boolean loggedReadFailure;
+    /** 是否已就「滚轮增量已送达」报过一次（首条用于现场诊断）。 */
+    private boolean loggedScroll;
 
     private GameInput(GameBridge bridge, InputSource fallback, IntSupplier logicalWidth,
                       IntSupplier logicalHeight, Method isKeyDown) {
@@ -68,6 +71,62 @@ public final class GameInput implements InputSource {
         this.logicalWidth = logicalWidth;
         this.logicalHeight = logicalHeight;
         this.isKeyDown = isKeyDown;
+        startKeyDiag();
+    }
+
+    /**
+     * THROWAWAY-DIAG：每 500ms 对拍一次「映射值 / SDL 原始缓冲 / isKeyDown 读数」，持续 150 秒。
+     *
+     * <p>用来判定"事件到了游戏却读不回来"到底断在哪一段：映射、原始缓冲，还是 isKeyDown 解析。
+     * 验完删除（连同 {@link #startKeyDiag()} 的调用）。
+     */
+    private void startKeyDiag() {
+        Thread thread = new Thread(() -> {
+            long deadline = System.currentTimeMillis() + 150000L;
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    int scancode = KeyMap.sdl(KeyMap.VK_RIGHT_SHIFT);
+                    Object rawState = null;
+                    try {
+                        Class<?> keyboard = Class.forName("org.lwjgl.sdl.SDLKeyboard");
+                        rawState = keyboard.getMethod("SDL_GetKeyboardState").invoke(null);
+                    } catch (Throwable ignored) {
+                        // 直读不可用时只打印其余两项
+                    }
+                    int raw229 = rawState instanceof java.nio.ByteBuffer
+                            ? ((java.nio.ByteBuffer) rawState).get(229) : -99;
+                    int raw225 = rawState instanceof java.nio.ByteBuffer
+                            ? ((java.nio.ByteBuffer) rawState).get(225) : -99;
+                    System.out.println("[nocturne] key diag: sdl(54)=" + scancode
+                            + " raw[229]=" + raw229 + " raw[225]=" + raw225
+                            + " viaKeyDown(54)=" + queryScancode(229)
+                            + " viaKeyDown(16)=" + queryScancode(225));
+                } catch (Throwable t) {
+                    System.out.println("[nocturne] key diag failed: " + t);
+                }
+                try {
+                    Thread.sleep(500L);
+                } catch (InterruptedException interrupted) {
+                    return;
+                }
+            }
+        }, "nocturne-key-diag");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /**
+     * THROWAWAY-DIAG：按 scancode 直接问 {@code isKeyDown}（与 {@link #keyDown(int)} 同路径）。
+     *
+     * @param scancode SDL scancode
+     * @return 读数；方法缺失时为 false
+     */
+    private boolean queryScancode(int scancode) {
+        if (isKeyDown == null) {
+            return false;
+        }
+        Object down = Reflect.call(isKeyDown, null, Integer.valueOf(scancode));
+        return down instanceof Boolean && ((Boolean) down).booleanValue();
     }
 
     /**
@@ -162,7 +221,17 @@ public final class GameInput implements InputSource {
 
     @Override
     public double scrollDelta() {
-        // SDL 的滚轮是事件驱动的，没有轮询接口；兜底源同样如此（那边恒为 0）。
+        // SDL 的滚轮是事件驱动的（没有轮询接口）：增量由游戏事件入口上的钩子累加在 bootstrap 层的
+        // ScrollState 里，这里每帧取走（界面关闭期间也要取走，否则打开瞬间会把积压一次滚出来）。
+        double scrolled = ScrollState.take();
+        if (scrolled != 0d) {
+            if (!loggedScroll) {
+                loggedScroll = true;
+                // 现场诊断：滚轮"看不见"时，先分清是钩子没吃到事件，还是增量没传到界面。
+                System.out.println("[nocturne] scroll delta consumed: " + scrolled);
+            }
+            return scrolled;
+        }
         return fallback == null ? 0d : fallback.scrollDelta();
     }
 
@@ -198,6 +267,20 @@ public final class GameInput implements InputSource {
     public boolean isPointerGrabbed() {
         Object value = bridge.callMapped(handler(), ClassType.MOUSE_HANDLER, "isMouseGrabbed");
         return value instanceof Boolean && ((Boolean) value).booleanValue();
+    }
+
+    // 剪贴板交给下一层输入源（SDL 栈上就是 {@link SdlInput}）：它已经绑好了与当前栈匹配的
+    // SDL 剪贴板入口，本类再走一遍游戏侧反射只会多一条可能失配的路径。
+    @Override
+    public String clipboard() {
+        return fallback == null ? "" : fallback.clipboard();
+    }
+
+    @Override
+    public void setClipboard(String value) {
+        if (fallback != null) {
+            fallback.setClipboard(value);
+        }
     }
 
     /**

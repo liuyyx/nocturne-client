@@ -100,6 +100,9 @@ public final class MainWindow extends JFrame {
     /** 工具栏右侧的状态指示点。 */
     private final StatusDot statusDot = new StatusDot();
 
+    /** 扫描骨架屏；持引用以便动画速度改动即时生效。 */
+    private final SkeletonPanel skeletonPanel = new SkeletonPanel();
+
     /** 工具栏里状态点旁的文字说明（空闲/扫描中…/注入成功 等）。 */
     private final JLabel statusText = new JLabel("空闲");
 
@@ -136,6 +139,9 @@ public final class MainWindow extends JFrame {
     public MainWindow(AppConfig config) {
         super("Nocturne \u00b7 诺克特恩");
         this.config = config;
+        // 动画速度偏好立即作用于注入器自身的两处动效（状态点过渡、骨架呼吸）。
+        statusDot.setSpeedPercent(config.animationSpeed);
+        skeletonPanel.setSpeedPercent(config.animationSpeed);
         // 退出策略用 EXIT_ON_CLOSE：没有托盘图标，关闭即结束进程。
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         // 尺寸与位置由逻辑分辨率推导，跨缩放比例表现一致。
@@ -395,7 +401,7 @@ public final class MainWindow extends JFrame {
                 "insets " + AppTheme.SPACE_XL + " " + AppTheme.SPACE_XL + " 0 " + AppTheme.SPACE_XL
                         + ", fillx, wrap 1", "[grow,fill]", "[]20[]20[]"));
         card.setOpaque(false);
-        card.add(new SkeletonPanel(), "growx");
+        card.add(skeletonPanel, "growx");
         return card;
     }
 
@@ -541,8 +547,11 @@ public final class MainWindow extends JFrame {
         cancelAutoMinimize();
         SettingsDialog dialog = new SettingsDialog(this, config, updated -> {
             AppTheme.setZoom(updated.uiScale / 100f);
-            // 快捷键在 attach 时写死传给游戏，改完必须重新注入才生效——这里也留一行保存日志。
             log.info("设置已保存（界面缩放 " + updated.uiScale + "%）；快捷键改动需重新注入后生效");
+        }, speed -> {
+            // 动画速度拖动中即时生效；快捷键在 attach 时写死传给游戏，改完必须重新注入才生效。
+            statusDot.setSpeedPercent(speed);
+            skeletonPanel.setSpeedPercent(speed);
         });
         dialog.setVisible(true);
     }

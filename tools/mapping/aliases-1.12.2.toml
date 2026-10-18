@@ -52,6 +52,12 @@ version = "1.8.9"
 "net/minecraft/client/gui/Gui" = "net/minecraft/client/gui/GuiIngame"
 "net/minecraft/world/entity/LivingEntity" = "net/minecraft/entity/EntityLivingBase"
 "net/minecraft/network/chat/Component" = "net/minecraft/util/text/ITextComponent"
+# 1.12.2 与 1.8.9 同名：MobEffect 还叫 Potion、MobEffectInstance 还叫 PotionEffect、
+# 掉落物还是 EntityItem。缺这几行时，1.12.2 表里药水效果与掉落物的成员会全部写成 absent，
+# 对应模块在该版本静默空转（不报错、也没有任何输出）。
+"net/minecraft/world/effect/MobEffect" = "net/minecraft/potion/Potion"
+"net/minecraft/world/effect/MobEffectInstance" = "net/minecraft/potion/PotionEffect"
+"net/minecraft/world/entity/item/ItemEntity" = "net/minecraft/entity/item/EntityItem"
 "net/minecraft/world/level/LevelReader" = "net/minecraft/world/IBlockAccess"
 "net/minecraft/world/level/chunk/LevelChunk" = "net/minecraft/world/chunk/Chunk"
 "net/minecraft/world/level/block/entity/BlockEntity" = "net/minecraft/tileentity/TileEntity"
@@ -192,6 +198,21 @@ scope = "net/minecraft/entity/Entity"
 mcp = "isSneaking"
 scope = "net/minecraft/entity/Entity"
 note = "1.8.9 的下蹲键状态就叫 isSneaking()"
+
+# Mojmap addEffect(MobEffectInstance) 在 1.12.2 的 MCP 名仍是 addPotionEffect（SRG func_70690_d）。
+# 1.12.2 本来就能解析它，这里显式写出来是为了把 scope 钉在 EntityLivingBase 上——
+# 同一个 MCP 名在别处也有，靠排序取首项会随数据变动飘。
+[methods.addEffect]
+mcp = "addPotionEffect"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+# 1.8.9 用 Potion.nightVision，1.12.2 已把它挪到 MobEffects.NIGHT_VISION（SRG field_76439_r）。
+# 必须写对 scope 并钉死 srg：1.12.2 的 MCP 里 NIGHT_VISION 同时存在于 MobEffects 与 PotionTypes，
+# 不钉就会按排序误取药水类型那个。
+[fields.NIGHT_VISION]
+mcp = "NIGHT_VISION"
+scope = "net/minecraft/init/MobEffects"
+srg = "field_76439_r"
 
 [methods.getName]
 mcp = "getName"

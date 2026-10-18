@@ -63,6 +63,53 @@ class FrameDispatcherTest {
         assertEquals(before, FrameDispatcher.count());
     }
 
+    /**
+     * 自销毁（{@code clear()}）必须先执行注册的恢复动作，再清空列表。
+     *
+     * <p>回归：这些动作修的是"由每帧监听器施加、但监听器不在 {@code clear()} 可见范围内"的外部状态
+     * （放开游戏鼠标抓取、1.8.9 的 {@code inGameHasFocus}）。顺序反了或漏跑，副作用就永久留在游戏里
+     * ——真机表现为自销毁后鼠标视角永久失效、点击无反应。
+     */
+    @Test
+    void clearRunsRegisteredShutdownActionsOnce() {
+        final int[] ran = {0};
+        Runnable action = new Runnable() {
+            @Override
+            public void run() {
+                ran[0]++;
+            }
+        };
+        FrameDispatcher.addShutdown(action);
+
+        FrameDispatcher.clear();
+        assertEquals(1, ran[0], "shutdown action must run on clear");
+
+        FrameDispatcher.clear();
+        assertEquals(1, ran[0], "shutdown actions must not survive a clear");
+    }
+
+    /** 一个恢复动作抛异常不得挡住其余动作，也不得把异常抛出 {@code clear()}。 */
+    @Test
+    void clearSurvivesAFailingShutdownAction() {
+        final int[] ran = {0};
+        FrameDispatcher.addShutdown(new Runnable() {
+            @Override
+            public void run() {
+                throw new IllegalStateException("boom");
+            }
+        });
+        FrameDispatcher.addShutdown(new Runnable() {
+            @Override
+            public void run() {
+                ran[0]++;
+            }
+        });
+
+        FrameDispatcher.clear();
+
+        assertEquals(1, ran[0], "a failing recovery must not block the others");
+    }
+
     private static boolean readFirstFrame() throws Exception {
         Field field = FrameDispatcher.class.getDeclaredField("firstFrameLogged");
         field.setAccessible(true);

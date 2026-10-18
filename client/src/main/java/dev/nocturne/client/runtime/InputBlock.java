@@ -17,6 +17,15 @@ public final class InputBlock {
     /** 我们的界面是否正在占用输入；游戏侧输入入口据此短路。 */
     private static volatile boolean blocked;
 
+    /**
+     * 是否已永久停止占用输入（自销毁）。
+     *
+     * <p>{@link #blocked} 由叠加层每帧刷新；自销毁后叠加层不再运行，最后一次写入的值会永久留下——
+     * 若那一刻界面正开着，游戏侧输入入口就被永久短路（点不动、按不动、滚不动）。自销毁时置位本标志，
+     * 使判定不再取决于那个再也不会被刷新的值。
+     */
+    private static volatile boolean disabled;
+
     private InputBlock() {
     }
 
@@ -30,9 +39,19 @@ public final class InputBlock {
     }
 
     /**
+     * 永久停止占用输入（自销毁时调用）：此后无论 {@link #setBlocked} 写过什么，一律放行。
+     *
+     * <p>幂等；可在任意线程调用。
+     */
+    public static void disable() {
+        disabled = true;
+        blocked = false;
+    }
+
+    /**
      * @return 游戏侧输入入口是否应短路（由织入的字节码调用）
      */
     public static boolean shouldBlock() {
-        return blocked;
+        return !disabled && blocked;
     }
 }

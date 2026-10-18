@@ -1036,14 +1036,29 @@
             "fields": {}
         },
         "net/minecraft/world/effect/MobEffect": {
-            "absent": true,
-            "names": {},
+            "names": {
+                "vanilla": "rp",
+                "fabric": "net.minecraft.class_1291"
+            },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "NIGHT_VISION": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "field_5925"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lrp;",
+                        "fabric": "Lnet/minecraft/class_1291;"
+                    }
+                }
+            }
         },
         "net/minecraft/world/effect/MobEffectInstance": {
-            "absent": true,
-            "names": {},
+            "names": {
+                "vanilla": "rq",
+                "fabric": "net.minecraft.class_1293"
+            },
             "methods": {},
             "fields": {}
         },
@@ -1073,6 +1088,9 @@
                         "fabric": "(DDD)D"
                     }
                 },
+                "getDeltaMovement": {
+                    "absent": true
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "g",
@@ -1094,6 +1112,9 @@
                     }
                 },
                 "getName": {
+                    "absent": true
+                },
+                "isInvisible": {
                     "absent": true
                 },
                 "isShiftKeyDown": {
@@ -1223,7 +1244,14 @@
             },
             "methods": {
                 "addEffect": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_6092"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lrq;)V",
+                        "fabric": "(Lnet/minecraft/class_1293;)V"
+                    }
                 },
                 "distanceToSqr": {
                     "names": {
@@ -1635,8 +1663,10 @@
             }
         },
         "net/minecraft/world/entity/item/ItemEntity": {
-            "absent": true,
-            "names": {},
+            "names": {
+                "vanilla": "yk",
+                "fabric": "net.minecraft.class_1542"
+            },
             "methods": {},
             "fields": {}
         },

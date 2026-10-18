@@ -77,4 +77,25 @@ public interface InputSource {
 
     /** @return 实际生效的输入后端名称，用于日志诊断，如 {@code "lwjgl2"} / {@code "glfw"} / {@code "none"} */
     String describe();
+
+    /**
+     * 读系统剪贴板。
+     *
+     * <p>三代输入栈各有自己的剪贴板入口（LWJGL2 的 {@code Display}、GLFW 的
+     * {@code glfwGetClipboardString}、SDL 的 {@code SDL_GetClipboardText}），与键鼠状态一样是
+     * "同义不同名"。放在这个接口上，界面就能拿到与当前输入栈匹配的那一份。
+     *
+     * @return 剪贴板文本；该后端不提供或读取失败时返回空串（绝不为 {@code null}）
+     */
+    default String clipboard() {
+        return "";
+    }
+
+    /**
+     * 写系统剪贴板。
+     *
+     * @param value 文本；实现应容忍 {@code null}（按空串处理）
+     */
+    default void setClipboard(String value) {
+    }
 }

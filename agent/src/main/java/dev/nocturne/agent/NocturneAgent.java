@@ -248,7 +248,7 @@ public final class NocturneAgent {
      * 选 bootstrap 而不是 system：它是所有加载器的父层，因此插桩引用与 agent 自身解析到的是
      * **同一份**类，静态状态（监听器列表）才是同一个——否则帧回调会分发到另一个空的列表上。
      *
-     * <p>只导出这两个类：它们不引用 Skija/ASM/gson 等第三方库，放进 bootstrap 不会与游戏的依赖
+     * <p>只导出这两个类：它们不引用 ASM/gson 等第三方库，放进 bootstrap 不会与游戏的依赖
      * 产生版本冲突（若把整个 agent jar 推上去，游戏自己的 gson 等会被我们的版本顶掉）。
      */
     private static void installBootstrapBridge(Instrumentation instrumentation) {
@@ -259,6 +259,7 @@ public final class NocturneAgent {
                 "dev/nocturne/client/runtime/FrameDispatcher.class",
                 "dev/nocturne/client/runtime/FrameListener.class",
                 "dev/nocturne/client/runtime/InputBlock.class",
+                "dev/nocturne/client/runtime/ScrollState.class",
         };
         java.nio.file.Path jar = null;
         try {
@@ -347,6 +348,9 @@ public final class NocturneAgent {
             // 后交给 Skia，或改用游戏自身的绘制 API）。
             log("SDL render stack detected: no frame hook registered (LWJGL GL bindings unusable"
                     + " under SDL; overlay disabled to keep the game stable)");
+            // 滚轮只有 SDL 世代缺（GLFW 世代能轮询）；游戏的事件分发用 lookupswitch 按类型分流，
+            // 滚轮走 SDLEventHandler.handleMouseWheelEvent，不会落到 Window.handleEvent，故挂在这里。
+            installScrollHook(instrumentation);
             return;
         }
         if (asmLoader == null) {
@@ -511,6 +515,88 @@ public final class NocturneAgent {
             }
         }
         log("input block registered on " + targetClass + "." + method);
+    }
+
+    /**
+     * SDL 滚轮事件入口：{@code SDLEventHandler.pollEvents} 按事件类型 {@code lookupswitch} 分流，
+     * 滚轮（{@code SDL_EVENT_MOUSE_WHEEL = 1027}）走这里，只有 default 分支才落到
+     * {@code Window.handleEvent}——所以只能挂在这个方法上。
+     */
+    private static final String WHEEL_EVENT_CLASS = "com.mojang.blaze3d.platform.SDLEventHandler";
+    /** 滚轮事件入口方法名。 */
+    private static final String WHEEL_EVENT_METHOD = "handleMouseWheelEvent";
+    /** 滚轮事件入口描述符。 */
+    private static final String WHEEL_EVENT_DESCRIPTOR = "(Lorg/lwjgl/sdl/SDL_Event;)V";
+    /** 滚轮钩子类内部名。 */
+    private static final String SCROLL_HOOK_OWNER = "dev/nocturne/agent/ScrollHook";
+    /** 滚轮钩子方法名。 */
+    private static final String SCROLL_HOOK_METHOD = "onEvent";
+    /** 游戏自己的滚轮入口；不屏蔽的话滚轮会顺带切快捷栏。 */
+    private static final String MOUSE_SCROLL_DESCRIPTOR = "(JDD)V";
+
+    /**
+     * 注册滚轮钩子，并顺带屏蔽游戏自己的滚轮处理。
+     *
+     * <p>SDL 的滚轮没有轮询接口（事件驱动），界面的输入却是每帧轮询的——因此 SDL 世代一直
+     * "列表滚不动"。这里在游戏处理 SDL 事件的入口上取增量，交给 bootstrap 层的
+     * {@code ScrollState}，界面每帧取走。
+     *
+     * @param instrumentation 插桩句柄
+     */
+    private static void installScrollHook(Instrumentation instrumentation) {
+        EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
+        if (asmLoader == null) {
+            log("embedded ASM unavailable; scroll hook skipped");
+            return;
+        }
+        ClassFileTransformer transformer = asmLoader.createCallbackTransformer(WHEEL_EVENT_CLASS,
+                WHEEL_EVENT_METHOD, WHEEL_EVENT_DESCRIPTOR, SCROLL_HOOK_OWNER, SCROLL_HOOK_METHOD,
+                false);
+        if (transformer == null) {
+            return;
+        }
+        try {
+            instrumentation.addTransformer(transformer, true);
+        } catch (Throwable t) {
+            log("could not register scroll hook: " + t);
+            return;
+        }
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            if (WHEEL_EVENT_CLASS.equals(loaded.getName())) {
+                try {
+                    instrumentation.retransformClasses(loaded);
+                } catch (Throwable t) {
+                    log("retransform " + WHEEL_EVENT_CLASS + " for scroll hook failed: " + t);
+                }
+                break;
+            }
+        }
+        log("scroll hook registered on " + WHEEL_EVENT_CLASS + "." + WHEEL_EVENT_METHOD);
+        // THROWAWAY-DIAG：键盘事件探针（判定"按键没反应"是系统层没送到还是我们读数错），验完删除。
+        ClassFileTransformer keyTransformer = asmLoader.createCallbackTransformer(WHEEL_EVENT_CLASS,
+                "handleKeyEvent", WHEEL_EVENT_DESCRIPTOR, "dev/nocturne/agent/KeyHook", "onEvent",
+                false);
+        if (keyTransformer != null) {
+            try {
+                instrumentation.addTransformer(keyTransformer, true);
+            } catch (Throwable t) {
+                log("could not register key probe: " + t);
+            }
+            for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+                if (WHEEL_EVENT_CLASS.equals(loaded.getName())) {
+                    try {
+                        instrumentation.retransformClasses(loaded);
+                    } catch (Throwable t) {
+                        log("retransform " + WHEEL_EVENT_CLASS + " for key probe failed: " + t);
+                    }
+                    break;
+                }
+            }
+        }
+        log("key probe registered on " + WHEEL_EVENT_CLASS + ".handleKeyEvent");
+        // 界面开着时游戏不该再自己处理滚轮（否则滚轮会顺带切快捷栏）。
+        registerInputBlock(instrumentation, asmLoader, "net.minecraft.client.MouseHandler", "onScroll",
+                MOUSE_SCROLL_DESCRIPTOR);
     }
 
     /**
@@ -721,8 +807,16 @@ public final class NocturneAgent {
         // 表优先：未混淆版本（26.x）的表里成员名等于规范名，但**携带 absent 标记**——
         // 某个成员在该版本不存在时必须能明确告知模块，而不是等到反射抛异常。
         try {
-            dev.nocturne.client.mapping.Mapping mapping =
+            dev.nocturne.client.mapping.ObfuscatedMapping mapping =
                     dev.nocturne.client.mapping.ObfuscatedMapping.load("/mappings-" + version + ".json");
+            // 文件名与内容必须一致：复制/生成写错版本时，整套映射会静默错位到另一个版本——
+            // 名字全部对不上、功能全废，而日志只说"表加载成功"，比加载失败难查得多。
+            String declared = mapping.version();
+            if (!version.equals(declared)) {
+                log("mapping table version mismatch: mappings-" + version + ".json declares '"
+                        + declared + "'; using identity mapping");
+                return remember(new dev.nocturne.client.mapping.IdentityMapping());
+            }
             log("mapping table loaded: mappings-" + version + ".json (" + mapping.describe() + ")");
             return remember(mapping);
         } catch (Throwable missing) {

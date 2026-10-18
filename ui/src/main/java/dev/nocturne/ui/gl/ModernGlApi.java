@@ -50,6 +50,41 @@ public final class ModernGlApi {
     public static final int GL_SCISSOR_TEST = 0x0C11;
     /** glGetIntegerv 查询项：当前视口。 */
     public static final int GL_VIEWPORT = 0x0BA2;
+    /** 二维纹理目标。 */
+    public static final int GL_TEXTURE_2D = 0x0DE1;
+    /** 纹理单元 0。 */
+    public static final int GL_TEXTURE0 = 0x84C0;
+    /** 纹理像素通道布局：RGBA。 */
+    public static final int GL_RGBA = 0x1908;
+    /** 像素分量类型：每通道 8 位无符号。 */
+    public static final int GL_UNSIGNED_BYTE = 0x1401;
+    /** 纹理采样参数：缩小过滤。 */
+    public static final int GL_TEXTURE_MIN_FILTER = 0x2801;
+    /** 纹理采样参数：放大过滤。 */
+    public static final int GL_TEXTURE_MAG_FILTER = 0x2800;
+    /** 过滤模式：最近邻。 */
+    public static final int GL_NEAREST = 0x2600;
+    /** 纹理环绕参数：S 轴。 */
+    public static final int GL_TEXTURE_WRAP_S = 0x2802;
+    /** 纹理环绕参数：T 轴。 */
+    public static final int GL_TEXTURE_WRAP_T = 0x2803;
+    /** 环绕模式：夹取到边缘。 */
+    public static final int GL_CLAMP_TO_EDGE = 0x812F;
+    /** glPixelStorei 参数：解包行对齐字节数。 */
+    public static final int GL_UNPACK_ALIGNMENT = 0x0CF5;
+    /**
+     * glPixelStorei 参数：解包时每行读取的像素数（{@code GL_UNPACK_ROW_LENGTH}）。
+     *
+     * <p>必须在上传前显式归零：游戏自己上传图集时会把它设成图集宽度，而<strong>这个值会影响
+     * 我们的上传</strong>——驱动会按「行内 4096 像素」去读我们的小缓冲，直接读越界到驱动里
+     * 崩掉（1.21.11 真机实测：{@code nvoglv64.dll} ACCESS_VIOLATION，栈帧落在
+     * {@code ModernGlApi.uploadTexture} 的 {@code glTexImage2D}）。
+     */
+    public static final int GL_UNPACK_ROW_LENGTH = 0x0CF2;
+    /** glPixelStorei 参数：解包时跳过的行数（{@code GL_UNPACK_SKIP_ROWS}），同样必须归零。 */
+    public static final int GL_UNPACK_SKIP_ROWS = 0x0CF3;
+    /** glPixelStorei 参数：解包时跳过的像素数（{@code GL_UNPACK_SKIP_PIXELS}），同样必须归零。 */
+    public static final int GL_UNPACK_SKIP_PIXELS = 0x0CF4;
 
     // 以下为已解析的 GL 入口点。标记「可选」的句柄在老版本 LWJGL 上可能缺失，
     // 此时对应包装方法会安全地跳过调用；未标记的则由 bind 保证非 null。
@@ -125,6 +160,26 @@ public final class ModernGlApi {
     private Method getIntegervBuffer;
     /** {@code glGetIntegerv(int, int[])}（老版本兜底形态）。 */
     private Method getIntegervArray;
+    /** {@code glGenTextures(int[])}。 */
+    private Method genTextures;
+    /** {@code glDeleteTextures(int[])}。 */
+    private Method deleteTextures;
+    /** {@code glBindTexture(int, int)}。 */
+    private Method bindTexture;
+    /** {@code glTexImage2D(..., ByteBuffer)}。 */
+    private Method texImage2D;
+    /** {@code glTexParameteri(int, int, int)}。 */
+    private Method texParameteri;
+    /** {@code glPixelStorei(int, int)}。 */
+    private Method pixelStorei;
+    /** {@code glActiveTexture(int)}。 */
+    private Method activeTexture;
+    /** {@code glUniform1i(int, int)}。 */
+    private Method uniform1i;
+
+    /** 纹理句柄读写与像素上传复用的直接缓冲；不足时按需扩容。 */
+    private java.nio.ByteBuffer pixelStaging;
+
 
     /** 复用的直接缓冲区，避免每次上传都 {@code memAlloc}；不足时按需扩容。 */
     private FloatBuffer staging;
@@ -236,7 +291,118 @@ public final class ModernGlApi {
                     .order(java.nio.ByteOrder.nativeOrder())
                     .asIntBuffer();
         }
+        // 纹理支路：全部按可选处理，缺项时 supportsTextures() 返回 false，UI 走降级路径。
+        api.genTextures = find(loader, "glGenTextures", int[].class);
+        api.deleteTextures = find(loader, "glDeleteTextures", int[].class);
+        api.bindTexture = find(loader, "glBindTexture", int.class, int.class);
+        api.texImage2D = find(loader, "glTexImage2D", int.class, int.class, int.class, int.class,
+                int.class, int.class, int.class, int.class, java.nio.ByteBuffer.class);
+        api.texParameteri = find(loader, "glTexParameteri", int.class, int.class, int.class);
+        api.pixelStorei = find(loader, "glPixelStorei", int.class, int.class);
+        api.activeTexture = find(loader, "glActiveTexture", int.class);
+        api.uniform1i = find(loader, "glUniform1i", int.class, int.class);
         return api;
+    }
+
+    /** @return 是否具备绘制纹理所需的最小句柄集（生成 / 绑定 / 上传 / 采样参数都由本类包装）。 */
+    public boolean hasTextures() {
+        return genTextures != null && bindTexture != null && texImage2D != null
+                && texParameteri != null;
+    }
+
+    /** @return 新建纹理句柄；不可用或失败时为 0 */
+    public int genTexture() {
+        if (genTextures == null) {
+            return 0;
+        }
+        int[] ids = new int[1];
+        Reflect.call(genTextures, null, ids);
+        return ids[0];
+    }
+
+    /** 删除纹理句柄；{@code id <= 0} 或不可用时为空操作。 */
+    public void deleteTexture(int id) {
+        if (deleteTextures == null || id <= 0) {
+            return;
+        }
+        Reflect.call(deleteTextures, null, new int[]{id});
+    }
+
+    /** 绑定二维纹理。 */
+    public void bindTexture2D(int id) {
+        if (bindTexture == null) {
+            return;
+        }
+        Reflect.call(bindTexture, null, GL_TEXTURE_2D, id);
+    }
+
+    /**
+     * 选择当前活动的纹理单元（对应 {@code glActiveTexture}）。
+     *
+     * @param unit 形如 {@link #GL_TEXTURE0} 的枚举值
+     */
+    public void activeTexture(int unit) {
+        Reflect.call(activeTexture, null, unit);
+    }
+
+    /** 设置采样器 uniform 指向的纹理单元；{@code location < 0} 时跳过。 */
+    public void uniform1i(int location, int value) {
+        if (location < 0 || uniform1i == null) {
+            return;
+        }
+        Reflect.call(uniform1i, null, location, value);
+    }
+
+    /** 设置纹理采样参数。 */
+    public void texParameteri(int target, int pname, int param) {
+        Reflect.call(texParameteri, null, target, pname, param);
+    }
+
+    /** 设置像素存储模式。 */
+    public void pixelStorei(int pname, int param) {
+        Reflect.call(pixelStorei, null, pname, param);
+    }
+
+    /**
+     * 上传一张 RGBA 纹理的全量像素（非预乘 {@code 0xAARRGGBB}、行优先、左上原点）。
+     *
+     * @return 下发成功返回 {@code true}
+     */
+    public boolean uploadTexture(int width, int height, int[] argb) {
+        if (texImage2D == null || width <= 0 || height <= 0 || argb == null) {
+            return false;
+        }
+        int needed = width * height * 4;
+        java.nio.ByteBuffer buffer = pixelStaging;
+        if (buffer == null || buffer.capacity() < needed) {
+            buffer = java.nio.ByteBuffer.allocateDirect(needed)
+                    .order(java.nio.ByteOrder.nativeOrder());
+            pixelStaging = buffer;
+        }
+        buffer.clear();
+        for (int i = 0; i < width * height; i++) {
+            int pixel = argb[i];
+            buffer.put((byte) ((pixel >> 16) & 0xFF));  // R
+            buffer.put((byte) ((pixel >> 8) & 0xFF));   // G
+            buffer.put((byte) (pixel & 0xFF));          // B
+            buffer.put((byte) ((pixel >>> 24) & 0xFF)); // A
+        }
+        buffer.flip();
+        if (pixelStorei != null) {
+            // 行对齐：RGBA 每行字节数必然是 4 的倍数，显式设为 4 以免游戏把全局值改过。
+            Reflect.call(pixelStorei, null, GL_UNPACK_ALIGNMENT, 4);
+            // 这三个解包状态必须显式归零：GL 的源地址 = base + ((SKIP_ROWS*ROW_LENGTH)+SKIP_PIXELS)*bpp，
+            // 而游戏上传图集时会把它们留在非 0 值上。1.21.11 真机实测（首次上传时读到）：
+            // ROW_LENGTH=1152、SKIP_ROWS=864、SKIP_PIXELS=288 → 源地址在 base 之后 3,982,464 字节，
+            // 而我们的缓冲区只有几字节 → 驱动读越界，直接 native abort（EXCEPTION_ACCESS_VIOLATION，
+            // problematic frame nvoglv64.dll）。归零后同一流程不再崩（同机 A/B 已验证）。
+            Reflect.call(pixelStorei, null, GL_UNPACK_ROW_LENGTH, 0);
+            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_ROWS, 0);
+            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_PIXELS, 0);
+        }
+        Reflect.call(texImage2D, null, GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+        return true;
     }
 
     /**
@@ -258,13 +424,10 @@ public final class ModernGlApi {
                 return null;
             }
             int[] out = new int[count];
-            viewportStaging.flip();
-            if (viewportStaging.remaining() < count) {
-                // GL 调用没有写入任何值（句柄不可用，或被驱动拒绝）：此时再 get 会抛
-                // BufferUnderflowException，并让整条帧回调失败、每帧刷一条「frame action failed」。
-                // 缺视口是可以由调用方回退处理的情形，不该升级成异常。
-                return null;
-            }
+            // 这里**不能** flip()：GL 是按原生地址写缓冲区的，Java 侧的 position 始终停在 0，
+            // flip() 会把 limit 置成 position(=0)，于是 remaining() 恒为 0——旧代码据此判定
+            // "GL 没写入"并返回 null，视口因此永远退回 Window 推算、混合因子恢复成了死代码。
+            // invoke 已经成功过一次（失败会抛并被上面捕获），按 limit=count、position=0 直接读即可。
             viewportStaging.get(out, 0, count);
             return out;
         }

@@ -29,7 +29,7 @@ public final class TrajectoriesModule extends Module implements WorldOverlay {
 
     /** 模拟步数上限（约 6 秒飞行；再往后就是没落地，画下去只是浪费绘制调用）。 */
     private static final int MAX_STEPS = 120;
-    /** 每 tick 重力加速度（MC 的投掷物都是 0.03 格/tick²）。 */
+    /** 每 tick 重力加速度：投掷物（雪球/蛋/珍珠/药水）是 0.03 格/tick²，箭是 0.05。 */
     private static final double GRAVITY = 0.03d;
     /** 每 tick 速度衰减（空气阻力）。 */
     private static final double DRAG = 0.99d;
@@ -51,7 +51,7 @@ public final class TrajectoriesModule extends Module implements WorldOverlay {
     private final BooleanValue ghostBowCharge = add(new BooleanValue("Ghost Bow Charge", false));
 
     /** RenderEvent 订阅句柄；禁用时退订。 */
-    private EventBus.Subscription renderSubscription;
+    private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
     private boolean gateLogged;
     /** 上一帧模拟步数（HUD/诊断用；0 表示未持有可投掷物或被门拦下）。 */
@@ -87,7 +87,9 @@ public final class TrajectoriesModule extends Module implements WorldOverlay {
     /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上）。 */
     @Override
     public void onTick() {
-        if (renderSubscription == null) {
+        if (isEnabled() && renderSubscription == null) {
+            // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
+            // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
             subscribe();
         }
     }
@@ -278,9 +280,15 @@ public final class TrajectoriesModule extends Module implements WorldOverlay {
         return new float[]{((Number) yaw).floatValue(), ((Number) pitch).floatValue()};
     }
 
-    /** 读实体眼位（{@code getEyePosition()} → {@code Vec3#x/y/z}）；缺成员时返回 {@code null}。 */
+    /** 读实体眼位（{@code getEyePosition} → {@code Vec3#x/y/z}）；缺成员时返回 {@code null}。 */
     private static double[] eyePosition(GameBridge bridge, Object entity) {
         Object vec = bridge.callMapped(entity, ClassType.ENTITY, "getEyePosition");
+        if (vec == null) {
+            // 1.8.9–1.16.5 的签名带 partialTicks（SRG func_174824_e(F)），只试零参会拿到 null，
+            // 轨迹于是整帧不画。插值量取 0 等价于"就用当前位置"。
+            vec = bridge.callMapped(entity, ClassType.ENTITY, "getEyePosition",
+                    Float.valueOf(0.0F));
+        }
         if (vec == null) {
             return null;
         }

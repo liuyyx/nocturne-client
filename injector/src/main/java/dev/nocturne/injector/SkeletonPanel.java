@@ -77,6 +77,18 @@ public final class SkeletonPanel extends JPanel {
         }
     }
 
+    /**
+     * 应用动画速度百分比（0–200）：100 为标准呼吸速度，200 翻倍，0 冻结在静止骨架。
+     *
+     * <p>由设置对话框实时调用；下限 16ms 保证定时器仍是有效动画。
+     *
+     * @param percent 动画速度百分比；非正数冻结动画
+     */
+    public void setSpeedPercent(int percent) {
+        timer.setDelay(percent <= 0 ? 100000
+                : Math.max(16, Math.round(FRAME_MS * 100f / percent)));
+    }
+
     /** 组件离开屏幕时停止动画，避免隐藏后仍在消耗 CPU。 */
     @Override
     public void removeNotify() {

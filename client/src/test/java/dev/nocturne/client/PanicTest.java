@@ -23,8 +23,55 @@ class PanicTest {
 
     /** 每个用例前后重置进程级单例，避免全局状态在用例间互相污染。 */
     @BeforeEach
-    void isolate() {
+    void isolate() throws Exception {
         TestSupport.resetClient();
+        resetInputBlock();
+    }
+
+    /** {@code InputBlock} 的"已停用"标志是单向的（生产语义如此），测试间用反射复位。 */
+    private static void resetInputBlock() throws Exception {
+        java.lang.reflect.Field disabled =
+                dev.nocturne.client.runtime.InputBlock.class.getDeclaredField("disabled");
+        disabled.setAccessible(true);
+        disabled.setBoolean(null, false);
+    }
+
+    /**
+     * 自销毁后，一帧接一帧地仍被注入字节码调用也不得把驱动闸门重新打开。
+     *
+     * <p>回归：帧回调的后半段（RenderEvent 广播 + 模块 tick）不经过已清空的分发器，且
+     * {@code driveModules} 会按"是否在世界里"调用 {@code setActive(inWorld)}——真机上游戏一解析完成
+     * 就把它置回 true，于是 panic 在 50ms 内被自己撤销，模块继续 tick。修复是在帧入口直接短路。
+     */
+    @Test
+    void panicKeepsDrivingGateOffAcrossFrames() {
+        NocturneClient client = NocturneClient.boot(null);
+        client.panic();
+
+        dev.nocturne.client.runtime.NocturneRuntime.onFrame();
+        dev.nocturne.client.runtime.NocturneRuntime.onFrame();
+
+        assertTrue(client.isPanicked());
+        assertFalse(client.modules().isActive(), "driving gate must stay off after panic");
+    }
+
+    /**
+     * 自销毁必须停掉输入占用。
+     *
+     * <p>回归：{@code blocked} 由叠加层每帧刷新，清空分发器后没人再刷新它——若自销毁那一刻界面正
+     * 开着，游戏侧输入入口（键盘/点击/滚轮）就被永久短路。
+     */
+    @Test
+    void panicStopsBlockingGameInput() {
+        NocturneClient client = NocturneClient.boot(null);
+        dev.nocturne.client.runtime.InputBlock.setBlocked(true);
+        assertTrue(dev.nocturne.client.runtime.InputBlock.shouldBlock(),
+                "precondition: overlay is eating input");
+
+        client.panic();
+
+        assertFalse(dev.nocturne.client.runtime.InputBlock.shouldBlock(),
+                "panic must stop blocking game input");
     }
 
     /** 用例结束后同样清空单例。 */

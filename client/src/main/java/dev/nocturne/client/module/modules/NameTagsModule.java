@@ -34,42 +34,29 @@ public final class NameTagsModule extends Module implements WorldOverlay {
     /** 投影结果复用（每帧几十个实体，避免逐点分配）。 */
     private final WorldProjection.ScreenPoint point = new WorldProjection.ScreenPoint();
 
-    /** 隐身实体是否跳过。 */
+    /** 隐身实体是否跳过（读不到隐身状态时按"可见"处理）。 */
     private final BooleanValue ignoreInvisibles = add(new BooleanValue("Ignore Invisibles", false));
-    /** 按距离自动缩放标签。 */
-    private final BooleanValue autoScale = add(new BooleanValue("Auto Scale", true));
-    /** 全局缩放。 */
-    private final NumberValue scale = add(new NumberValue("Scale", 1.0, 0.1, 1.5, 0.1));
-    /** 隐藏 Bot。 */
-    private final BooleanValue hideBots = add(new BooleanValue("Hide bots", true));
-    /** 玩家组总开关 + 血量/距离/装备/药水/最大距离。 */
+    /** 玩家组总开关 + 血量/距离/最大距离。 */
     private final BooleanValue renderPlayers = add(new BooleanValue("Render Players", true));
     private final BooleanValue playersHealth = add(new BooleanValue("Health", false));
     private final BooleanValue playersDistance = add(new BooleanValue("Distance", false));
-    private final BooleanValue equipment = add(new BooleanValue("Equipment", false));
-    private final BooleanValue playersEffects = add(new BooleanValue("Effects", false));
     private final NumberValue playersMaxDistance =
             add(new NumberValue("Player Max Distance", 0.0, 0.0, 250.0, 1.0));
-    /** 玩家组专属：强度指示 + 药水折算。 */
-    private final BooleanValue strengthIndicator = add(new BooleanValue("Strength Indicator", false));
-    private final BooleanValue calculateEffects = add(new BooleanValue("Calculate Effects", false));
-    /** 动物组总开关 + 血量/距离/药水/最大距离。 */
+    /** 动物组总开关 + 血量/距离/最大距离。 */
     private final BooleanValue renderAnimals = add(new BooleanValue("Render Animals", false));
     private final BooleanValue animalsHealth = add(new BooleanValue("Health", false));
     private final BooleanValue animalsDistance = add(new BooleanValue("Distance", false));
-    private final BooleanValue animalsEffects = add(new BooleanValue("Effects", false));
     private final NumberValue animalsMaxDistance =
             add(new NumberValue("Animal Max Distance", 0.0, 0.0, 250.0, 1.0));
-    /** 怪物组总开关 + 血量/距离/药水/最大距离。 */
+    /** 怪物组总开关 + 血量/距离/最大距离。 */
     private final BooleanValue renderMobs = add(new BooleanValue("Render Mobs", false));
     private final BooleanValue mobsHealth = add(new BooleanValue("Health", false));
     private final BooleanValue mobsDistance = add(new BooleanValue("Distance", false));
-    private final BooleanValue mobsEffects = add(new BooleanValue("Effects", false));
     private final NumberValue mobsMaxDistance =
             add(new NumberValue("Mob Max Distance", 0.0, 0.0, 250.0, 1.0));
 
     /** RenderEvent 订阅句柄；禁用时退订。 */
-    private EventBus.Subscription renderSubscription;
+    private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
     private boolean gateLogged;
     /** 上一帧收集到的可见实体数（HUD/诊断用）。 */
@@ -105,7 +92,9 @@ public final class NameTagsModule extends Module implements WorldOverlay {
     /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上）。 */
     @Override
     public void onTick() {
-        if (renderSubscription == null) {
+        if (isEnabled() && renderSubscription == null) {
+            // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
+            // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
             subscribe();
         }
     }
@@ -219,15 +208,19 @@ public final class NameTagsModule extends Module implements WorldOverlay {
         } catch (Throwable t) {
             return out;
         }
-        if (!(raw instanceof List)) {
+        // 1.15+ 返回 Iterable（1.8.9–1.12.2 才是 List）：只认 List 会让中间版本静默零输出。
+        if (!(raw instanceof Iterable)) {
             return out;
         }
         Object self = bridge.player();
-        for (Object entity : (List<Object>) raw) {
+        for (Object entity : (Iterable<Object>) raw) {
             if (entity == null || (self != null && self.equals(entity))) {
                 continue;
             }
             if (!isLiving(bridge, entity)) {
+                continue;
+            }
+            if (ignoreInvisibles.get() && isInvisible(bridge, entity)) {
                 continue;
             }
             out.add(entity);
@@ -251,7 +244,8 @@ public final class NameTagsModule extends Module implements WorldOverlay {
         if (level == null) {
             return;
         }
-        boolean withDistance = playersDistance.get();
+        boolean withDistance = playersDistance.get() || animalsDistance.get() || mobsDistance.get();
+        boolean withHealth = playersHealth.get() || animalsHealth.get() || mobsHealth.get();
         float lineHeight = draw.textHeight();
         for (Object entity : visibleEntities(bridge, level)) {
             double[] pos = position(bridge, entity);
@@ -262,7 +256,7 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             if (!point.visible) {
                 continue;
             }
-            String label = label(bridge, entity, withDistance);
+            String label = label(bridge, entity, withDistance, withHealth);
             if (label == null) {
                 continue;
             }
@@ -270,17 +264,45 @@ public final class NameTagsModule extends Module implements WorldOverlay {
         }
     }
 
-    /** 标签文本：名字（+ 距离）；名字读不到时返回 {@code null}。 */
-    private static String label(GameBridge bridge, Object entity, boolean withDistance) {
-        Object name = bridge.callMapped(entity, ClassType.ENTITY, "getName");
-        if (!(name instanceof String)) {
+    /**
+     * 标签文本：名字 [+ 血量] [+ 距离]；名字读不到时返回 {@code null}。
+     *
+     * <p>血量与距离的开关按"任一分组打开即生效"处理：按实体类型细分需要 Animal 等映射面
+     * （现在只有 Player/Mob 两级），分组开关暂时合流——比"开关完全没人看"好得多，
+     * 等 kind 面进表后再按组精确匹配。
+     */
+    private static String label(GameBridge bridge, Object entity, boolean withDistance,
+                                boolean withHealth) {
+        // getName 返回的是聊天组件而不是字符串，必须经映射表读文本（见 GameBridge#componentText）。
+        String name = bridge.componentText(bridge.callMapped(entity, ClassType.ENTITY, "getName"));
+        if (name == null) {
             return null;
         }
-        if (!withDistance) {
-            return (String) name;
+        StringBuilder text = new StringBuilder(name);
+        if (withHealth) {
+            Object health = bridge.callMapped(entity, ClassType.LIVING_ENTITY, "getHealth");
+            if (health instanceof Number) {
+                text.append(' ').append(Math.round(((Number) health).doubleValue())).append("hp");
+            }
         }
-        double dist = distanceTo(bridge, bridge.player(), entity);
-        return dist >= 0 ? name + " " + Math.round(dist) + "m" : (String) name;
+        if (withDistance) {
+            double dist = distanceTo(bridge, bridge.player(), entity);
+            if (dist >= 0) {
+                text.append(' ').append(Math.round(dist)).append('m');
+            }
+        }
+        return text.toString();
+    }
+
+    /**
+     * 实体是否隐身。
+     *
+     * <p>{@code Entity#isInvisible} 目前不在映射表里：未混淆版本（26.x）按规范名直接能调到，
+     * 混淆版本读不到就一律当作"可见"——宁可在老版本上多显示几个标签，也不因为读不到而把实体全滤掉。
+     */
+    private static boolean isInvisible(GameBridge bridge, Object entity) {
+        Object value = bridge.callMapped(entity, ClassType.ENTITY, "isInvisible");
+        return value instanceof Boolean && ((Boolean) value).booleanValue();
     }
 
     /** 读实体的世界坐标（{@code position()} → {@code Vec3#x/y/z}）；缺成员时返回 {@code null}。 */

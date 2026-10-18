@@ -233,6 +233,39 @@ final class ForeignScreenGuard implements FrameListener {
     }
 
     /**
+     * 自销毁（panic）时的恢复：把游戏鼠标抓取与 1.8.9 的 {@code inGameHasFocus} 还原。
+     *
+     * <p><b>为什么必须由外部主动调</b>：本守护是每帧监听器，而 panic 会清空帧分发器——之后
+     * {@link #onFrame()} 再也不会被驱动，我们改过的外部状态（放开鼠标抓取、{@code inGameHasFocus=false}）
+     * 就永久留在那儿：1.8.9–1.12 表现为鼠标视角永久失效。注册点是
+     * {@code NocturneRuntime.addShutdown}，由 panic 在清空分发器前调用。
+     *
+     * <p>只还原<b>由我们</b>改过的项（各标志记账），不碰游戏自己设置的抓取状态。
+     * 异常一律吞掉：这是尽力而为的清理路径，不能把异常抛回 panic 的调用方。
+     */
+    public void restore() {
+        try {
+            if (mouseReleased) {
+                Object handler = mouseHandler();
+                if (handler != null) {
+                    bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "grabMouse");
+                }
+                mouseReleased = false;
+            }
+            if (Boolean.FALSE.equals(gameInputApplied)) {
+                Object minecraft = bridge.minecraft();
+                if (minecraft != null
+                        && bridge.writeField(minecraft, ClassType.MINECRAFT,
+                                "inGameHasFocus", true)) {
+                    gameInputApplied = Boolean.TRUE;
+                }
+            }
+        } catch (Throwable ignored) {
+            // 尽力而为：恢复失败也不该影响 panic 的其余步骤
+        }
+    }
+
+    /**
      * 按形状读当前 screen：非 static、类型名以 {@code Screen} 结尾的字段（1.8.9 的
      * {@code GuiScreen}、26.x 的 {@code Screen} 都命中）。
      */

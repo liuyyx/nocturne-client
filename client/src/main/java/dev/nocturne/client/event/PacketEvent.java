@@ -6,8 +6,11 @@ package dev.nocturne.client.event;
  * <p>当前仅立类型、暂无生产投递点：包钩子是 P6-2 战斗/走位模块的前置条件（KillAura 的目标选择、
  * Velocity 的包修改都挂在这里）。投递点接入前，订阅者收不到任何事件——这是预期的，
  * 不是静默失败。
+ *
+ * <p>{@link #cancelled} 由总线执行（实现 {@link EventBus.Cancellable}）：置位后总线不再把本事件
+ * 投给后续订阅者。接入真正的包钩子之后，投递方据此决定是否放行这次收发。
  */
-public final class PacketEvent {
+public final class PacketEvent implements EventBus.Cancellable {
 
     /** 包方向。 */
     public enum Direction {
@@ -27,5 +30,11 @@ public final class PacketEvent {
     public PacketEvent(Direction direction, Object packet) {
         this.direction = direction;
         this.packet = packet;
+    }
+
+    /** @return 本次事件是否已被某个订阅者取消（总线据此停止后续投递） */
+    @Override
+    public boolean isCancelled() {
+        return cancelled;
     }
 }

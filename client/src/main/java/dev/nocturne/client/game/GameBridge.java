@@ -191,6 +191,27 @@ public final class GameBridge {
         return minecraft == null ? null : readField(minecraft, ClassType.MINECRAFT, "player");
     }
 
+    /**
+     * 游戏侧的类加载器。
+     *
+     * <p>解析映射类名必须用它：模块自己的加载器是系统/应用加载器，而在 Fabric（KnotClassLoader）与
+     * Forge 的隔离加载器下它看不到任何游戏类，{@code Class.forName} 会恒失败——模块据此判定
+     * "该版本没有这个类"并自我禁用，开关看着在、其实什么都不做。
+     *
+     * @return 已解析游戏类的加载器；尚未解析时退回玩家的；两者都拿不到时返回本类的加载器
+     */
+    public ClassLoader gameLoader() {
+        Class<?> minecraft = minecraftClass();
+        if (minecraft != null && minecraft.getClassLoader() != null) {
+            return minecraft.getClassLoader();
+        }
+        Object player = player();
+        if (player != null && player.getClass().getClassLoader() != null) {
+            return player.getClass().getClassLoader();
+        }
+        return GameBridge.class.getClassLoader();
+    }
+
     /** @return 当前是否处于世界中（本地玩家已可用） */
     public boolean inWorld() {
         return player() != null;
@@ -224,6 +245,13 @@ public final class GameBridge {
             Class<?>[] parameters = descriptor == null
                     ? null
                     : descriptorParameters(type, candidate.name(), descriptor);
+            if (parameters != null && parameters.length != (args == null ? 0 : args.length)) {
+                // 表里的描述符只覆盖该规范方法在某一种签名。同一个规范名在不同版本之间换过 arity
+                // （典型：Entity#getEyePosition 在 1.8.9–1.16.5 是 (F)，1.17+ 才是零参），按描述符
+                // 去找必然找不到匹配的重载、调用也必然失败——必须退化为按实参推断，否则整条调用链
+                // 静默返回 null（症状：世界覆盖层什么都不画，日志只有一句"读不到成员"）。
+                parameters = null;
+            }
             if (parameters == null) {
                 // 没有描述符（恒等映射/表缺条目），或该命名空间的描述符在本加载器里解析不出来：
                 // 退化为按实参类型推断，而不是把整条链就此中断。
@@ -238,6 +266,32 @@ public final class GameBridge {
             }
         }
         return null;
+    }
+
+    /**
+     * 把"聊天组件"读成纯文本。
+     *
+     * <p>为什么需要它：{@code Entity#getName} 在任何版本都不返回 {@code String}——1.8.9 是
+     * {@code IChatComponent}、1.13+ 是 {@code Component}。调用方写 {@code instanceof String} 时，
+     * 结论永远是"读不到名字"：标签一个字符都画不出来，而计数器照常增长（看起来像渲染坏了）。
+     *
+     * <p>读文本走映射表里的 {@code Component#getString()}，因此混淆版本也对得上（1.8.9 是
+     * {@code d} / {@code method_10865} / {@code func_150254_d}）。调用方拿到 {@code null} 表示
+     * 该版本读不出文本，应当跳过这一项，而不是画个空标签。
+     *
+     * @param component 组件实例；{@code null} 时返回 {@code null}
+     * @return 纯文本；该实例不是组件、或映射不到取文本方法时为 {@code null}
+     */
+    public String componentText(Object component) {
+        if (component == null) {
+            return null;
+        }
+        if (component instanceof String) {
+            // 未混淆构建、或将来某个版本直接给字符串
+            return (String) component;
+        }
+        Object text = callMapped(component, ClassType.CHAT_COMPONENT, "getString");
+        return text instanceof String ? (String) text : null;
     }
 
     /** 解析表中记录的描述符；结构非法时记录限流日志并返回 {@code null}。 */

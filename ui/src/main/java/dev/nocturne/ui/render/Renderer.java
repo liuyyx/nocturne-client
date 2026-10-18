@@ -72,4 +72,49 @@ public interface Renderer {
 
     /** 弹出最近一次 {@link #pushClip} 设置的裁剪区域；栈空时为空操作。 */
     void popClip();
+
+    /**
+     * 上传或更新一张纹理。
+     *
+     * <p>像素格式固定为 {@code 0xAARRGGBB}、行优先、左上角为原点，且<b>非预乘</b>：
+     * 三个 GL 路径都用 {@code SRC_ALPHA / ONE_MINUS_SRC_ALPHA} 混合，预乘会双重乘 alpha。
+     *
+     * @param id     已有纹理句柄；小于等于 0 表示新建
+     * @param width  宽度（像素）；小于等于 0 时返回 {@code id} 原样
+     * @param height 高度（像素）；小于等于 0 时返回 {@code id} 原样
+     * @param argb   像素数据，长度必须不小于 {@code width * height}
+     * @return 纹理句柄；失败或本后端不支持纹理时返回 {@code id} 原样
+     */
+    int uploadTexture(int id, int width, int height, int[] argb);
+
+    /**
+     * 删除纹理。
+     *
+     * @param id 纹理句柄；小于等于 0 时忽略
+     */
+    void deleteTexture(int id);
+
+    /**
+     * 以 {@code argb} 调制绘制一张纹理。
+     *
+     * <p>{@code uv} 为 0..1 的归一化纹理坐标；{@code u0/v0} 是左上角、{@code u1/v1} 是右下角。
+     * {@code texture} 小于等于 0、宽高小于等于 0 或 {@code argb} 的 alpha 为 0 时跳过绘制。
+     *
+     * @param texture 纹理句柄
+     * @param argb    调制色（{@code 0xFFFFFFFF} 表示原样绘制）
+     */
+    void texturedQuad(int texture, float x, float y, float width, float height,
+                      float u0, float v0, float u1, float v1, int argb);
+
+    /**
+     * 本后端是否支持纹理栅格。
+     *
+     * <p>返回 {@code false} 时调用方必须走降级路径（例如用游戏字体代替字形图集），
+     * 而不是继续调用 {@link #uploadTexture}/{@link #texturedQuad} 期待效果。
+     *
+     * @return 支持返回 {@code true}
+     */
+    default boolean supportsTextures() {
+        return false;
+    }
 }

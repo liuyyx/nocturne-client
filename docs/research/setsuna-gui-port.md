@@ -1,3 +1,8 @@
+> **已废弃（历史文档）**：本文记录的 Setsuna UI 移植件（`ui/skija/**`、Skija 后端、组件树、
+> HUD / HUD 编辑器、纹理桥、主题、动画）**已全部从代码库删除**，界面改为 Fatality 风格 ClickGUI
+> （见 `docs/research/LabFatalityGui.java` 与 `fatality-ui-*.png`、`THIRD-PARTY-NOTICES.md` §2）。
+> 本文中的路径、截图与结论仅作历史参考，**与当前代码不符**。
+
 # 照抄 Setsuna GUI 到 nocturne-client：可行性与最小集（实测）
 
 对象：`vendor/setsuna/`（Setsuna 客户端源码快照，GPL-3.0，330 个 `.java`）

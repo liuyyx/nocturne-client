@@ -1081,14 +1081,32 @@
             "fields": {}
         },
         "net/minecraft/world/effect/MobEffect": {
-            "absent": true,
-            "names": {},
+            "names": {
+                "vanilla": "aej",
+                "fabric": "net.minecraft.class_1291",
+                "forge": "net.minecraft.potion.Potion"
+            },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "NIGHT_VISION": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "field_5925",
+                        "forge": "field_76439_r"
+                    },
+                    "descriptors": {
+                        "vanilla": "Laej;",
+                        "fabric": "Lnet/minecraft/class_1291;"
+                    }
+                }
+            }
         },
         "net/minecraft/world/effect/MobEffectInstance": {
-            "absent": true,
-            "names": {},
+            "names": {
+                "vanilla": "aek",
+                "fabric": "net.minecraft.class_1293",
+                "forge": "net.minecraft.potion.PotionEffect"
+            },
             "methods": {},
             "fields": {}
         },
@@ -1123,6 +1141,9 @@
                         "forge": "(DDD)D"
                     }
                 },
+                "getDeltaMovement": {
+                    "absent": true
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "i",
@@ -1148,6 +1169,9 @@
                     }
                 },
                 "getName": {
+                    "absent": true
+                },
+                "isInvisible": {
                     "absent": true
                 },
                 "isShiftKeyDown": {
@@ -1294,7 +1318,16 @@
             },
             "methods": {
                 "addEffect": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_6092",
+                        "forge": "func_195064_c"
+                    },
+                    "signatures": {
+                        "vanilla": "(Laek;)Z",
+                        "fabric": "(Lnet/minecraft/class_1293;)Z",
+                        "forge": "(Lnet/minecraft/potion/PotionEffect;)Z"
+                    }
                 },
                 "distanceToSqr": {
                     "names": {
@@ -1767,8 +1800,11 @@
             }
         },
         "net/minecraft/world/entity/item/ItemEntity": {
-            "absent": true,
-            "names": {},
+            "names": {
+                "vanilla": "aml",
+                "fabric": "net.minecraft.class_1542",
+                "forge": "net.minecraft.entity.item.EntityItem"
+            },
             "methods": {},
             "fields": {}
         },

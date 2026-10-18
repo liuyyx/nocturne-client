@@ -102,4 +102,25 @@ public final class FakeBackend implements UiBackend {
     public void popClip() {
         renderer.popClip();
     }
+
+    @Override
+    public boolean supportsTextures() {
+        return renderer.supportsTextures();
+    }
+
+    @Override
+    public int uploadTexture(int id, int width, int height, int[] argb) {
+        return renderer.uploadTexture(id, width, height, argb);
+    }
+
+    @Override
+    public void deleteTexture(int id) {
+        renderer.deleteTexture(id);
+    }
+
+    @Override
+    public void texturedQuad(int texture, float x, float y, float width, float height,
+                             float u0, float v0, float u1, float v1, int argb) {
+        renderer.texturedQuad(texture, x, y, width, height, u0, v0, u1, v1, argb);
+    }
 }

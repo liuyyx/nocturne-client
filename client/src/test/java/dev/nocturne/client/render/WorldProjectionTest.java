@@ -49,23 +49,56 @@ class WorldProjectionTest {
                 "a point inside the near plane must not be visible");
     }
 
-    /** 右侧的点往右走、上方的点往上走（屏幕 y 向下，所以 y 变小）。 */
+    /**
+     * 右侧的点往右走、上方的点往上走（屏幕 y 向下，所以 y 变小）。
+     *
+     * <p>方向约定要按 Minecraft 的坐标系来读：yaw=0 面朝 +Z（南）时，+X（东）在玩家<b>左手边</b>
+     * ——面朝南时左为东、右为西。原先这里断言 +X 往右，等于把左右写反的实现钉成了"正确"，
+     * 真机上就是所有世界覆盖物水平镜像。
+     */
     @Test
     void rightAndUpMapToRightAndUp() {
         WorldProjection projection = lookingSouth();
         float centreX = 427 / 2f;
         float centreY = 240 / 2f;
 
-        WorldProjection.ScreenPoint right = projection.project(5d, 0d, 10d);
+        WorldProjection.ScreenPoint right = projection.project(-5d, 0d, 10d);
         assertTrue(right.visible);
-        assertTrue(right.x > centreX, "a point to the right must land right of centre; x=" + right.x);
+        assertTrue(right.x > centreX,
+                "facing south, west (-X) is on the player's right; x=" + right.x);
+
+        WorldProjection.ScreenPoint left = projection.project(5d, 0d, 10d);
+        assertTrue(left.visible);
+        assertTrue(left.x < centreX,
+                "facing south, east (+X) is on the player's left; x=" + left.x);
 
         WorldProjection.ScreenPoint up = projection.project(0d, 5d, 10d);
         assertTrue(up.visible);
         assertTrue(up.y < centreY, "a point above must land above centre (screen y grows down); y=" + up.y);
     }
 
-    /** 朝西（yaw=90）时，世界 -X 方向变成正前方，原先的前方（+Z）落到右侧。 */
+    /**
+     * 视线方向上的点在<b>任何</b> pitch 下都必须落在视口中心。
+     *
+     * <p>回归：{@code up} 的 X/Z 曾反号，于是 pitch=45 时 {@code up·look = -1}——up 与视线反向，
+     * 视场里所有点被投到同一条水平线上（"世界覆盖物塌成一条线"）。只测 pitch=0 是抓不到的：
+     * 那时 sinPitch=0，反号的两项都乘 0。这里取一个恰在视线方向上的点（眼位原点、俯视 45° 时的
+     * {@code (0,-5,5)}），它必须落在中心。
+     */
+    @Test
+    void thePointAlongTheLookDirectionIsCentredAtAnyPitch() {
+        WorldProjection projection = new WorldProjection();
+        projection.update(0d, 0d, 0d, 0f, 45f, 70f, 427, 240);
+
+        WorldProjection.ScreenPoint ahead = projection.project(0d, -5d, 5d);
+
+        assertTrue(ahead.visible, "a point along the look direction must be visible");
+        assertEquals(427 / 2f, ahead.x, 0.6f, "x must be the viewport centre");
+        assertEquals(240 / 2f, ahead.y, 0.6f,
+                "a point along the look direction must stay centred when pitched; y=" + ahead.y);
+    }
+
+    /** 朝西（yaw=90）时，世界 -X 方向变成正前方，原先的前方（+Z）落到<b>左</b>边。 */
     @Test
     void yawTurnsTheView() {
         WorldProjection projection = new WorldProjection();
@@ -78,7 +111,8 @@ class WorldProjectionTest {
 
         WorldProjection.ScreenPoint south = projection.project(-5d, 0d, 5d);
         assertTrue(south.visible, "a point 45 degrees off the new forward must stay on screen");
-        assertTrue(south.x > 427 / 2f, "after turning west, the +Z side must be off to the right; x=" + south.x);
+        assertTrue(south.x < 427 / 2f,
+                "facing west, the +Z side (south) is on the player's left; x=" + south.x);
     }
 
     /** 超出视场角的点判不可见：正侧方（与视线成 90°）不该出现在屏幕上。 */

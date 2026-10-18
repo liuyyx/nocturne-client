@@ -29,8 +29,14 @@ public final class AutoRespawnModule extends Module {
     /** 两次重生请求之间的最小间隔（毫秒）：即使玩家状态抖动，也不会退化回每 tick 发一次。 */
     private static final long MIN_RETRY_INTERVAL_MS = 1000L;
 
-    /** 本次死亡是否已请求过重生；玩家脱离死亡状态后复位。 */
+    /**
+     * 本次死亡周期内是否已发出过重生请求；玩家脱离死亡状态后复位。
+     *
+     * <p>只用于诊断（避免重复刷屏），<b>不再是"只发一次"的闩锁</b>——见 {@link #onTick}。
+     */
     private boolean respawnRequested;
+    /** respawnPlayer 调不动是否已打过日志（表驱动门：缺成员版本只报一次）。 */
+    private boolean respawnLogOnce;
     /** 上次发起重生请求的时刻（{@link System#currentTimeMillis()}）；初始 0 表示从未请求。 */
     private long lastRequestMs;
 
@@ -71,24 +77,45 @@ public final class AutoRespawnModule extends Module {
         if (player == null) {
             return;
         }
-        Object dead = bridge.readField(player, ClassType.ENTITY, "isDead");
-        if (!Boolean.TRUE.equals(dead)) {
-            // 玩家已脱离死亡状态（服务端已处理重生）：复位闩锁，为下一次死亡做准备
+        if (!isDead(bridge, player)) {
+            // 玩家已脱离死亡状态（服务端已处理重生）：复位状态，为下一次死亡做准备。
             respawnRequested = false;
-            return;
-        }
-        if (respawnRequested) {
-            // 同一次死亡只请求一次，等待服务端处理
+            respawnLogOnce = false;
             return;
         }
         long now = System.currentTimeMillis();
         if (now - lastRequestMs < MIN_RETRY_INTERVAL_MS) {
-            // 冷却未到：避免状态抖动导致连续请求
+            // 冷却未到：避免状态抖动导致连续请求（服务端对重生包有频率限制）。
             return;
         }
+        boolean retry = respawnRequested;
         lastRequestMs = now;
         respawnRequested = true;
+        // 发出后**不认定成功**：某些版本的表里没有 respawnPlayer（absent），调用会静默返回 null。
+        // 旧代码在调用前就把闩锁置位并永不复位，于是"发不出去"和"已经发过"再也分不开——
+        // 除 1.8.9/1.12.2 之外的所有版本都自动重生失效。这里改成按冷却重试，直到玩家复活。
         bridge.callMapped(player, ClassType.LOCAL_PLAYER, "respawnPlayer");
+        if (!respawnLogOnce) {
+            respawnLogOnce = true;
+            System.out.println("[nocturne] AutoRespawn: respawn " + (retry ? "retry" : "request")
+                    + " sent (重试间隔 " + MIN_RETRY_INTERVAL_MS + "ms"
+                    + "；该版本若无 respawnPlayer 会持续重试到复活)");
+        }
+    }
+
+    /**
+     * 玩家是否处于死亡状态。
+     *
+     * <p>两条判据取并集：{@code Entity#isDead} 在 26.2/26.3 的映射表里是 absent（字段被改名），
+     * 只认它会让这些版本永远判为"活着"、自动重生整条失效；血量 {@code getHealth() <= 0} 三代都有，
+     * 作为兜底。两者都读不到时判为"活着"——不主动发重生包比乱发安全。
+     */
+    private static boolean isDead(GameBridge bridge, Object player) {
+        if (Boolean.TRUE.equals(bridge.readField(player, ClassType.ENTITY, "isDead"))) {
+            return true;
+        }
+        Object health = bridge.callMapped(player, ClassType.LIVING_ENTITY, "getHealth");
+        return health instanceof Number && ((Number) health).doubleValue() <= 0d;
     }
 
     /** 取当前客户端的游戏桥接；客户端尚未构造时返回 {@code null}。 */

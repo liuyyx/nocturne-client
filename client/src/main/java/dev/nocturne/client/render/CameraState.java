@@ -54,6 +54,13 @@ public final class CameraState {
         }
         Object eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition");
         if (eye == null) {
+            // 1.17+ 是零参 getEyePosition()；1.8.9–1.16.5 的签名带 partialTicks
+            // （SRG func_174824_e(F) / MCP getPositionEyes(float)）。两形态各试一次——只试零参会让
+            // A/B 代覆盖层整帧不画。插值量取 0 等价于"就用当前位置"，覆盖物不会因此画偏。
+            eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition",
+                    Float.valueOf(0.0F));
+        }
+        if (eye == null) {
             return missing(bridge, "Entity#getEyePosition");
         }
         Double eyeX = number(bridge.readField(eye, ClassType.VEC3, "x"));

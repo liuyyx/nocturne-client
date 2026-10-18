@@ -48,7 +48,10 @@ CLIENT_SRC = os.path.join(ROOT, "client", "src", "main", "java")
 CLASS_TYPE = os.path.join(CLIENT_SRC, "dev", "nocturne", "client", "mapping", "ClassType.java")
 REQUIREMENTS = os.path.join(TOOLS, "requirements.txt")
 RESOURCES = os.path.join(ROOT, "client", "src", "main", "resources")
-VANILLA_ROOT = os.path.join(ROOT, "..", "OpenVape4.21", "src", "main", "resources", "mappings")
+#: 旧的 SRG/MCP 资产（1.8.9 / 1.12.2 / 1.16.5 … 的 joined.srg 与 MCP CSV）。
+#: 必须用**仓库内**的 vendor 副本：指向仓库外（../OpenVape4.21）会让干净检出上的重新生成
+#: 静默退化成"没有 legacy 数据源"，进而把表写成全 absent，而不是报错。
+VANILLA_ROOT = os.path.join(ROOT, "vendor", "vape", "src", "main", "resources", "mappings")
 
 DEFAULT_JAVAP = os.environ.get(
     "NOCTURNE_JAVAP",

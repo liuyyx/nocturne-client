@@ -144,6 +144,90 @@ class GameBridgeTest {
         assertEquals("respawn:3", bridge.callMapped(target, ClassType.LOCAL_PLAYER, "respawnPlayer", 3));
     }
 
+    /** 把 {@code pick} 记成"零参"描述符的映射：钉住描述符 arity 与实参不符时的降级。 */
+    static final class ZeroArityDescriptorMapping implements Mapping {
+        @Override
+        public String describe() {
+            return "zero-arity-descriptor";
+        }
+
+        @Override
+        public String className(ClassType type) {
+            return type.canonicalName();
+        }
+
+        @Override
+        public String methodName(ClassType owner, String canonicalName, String descriptor) {
+            return canonicalName;
+        }
+
+        @Override
+        public String fieldName(ClassType owner, String canonicalName) {
+            return canonicalName;
+        }
+
+        @Override
+        public String methodDescriptor(ClassType owner, String canonicalName) {
+            return "pick".equals(canonicalName) ? "()Ljava/lang/String;" : null;
+        }
+
+        @Override
+        public boolean isIdentity() {
+            return false;
+        }
+    }
+
+    /** 仿 {@code Component}：取文本入口是无参的 {@code getString()}。 */
+    public static final class FakeComponent {
+        private final String text;
+
+        FakeComponent(String text) {
+            this.text = text;
+        }
+
+        /** 与真实 {@code Component#getString()} 同名同形（无参、返回 String）。 */
+        public String getString() {
+            return text;
+        }
+    }
+
+    /**
+     * 回归（High-8）：{@code Entity#getName} 返回的是聊天组件而不是字符串，必须经映射表读出文本。
+     *
+     * <p>原实现用 {@code instanceof String} 判定，于是 NameTags / ItemEsp / Esp 在任何版本都判为
+     * "读不到名字"——标签一个字符都画不出来，而计数器照常增长（看起来像渲染坏了）。
+     */
+    @Test
+    void readsChatComponentsAsPlainText() {
+        GameBridge bridge = new GameBridge(null, new TestMapping(FakeMinecraft.class));
+
+        assertEquals("Steve", bridge.componentText(new FakeComponent("Steve")),
+                "a component must be read through its text accessor");
+        assertEquals("plain", bridge.componentText("plain"),
+                "a plain String passes through unchanged (unobfuscated builds)");
+        assertNull(bridge.componentText(null));
+        assertNull(bridge.componentText(new Object()),
+                "an object without the component shape must yield null, not a bogus name");
+    }
+
+    /**
+     * 回归（High-3）：表里记的描述符只覆盖该规范方法的一种签名。本次实参个数与它不符时，必须退化为
+     * 按实参推断——否则会找一个 arity 不匹配的重载、调用失败后静默返回 {@code null}。
+     *
+     * <p>真机症状：{@code Entity#getEyePosition} 在 1.8.9–1.16.5 的签名是 {@code (F)}，调用方若按
+     * 26.x 的零参形态调用，世界覆盖层就整帧不画，日志里只有一句"读不到 getEyePosition"。
+     */
+    @Test
+    void fallsBackToArgumentInferenceWhenStoredDescriptorArityDiffers() {
+        GameBridge bridge = new GameBridge(null, new ZeroArityDescriptorMapping());
+        Overloaded target = new Overloaded();
+
+        assertEquals("none", bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick"),
+                "a zero-arg call still matches the stored zero-arg descriptor");
+        assertEquals("int:5", bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick", 5),
+                "arity mismatch must fall back to argument inference instead of returning null");
+    }
+
     /** 恒等映射下无法推导（名字不存在）时返回 null，而不是抛异常 */
     @Test
     void identityMappingReturnsNullForUnknownMethods() {

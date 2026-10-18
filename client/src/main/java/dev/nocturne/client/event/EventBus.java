@@ -31,6 +31,17 @@ public final class EventBus {
     private final Map<Consumer<?>, long[]> errorLogTimes = new ConcurrentHashMap<Consumer<?>, long[]>();
 
     /**
+     * 可取消事件：{@link #post} 在每个订阅者返回后检查一次，已取消则停止向后续订阅者投递。
+     *
+     * <p>为什么要总线级支持：字段本身只是数据。声明了"取消"却没有任何人检查它，等于给订阅者
+     * 一个永远不生效的旋钮——调用方以为改了标志就能拦下这次收发，实际什么都没发生。
+     */
+    public interface Cancellable {
+        /** @return 为 true 时总线不再把本事件投给后续订阅者 */
+        boolean isCancelled();
+    }
+
+    /**
      * 订阅句柄：由 {@link #subscribe} 返回，持有它即可在之后精确退订。
      *
      * <p>存在意义：退订不能依赖“重建一个等价的 lambda 再传入”，因为两次 {@code () -> ...}
@@ -124,6 +135,10 @@ public final class EventBus {
                 // 逐订阅者隔离：一个订阅者出错不得中止其余订阅者，也不得把异常抛回游戏帧循环
                 logListenerFailure(event.getClass(), listener, error);
             }
+            if (event instanceof Cancellable && ((Cancellable) event).isCancelled()) {
+                // 被取消：不再投给后续订阅者（见 Cancellable 的说明）
+                break;
+            }
         }
         return event;
     }
@@ -136,6 +151,9 @@ public final class EventBus {
         List<Consumer<?>> list = listeners.get(type);
         if (list != null) {
             list.removeAll(Collections.singleton(listener));
+            // 限流表按订阅者身份键控，退订时必须一并清掉：否则每个用过的订阅者实例都被它永久
+            // 强引用（模块每次启停都会新建 lambda），长时间运行就是一条稳定增长的泄漏。
+            errorLogTimes.remove(listener);
         }
     }
 

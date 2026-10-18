@@ -5,10 +5,15 @@ import dev.nocturne.ui.render.Renderer;
 /**
  * 可绘制后端：在 {@link Renderer} 绘制表面之上补上每帧的准备与收尾。
  *
- * <p>目前有三个实现——面向固定管线（Minecraft ≤ 1.12、LWJGL2）的 {@link GlRenderer}、
- * 面向 OpenGL 3.2 核心 profile（1.13+ / 26.x、LWJGL3）的 {@link ModernRenderer}、
- * 以及不分代的 Skija 实现 {@link SkijaBackend}。
- * 将来接入游戏的 Vulkan 设备时，Vulkan 后端可以直接挂在同一接口下，
+ * <p>目前有三个实现，按运行环境二选一：
+ * <ul>
+ *   <li>{@link GlRenderer}（{@code gl-fixed}）——固定管线 + LWJGL2，覆盖 1.8.9–1.12.2；</li>
+ *   <li>{@link ModernRenderer}（{@code gl-core}）——OpenGL 3.2 核心 profile + LWJGL3，
+ *       覆盖 1.13–1.21.11；</li>
+ *   <li>{@link ExtractorRenderer}（{@code gui-extractor}）——不碰 LWJGL 的 GL 绑定，
+ *       把绘制提交给游戏自己的 {@code GuiGraphicsExtractor}，覆盖 26.1–26.3
+ *       （26.2 起游戏可跑 GL 或 Vulkan，具体由游戏决定，我们只提交绘制）。</li>
+ * </ul>
  * 这也是覆盖层面向本类型而非某个具体渲染器的原因。
  */
 public interface UiBackend extends Renderer {
@@ -19,7 +24,7 @@ public interface UiBackend extends Renderer {
     /** 释放 {@link #beginFrame()} 设置的状态；绘制完成后调用一次。 */
     void endFrame();
 
-    /** 用于日志与诊断的短名称，如 {@code "gl-fixed"} 或 {@code "gl-core"}。 */
+    /** 用于日志与诊断的短名称：{@code "gl-fixed"} / {@code "gl-core"} / {@code "gui-extractor"}。 */
     String backendName();
 
     /**

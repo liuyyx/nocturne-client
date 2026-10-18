@@ -106,31 +106,51 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 - **运行时**：`NocturneRuntime.onFrame()` 是帧广播器，四层防御：
   ThreadLocal 重入 → `tryLock` 非阻塞 → 逐监听器 `catch(Throwable)` → 最外层兜底。
   按 50ms 折算成 20Hz 驱动 `ModuleRegistry.tick()`。状态全在 bootstrap 层的 `FrameDispatcher`（见 3.5）。
-- **HUD 接缝**：`HudSink`（`add`/`remove`/`has`）；`ui` 侧实现是 `SkijaHudSink`，由 `OverlayBootstrap`
-  在 Skija 后端下接上（其余后端 HUD 暂不可用）。
+- **HUD 接缝**：`HudSink`（`add`/`remove`/`has`）接口保留，但**当前没有实现**——旧 UI 库连同
+  `SkijaHudSink` 与 HUD/HUD 编辑器一起被删除（用户确认），`OverlayBootstrap` 不再注入汇。
 
-### 3.4 ui（自绘 ClickGUI / HUD）
+### 3.4 ui（自绘 ClickGUI）
 
-- 渲染抽象 `Renderer`（rect / roundedRect / outline / text / pushClip / popClip）
+- 渲染抽象 `Renderer`（rect / roundedRect / outline / text / pushClip / popClip
+  + **纹理原语** `uploadTexture` / `deleteTexture` / `texturedQuad` / `supportsTextures`）
   + `UiBackend`（+ beginFrame/endFrame/backendName/width/height/ready）。
-- 四个后端（都挂在 `UiBackend` 下，由 `OverlayBootstrap.selectBackend` 按栈挑选）：
-  `GlRenderer`（固定管线，`glOrtho` + `glScissor` 裁剪栈；≤1.12）、
-  `ModernRenderer`（核心 profile，GLSL 150 + 单 VBO/VAO，颜色走 uniform；1.13–26.2）、
+- 三个后端（都挂在 `UiBackend` 下，由 `OverlayBootstrap.selectBackend` 按栈挑选）：
+  `GlRenderer`（固定管线，`glOrtho` + `glScissor` 裁剪栈，纹理走立即模式四边形；≤1.12）、
+  `ModernRenderer`（核心 profile，GLSL 150 + 单 VBO/VAO，顶点布局 `x,y,u,v`，片元按 `uTexture`
+  在「平涂」与「采样×调制色」之间切换，纯色也绑一张 1×1 白纹理；1.13–1.21.11）、
   `ExtractorRenderer`（26.x SDL 栈：**完全不碰 GL**，把原语翻译成游戏自己的 `GuiGraphicsExtractor`
   调用——`fill` 收左上/右下两角、`outline` 收左上+宽高、`enableScissor`/`disableScissor` 裁剪、
-  `text(Font,…)` 画字；圆角无原语，逐行内缩近似）、
-  `SkijaBackend`（Skija 画布，Multi-Release JAR 在 Java 8 可用）。后两者当前都不在 LWJGL2 / 核心
-  profile 路径上被 probe：Skia 直写外部帧缓冲会盖黑游戏（修法是纹理中转，未做）。
+  `text(Font,…)` 画字；圆角无原语，逐行内缩近似。自定义纹理走
+  `DynamicTexture` + `TextureManager.register` + `blit(RenderPipeline, Identifier, …)`，
+  三个 26.x 版本的签名已用 `javap` 逐个核对；任一项解析不到就整条纹理支路关闭，
+  界面退回「游戏字体 + ASCII 图标」）。
+- 字形与程序化纹理：`text/FontRegistry` 从资源加载 TTF，`text/GlyphAtlas` 按 `(fontId, 字号)`
+  维护 1024² 白化字形图集（LRU 淘汰时释放纹理），`text/FontRasterizer` 把
+  `FaFont.Provider` 接到图集并把度量换算回设计单位；`text/RasterTextures` 用解析解生成阴影与
+  圆角描边角弧的 alpha 场。三条支路都只经 `Renderer` 的纹理原语。
+- 界面实现：`fatality/FaClickGui`（分类 Tab + 侧边栏 + 三列瀑布流 + 底部搜索；浮层栈、
+  键盘焦点、拖拽/缩放窗口、布局持久化到 `<user.dir>/nocturne/clickgui.properties`），
+  绘制词汇是 `fatality/FaDraw` 与它的 `BackendFaDraw` 实现（变换/透明度/裁剪自持，渐变按缺少
+  逐顶点色的现实分段近似）。
+- 输入与界面之间只有 `OverlayGui`：`GuiOverlay` 每帧轮询输入状态并合成点击/拖拽/滚轮/按键事件，
+  **字符输入由 `KeyChars` 从轮询状态合成**（三代输入栈的字符回调签名各不相同，界面又必须有文本框）。
 - 输入占用：界面开着时由 `InputBlock`（bootstrap 层共享标志）让游戏侧入口短路
   （`KeyboardHandler#keyPress`、`KeyMapping#setAll/set/click`、`ContainerEventHandler#mouseClicked`），
   否则同一次点击/按键会同时打在后面的原生界面上。我们自己的输入不经过这些入口，不受影响。
 - 输入四路：`ReflectiveInput` 绑 lwjgl2 / glfw（GLFW 滚轮走动态代理回调并转发被顶掉的旧回调）、
   `GameInput`（SDL 世代：**鼠标取游戏自己的事件态**——`MouseHandler.xpos/ypos` + `activeButton`，
-  因为 `SDL_GetMouseState` 在"无鼠标焦点"时静默给 0,0；见 VERSION-MATRIX P5-C）、
-  `SdlInput`（26.x SDL3：轮询 `SDL_GetMouseState` / `SDL_GetKeyboardState`；**SDL 的滚轮是事件驱动、
-  没有轮询接口，仍为已知缺口**）；三代都解析不出时退化为 `NoInput`。
-- 组件树、主题、字体、动画、分类栏拖动、滚轮、右键设置面板、指针捕获交接。
-- HUD：`SetsunaHud` / `HudManager` 挂在 `SkijaHudSink` 上；非 Skija 后端（含 26.x）HUD 暂不可用。
+  因为 `SDL_GetMouseState` 在"无鼠标焦点"时静默给 0,0；见 VERSION-MATRIX P5-C。**滚轮**走
+  `ScrollState`（bootstrap 层）：注入器在游戏自己的滚轮入口 `SDLEventHandler#handleMouseWheelEvent`
+  上挂 `ScrollHook`（SDL 滚轮是事件驱动、没有轮询接口，只能从事件对象上取），`GameInput` 每帧取走；
+  同时短路 `MouseHandler#onScroll`，否则滚轮会顺带切快捷栏）、
+  `SdlInput`（26.x SDL3：轮询 `SDL_GetMouseState` / `SDL_GetKeyboardState`；没有滚轮轮询能力，
+  `scrollDelta()` 恒为 0，滚轮由上面的 `ScrollState` 提供）；三代都解析不出时退化为 `NoInput`。
+- 旧 UI 库（Skija 后端、Setsuna 移植件、组件树、主题、动画、HUD、HUD 编辑器、纹理桥）
+  **已整体删除**；`ui` 不再依赖任何第三方 UI 库。
+- 3D 玩家预览（Render 分类的 Preview 卡片）**未实现，卡片降级为占位**：缺的前置条件是映射表里
+  没有实体渲染面（`RenderManager` / `EntityRenderDispatcher` / `RenderTarget` 等类的
+  `methods`/`fields` 为空），而 26.x 又不能自建离屏 framebuffer（SDL 栈上任何 LWJGL GL 调用都会
+  让 JVM abort）。
 
 ### 3.5 runtime（bootstrap 层的全局状态）
 

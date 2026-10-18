@@ -37,6 +37,9 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
     /** 内部错误是否已打印过（限流，避免每帧刷屏）。 */
     private final AtomicBoolean errorLogged = new AtomicBoolean(false);
 
+    /** 织入结局是否已打印过（成功/未命中各一次）。 */
+    private final AtomicBoolean outcomeLogged = new AtomicBoolean(false);
+
     /** 目标类内部名（斜杠形式）。 */
     private final String targetClassInternalName;
     /** 目标方法名。 */
@@ -140,7 +143,18 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
             // 保留原始 StackMapTable（SKIP_FRAMES 会让含分支的方法在 Java 6+ 校验下 VerifyError），
             // 只插入一条栈平衡的调用，帧内容仍然有效。
             reader.accept(visitor, 0);
-            return patched[0] ? writer.toByteArray() : null;
+            // 钩子"注册成功"不等于"织入成功"：类名/方法名/描述符三者对不上时这里会静默返回 null，
+            // 现场表现是钩子一次都不触发。把两种结局都留痕（每个转换器只印一次）。
+            if (patched[0]) {
+                if (outcomeLogged.compareAndSet(false, true)) {
+                    System.out.println("[nocturne] callback hook woven: " + label);
+                }
+                return writer.toByteArray();
+            }
+            if (outcomeLogged.compareAndSet(false, true)) {
+                System.out.println("[nocturne] callback hook NOT woven (target not found): " + label);
+            }
+            return null;
         } catch (Throwable t) {
             if (errorLogged.compareAndSet(false, true)) {
                 System.out.println("[nocturne] callback hook failed for " + label + ": " + t);

@@ -1202,6 +1202,14 @@
                         "neoforge": "distanceToSqr"
                     }
                 },
+                "getDeltaMovement": {
+                    "names": {
+                        "vanilla": "getDeltaMovement",
+                        "fabric": "getDeltaMovement",
+                        "forge": "getDeltaMovement",
+                        "neoforge": "getDeltaMovement"
+                    }
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "getEyePosition",
@@ -1224,6 +1232,14 @@
                         "fabric": "getName",
                         "forge": "getName",
                         "neoforge": "getName"
+                    }
+                },
+                "isInvisible": {
+                    "names": {
+                        "vanilla": "isInvisible",
+                        "fabric": "isInvisible",
+                        "forge": "isInvisible",
+                        "neoforge": "isInvisible"
                     }
                 },
                 "isShiftKeyDown": {

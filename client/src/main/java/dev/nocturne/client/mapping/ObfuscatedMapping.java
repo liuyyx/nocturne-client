@@ -208,6 +208,13 @@ public final class ObfuscatedMapping implements Mapping {
         if (document == null) {
             throw new IllegalStateException("mapping json is empty");
         }
+        // 与 parse 同一套语义校验：fixture 也不该能把"空表/无版本"当成合法映射塞进来。
+        if (document.version == null || document.version.trim().isEmpty()) {
+            throw new IllegalStateException("mapping json declares no version");
+        }
+        if (document.classes == null || document.classes.isEmpty()) {
+            throw new IllegalStateException("mapping json has no classes");
+        }
         return new ObfuscatedMapping(document.version, document.classes);
     }
 
@@ -224,6 +231,15 @@ public final class ObfuscatedMapping implements Mapping {
             // Gson 直接填充这些包可见字段，无需额外的反序列化配置。
             if (document == null) {
                 throw new IllegalStateException("mapping resource is empty: " + resource);
+            }
+            // 语义校验：只有"真能用的表"才算加载成功。结构合法但 classes 为空（或版本号缺失）的表
+            // 若放过，所有查询都会静默退化成规范名——功能看着在、实际全不对，日志里只剩一行
+            // "obfuscated <版本> (0 classes)"。这类表必须走异常，让调用方回退恒等映射并告警。
+            if (document.version == null || document.version.trim().isEmpty()) {
+                throw new IllegalStateException("mapping resource declares no version: " + resource);
+            }
+            if (document.classes == null || document.classes.isEmpty()) {
+                throw new IllegalStateException("mapping resource has no classes: " + resource);
             }
             return new ObfuscatedMapping(document.version, document.classes);
         } finally {
@@ -451,9 +467,11 @@ public final class ObfuscatedMapping implements Mapping {
 
     /** 记录一次「该规范成员在本表对应版本里不存在」的诊断，使成员级回退不再静默。 */
     private static void reportAbsentMember(String owner, String member, String kind) {
-        String key = owner + "#" + member;
+        // 去重键必须带 kind：方法与其同名 getter 字段是两个不同的成员，只用 owner#member
+        // 会让先到的那条把后到的整条诊断吞掉（"某个成员在本版本不存在"就少报一次）。
+        String key = owner + "#" + kind + " " + member;
         if (ABSENT_MEMBERS_REPORTED.add(key)) {
-            System.out.println("[nocturne] mapping: " + kind + " " + key
+            System.out.println("[nocturne] mapping: " + kind + " " + owner + "#" + member
                     + " does not exist in this version; callers will see the canonical name"
                     + " (module behaviour for it is unavailable here)");
         }

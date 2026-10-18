@@ -41,6 +41,8 @@ public final class FullBrightModule extends Module {
     private double fadeCurrent = -1.0;
     /** 夜视药水不可用是否已打过日志（表驱动门：缺成员版本只报一次）。 */
     private boolean nightVisionLogged;
+    /** 上一 tick 是否处于 Night Vision 模式：用于在切回 Gamma 时撤掉已加的夜视药水。 */
+    private boolean lastNightVisionTick;
 
     /** 模块名，注册表内唯一，也是 GUI 中的显示名。 */
     @Override
@@ -70,6 +72,14 @@ public final class FullBrightModule extends Module {
     @Override
     protected void onDisable() {
         if (isNightVision()) {
+            // 必须把药水摘掉：不然它会一直挂到自然到期（默认 5220 tick ≈ 4.3 分钟），
+            // 玩家关掉模块之后还是夜视。
+            GameBridge bridge = bridge();
+            Object player = bridge == null ? null : bridge.player();
+            if (bridge != null && player != null) {
+                removeNightVision(bridge, player);
+            }
+            lastNightVisionTick = false;
             return;
         }
         restoreOriginal();
@@ -84,8 +94,18 @@ public final class FullBrightModule extends Module {
     @Override
     public void onTick() {
         if (isNightVision()) {
+            lastNightVisionTick = true;
             applyNightVision();
             return;
+        }
+        if (lastNightVisionTick) {
+            // 刚从 Night Vision 切到 Gamma：先把药水摘掉，否则"切成 Gamma 模式"之后画面还是夜视的。
+            lastNightVisionTick = false;
+            GameBridge bridge = bridge();
+            Object player = bridge == null ? null : bridge.player();
+            if (bridge != null && player != null) {
+                removeNightVision(bridge, player);
+            }
         }
         double target = gamma.get();
         if (!fade.get()) {
@@ -160,6 +180,39 @@ public final class FullBrightModule extends Module {
         Object result = bridge.callMapped(player, ClassType.LIVING_ENTITY, "addEffect", instance);
         if (result == null) {
             logGateOnce("addEffect 调用失败，Night Vision 模式已禁用");
+        }
+    }
+
+    /**
+     * 移除玩家身上的夜视药水（Night Vision 模式退出/切换时用）。
+     *
+     * <p>不查映射表：{@code removeEffect} 在表里没有条目，按<b>形状</b>找——单参、参数类型能接受
+     * 我们构造出的那个效果实例、返回 void 的方法。{@code removeAllEffects()} 虽然更简单，
+     * 但会把玩家自己吃的其它药水一起清掉，不能用。
+     */
+    private void removeNightVision(GameBridge bridge, Object player) {
+        Object effectType = readStaticField(bridge, ClassType.MOB_EFFECT, "NIGHT_VISION");
+        if (effectType == null) {
+            return;
+        }
+        Object instance = newEffectInstance(bridge, effectType);
+        if (instance == null) {
+            return;
+        }
+        for (Method method : player.getClass().getMethods()) {
+            Class<?>[] params = method.getParameterTypes();
+            if (params.length != 1
+                    || !params[0].isInstance(instance)
+                    || method.getReturnType() != void.class) {
+                continue;
+            }
+            try {
+                method.setAccessible(true);
+                method.invoke(player, instance);
+                return;
+            } catch (Throwable ignored) {
+                // 换下一个候选方法
+            }
         }
     }
 

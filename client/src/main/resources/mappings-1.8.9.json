@@ -1127,6 +1127,9 @@
                         "forge": "(DDD)D"
                     }
                 },
+                "getDeltaMovement": {
+                    "absent": true
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "e",
@@ -1162,6 +1165,9 @@
                         "fabric": "()Ljava/lang/String;",
                         "forge": "()Ljava/lang/String;"
                     }
+                },
+                "isInvisible": {
+                    "absent": true
                 },
                 "isShiftKeyDown": {
                     "names": {

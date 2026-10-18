@@ -96,14 +96,18 @@ public final class WorldProjection {
         this.lookY = -sinPitch;
         this.lookZ = cosYaw * cosPitch;
 
-        this.rightX = cosYaw;
+        // 屏幕右方向：yaw=0 面朝 +Z（南）时，玩家的右手边是 -X（西）——所以是 -cosYaw/-sinYaw，
+        // 不是 +。写反的后果是全部世界覆盖物水平镜像（真实症状：玩家看到的框画在视线另一侧）。
+        this.rightX = -cosYaw;
         this.rightY = 0d;
-        this.rightZ = sinYaw;
+        this.rightZ = -sinYaw;
 
         // up = right × look（右手系；pitch=0 时退化为 (0,1,0)）。
-        this.upX = sinYaw * sinPitch;
+        // X/Z 的符号必须与上面的 right 配套：写反会让 up 在 pitch≠0 时与视线反向
+        // （up·look 变成 -1），视场里所有点被投到同一条水平线上——"世界覆盖物塌成一条线"。
+        this.upX = -sinYaw * sinPitch;
         this.upY = cosPitch;
-        this.upZ = -cosYaw * sinPitch;
+        this.upZ = cosYaw * sinPitch;
 
         double fov = fovDegrees;
         if (fov < 1f) {

@@ -36,6 +36,53 @@ class ObfuscatedMappingTest {
         return ObfuscatedMapping.load("/mappings-1.8.9.json");
     }
 
+    /**
+     * 结构合法但语义损坏的表必须拒绝加载。
+     *
+     * <p>回归（High-7）：{@code parse} 原先只校验 {@code document != null}，于是"没有 classes"或
+     * "没有版本号"的表会加载<b>成功</b>——所有查找静默退化成规范名、界面一片空白，日志里只剩一行
+     * "obfuscated &lt;版本&gt; (0 classes)"。畸形 JSON 反而会走异常并回退恒等映射，所以空表曾是唯一
+     * 安静的坏表形态。
+     */
+    @Test
+    void semanticallyEmptyTablesAreRejected() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> ObfuscatedMapping.fromJson("{\"version\":\"1.8.9\",\"classes\":{}}"),
+                "an empty class map must not load as a usable table");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> ObfuscatedMapping.fromJson("{\"classes\":{\"net/minecraft/client/Minecraft\":{}}}"),
+                "a table without a version must not load");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> ObfuscatedMapping.fromJson("null"),
+                "a null document must not load");
+    }
+
+    /**
+     * 打包的每一张映射表都必须能用：非空，且<b>内容里的版本号与文件名一致</b>。
+     *
+     * <p>回归（High-7/9/10）：文件名与内容错配（复制粘贴、生成脚本写错版本）会让整套映射静默指向
+     * 另一个版本——名字全对不上、功能全废，而日志只说"表加载成功"。这类问题必须在测试里当场暴露。
+     */
+    @Test
+    void everyPackagedTableIsUsableAndMatchesItsFileName() {
+        File resources = new File("src/main/resources");
+        Assumptions.assumeTrue(resources.isDirectory(),
+                "resources directory is not visible from " + resources.getAbsolutePath());
+        File[] tables = resources.listFiles((dir, name) ->
+                name.startsWith("mappings-") && name.endsWith(".json"));
+
+        assertTrue(tables != null && tables.length > 0, "at least one mapping table must ship");
+        for (File table : tables) {
+            String fileName = table.getName();
+            String expected = fileName.substring("mappings-".length(),
+                    fileName.length() - ".json".length());
+            ObfuscatedMapping mapping = ObfuscatedMapping.load("/" + fileName);
+            assertEquals(expected, mapping.version(),
+                    fileName + " declares a different version than its file name");
+            assertTrue(mapping.classCount() > 0, fileName + " has no classes");
+        }
+    }
+
     /** 验证表能正常加载：版本号正确、非恒等映射、覆盖规模足够、描述串包含版本号。 */
     @Test
     void loadsTheTable() {

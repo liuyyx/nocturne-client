@@ -166,6 +166,15 @@ public final class GlApi {
     private final Method texParameteri;
     /** {@code glDisableClientState}：关闭客户态数组（立即模式绘制前必须关掉）。 */
     private Method disableClientStateMethod;
+    /**
+     * {@code glClientActiveTexture}：切换**客户态**纹理单元。
+     *
+     * <p>纹理坐标数组是「每客户纹理单元」独立的状态。1.8.9 的区块渲染会在
+     * {@code defaultTexUnit} 与 {@code lightmapTexUnit} 两个单元上分别启用它，
+     * 而关闭调用只作用于当前单元——漏掉的那个单元上若仍开着，立即模式的
+     * {@code glTexCoord2f} 会被忽略并采到垃圾 UV。
+     */
+    private Method clientActiveTextureMethod;
 
     /**
      * 关闭所有客户态数组（顶点/法线/颜色/纹理坐标）。
@@ -181,10 +190,23 @@ public final class GlApi {
         Reflect.call(disableClientStateMethod, null, GL_VERTEX_ARRAY);
         Reflect.call(disableClientStateMethod, null, GL_NORMAL_ARRAY);
         Reflect.call(disableClientStateMethod, null, GL_COLOR_ARRAY);
-        Reflect.call(disableClientStateMethod, null, GL_TEXTURE_COORD_ARRAY);
+        // 纹理坐标数组是**每客户纹理单元**独立的：1.8.9 会在 defaultTexUnit 与 lightmapTexUnit
+        // 两个单元上分别启用它（光照贴图 UV 走 texture unit 1），只关当前单元会漏掉另一个，
+        // 那个单元上仍开着时立即模式的 glTexCoord2f 会被静默忽略。两个单元都关，再切回 0 号。
+        for (int unit = 0; unit <= 1; unit++) {
+            if (clientActiveTextureMethod != null) {
+                Reflect.call(clientActiveTextureMethod, null, GL_TEXTURE0 + unit);
+            }
+            Reflect.call(disableClientStateMethod, null, GL_TEXTURE_COORD_ARRAY);
+        }
+        if (clientActiveTextureMethod != null) {
+            Reflect.call(clientActiveTextureMethod, null, GL_TEXTURE0);
+        }
     }
 
 
+    /** 0 号纹理单元（{@code glClientActiveTexture} 的基址）。 */
+    public static final int GL_TEXTURE0 = 0x84C0;
     /** 客户态数组：顶点。开启时立即模式（{@code glBegin/glVertex2f}）会被忽略且不报错。 */
     public static final int GL_VERTEX_ARRAY = 0x8074;
     /** 客户态数组：法线。 */
@@ -563,6 +585,7 @@ public final class GlApi {
                 StateManager.resolve(gl.getClassLoader()));
         // 立即模式的前提：客户态数组必须关得掉（关不掉时 glBegin/glVertex2f 会被静默忽略）。
         bound.disableClientStateMethod = Reflect.method(gl, "glDisableClientState", int.class);
+        bound.clientActiveTextureMethod = Reflect.method(gl, "glClientActiveTexture", int.class);
         bound.isEnabledMethod = Reflect.method(gl, "glIsEnabled", int.class);
         return bound;
     }

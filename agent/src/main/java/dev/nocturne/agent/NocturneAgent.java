@@ -487,6 +487,51 @@ public final class NocturneAgent {
         // 屏蔽屏幕的点击入口效果相同，且完全不碰我们自己的输入路径。
         registerInputBlock(instrumentation, asmLoader, SCREEN_CLICK_CLASS, SCREEN_CLICK_METHOD,
                 SCREEN_CLICK_DESCRIPTOR);
+        // 旧世代（1.8.9 / 1.12.2）没有上面那些类名：真正把指针抓走的是 Minecraft#setIngameFocus
+        // ——点击游戏窗口时它重新捕获指针并把光标拽到屏幕中心。界面开着时这条必须禁掉，
+        // 否则"点一下界面，鼠标就被游戏抢走并跳到正中"。
+        // 名字按三代给：Forge/SRG 与 MCP 语义名、1.8.9 原版混淆 ave.n()V、1.12.2 原版混淆 bib.o()V。
+        // 只对**已加载**的类注册，避免为不存在的类留下无用的转换器。
+        for (String owner : LEGACY_FOCUS_CLASSES) {
+            for (String method : LEGACY_FOCUS_METHODS) {
+                registerInputBlockIfLoaded(instrumentation, asmLoader, owner, method, "()V");
+            }
+        }
+    }
+
+    /** 旧世代可能承载 {@code setIngameFocus} 的类名（语义名与两代原版混淆名）。 */
+    private static final String[] LEGACY_FOCUS_CLASSES = {
+            "net.minecraft.client.Minecraft", "ave", "bib"};
+    /** {@code setIngameFocus} 在各命名空间下的方法名。 */
+    private static final String[] LEGACY_FOCUS_METHODS = {
+            "setIngameFocus", "func_71381_h", "n", "o"};
+
+    /**
+     * 与 {@link #registerInputBlock} 相同，但目标类未加载时直接跳过。
+     *
+     * <p>旧世代的类名是"多套候选"（语义名 + 各版本混淆名），逐个注册会给不存在的类留下无用的
+     * 转换器，也会在日志里刷出误导性的"已注册"。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader       内嵌 ASM 子加载器
+     * @param targetClass     目标类（点号形式）
+     * @param method          目标方法名
+     * @param descriptor      目标方法描述符
+     */
+    private static void registerInputBlockIfLoaded(Instrumentation instrumentation,
+                                                   EmbeddedAsmLoader asmLoader, String targetClass,
+                                                   String method, String descriptor) {
+        boolean loaded = false;
+        for (Class<?> candidate : instrumentation.getAllLoadedClasses()) {
+            if (targetClass.equals(candidate.getName())) {
+                loaded = true;
+                break;
+            }
+        }
+        if (!loaded) {
+            return;
+        }
+        registerInputBlock(instrumentation, asmLoader, targetClass, method, descriptor);
     }
 
     /**

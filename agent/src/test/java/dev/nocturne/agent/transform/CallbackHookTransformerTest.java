@@ -114,6 +114,26 @@ class CallbackHookTransformerTest {
         assertEquals(argument, Sink.last, "instance method must hand over its argument, not `this`");
     }
 
+    /**
+     * 首参为基本类型（{@code int}）时不得织入：钩子签名是 {@code (Object)V}，把 {@code int} 槽位
+     * 当引用取会让目标类在**校验期**抛 {@code VerifyError}（类加载失败）。这里必须「完全不改」。
+     */
+    @Test
+    void leavesPrimitiveFirstArgumentUntouched() throws Exception {
+        CallbackHookTransformer transformer = new CallbackHookTransformer(
+                "dev/nocturne/agent/transform/SubjectSample", "handleInt", "(I)V", HOOK_OWNER, "accept", false);
+
+        byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
+                sampleClass("handleInt", "(I)V", Opcodes.ACC_PUBLIC));
+        assertNull(patched, "primitive first argument must not be patched");
+
+        // 未织入的类必须仍可正常定义并调用（若误织入，这里会抛 VerifyError）。
+        Object subject = define(sampleClass("handleInt", "(I)V", Opcodes.ACC_PUBLIC))
+                .getConstructor().newInstance();
+        subject.getClass().getMethod("handleInt", int.class).invoke(subject, 7);
+        assertEquals(0, Sink.calls, "hook must not fire for a primitive first argument");
+    }
+
     /** 静态方法：首个形参在槽位 0。 */
     @Test
     void capturesTheFirstArgumentOfAStaticMethod() throws Exception {

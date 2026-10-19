@@ -337,7 +337,9 @@ public final class GlApi {
                     find(type, "k", "func_179084_k", "disableBlend"),
                     find(type, "j", "func_179126_j", "enableDepth"),
                     find(type, "i", "func_179097_i", "disableDepth"),
-                    find(type, "", "func_179089_o", "enableCull"),
+                    // 1.8.9 原版混淆名是 o；空串会让候选解析直接落空（Forge/SRG 下靠 func_179089_o 命中，
+                    // 原版混淆运行时则整条 cull 缓存同步失效）。
+                    find(type, "o", "func_179089_o", "enableCull"),
                     find(type, "p", "func_179129_p", "disableCull"),
                     findIntPair(type, "b", "func_179112_b", "blendFunc", "tryBlendFuncSeparate"),
                     find(type, "E", "func_179094_E", "pushMatrix"),

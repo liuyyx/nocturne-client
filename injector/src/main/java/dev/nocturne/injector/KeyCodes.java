@@ -51,15 +51,18 @@ final class KeyCodes {
         // 修饰键。AWT 无法区分左右 Shift/Ctrl/Alt/Windows，右半边沿用与 RSHIFT=54 相同的约定：
         // 用后端右变体的哨兵值，保证录制出的左右键能各自解析回一个唯一的数字。
         put("LSHIFT", 16);
-        put("RSHIFT", FALLBACK);
+        // RSHIFT 只登记正向：反向表里 54 必须留给数字键 "6"（AWT 的 VK_6 就是 54）。
+        // 否则录制数字 6 会拿到 "RSHIFT"，而反向查表再也还原不出 "6"（往返被破坏）。
+        // 右 Shift 这条绑定仍可用（guiBind 默认值就是它），只是不再由 54 反查得到。
+        alias("RSHIFT", FALLBACK);
         put("LCTRL", 17);
         put("RCTRL", 157);
         put("LALT", 18);
         put("RALT", 184);
         put("LWIN", 524);
         put("RWIN", 220);
-        // 已知冲突：AWT 的 VK_6 恰好也是 54，与 RSHIFT 撞号，因此「数字 6」作为绑定会被当成右
-        // Shift。这是 K1 锚定 RSHIFT=54 带来的限制，需改动 K1 才能消除；此处保持 RSHIFT 为 54。
+        // RSHIFT 的哨兵 54 与 AWT 的 VK_6 数值相同：这对**正向**解析无影响（guiBind=RSHIFT 仍是
+        // 54，与 KeyMap 的约定一致），但反向解析必须唯一——见上面的 alias 调用。
 
         // 编辑与导航键。
         put("SPACE", 32);

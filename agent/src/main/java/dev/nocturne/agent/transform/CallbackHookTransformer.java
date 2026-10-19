@@ -168,7 +168,10 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
      * 计算第一个形参在局部变量表中的槽位。
      *
      * <p>实例方法的槽位 0 是 {@code this}，因此首个形参从 1 开始；静态方法从 0 开始。
-     * 首个形参必须是**引用类型**（我们要把它当对象交给钩子）：无参方法或首参是 long/double 时返回 -1，
+     * 首个形参必须是**引用类型**：钩子签名固定为 {@code (Ljava/lang/Object;)V}，而 {@code aload}
+     * 用在一个基本类型槽位上会让目标类在**校验期**直接 {@code VerifyError}（类加载失败、比钩子不生效
+     * 严重得多）。因此无参方法、首参是 {@code long}/{@code double}（占两个槽位）以及任何基本类型
+     * （{@code int}/{@code float}/{@code boolean}/{@code byte}/{@code char}/{@code short}）一律返回 -1，
      * 调用方据此判定「不命中」。
      *
      * @param access     方法访问标志
@@ -181,7 +184,9 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
             return -1;
         }
         Type first = arguments[0];
-        if (first.getSort() == Type.LONG || first.getSort() == Type.DOUBLE) {
+        int sort = first.getSort();
+        if (sort != Type.OBJECT && sort != Type.ARRAY) {
+            // 基本类型（含 long/double 的双槽位情形）不能用 aload 取，钩子对它不适用。
             return -1;
         }
         return (access & Opcodes.ACC_STATIC) != 0 ? 0 : 1;

@@ -77,11 +77,22 @@ class KeyCodesTest {
                 "MINUS", "EQUALS", "OPENBRACKET", "CLOSEBRACKET", "BACKSLASH", "SEMICOLON",
                 "QUOTE", "BACKQUOTE", "COMMA", "PERIOD", "SLASH",
                 "NUMPAD0", "NUMPAD5", "NUMPAD9", "NUMPADMULTIPLY", "NUMPADDIVIDE",
-                "F1", "F12", "R", "0", "RSHIFT", "PAGEUP"};
+                "F1", "F12", "R", "0", "6", "PAGEUP"};
         for (String name : names) {
             int vk = KeyCodes.codeFor(name);
             assertEquals(name, KeyCodes.nameForVk(vk), "往返失败：" + name);
         }
+    }
+
+    /**
+     * 右 Shift 哨兵 54 与 AWT 的 VK_6 数值相同：正向必须仍解析成 54（绑定默认值可用），
+     * 反向必须归还数字键 "6"，否则录制数字 6 会被当成右 Shift、且往返不再成立。
+     */
+    @Test
+    void rightShiftSentinelDoesNotShadowDigitSix() {
+        assertEquals(54, KeyCodes.codeFor("RSHIFT"));
+        assertEquals("6", KeyCodes.nameForVk(54));
+        assertEquals(48 + 6, KeyCodes.codeFor("6"));
     }
 
     /** 表外 VK 用 {@code KEY<code>} 表达，且能被 {@link KeyCodes#codeFor(String)} 原样解析回来。 */

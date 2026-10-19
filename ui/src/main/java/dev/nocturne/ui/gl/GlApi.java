@@ -290,13 +290,14 @@ public final class GlApi {
         private final Method disableCull;
         private final Method blendFunc;
         private final Method bindTexture;
+        private final Method color;
         private final Method pushMatrix;
         private final Method popMatrix;
 
         private StateManager(Method enableTexture2D, Method disableTexture2D, Method enableBlend,
                              Method disableBlend, Method enableDepth, Method disableDepth,
                              Method enableCull, Method disableCull, Method blendFunc,
-                             Method bindTexture,
+                             Method bindTexture, Method color,
                              Method pushMatrix, Method popMatrix) {
             this.enableTexture2D = enableTexture2D;
             this.disableTexture2D = disableTexture2D;
@@ -308,6 +309,7 @@ public final class GlApi {
             this.disableCull = disableCull;
             this.blendFunc = blendFunc;
             this.bindTexture = bindTexture;
+            this.color = color;
             this.pushMatrix = pushMatrix;
             this.popMatrix = popMatrix;
         }
@@ -348,10 +350,50 @@ public final class GlApi {
                     // 纹理绑定：1.8.9 原版混淆名 i(int) = func_179144_i。反向对照：i() (无参) 是
                     // disableDepth，所以必须按 (int) 精确匹配，绝不能按名字取。
                     findInt(type, "i", "func_179144_i", "bindTexture", "_bindTexture"),
+                    // 当前颜色：1.8.9 原版混淆名 c(float,float,float,float) = func_179131_c。
+                    // bfl 为颜色保留了 colorState 缓存，我们只发裸 glColor4f 会让它变成假值：
+                    // 游戏的 FontRenderer 走 GlStateManager.color，下一次同色请求被跳过，
+                    // 真实颜色停在我们这里——文字就会串色（"缺行/颜色不对"类症状的根因）。
+                    findFloats4(type, "c", "func_179131_c", "color", "color4f"),
                     find(type, "E", "func_179094_E", "pushMatrix"),
                     find(type, "F", "func_179121_F", "popMatrix"));
             return state.enableTexture2D == null && state.disableTexture2D == null
                     && state.enableBlend == null && state.blendFunc == null ? null : state;
+        }
+
+        /**
+         * 按候选名解析 {@code (float,float,float,float)} 方法（当前颜色）。
+         *
+         * @param type  目标类
+         * @param names 候选名（原版混淆名 / SRG 名 / 语义名）
+         * @return 方法句柄；都解析不到返回 {@code null}
+         */
+        private static Method findFloats4(Class<?> type, String... names) {
+            for (String name : names) {
+                if (name.isEmpty()) {
+                    continue;
+                }
+                Method method = Reflect.method(type, name, float.class, float.class, float.class,
+                        float.class);
+                if (method != null) {
+                    return method;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * 设置当前颜色（同步游戏的颜色缓存）；句柄缺失时返回 false。
+         *
+         * @param r,g,b,a 分量 0..1
+         * @return 已处理返回 {@code true}
+         */
+        boolean color(float r, float g, float b, float a) {
+            if (color == null) {
+                return false;
+            }
+            Reflect.call(color, null, r, g, b, a);
+            return true;
         }
 
         /** 按候选名解析 {@code (int)} 方法（纹理绑定）。 */
@@ -531,6 +573,11 @@ public final class GlApi {
      * @param r,g,b,a 分量，取值 0–1
      */
     public void color(float r, float g, float b, float a) {
+        // 与能力位同一条原则：先同步游戏的颜色缓存，再无条件下发真实颜色。
+        // 只发裸 glColor4f 会把游戏的缓存留成假值，它自己的 FontRenderer 之后同色请求会被跳过。
+        if (state != null) {
+            state.color(r, g, b, a);
+        }
         Reflect.call(color4f, null, r, g, b, a);
     }
 

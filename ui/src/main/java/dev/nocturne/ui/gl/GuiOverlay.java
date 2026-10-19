@@ -491,8 +491,6 @@ public final class GuiOverlay implements FrameListener {
         }
     }
 
-    /** TEMP-DIAG：上一次打印绘制计数的时间。 */
-    private long diagDrawnAt;
 
     /**
      * 是否存在启用中的世界覆盖层模块。

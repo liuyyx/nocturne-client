@@ -64,14 +64,28 @@ class Requirements:
 
 
 def parse_class_type(path: str) -> "dict[str, str]":
-    """``ClassType.java`` enum constant -> canonical (dotted) class name."""
+    """``ClassType.java`` enum constant -> canonical (dotted) class name.
+
+    缩进不敏感：早先的写法要求"恰好四个空格"，一次 IDE 重排（或换成制表符）就会**静默**
+    丢掉整类需求——映射表随之少一项，而 ``--check`` 依然全绿，运行期表现为"功能悄悄失效"。
+    这里放宽缩进，并在末尾做一次自检：源文件里出现的 ``NAME("...")`` 形态若多于解析结果，
+    直接报错而不是继续往下生成。
+    """
     text = open(path, encoding="utf-8").read()
     result: "dict[str, str]" = {}
-    # e.g.  MINECRAFT("net.minecraft.client.Minecraft"),
+    # e.g.  MINECRAFT("net.minecraft.client.Minecraft"),   （空格/制表符缩进均可）
     for constant, canonical in re.findall(
-        r"^\s{4}([A-Z][A-Z0-9_]*)\(\"([^\"]+)\"\)", text, re.M
+        r"^[ \t]*([A-Z][A-Z0-9_]*)[ \t]*\([ \t]*\"([^\"]+)\"", text, re.M
     ):
         result[constant] = canonical
+    # 枚举常量声明（`NAME(`、`NAME,`、`NAME;`、`NAME {`）都要被上面的正则解释掉；
+    # 少解释一个就说明有需求面被静默丢掉，此时拒绝继续生成。
+    declared = len(re.findall(r"^[ \t]*[A-Z][A-Z0-9_]*[ \t]*[(:,;{]", text, re.M))
+    if declared != len(result):
+        raise ValueError(
+            f"{path}: 解析出 {len(result)} 个 ClassType 常量，但源文件里有 {declared} 处 "
+            f"NAME(\"...\") 形态——两者的差异意味着有需求面被静默丢掉，拒绝继续生成"
+        )
     return result
 
 

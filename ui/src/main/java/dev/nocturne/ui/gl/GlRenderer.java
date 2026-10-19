@@ -416,14 +416,15 @@ public final class GlRenderer implements UiBackend {
             gl.color(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f, (argb & 0xFF) / 255f,
                     ((argb >>> 24) & 0xFF) / 255f);
             gl.begin(GlApi.GL_QUADS);
-            gl.texCoord(u0, v0);
-            gl.vertex(x, y);
-            gl.texCoord(u1, v0);
-            gl.vertex(x + width, y);
-            gl.texCoord(u1, v1);
-            gl.vertex(x + width, y + height);
+            // 顶点序与纯色四边形保持一致（正面序，见 GlApi.fillRect 的说明）；纹理坐标跟着顶点走。
             gl.texCoord(u0, v1);
             gl.vertex(x, y + height);
+            gl.texCoord(u1, v1);
+            gl.vertex(x + width, y + height);
+            gl.texCoord(u1, v0);
+            gl.vertex(x + width, y);
+            gl.texCoord(u0, v0);
+            gl.vertex(x, y);
             gl.end();
         } finally {
             gl.disable(GlApi.GL_TEXTURE_2D);
@@ -565,8 +566,9 @@ public final class GlRenderer implements UiBackend {
         gl.disable(GlApi.GL_TEXTURE_2D);
         gl.color(r, g, b, a);
         gl.begin(GlApi.GL_TRIANGLE_FAN);
+        // 扇形绕序同样按正面序走（角度递减）：投影翻转 y 轴后，角度递增方向的扇形是背面。
         gl.vertex(cx, cy);
-        for (int i = 0; i <= CORNER_STEPS; i++) {
+        for (int i = CORNER_STEPS; i >= 0; i--) {
             double angle = Math.toRadians(startDeg + (endDeg - startDeg) * i / (double) CORNER_STEPS);
             gl.vertex(cx + (float) Math.cos(angle) * radius, cy + (float) Math.sin(angle) * radius);
         }

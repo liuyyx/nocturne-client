@@ -38,52 +38,6 @@ abstract class FaDraw {
      */
     abstract void text(String text, float x, float y, FaFont font, int argb);
 
-    /** 玩家预览的姿态与 ESP 外观。{@code esp} 取 {@link #ESP_GLOW}/{@link #ESP_OUTLINE}；颜色为 ARGB。 */
-    static final class PlayerView {
-        /** 模型整体朝向（度）。 */
-        final float yaw;
-        /** 头部偏航（度）。 */
-        final float headYaw;
-        /** 头部俯仰（度）。 */
-        final float headPitch;
-        /** ESP 模式。 */
-        final int esp;
-        /** 主色。 */
-        final int colorA;
-        /** 渐变色（未开启渐变时等于主色）。 */
-        final int colorB;
-        /** 发光半径（设计单位）。 */
-        final float glowRadius;
-
-        PlayerView(float yaw, float headYaw, float headPitch, int esp, int colorA, int colorB,
-                   float glowRadius) {
-            this.yaw = yaw;
-            this.headYaw = headYaw;
-            this.headPitch = headPitch;
-            this.esp = esp;
-            this.colorA = colorA;
-            this.colorB = colorB;
-            this.glowRadius = glowRadius;
-        }
-    }
-
-    /** 不做 ESP 处理。 */
-    static final int ESP_NONE = 0;
-    /** ESP 发光。 */
-    static final int ESP_GLOW = 1;
-    /** ESP 描边。 */
-    static final int ESP_OUTLINE = 2;
-
-    /**
-     * 在给定盒子内绘制本地玩家模型（脚位于 {@code feetX, feetY}，高 {@code height}）。
-     *
-     * <p>默认实现返回 {@code false}：3D 预览由 {@code dev.nocturne.ui.preview.PlayerPreview} 单独接管，
-     * 本词汇层不承担离屏渲染。返回 false 时调用方画静态占位内容。
-     */
-    boolean player(float boxX, float boxY, float boxW, float boxH, float feetX, float feetY,
-                   float height, PlayerView view) {
-        return false;
-    }
 
     /**
      * 绘制一个物品图标。

@@ -3,50 +3,55 @@ package dev.nocturne.ui.fatality;
 import dev.nocturne.client.module.Category;
 
 /**
- * Fatality 界面的配色、尺寸与字形表。颜色为 ARGB，取自参考实现：
- * 炭黑表面、珊瑚红强调色与灰色文字梯度。
+ * Fatality 界面的配色、尺寸与字形表。颜色为 ARGB。
+ *
+ * <p>色板与注入器（{@code injector/AppTheme}）保持同一套 token：暖石墨近黑底 + 钠灯琥珀强调色 +
+ * 暖纸白文字梯度。两处刻意共用同一组数值，界面与注入器看起来才是同一个产品；改色时两边一起改。
  */
 final class FaTheme {
-    // ── 表面 ────────────────────────────────────────────────────────────────
-    static final int WINDOW = 0xFF151515;
-    static final int HEADER_TOP = 0xFF191919;
-    static final int HEADER = 0xFF1C1C1C;
-    static final int FOOTER = 0xFF1C1C1C;
-    static final int DIVIDER = 0xFF111111;
-    static final int GROUP = 0xFF1C1C1C;
-    static final int GROUP_BORDER = 0xFF222222;
-    static final int FIELD = 0xFF161616;
-    static final int FIELD_HOVER = 0xFF191919;
-    static final int TAB_ACTIVE = 0xFF222222;
-    static final int POPUP = 0xFF1C1C1C;
-    static final int POPUP_BORDER = 0xFF242424;
+    // ── 表面（对应 AppTheme.BACKGROUND / PANEL / PANEL_RAISED / PANEL_HOVER） ──
+    static final int WINDOW = 0xFF131315;
+    static final int HEADER_TOP = 0xFF1A1A1D;
+    static final int HEADER = 0xFF1A1A1D;
+    static final int FOOTER = 0xFF1A1A1D;
+    static final int DIVIDER = 0xFF222227;
+    static final int GROUP = 0xFF1A1A1D;
+    static final int GROUP_BORDER = 0xFF2B2B31;
+    static final int FIELD = 0xFF202024;
+    static final int FIELD_HOVER = 0xFF26262B;
+    static final int TAB_ACTIVE = 0xFF26262B;
+    static final int POPUP = 0xFF1A1A1D;
+    static final int POPUP_BORDER = 0xFF2B2B31;
     static final int SHADOW = 0x8C000000;
 
-    // ── 文字 ────────────────────────────────────────────────────────────────
-    static final int LOGO = 0xFFF2F0F5;
-    static final int TITLE = 0xFFEDEDED;
-    static final int LABEL = 0xFFE4E4E4;
-    static final int LABEL_HOVER = 0xFFF4F4F4;
-    static final int LABEL_DISABLED = 0xFF3A3A3A;
-    static final int MUTED = 0xFF666666;
-    static final int FIELD_TEXT = 0xFF686868;
-    static final int FIELD_TEXT_HOVER = 0xFF959595;
-    static final int TAB_TEXT = 0xFF666666;
-    static final int TAB_TEXT_HOVER = 0xFF9A9A9A;
-    static final int TAB_TEXT_ACTIVE = 0xFFEAEAEA;
-    static final int SIDE_TEXT = 0xFF666666;
-    static final int SIDE_TEXT_ENABLED = 0xFF9C9C9C;
-    static final int SIDE_TEXT_ACTIVE = 0xFFEDEDED;
-    static final int ICON = 0xFF6A6A6A;
-    static final int ICON_FAINT = 0xFF444444;
-    static final int ICON_HOVER = 0xFFD2D2D2;
-    static final int CHEVRON = 0xFFCACACA;
-    static final int TICK = 0xFFF6F6F6;
+    // ── 文字（对应 AppTheme.TEXT / TEXT_MUTED / TEXT_FAINT） ────────────────
+    static final int LOGO = 0xFFECE9E1;
+    static final int TITLE = 0xFFECE9E1;
+    static final int LABEL = 0xFFECE9E1;
+    static final int LABEL_HOVER = 0xFFF6F4EE;
+    static final int LABEL_DISABLED = 0xFF625E55;
+    static final int MUTED = 0xFF9C978B;
+    static final int FIELD_TEXT = 0xFF9C978B;
+    static final int FIELD_TEXT_HOVER = 0xFFECE9E1;
+    static final int TAB_TEXT = 0xFF9C978B;
+    static final int TAB_TEXT_HOVER = 0xFFECE9E1;
+    static final int TAB_TEXT_ACTIVE = 0xFFECE9E1;
+    static final int SIDE_TEXT = 0xFF9C978B;
+    static final int SIDE_TEXT_ENABLED = 0xFFECE9E1;
+    static final int SIDE_TEXT_ACTIVE = 0xFFECE9E1;
+    static final int ICON = 0xFF9C978B;
+    static final int ICON_FAINT = 0xFF625E55;
+    static final int ICON_HOVER = 0xFFECE9E1;
+    static final int CHEVRON = 0xFF9C978B;
+    /** 勾选标记画在强调色底上，用暖墨（AppTheme.ON_ACCENT）保证对比度。 */
+    static final int TICK = 0xFF171410;
 
-    // ── 强调色 ──────────────────────────────────────────────────────────────
-    static final int ACCENT = 0xFFFF615A;
-    static final int ACCENT_DIM = 0xFF8A3A36;
-    static final int ORANGE = 0xFFF5A35D;
+    // ── 强调色（对应 AppTheme.ACCENT / ACCENT_PRESSED / INFO） ──────────────
+    /** 钠灯琥珀：品牌、开关、滑条、选中态一色三用。 */
+    static final int ACCENT = 0xFFE8A33D;
+    /** 强调色的暗态（AppTheme.ACCENT_PRESSED）。 */
+    static final int ACCENT_DIM = 0xFFD59638;
+    static final int ORANGE = 0xFFEFB04B;
 
     // ── 尺寸（设计单位） ────────────────────────────────────────────────────
     // 参考实现的目标画布是 960x540 的逻辑像素，这里取其 0.8 倍，使默认窗口在 960x540 下仍有余量；

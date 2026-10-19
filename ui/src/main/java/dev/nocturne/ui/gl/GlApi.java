@@ -289,12 +289,14 @@ public final class GlApi {
         private final Method enableCull;
         private final Method disableCull;
         private final Method blendFunc;
+        private final Method bindTexture;
         private final Method pushMatrix;
         private final Method popMatrix;
 
         private StateManager(Method enableTexture2D, Method disableTexture2D, Method enableBlend,
                              Method disableBlend, Method enableDepth, Method disableDepth,
                              Method enableCull, Method disableCull, Method blendFunc,
+                             Method bindTexture,
                              Method pushMatrix, Method popMatrix) {
             this.enableTexture2D = enableTexture2D;
             this.disableTexture2D = disableTexture2D;
@@ -305,6 +307,7 @@ public final class GlApi {
             this.enableCull = enableCull;
             this.disableCull = disableCull;
             this.blendFunc = blendFunc;
+            this.bindTexture = bindTexture;
             this.pushMatrix = pushMatrix;
             this.popMatrix = popMatrix;
         }
@@ -342,10 +345,27 @@ public final class GlApi {
                     find(type, "o", "func_179089_o", "enableCull"),
                     find(type, "p", "func_179129_p", "disableCull"),
                     findIntPair(type, "b", "func_179112_b", "blendFunc", "tryBlendFuncSeparate"),
+                    // 纹理绑定：1.8.9 原版混淆名 i(int) = func_179144_i。反向对照：i() (无参) 是
+                    // disableDepth，所以必须按 (int) 精确匹配，绝不能按名字取。
+                    findInt(type, "i", "func_179144_i", "bindTexture", "_bindTexture"),
                     find(type, "E", "func_179094_E", "pushMatrix"),
                     find(type, "F", "func_179121_F", "popMatrix"));
             return state.enableTexture2D == null && state.disableTexture2D == null
                     && state.enableBlend == null && state.blendFunc == null ? null : state;
+        }
+
+        /** 按候选名解析 {@code (int)} 方法（纹理绑定）。 */
+        private static Method findInt(Class<?> type, String... names) {
+            for (String name : names) {
+                if (name.isEmpty()) {
+                    continue;
+                }
+                Method method = Reflect.method(type, name, int.class);
+                if (method != null) {
+                    return method;
+                }
+            }
+            return null;
         }
 
         /**
@@ -404,6 +424,20 @@ public final class GlApi {
                 return false;
             }
             Reflect.call(target, null);
+            return true;
+        }
+
+        /**
+         * 绑定 2D 纹理；句柄缺失时返回 false。
+         *
+         * @param texture 纹理句柄
+         * @return 已处理返回 {@code true}
+         */
+        boolean bind2d(int texture) {
+            if (bindTexture == null) {
+                return false;
+            }
+            Reflect.call(bindTexture, null, texture);
             return true;
         }
 
@@ -762,6 +796,12 @@ public final class GlApi {
 
     /** 绑定二维纹理到 {@link #GL_TEXTURE_2D}。 */
     public void bindTexture2D(int id) {
+        // 与能力位同一条原则：先经游戏的 GlStateManager 同步它的纹理缓存，再无条件下发真实绑定。
+        // 只走裸 GL 会让游戏缓存以为"还是旧纹理"，之后它给字体图集绑定纹理时按缓存跳过，
+        // 游戏文字就会拿我们的字形图集去采样——屏幕上出现成排的实心方块（1.8.9 真机实测）。
+        if (state != null) {
+            state.bind2d(id);
+        }
         bindTexture(GL_TEXTURE_2D, id);
     }
 
@@ -921,10 +961,13 @@ public final class GlApi {
             color(r, g, b, a);
         }
         begin(GL_QUADS);
-        vertex(x, y);
-        vertex(x + width, y);
-        vertex(x + width, y + height);
+        // 绕序必须与 vanilla GUI 一致：投影把 y 轴翻成向下之后，(x,y+ h)→(x+w,y+h)→(x+w,y)→(x,y)
+        // 在 NDC 里是逆时针 = 默认 GL_CCW 的正面。写反的话，一旦剔除被谁打开（1.8.9 的 EntityRenderer
+        // 帧末就把 GL_CULL_FACE 留成开启），整个界面会被背面剔除掉且不报错。
         vertex(x, y + height);
+        vertex(x + width, y + height);
+        vertex(x + width, y);
+        vertex(x, y);
         end();
     }
 
@@ -940,10 +983,10 @@ public final class GlApi {
         color(r, g, b, a);
         this.lineWidth(lineWidth);
         begin(GL_LINE_LOOP);
-        vertex(x, y);
-        vertex(x + width, y);
-        vertex(x + width, y + height);
         vertex(x, y + height);
+        vertex(x + width, y + height);
+        vertex(x + width, y);
+        vertex(x, y);
         end();
     }
 }

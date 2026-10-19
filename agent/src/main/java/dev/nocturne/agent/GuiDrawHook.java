@@ -9,8 +9,7 @@ import java.lang.reflect.Method;
  * GUI 绘制钩子：由 {@link dev.nocturne.agent.transform.CallbackHookTransformer} 注入到**两个**绘制
  * 入口的**末尾**（首个 {@code RETURN} 之前）：
  * <ul>
- *   <li>{@code Gui.extractRenderState(GuiGraphicsExtractor, DeltaTracker)}——游戏内（世界里的 HUD，
- *       该方法内部再调 {@code Hud.extractRenderState(GuiGraphicsExtractor)}，后者只有一个形参）；</li>
+ *   <li>{@code Hud.extractRenderState(GuiGraphicsExtractor, DeltaTracker)}——游戏内（世界里的 HUD）；</li>
  *   <li>{@code Screen.extractRenderStateWithTooltipAndSubtitles(GuiGraphicsExtractor, int, int, float)}
  *       ——任意界面（主菜单、暂停菜单、容器界面…）。它是 {@code final}，所以子类覆盖
  *       {@code extractRenderState} 也照样走它。</li>

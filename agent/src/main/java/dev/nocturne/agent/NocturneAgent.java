@@ -369,15 +369,13 @@ public final class NocturneAgent {
     }
 
     /**
-     * HUD 绘制入口：游戏内每帧一次，签名取自 26.3 实际字节码。
+     * HUD 绘制入口：游戏内每帧一次。签名取自 26.3 实际字节码（javap 实测）：
+     * {@code Hud.extractRenderState(GuiGraphicsExtractor, DeltaTracker)}。
      *
-     * <p>两参形态的 {@code extractRenderState(GuiGraphicsExtractor, DeltaTracker)} 属于
-     * {@code net.minecraft.client.gui.Gui}（世界的每帧提取入口，内部再调
-     * {@code Hud.extractRenderState(GuiGraphicsExtractor)}——那个只有<b>一个</b>形参）。
-     * 早先写成 {@code Hud} 时类名与描述符对不上：转换器「精确匹配才织入、否则静默放行」，
-     * 于是钩子永不触发，而注册日志与成功时一模一样。
+     * <p>同名方法在 {@code Gui} 上也存在，但签名不同（{@code (DeltaTracker, boolean, boolean)}）——
+     * 两个类不能互换，转换器按「类名+方法名+描述符」精确匹配，写错就是静默不织入。
      */
-    private static final String HUD_DRAW_CLASS = "net.minecraft.client.gui.Gui";
+    private static final String HUD_DRAW_CLASS = "net.minecraft.client.gui.Hud";
     /** 目标方法名。 */
     private static final String HUD_DRAW_METHOD = "extractRenderState";
     /** 目标方法描述符：首个引用形参即绘制上下文。 */

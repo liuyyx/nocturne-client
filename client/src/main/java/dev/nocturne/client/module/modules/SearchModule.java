@@ -135,12 +135,14 @@ public final class SearchModule extends Module implements WorldOverlay {
     /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上），并推进一次扫描。 */
     @Override
     public void onTick() {
-        if (isEnabled() && renderSubscription == null) {
-            // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
-            // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
-            subscribe();
+        synchronized (this) {
+            if (isEnabled() && renderSubscription == null) {
+                // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
+                // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
+                subscribe();
+            }
+            scanOneBatch();
         }
-        scanOneBatch();
     }
 
     /** @return 上一帧命中数（实时诊断用）。 */

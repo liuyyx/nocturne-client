@@ -97,13 +97,19 @@ class GlRendererTest {
         renderer = new GlRenderer(GlApi.bind(FakeGl.class), text);
     }
 
-    /** 实心矩形发出一次 {@code glBegin}/{@code glEnd} 与四个顶点 */
+    /** 实心矩形发出四个顶点并留在批次里；连续矩形共用同一个批次（合批） */
     @Test
     void rectDrawsOneQuad() {
         renderer.rect(0f, 0f, 10f, 10f, Color.WHITE);
         assertEquals(1, FakeGl.beginCalls);
         assertEquals(4, FakeGl.vertexCalls);
-        assertEquals(1, FakeGl.endCalls);
+        assertEquals(0, FakeGl.endCalls, "the batch stays open until a state change or endFrame");
+
+        renderer.rect(20f, 0f, 10f, 10f, Color.WHITE);
+        assertEquals(1, FakeGl.beginCalls, "consecutive quads share one batch");
+        assertEquals(8, FakeGl.vertexCalls);
+
+        renderer.endFrame();
     }
 
     /** 宽或高为 0、以及颜色为 null 的退化矩形都应被跳过，不产生任何图元 */
@@ -123,14 +129,17 @@ class GlRendererTest {
         assertEquals(4, FakeGl.vertexCalls);
     }
 
-    /** 正常圆角矩形由 3 条带状四边形加 4 个角的扇形组成，共 7 个独立闭合图元 */
+    /** 圆角矩形由 3 条带状四边形 + 4 个角的扇形组成；合批后是「四边形批次 + 扇形批次」两次 */
     @Test
     void roundedRectBuildsBandsAndFans() {
+        FakeGl.viewport = new int[]{0, 0, 800, 600};
+        renderer.beginFrame();
         renderer.roundedRect(0f, 0f, 40f, 20f, 4f, Color.WHITE);
-        // 3 bands (quads) + 4 corners (fans)
-        assertEquals(7, FakeGl.beginCalls);
-        assertEquals(7, FakeGl.endCalls, "every band and corner closes its own primitive");
+        // 3 bands 合进一个 QUADS 批次；4 个角合进一个 TRIANGLE_FAN 批次
+        assertEquals(2, FakeGl.beginCalls);
         assertTrue(FakeGl.vertexCalls > 12, "corners add fan vertices");
+        renderer.endFrame();
+        assertEquals(2, FakeGl.endCalls);
     }
 
     /** 描边使用 {@code GL_LINE_LOOP} 图元并发出四个顶点 */

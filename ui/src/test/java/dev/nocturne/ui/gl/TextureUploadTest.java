@@ -112,12 +112,17 @@ class TextureUploadTest {
 
         renderer.texturedQuad(12, 1f, 2f, 3f, 4f, 0f, 0f, 1f, 1f, 0xFFFFFFFF);
 
-        assertFalse(FakeGl.isCapEnabled(GlApi.GL_TEXTURE_2D),
-                "the texture unit must be released after the quad");
+        assertTrue(FakeGl.isCapEnabled(GlApi.GL_TEXTURE_2D),
+                "the texture stays enabled while the batch is open (batching)");
         assertEquals(GlApi.GL_QUADS, FakeGl.lastBeginMode);
         assertEquals(1, FakeGl.beginCalls);
         assertEquals(4, FakeGl.vertexCalls, "a quad has four vertices");
         assertTrue(FakeGl.enableCount(GlApi.GL_TEXTURE_2D) >= 1, "texturing must be enabled");
+
+        // 离开纹理批次（下一个无纹理图元）时必须把纹理关掉，否则后续无纹理图元会去采样图集。
+        renderer.rect(0f, 0f, 1f, 1f, dev.nocturne.ui.render.Color.WHITE);
+        assertFalse(FakeGl.isCapEnabled(GlApi.GL_TEXTURE_2D),
+                "leaving the textured batch must release the texture unit");
     }
 
     /** 透明、零尺寸或无句柄的纹理四边形必须被跳过，不得产生绘制调用。 */

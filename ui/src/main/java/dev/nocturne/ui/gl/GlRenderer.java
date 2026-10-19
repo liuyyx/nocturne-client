@@ -266,6 +266,15 @@ public final class GlRenderer implements UiBackend {
      * <p>只恢复矩阵栈：其余开关（深度测试、纹理、剔除）由游戏每帧自行重设，逐个查询原值再还原
      * 反而会在热路径上引入多次 {@code glGet*} 调用。
      */
+    /**
+     * 取出上一秒的绘制统计（诊断用）。
+     *
+     * @return {@code {批次数, 顶点数}}
+     */
+    public int[] takeBatchCounts() {
+        return gl.takeBatchCounts();
+    }
+
     @Override
     public void endFrame() {
         if (statePushed) {
@@ -406,29 +415,20 @@ public final class GlRenderer implements UiBackend {
         if (texture <= 0 || width <= 0f || height <= 0f || (argb >>> 24) == 0) {
             return;
         }
-        gl.bindTexture2D(texture);
-        // 纹理开关经 GlStateManager（缓存同步）；画完必须关掉，否则后续无纹理坐标的图元会去采样图集
-        //（游戏字体渲染器与我们的 fillRect 都假设它可以是开的，但只有我们自己会开它）。
-        // 用 try/finally：组件树中途抛异常也不能把 GL_TEXTURE_2D 留在开启态——那会让游戏后面
-        // 所有无纹理图元都去采样我们的图集，整屏发白且界面不显示。
-        gl.enable(GlApi.GL_TEXTURE_2D);
-        try {
-            gl.color(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f, (argb & 0xFF) / 255f,
-                    ((argb >>> 24) & 0xFF) / 255f);
-            gl.begin(GlApi.GL_QUADS);
-            // 顶点序与纯色四边形保持一致（正面序，见 GlApi.fillRect 的说明）；纹理坐标跟着顶点走。
-            gl.texCoord(u0, v1);
-            gl.vertex(x, y + height);
-            gl.texCoord(u1, v1);
-            gl.vertex(x + width, y + height);
-            gl.texCoord(u1, v0);
-            gl.vertex(x + width, y);
-            gl.texCoord(u0, v0);
-            gl.vertex(x, y);
-            gl.end();
-        } finally {
-            gl.disable(GlApi.GL_TEXTURE_2D);
-        }
+        // 纹理状态由批次负责（同一张图集的连续字形合进同一个批次）；离开纹理批次时由
+        // ensureBatch 统一 flush 并关掉 GL_TEXTURE_2D，因此这里不需要 try/finally。
+        gl.beginTexturedQuads(texture);
+        gl.color(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f, (argb & 0xFF) / 255f,
+                ((argb >>> 24) & 0xFF) / 255f);
+        // 顶点序与纯色四边形保持一致（正面序，见 GlApi.fillRect 的说明）；纹理坐标跟着顶点走。
+        gl.texCoord(u0, v1);
+        gl.vertex(x, y + height);
+        gl.texCoord(u1, v1);
+        gl.vertex(x + width, y + height);
+        gl.texCoord(u1, v0);
+        gl.vertex(x + width, y);
+        gl.texCoord(u0, v0);
+        gl.vertex(x, y);
     }
 
     @Override
@@ -562,16 +562,14 @@ public final class GlRenderer implements UiBackend {
      */
     private void quarter(float cx, float cy, float radius, float startDeg, float endDeg,
                          float r, float g, float b, float a) {
-        // 文字绘制会把 GL_TEXTURE_2D 打开，扇形批次同样不能带着它绘制。
-        gl.disable(GlApi.GL_TEXTURE_2D);
+        // 无纹理扇形批次：与相邻的圆角条带合批，批次内的颜色逐顶点设置。
+        gl.beginFan(0);
         gl.color(r, g, b, a);
-        gl.begin(GlApi.GL_TRIANGLE_FAN);
         // 扇形绕序同样按正面序走（角度递减）：投影翻转 y 轴后，角度递增方向的扇形是背面。
         gl.vertex(cx, cy);
         for (int i = CORNER_STEPS; i >= 0; i--) {
             double angle = Math.toRadians(startDeg + (endDeg - startDeg) * i / (double) CORNER_STEPS);
             gl.vertex(cx + (float) Math.cos(angle) * radius, cy + (float) Math.sin(angle) * radius);
         }
-        gl.end();
     }
 }

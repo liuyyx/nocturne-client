@@ -567,6 +567,89 @@ public final class GlApi {
         return bound;
     }
 
+    // ── 立即模式批次合并（照 eps-plus 的「累加器 + 一次提交」） ─────────────
+    //
+    // 逐图元 begin/end + 每图元重复开关纹理，是 UI 每帧最大的 GL 调用来源：一个面板几百个矩形
+    // 就是几百次 glBegin/glEnd 与上千次状态切换。GL 允许在 glBegin/glEnd 之间改颜色与纹理坐标，
+    // 所以「模式 + 纹理相同」的连续图元可以合进同一个批次：纯色矩形、同一图集的字形都能合并。
+    // 任何状态切换（开关纹理、绑定纹理、裁剪、矩阵、线宽）之前必须先 flush。
+
+    /** 当前打开的批次模式；0 表示没有打开的批次。 */
+    private int batchMode;
+    /** 当前批次的纹理：0 表示无纹理，否则为纹理句柄。 */
+    private int batchTexture;
+    /** 统计：提交的批次数（UI 一次 draw call ≈ 一个批次）。 */
+    private int batchCount;
+    /** 统计：提交的顶点数。 */
+    private int vertexCount;
+
+    /**
+     * 确保当前有一个「模式 + 纹理」匹配的批次；不匹配时先结束旧批次。
+     *
+     * @param mode    图元模式（{@code GL_QUADS}/{@code GL_LINE_LOOP}/…）
+     * @param texture 纹理句柄；0 表示无纹理
+     */
+    private void ensureBatch(int mode, int texture) {
+        if (batchMode == mode && batchTexture == texture) {
+            return;
+        }
+        flushBatch();
+        if (texture == 0) {
+            setCap(GL_TEXTURE_2D, false);
+        } else {
+            setCap(GL_TEXTURE_2D, true);
+            bindTexture2D(texture);
+        }
+        batchTexture = texture;
+        batchMode = mode;
+        batchCount++;
+        Reflect.call(begin, null, mode);
+    }
+
+    /**
+     * 结束当前批次；没有打开的批次时为空操作。
+     *
+     * <p>任何会改变 GL 状态的操作（能力位、纹理、裁剪、矩阵、线宽）在调用真实 GL 之前都必须先调它。
+     */
+    public void flushBatch() {
+        if (batchMode == 0) {
+            return;
+        }
+        Reflect.call(end, null);
+        batchMode = 0;
+        batchTexture = 0;
+    }
+
+    /**
+     * 开一个扇形批次（{@code GL_TRIANGLE_FAN}）。
+     *
+     * <p>调用方自己提交顶点，不需要 end：批次在下次状态切换或 {@link #flushBatch()} 时结束。
+     *
+     * @param texture 纹理句柄；0 表示无纹理
+     */
+    public void beginFan(int texture) {
+        ensureBatch(GL_TRIANGLE_FAN, texture);
+    }
+
+    /**
+     * 开一个纹理四边形批次（{@code GL_QUADS} + 指定纹理）。
+     *
+     * <p>同一张图集的连续字形会合进同一个批次——这是文字路径最大的调用数来源。
+     *
+     * @param texture 纹理句柄
+     */
+    public void beginTexturedQuads(int texture) {
+        ensureBatch(GL_QUADS, texture);
+    }
+
+    /** @return 上次清零以来提交的 {@code {批次数, 顶点数}}，并清零（诊断用）。 */
+    public int[] takeBatchCounts() {
+        int[] out = {batchCount, vertexCount};
+        batchCount = 0;
+        vertexCount = 0;
+        return out;
+    }
+
     /**
      * 设置当前顶点颜色（对应 {@code glColor4f}）。
      *
@@ -597,6 +680,7 @@ public final class GlApi {
 
     /** 提交一个二维顶点（对应 {@code glVertex2f}），坐标以窗口像素为单位。 */
     public void vertex(float x, float y) {
+        vertexCount++;
         Reflect.call(vertex2f, null, x, y);
     }
 
@@ -626,6 +710,7 @@ public final class GlApi {
      * @param enabled 目标状态
      */
     private void setCap(int cap, boolean enabled) {
+        flushBatch();
         if (state != null) {
             state.set(cap, enabled);
         }
@@ -660,6 +745,7 @@ public final class GlApi {
 
     /** 设置 alpha 混合的源/目标因子（对应 {@code glBlendFunc}）。 */
     public void blendFunc(int src, int dst) {
+        flushBatch();
         // 同上：桥同步缓存，真实调用负责落地（混合因子在部分版本也被缓存）。
         if (state != null) {
             state.blend(src, dst);
@@ -703,16 +789,19 @@ public final class GlApi {
 
     /** 平移当前矩阵（对应 {@code glTranslatef}）；UI 通常只在 z 传 0。 */
     public void translate(float x, float y, float z) {
+        flushBatch();
         Reflect.call(translatef, null, x, y, z);
     }
 
     /** 缩放当前矩阵（对应 {@code glScalef}）。 */
     public void scale(float x, float y, float z) {
+        flushBatch();
         Reflect.call(scalef, null, x, y, z);
     }
 
     /** 设置线段宽度（对应 {@code glLineWidth}）。 */
     public void lineWidth(float width) {
+        flushBatch();
         Reflect.call(lineWidth, null, width);
     }
 
@@ -728,6 +817,7 @@ public final class GlApi {
 
     /** 切换当前操作的矩阵栈（对应 {@code glMatrixMode}），参数取 {@link #GL_PROJECTION} 或 {@link #GL_MODELVIEW}。 */
     public void matrixMode(int mode) {
+        flushBatch();
         Reflect.call(matrixMode, null, mode);
     }
 
@@ -781,6 +871,7 @@ public final class GlApi {
      * 换算由调用方 {@link GlRenderer} 负责。
      */
     public void scissor(int x, int y, int width, int height) {
+        flushBatch();
         Reflect.call(scissor, null, x, y, width, height);
     }
 
@@ -843,6 +934,9 @@ public final class GlApi {
 
     /** 绑定二维纹理到 {@link #GL_TEXTURE_2D}。 */
     public void bindTexture2D(int id) {
+        if (batchMode != 0) {
+            flushBatch();
+        }
         // 与能力位同一条原则：先经游戏的 GlStateManager 同步它的纹理缓存，再无条件下发真实绑定。
         // 只走裸 GL 会让游戏缓存以为"还是旧纹理"，之后它给字体图集绑定纹理时按缓存跳过，
         // 游戏文字就会拿我们的字形图集去采样——屏幕上出现成排的实心方块（1.8.9 真机实测）。
@@ -997,17 +1091,8 @@ public final class GlApi {
      * 若不在每个图元批次前复位，后续所有无纹理坐标的图元都会去采样字体图集。
      */
     public void fillRect(float x, float y, float width, float height, float r, float g, float b, float a) {
-        String debug = System.getProperty("nocturne.ui.debug", "");
-        if ("arrays".equals(debug) || "both".equals(debug)) {
-            return;
-        }
-        disable(GL_TEXTURE_2D);
-        if ("both".equals(debug) || "opaque".equals(debug)) {
-            Reflect.call(color4f, null, r, g, b, 1.0f);
-        } else {
-            color(r, g, b, a);
-        }
-        begin(GL_QUADS);
+        ensureBatch(GL_QUADS, 0);
+        color(r, g, b, a);
         // 绕序必须与 vanilla GUI 一致：投影把 y 轴翻成向下之后，(x,y+ h)→(x+w,y+h)→(x+w,y)→(x,y)
         // 在 NDC 里是逆时针 = 默认 GL_CCW 的正面。写反的话，一旦剔除被谁打开（1.8.9 的 EntityRenderer
         // 帧末就把 GL_CULL_FACE 留成开启），整个界面会被背面剔除掉且不报错。
@@ -1015,7 +1100,6 @@ public final class GlApi {
         vertex(x + width, y + height);
         vertex(x + width, y);
         vertex(x, y);
-        end();
     }
 
     /**
@@ -1026,14 +1110,12 @@ public final class GlApi {
      */
     public void strokeRect(float x, float y, float width, float height, float lineWidth,
                            float r, float g, float b, float a) {
-        disable(GL_TEXTURE_2D);
-        color(r, g, b, a);
         this.lineWidth(lineWidth);
-        begin(GL_LINE_LOOP);
+        ensureBatch(GL_LINE_LOOP, 0);
+        color(r, g, b, a);
         vertex(x, y + height);
         vertex(x + width, y + height);
         vertex(x + width, y);
         vertex(x, y);
-        end();
     }
 }

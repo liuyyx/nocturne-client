@@ -212,6 +212,9 @@ public final class GuiOverlay implements FrameListener {
     /** 是否已打印过左右 Shift 探针，保证只打印一次。 */
     private boolean loggedShiftProbe;
     /** 上一帧是否有界面处于打开状态；用于识别指针捕获的交接沿。 */
+    /** 上一次打印批次统计的时间（仅调试开关下使用）。 */
+    private long batchLoggedAt;
+
     private boolean wasOpenForPointer;
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
     private boolean pointerGrabbedBeforeGui;
@@ -488,6 +491,16 @@ public final class GuiOverlay implements FrameListener {
             }
         } finally {
             renderer.endFrame();
+            if (renderer instanceof GlRenderer
+                    && System.getProperty("nocturne.ui.debug") != null) {
+                long now = System.currentTimeMillis();
+                if (now - batchLoggedAt >= 1000L) {
+                    batchLoggedAt = now;
+                    int[] counts = ((GlRenderer) renderer).takeBatchCounts();
+                    System.out.println("[nocturne] draw batches/s=" + counts[0]
+                            + " vertices/s=" + counts[1]);
+                }
+            }
         }
     }
 

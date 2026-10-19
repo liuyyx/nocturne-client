@@ -36,20 +36,38 @@ class GlApiTest {
         assertNull(GlApi.bind("does.not.Exist", getClass().getClassLoader()));
     }
 
-    /** 填充实心矩形恰好发出一次颜色设置、一次 {@code glBegin(GL_QUADS)}、四个顶点和一次 {@code glEnd} */
+    /**
+     * 填充矩形：一次设色 + 四个顶点，**图元留在批次里**（合批，见 eps-plus 的累加器结构），
+     * 直到 {@link GlApi#flushBatch()} 才真正 {@code glEnd}。
+     */
     @Test
-    void fillRectEmitsOneColorAndFourVertices() {
+    void fillRectAccumulatesIntoABatch() {
         GlApi api = GlApi.bind(FakeGl.class);
         api.fillRect(10f, 20f, 30f, 40f, 1f, 0f, 0f, 1f);
+        api.fillRect(50f, 20f, 30f, 40f, 0f, 1f, 0f, 1f);
 
-        assertEquals(1, FakeGl.colorCalls);
-        assertEquals(1, FakeGl.beginCalls);
-        assertEquals(4, FakeGl.vertexCalls);
-        assertEquals(1, FakeGl.endCalls);
+        assertEquals(2, FakeGl.colorCalls);
+        assertEquals(1, FakeGl.beginCalls, "consecutive quads must share one batch");
+        assertEquals(8, FakeGl.vertexCalls);
+        assertEquals(0, FakeGl.endCalls, "the batch stays open");
         assertEquals(GlApi.GL_QUADS, FakeGl.lastBeginMode);
+
+        api.flushBatch();
+        assertEquals(1, FakeGl.endCalls);
+        assertEquals(1, api.takeBatchCounts()[0] == 0 ? 0 : 1);
     }
 
-    /** 描边矩形须先设置线宽，并以 {@code GL_LINE_LOOP} 发出四个顶点 */
+    /** 批次之间的状态切换必须先结束旧批次（否则状态命令会落进 glBegin/glEnd 之间）。 */
+    @Test
+    void stateChangeFlushesTheOpenBatch() {
+        GlApi api = GlApi.bind(FakeGl.class);
+        api.fillRect(0f, 0f, 10f, 10f, 1f, 1f, 1f, 1f);
+        api.bindTexture2D(7);
+        assertEquals(1, FakeGl.endCalls, "binding a texture must close the pending batch");
+        api.flushBatch();
+    }
+
+    /** 描边矩形须先设置线宽，并以 {@code GL_LINE_LOOP} 发出四个顶点（同样留在批次里） */
     @Test
     void strokeRectSetsLineWidthAndLoops() {
         GlApi api = GlApi.bind(FakeGl.class);
@@ -59,6 +77,8 @@ class GlApiTest {
         assertEquals(2f, FakeGl.lastLineWidth, 1e-6);
         assertEquals(4, FakeGl.vertexCalls);
         assertEquals(GlApi.GL_LINE_LOOP, FakeGl.lastBeginMode);
+        api.flushBatch();
+        assertEquals(1, FakeGl.endCalls);
     }
 
     /** 数组形态存在时按数组形态读视口（LWJGL3） */

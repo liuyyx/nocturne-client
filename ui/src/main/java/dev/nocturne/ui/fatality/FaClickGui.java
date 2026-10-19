@@ -177,6 +177,9 @@ public final class FaClickGui implements OverlayGui {
         float maxScroll;
     }
 
+    /** TEMP-DIAG：绘制几何诊断是否已打过一次。 */
+    private boolean loggedDrawDiag;
+
     /** 顶部语言芯片的矩形（设计坐标，{@code x,y,w,h}）；绘制时更新，点击时命中测试。 */
     private final float[] langChip = {0.0f, 0.0f, 0.0f, 0.0f};
 

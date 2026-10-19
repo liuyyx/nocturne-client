@@ -164,6 +164,43 @@ public final class GlApi {
     private final Method texImage2D;
     /** 已解析的 {@code glTexParameteri}。 */
     private final Method texParameteri;
+    /** {@code glDisableClientState}：关闭客户态数组（立即模式绘制前必须关掉）。 */
+    private Method disableClientStateMethod;
+
+    /**
+     * 关闭所有客户态数组（顶点/法线/颜色/纹理坐标）。
+     *
+     * <p>立即模式（{@code glBegin/glVertex2f}）在对应客户态数组仍启用时<b>整段被忽略且不报错</b>。
+     * 游戏各版本的渲染路径是否留下这些状态并不一致（例如 1.8.9 的方块渲染路径会留下
+     * {@code GL_VERTEX_ARRAY}），所以每帧开始时统一关掉，绘制代码就不必关心版本差异。
+     */
+    public void disableClientArrays() {
+        if (disableClientStateMethod == null) {
+            return;
+        }
+        Reflect.call(disableClientStateMethod, null, GL_VERTEX_ARRAY);
+        Reflect.call(disableClientStateMethod, null, GL_NORMAL_ARRAY);
+        Reflect.call(disableClientStateMethod, null, GL_COLOR_ARRAY);
+        Reflect.call(disableClientStateMethod, null, GL_TEXTURE_COORD_ARRAY);
+    }
+
+
+    /** 客户态数组：顶点。开启时立即模式（{@code glBegin/glVertex2f}）会被忽略且不报错。 */
+    public static final int GL_VERTEX_ARRAY = 0x8074;
+    /** 客户态数组：法线。 */
+    public static final int GL_NORMAL_ARRAY = 0x8075;
+    /** 客户态数组：颜色。开启时立即模式的 {@code glColor4f} 不生效。 */
+    public static final int GL_COLOR_ARRAY = 0x8076;
+    /** 客户态数组：纹理坐标。 */
+    public static final int GL_TEXTURE_COORD_ARRAY = 0x8078;
+
+
+
+
+
+
+
+
     /** 已解析的 {@code glPixelStorei}。 */
     private final Method pixelStorei;
 
@@ -302,11 +339,31 @@ public final class GlApi {
                     find(type, "i", "func_179097_i", "disableDepth"),
                     find(type, "", "func_179089_o", "enableCull"),
                     find(type, "p", "func_179129_p", "disableCull"),
-                    find(type, "b", "func_179112_b", "blendFunc"),
+                    findIntPair(type, "b", "func_179112_b", "blendFunc", "tryBlendFuncSeparate"),
                     find(type, "E", "func_179094_E", "pushMatrix"),
                     find(type, "F", "func_179121_F", "popMatrix"));
             return state.enableTexture2D == null && state.disableTexture2D == null
                     && state.enableBlend == null && state.blendFunc == null ? null : state;
+        }
+
+        /**
+         * 按候选名解析 {@code (int,int)} 方法（混合因子是唯一带参的状态设置）。
+         *
+         * <p>不能复用 {@link #find}：1.8.9 的 {@code GlStateManager} 里存在<b>无参</b>的 {@code b()}，
+         * 按名字匹配会绑到它，调用时抛 {@code IllegalArgumentException: wrong number of arguments}
+         * 并被静默吞掉——混合因子于是从未设置成功。
+         */
+        private static Method findIntPair(Class<?> type, String... names) {
+            for (String name : names) {
+                if (name.isEmpty()) {
+                    continue;
+                }
+                Method method = Reflect.method(type, name, int.class, int.class);
+                if (method != null) {
+                    return method;
+                }
+            }
+            return null;
         }
 
         /** 按候选名逐个解析无参方法（矩阵/开关类都是无参）。 */
@@ -357,15 +414,6 @@ public final class GlApi {
             return true;
         }
 
-        /** 矩阵栈操作；本桥句柄缺失时返回 false。 */
-        boolean matrix(boolean push) {
-            Method target = push ? pushMatrix : popMatrix;
-            if (target == null) {
-                return false;
-            }
-            Reflect.call(target, null);
-            return true;
-        }
     }
 
     /**
@@ -394,7 +442,7 @@ public final class GlApi {
         if (color4f == null || begin == null || end == null || vertex2f == null) {
             return null; // 核心句柄不全，无法作为可用的 GL11
         }
-        return new GlApi(
+        GlApi bound = new GlApi(
                 color4f, begin, end, vertex2f,
                 Reflect.method(gl, "glEnable", int.class),
                 Reflect.method(gl, "glDisable", int.class),
@@ -435,6 +483,10 @@ public final class GlApi {
                 Reflect.method(gl, "glPixelStorei", int.class, int.class),
                 // 状态类调用优先走游戏的 GlStateManager（缓存一致），解析不到时为 null。
                 StateManager.resolve(gl.getClassLoader()));
+        // 立即模式的前提：客户态数组必须关得掉（关不掉时 glBegin/glVertex2f 会被静默忽略）。
+        bound.disableClientStateMethod = Reflect.method(gl, "glDisableClientState", int.class);
+        bound.isEnabledMethod = Reflect.method(gl, "glIsEnabled", int.class);
+        return bound;
     }
 
     /**
@@ -467,43 +519,78 @@ public final class GlApi {
 
     /** 开启某项 GL 能力（对应 {@code glEnable}）。 */
     public void enable(int cap) {
-        // 状态类调用必须优先走游戏的 GlStateManager：直接 glEnable 会让它的状态缓存与实际失配，
-        // 之后游戏"以为已经开过"而不再设置，我们自己的字形/纹理就会画不出来（详见 StateManager）。
-        if (state != null && state.set(cap, true)) {
-            return;
-        }
-        Reflect.call(enable, null, cap);
+        setCap(cap, true);
     }
 
     /** 关闭某项 GL 能力（对应 {@code glDisable}）。 */
     public void disable(int cap) {
-        if (state != null && state.set(cap, false)) {
+        setCap(cap, false);
+    }
+
+    /**
+     * 设置某项能力位：<b>先经游戏的状态桥同步它的缓存，再直接下发真实 GL 调用</b>。
+     *
+     * <p>为什么两次都要做：游戏的状态管理器（1.8.9 的 {@code GlStateManager}）为每个能力位维护
+     * 一份"我认为现在是开还是关"的缓存，并在设置时跳过"已经是这个值"的调用。一旦缓存与实际状态
+     * 脱钩（其它模组、直接 GL 调用、或游戏自身的某些路径都会造成），缓存就会让本该生效的设置变成
+     * 空操作，而真实状态保持原样——表现为"绘制代码全部正确、画面却看不见"，且不报任何 GL 错误。
+     *
+     * <p>1.8.9 真机实测：{@code GL_CULL_FACE} 缓存认为已关、实际仍开着，我们翻转 y 轴的正交投影让
+     * 四边形在屏幕空间变成顺时针，于是整个界面被背面剔除掉（{@code glClear} 不受影响，所以表现为
+     * "清屏可见、几何不可见"）。两次调用后缓存与实际必然一致（顺序：先缓存后真实）。
+     *
+     * @param cap     能力位
+     * @param enabled 目标状态
+     */
+    private void setCap(int cap, boolean enabled) {
+        if (state != null) {
+            state.set(cap, enabled);
+        }
+        Reflect.call(enabled ? enable : disable, null, cap);
+        // 校验只在调试模式下做：生产路径不为此每帧付出多次 glIsEnabled。
+        if (System.getProperty("nocturne.ui.debug") != null) {
+            Boolean real = isCapEnabled(cap);
+            if (real != null && real != enabled) {
+                reportStateDesync(cap, enabled, real);
+            }
+        }
+    }
+
+    /** 已经报告过的状态失配能力位（每项只报一次，避免每帧刷屏）。 */
+    private final java.util.Set<Integer> desyncReported = java.util.Collections
+            .synchronizedSet(new java.util.HashSet<Integer>());
+
+    /**
+     * 报告"设置后真实状态仍与目标不符"（正常情况下不会发生；发生即为桥/驱动异常）。
+     *
+     * @param cap   能力位
+     * @param want  目标状态
+     * @param real  读回的真实状态
+     */
+    private void reportStateDesync(int cap, boolean want, boolean real) {
+        if (!desyncReported.add(cap)) {
             return;
         }
-        Reflect.call(disable, null, cap);
+        System.out.println("[nocturne] gl state desync: cap=0x" + Integer.toHexString(cap)
+                + " want=" + want + " real=" + real);
     }
 
     /** 设置 alpha 混合的源/目标因子（对应 {@code glBlendFunc}）。 */
     public void blendFunc(int src, int dst) {
-        if (state != null && state.blend(src, dst)) {
-            return;
+        // 同上：桥同步缓存，真实调用负责落地（混合因子在部分版本也被缓存）。
+        if (state != null) {
+            state.blend(src, dst);
         }
         Reflect.call(blendFunc, null, src, dst);
     }
 
     /** 压入当前模型视图矩阵（对应 {@code glPushMatrix}）。 */
     public void pushMatrix() {
-        if (state != null && state.matrix(true)) {
-            return;
-        }
         Reflect.call(pushMatrix, null);
     }
 
     /** 弹出模型视图矩阵栈（对应 {@code glPopMatrix}），必须与 {@link #pushMatrix()} 成对使用。 */
     public void popMatrix() {
-        if (state != null && state.matrix(false)) {
-            return;
-        }
         Reflect.call(popMatrix, null);
     }
 
@@ -721,20 +808,49 @@ public final class GlApi {
         return true;
     }
 
+    /** 已解析的 {@code glIsEnabled}，用于回读能力位的真实状态（调试校验用）。 */
+    private Method isEnabledMethod;
+
+    public boolean isCapEnabled(int cap) {
+        if (isEnabledMethod == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(Reflect.call(isEnabledMethod, null, cap));
+    }
+
+    public int[] intQuery(int pname, int count) {
+        int[] out = new int[count];
+        if (getIntegerv != null) {
+            Reflect.call(getIntegerv, null, pname, out);
+            return out;
+        }
+        if (getIntegervBuffer != null) {
+            viewportBuffer.clear();
+            Reflect.call(getIntegervBuffer, null, pname, viewportBuffer);
+            for (int i = 0; i < count; i++) {
+                out[i] = viewportBuffer.get(i);
+            }
+            return out;
+        }
+        return null;
+    }
+
     /** @return 当前绑定的 2D 纹理；查询失败时返回 {@code -1} */
     public int boundTexture() {
         int[] out = new int[1];
         if (getIntegerv != null) {
-            // LWJGL2 的形态：glGetInteger(int, IntBuffer)（1.8.9/1.12.2 实测只有这一种）。
+            // LWJGL3 形态：直接写进 int[]。
             Reflect.call(getIntegerv, null, GL_TEXTURE_BINDING_2D, out);
-            return out[0];
+            if (out[0] > 0) {
+                return out[0];
+            }
         }
         if (getIntegervBuffer != null) {
+            // LWJGL2 形态：写进直接缓冲后再取回（GL 调用不会移动缓冲区位置，**不能 flip**——
+            // 早先多调一次 flip 让 position 停在被清空处，读回来恒为 -1，绑定还原整个失效）。
             viewportBuffer.clear();
-            viewportBuffer.limit(1);
             Reflect.call(getIntegervBuffer, null, GL_TEXTURE_BINDING_2D, viewportBuffer);
-            viewportBuffer.flip();
-            return viewportBuffer.remaining() > 0 ? viewportBuffer.get(0) : -1;
+            return viewportBuffer.get(0);
         }
         return -1;
     }
@@ -792,8 +908,16 @@ public final class GlApi {
      * 若不在每个图元批次前复位，后续所有无纹理坐标的图元都会去采样字体图集。
      */
     public void fillRect(float x, float y, float width, float height, float r, float g, float b, float a) {
+        String debug = System.getProperty("nocturne.ui.debug", "");
+        if ("arrays".equals(debug) || "both".equals(debug)) {
+            return;
+        }
         disable(GL_TEXTURE_2D);
-        color(r, g, b, a);
+        if ("both".equals(debug) || "opaque".equals(debug)) {
+            Reflect.call(color4f, null, r, g, b, 1.0f);
+        } else {
+            color(r, g, b, a);
+        }
         begin(GL_QUADS);
         vertex(x, y);
         vertex(x + width, y);

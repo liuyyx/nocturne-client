@@ -110,6 +110,10 @@ public final class Reflect {
         }
     }
 
+    /** TEMP-DIAG：已经报告过的失败方法，避免每帧刷屏。 */
+    private static final java.util.Set<String> REPORTED_FAILURES =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
     /** 调用方法句柄；句柄为 {@code null} 或调用失败时返回 {@code null}。 */
     public static Object call(Method method, Object target, Object... args) {
         if (method == null) {
@@ -118,8 +122,34 @@ public final class Reflect {
         try {
             return method.invoke(target, args);
         } catch (Throwable t) {
+            reportFailure(method, t, args);
             return null;
         }
+    }
+
+    /**
+     * TEMP-DIAG：在 {@code -Dnocturne.ui.debug} 打开时，把"静默失败"的调用打到日志。
+     *
+     * <p>反射调用失败原本被刻意吞掉（版本差异属于正常结果）；但 GL 调用失败会导致
+     * "无报错、无图形"，必须先看得见。
+     */
+    private static void reportFailure(Method method, Throwable t, Object[] args) {
+        if (System.getProperty("nocturne.ui.debug") == null) {
+            return;
+        }
+        String key = method.getDeclaringClass().getName() + "." + method.getName();
+        if (!REPORTED_FAILURES.add(key)) {
+            return;
+        }
+        StringBuilder b = new StringBuilder("[nocturne] REFLECT FAIL ").append(key).append('(');
+        for (int i = 0; i < args.length; i++) {
+            if (i > 0) {
+                b.append(',');
+            }
+            b.append(args[i] == null ? "null" : args[i].getClass().getSimpleName());
+        }
+        b.append(") -> ").append(t);
+        System.err.println(b);
     }
 
     /** 读取静态字段值；字段缺失或不可访问时返回 {@code null}。 */

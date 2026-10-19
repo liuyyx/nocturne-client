@@ -461,7 +461,13 @@ public final class GuiOverlay implements FrameListener {
      * <p>begin/end 必须成对且**每帧只有一次**：绘制中途抛异常时若不执行 endFrame，
      * GL 状态与原生表面都会留在中间态。
      */
+    /** TEMP-DIAG：每帧画红矩形并回读中心像素（不需要界面打开）。 */
+
+    /** TEMP-DIAG：probe 模式的日志限流。 */
+
     private void drawFrame() {
+        // TEMP-DIAG（定位界面不显示后删除）：界面打开时每秒打一次真实下发次数。
+        long diagNow = System.currentTimeMillis();
         boolean guiOpen = gui.isOpen();
         // 世界覆盖层（ESP/Tracers/NameTags/StorageESP…）与界面无关，必须单独计入：
         // 界面关着时本方法此前直接 return，于是 beginFrame() 根本不执行、覆盖层一帧都不画——
@@ -484,6 +490,9 @@ public final class GuiOverlay implements FrameListener {
             renderer.endFrame();
         }
     }
+
+    /** TEMP-DIAG：上一次打印绘制计数的时间。 */
+    private long diagDrawnAt;
 
     /**
      * 是否存在启用中的世界覆盖层模块。

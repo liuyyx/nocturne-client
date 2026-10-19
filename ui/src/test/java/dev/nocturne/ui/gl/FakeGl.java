@@ -126,10 +126,19 @@ public final class FakeGl {
         texParameters.clear();
     }
 
-    /** 清空仅与裁剪相关的观察，便于 beginFrame 之后单独断言 pushClip 的行为 */
+    /**
+     * 清空仅与裁剪相关的观察，便于 beginFrame 之后单独断言 pushClip 的行为。
+     *
+     * <p>能力位的开关状态与计数也属于裁剪观察：{@code beginFrame()} 自身会关闭
+     * {@code GL_SCISSOR_TEST}，若只清 {@code scissorCalls}，pushClip/popClip 的
+     * 计数断言会把 beginFrame 的那一次算进去。
+     */
     public static void resetScissorObservations() {
         scissorCalls = 0;
         lastScissor = null;
+        capEnableCounts.clear();
+        capDisableCounts.clear();
+        enabledCaps.clear();
     }
 
     // ---- 断言辅助 ----

@@ -39,6 +39,17 @@ public final class GlRenderer implements UiBackend {
      * 1.8.9 真机症状：一开界面整个背景变白。
      */
     private int savedTextureBinding = -1;
+
+
+
+
+
+
+
+
+
+
+
     /** 当前裁剪嵌套深度（含因栈满被忽略的层）；为 0 表示未启用裁剪。 */
     private int clipDepth;
     /** 裁剪栈溢出是否已提示过；保证只打印一次，避免每帧刷屏。 */
@@ -233,6 +244,12 @@ public final class GlRenderer implements UiBackend {
         gl.pushMatrix();
         gl.loadIdentity();
 
+        // 立即模式的前提：客户态数组全部关闭（否则 glBegin/glVertex2f 被静默忽略）。
+        gl.disableClientArrays();
+        // 上一帧（世界覆盖层/组件树）可能留下裁剪测试：若 scissor 盒退化成 0 尺寸，
+        // 本帧所有绘制都会被静默裁掉（不报错、颜色矩阵都对，就是看不见）。
+        // 本帧的裁剪由 pushClip/popClip 重新开启，所以这里关掉是安全的。
+        gl.disable(GlApi.GL_SCISSOR_TEST);
         gl.disable(GlApi.GL_DEPTH_TEST);
         gl.disable(GlApi.GL_CULL_FACE);
         gl.disable(GlApi.GL_TEXTURE_2D);

@@ -498,7 +498,9 @@ public final class GuiOverlay implements FrameListener {
                     batchLoggedAt = now;
                     int[] counts = ((GlRenderer) renderer).takeBatchCounts();
                     System.out.println("[nocturne] draw batches/s=" + counts[0]
-                            + " vertices/s=" + counts[1]);
+                            + " vertices/s=" + counts[1]
+                            + " tex batches/s=" + counts[2]
+                            + " text/s=" + MinecraftTextRenderer.takeDrawCalls());
                 }
             }
         }

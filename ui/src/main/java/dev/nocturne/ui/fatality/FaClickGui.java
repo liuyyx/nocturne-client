@@ -92,6 +92,8 @@ public final class FaClickGui implements OverlayGui {
     private int viewportHeight;
     /** 逻辑像素 → 物理像素（用于字形栅格密度）。 */
     private int backendScale = 1;
+    /** 字体诊断只打印一次（-Dnocturne.ui.debug）。 */
+    private boolean fontDiagLogged;
     /** 当前绘制后端名（诊断展示）。 */
     private String backendName = "?";
 
@@ -445,6 +447,13 @@ public final class FaClickGui implements OverlayGui {
         }
         // 字体句柄每帧按「后端 + 缩放」同步：换了后端或缩放，字形图集必须整体重建。
         FaTheme.fonts = FontRasterizer.bind(renderer, scale, backendScale);
+        if (!fontDiagLogged && System.getProperty("nocturne.ui.debug") != null) {
+            fontDiagLogged = true;
+            System.out.println("[nocturne] gui render: backend=" + backendName + " scale=" + scale
+                    + " backendScale=" + backendScale + " fonts="
+                    + FaTheme.fonts.getClass().getSimpleName()
+                    + " atlas=" + FontRasterizer.atlasActive());
+        }
 
         long now = System.nanoTime();
         float dt = lastNanos == 0L ? 1.0f / 60.0f : Math.min(0.1f, (now - lastNanos) / 1.0e9f);

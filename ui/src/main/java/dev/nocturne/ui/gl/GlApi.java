@@ -580,6 +580,8 @@ public final class GlApi {
     private int batchTexture;
     /** 统计：提交的批次数（UI 一次 draw call ≈ 一个批次）。 */
     private int batchCount;
+    /** 自上次清零以来「带纹理」的批次数（诊断用）。 */
+    private int texturedBatches;
     /** 统计：提交的顶点数。 */
     private int vertexCount;
 
@@ -603,6 +605,9 @@ public final class GlApi {
         batchTexture = texture;
         batchMode = mode;
         batchCount++;
+        if (texture != 0) {
+            texturedBatches++;
+        }
         Reflect.call(begin, null, mode);
     }
 
@@ -644,9 +649,10 @@ public final class GlApi {
 
     /** @return 上次清零以来提交的 {@code {批次数, 顶点数}}，并清零（诊断用）。 */
     public int[] takeBatchCounts() {
-        int[] out = {batchCount, vertexCount};
+        int[] out = {batchCount, vertexCount, texturedBatches};
         batchCount = 0;
         vertexCount = 0;
+        texturedBatches = 0;
         return out;
     }
 
@@ -755,11 +761,13 @@ public final class GlApi {
 
     /** 压入当前模型视图矩阵（对应 {@code glPushMatrix}）。 */
     public void pushMatrix() {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         Reflect.call(pushMatrix, null);
     }
 
     /** 弹出模型视图矩阵栈（对应 {@code glPopMatrix}），必须与 {@link #pushMatrix()} 成对使用。 */
     public void popMatrix() {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         Reflect.call(popMatrix, null);
     }
 
@@ -812,6 +820,7 @@ public final class GlApi {
 
     /** 绑定纹理对象（对应 {@code glBindTexture}）。 */
     public void bindTexture(int target, int texture) {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         Reflect.call(bindTexture, null, target, texture);
     }
 
@@ -823,6 +832,7 @@ public final class GlApi {
 
     /** 把当前矩阵重置为单位矩阵（对应 {@code glLoadIdentity}）。 */
     public void loadIdentity() {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         Reflect.call(loadIdentity, null);
     }
 
@@ -833,6 +843,7 @@ public final class GlApi {
      * @param near,far              近远裁剪面距离；UI 用 {@code -1, 1} 即可，因为所有顶点都在 z=0
      */
     public void ortho(double left, double right, double bottom, double top, double near, double far) {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         Reflect.call(ortho, null, left, right, bottom, top, near, far);
     }
 
@@ -842,6 +853,7 @@ public final class GlApi {
      * @return {@code {x, y, width, height}}；句柄缺失时返回 {@code null}，查询失败时各项为 0
      */
     public int[] viewport() {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         int[] out = new int[4];
         if (getIntegerv != null) {
             // LWJGL3 形态：直接写进 int[]。
@@ -892,27 +904,34 @@ public final class GlApi {
 
     /** @return 新建的纹理句柄；不可用或失败时为 0 */
     public int genTexture() {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         if (genTexturesArray != null) {
             int[] ids = new int[1];
             Reflect.call(genTexturesArray, null, ids);
             return ids[0];
         }
         if (genTexturesBuffer != null) {
-            textureBuffer.clear();
-            textureBuffer.limit(1);
-            // LWJGL2 的 (int, IntBuffer) 形态带 count；只有 (IntBuffer) 重载时传 null 也不影响（按缓冲余量）。
+            // 必须用**专用**缓冲：共享的 textureBuffer 还会被 boundTexture()/viewport() 写入，
+            // 一旦驱动/重载没有真的写回新句柄，读到的就是上一次查询留下的脏值——实测表现为
+            // 「每张图集都拿到同一个纹理名」（1.8.9：字形图集、阴影、圆角环全部 = 41），
+            // 后上传的图集覆盖先上传的，文字于是画成别的字形的乱码。
+            java.nio.IntBuffer scratch = java.nio.ByteBuffer.allocateDirect(4)
+                    .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
+            scratch.limit(1);
             if (hasParameter(genTexturesBuffer, int.class)) {
-                Reflect.call(genTexturesBuffer, null, 1, textureBuffer);
+                Reflect.call(genTexturesBuffer, null, 1, scratch);
             } else {
-                Reflect.call(genTexturesBuffer, null, textureBuffer);
+                Reflect.call(genTexturesBuffer, null, scratch);
             }
-            return textureBuffer.get(0);
+            return scratch.get(0);
         }
         return 0;
     }
 
+
     /** 删除一个纹理句柄；{@code id <= 0} 或不可用时为空操作。 */
     public void deleteTexture(int id) {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         if (id <= 0) {
             return;
         }
@@ -921,13 +940,14 @@ public final class GlApi {
             return;
         }
         if (deleteTexturesBuffer != null) {
-            textureBuffer.clear();
-            textureBuffer.limit(1);
-            textureBuffer.put(0, id);
+            // 同 genTexture：绝不复用共享缓冲，避免把「纹理句柄」写进还会被其它查询使用的缓冲。
+            java.nio.IntBuffer scratch = java.nio.ByteBuffer.allocateDirect(4)
+                    .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
+            scratch.put(0, id);
             if (hasParameter(deleteTexturesBuffer, int.class)) {
-                Reflect.call(deleteTexturesBuffer, null, 1, textureBuffer);
+                Reflect.call(deleteTexturesBuffer, null, 1, scratch);
             } else {
-                Reflect.call(deleteTexturesBuffer, null, textureBuffer);
+                Reflect.call(deleteTexturesBuffer, null, scratch);
             }
         }
     }
@@ -1020,6 +1040,7 @@ public final class GlApi {
 
     /** @return 当前绑定的 2D 纹理；查询失败时返回 {@code -1} */
     public int boundTexture() {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         int[] out = new int[1];
         if (getIntegerv != null) {
             // LWJGL3 形态：直接写进 int[]。
@@ -1040,11 +1061,13 @@ public final class GlApi {
 
     /** 设置纹理采样参数（对应 {@code glTexParameteri}）。 */
     public void texParameteri(int target, int pname, int param) {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         Reflect.call(texParameteri, null, target, pname, param);
     }
 
     /** 设置像素存储模式（对应 {@code glPixelStorei}）。 */
     public void pixelStorei(int pname, int param) {
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         Reflect.call(pixelStorei, null, pname, param);
     }
 

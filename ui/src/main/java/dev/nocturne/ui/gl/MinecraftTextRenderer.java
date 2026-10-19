@@ -351,11 +351,22 @@ public final class MinecraftTextRenderer implements TextRenderer {
         return fontRenderer;
     }
 
+    /** 自上次取值以来 draw() 被调用的次数（诊断用：区分「没让画字」与「画了看不见」）。 */
+    private static int drawCalls;
+
+    /** @return 自上次取值以来 {@link #draw} 的调用次数，并清零。 */
+    static int takeDrawCalls() {
+        int n = drawCalls;
+        drawCalls = 0;
+        return n;
+    }
+
     @Override
     public void draw(String text, float x, float y, float size, Color color) {
         if (text == null || text.isEmpty()) {
             return;
         }
+        drawCalls++;
         if (!ensureFont()) {
             return;   // 字体还没就绪：不画，但下面每帧都会再试（见 ensureFont 的退避）
         }

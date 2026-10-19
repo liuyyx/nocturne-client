@@ -63,6 +63,12 @@ public final class FontRasterizer implements FaFont.Provider {
         this.backendScale = backendScale <= 0f ? 1.0f : backendScale;
         this.density = this.designScale * this.backendScale;
         this.atlas = renderer != null && renderer.supportsTextures() && FontRegistry.available();
+        if (System.getProperty("nocturne.ui.debug") != null) {
+            System.out.println("[nocturne] fonts: atlas=" + this.atlas
+                    + " renderer=" + (renderer == null ? "null" : renderer.getClass().getSimpleName())
+                    + " textures=" + (renderer != null && renderer.supportsTextures())
+                    + " registry=" + FontRegistry.available());
+        }
     }
 
     /** @return 未绑定后端时可用的 Provider（字体全部走退化实现，不会画字） */

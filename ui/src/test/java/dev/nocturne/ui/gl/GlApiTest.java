@@ -142,4 +142,30 @@ class GlApiTest {
         public static void glVertex2f(float x, float y) {
         }
     }
+
+    /**
+     * 状态类调用必须先把打开中的批次收尾。
+     *
+     * <p>回归：合批之后图集上传发生在批次内部，而 {@code glGenTextures} 落在
+     * {@code glBegin/glEnd} 之间是 {@code GL_INVALID_OPERATION}，句柄会一直是 0，
+     * 整段文字静默消失（1.8.9 真机实测）。因此凡是非顶点类 GL 调用都必须先 {@code glEnd}。
+     */
+    @Test
+    void stateCallsCloseTheOpenBatchFirst() {
+        GlApi api = GlApi.bind(FakeGl.class);
+        GlRenderer renderer = new GlRenderer(api, null);
+
+        renderer.rect(0f, 0f, 10f, 10f, dev.nocturne.ui.render.Color.WHITE);
+        assertEquals(1, FakeGl.beginCalls, "矩形应打开一个批次");
+        assertEquals(0, FakeGl.endCalls, "批次应保持打开（合批）");
+
+        api.genTexture();
+
+        assertEquals(1, FakeGl.endCalls,
+                "glGenTextures 之前必须 glEnd，否则 GL_INVALID_OPERATION 让句柄恒为 0");
+
+        renderer.rect(0f, 0f, 10f, 10f, dev.nocturne.ui.render.Color.WHITE);
+        api.pushMatrix();
+        assertEquals(2, FakeGl.endCalls, "矩阵操作同样不能落在批次内");
+    }
 }

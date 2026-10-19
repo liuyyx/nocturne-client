@@ -633,6 +633,11 @@ public final class GlApi {
      * @param texture 纹理句柄；0 表示无纹理
      */
     public void beginFan(int texture) {
+        // fan 是**一个连续条带**：两组互不相连的顶点并进同一个 GL_TRIANGLE_FAN 时，
+        // 前一组最后一个顶点会与后一组的中心点连成巨大三角面。圆角矩形的四个角各调一次
+        // beginFan，所以这里必须先收尾——不能让 ensureBatch 的「同模式合批」把角并起来。
+        // （1.8.9 真机现象：半透明/淡入中的圆角块出现横贯整块的斜三角。）
+        flushBatch();
         ensureBatch(GL_TRIANGLE_FAN, texture);
     }
 

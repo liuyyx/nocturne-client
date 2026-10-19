@@ -135,11 +135,11 @@ class GlRendererTest {
         FakeGl.viewport = new int[]{0, 0, 800, 600};
         renderer.beginFrame();
         renderer.roundedRect(0f, 0f, 40f, 20f, 4f, Color.WHITE);
-        // 3 bands 合进一个 QUADS 批次；4 个角合进一个 TRIANGLE_FAN 批次
-        assertEquals(2, FakeGl.beginCalls);
+        // 3 条带合进一个 QUADS 批次；4 个角各自一个 TRIANGLE_FAN（fan 不能跨角合批）
+        assertEquals(5, FakeGl.beginCalls);
         assertTrue(FakeGl.vertexCalls > 12, "corners add fan vertices");
         renderer.endFrame();
-        assertEquals(2, FakeGl.endCalls);
+        assertEquals(5, FakeGl.endCalls);
     }
 
     /** 描边使用 {@code GL_LINE_LOOP} 图元并发出四个顶点 */

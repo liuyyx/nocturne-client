@@ -168,4 +168,23 @@ class GlApiTest {
         api.pushMatrix();
         assertEquals(2, FakeGl.endCalls, "矩阵操作同样不能落在批次内");
     }
+
+    /**
+     * 连续两次 {@code beginFan} 必须各自开启一个图元。
+     *
+     * <p>回归：GL_TRIANGLE_FAN 是一个连续条带，若「同模式合批」把两组互不相连的顶点并进同一个
+     * fan，前一组最后一个顶点会与后一组的中心点连成巨大三角面。1.8.9 真机现象是圆角矩形
+     * （四个角各一次 beginFan）在半透明/淡入时出现横贯整块的斜三角。
+     */
+    @Test
+    void consecutiveFansAreSeparatePrimitives() {
+        GlApi api = GlApi.bind(FakeGl.class);
+
+        api.beginFan(0);
+        api.vertex(0f, 0f);
+        api.beginFan(0);
+
+        assertEquals(2, FakeGl.beginCalls, "两个扇形必须各自 glBegin");
+        assertEquals(1, FakeGl.endCalls, "第二个扇形开始前必须先结束第一个");
+    }
 }

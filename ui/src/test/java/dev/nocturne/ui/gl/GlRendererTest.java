@@ -403,4 +403,24 @@ class GlRendererTest {
             from = at + needle.length();
         }
     }
+
+    /**
+     * 渐变四边形必须**一次** glBegin 提交四个逐顶点色。
+     *
+     * <p>回归：颜色选择器的 SV 方块原先靠「切成 64 段平涂小矩形」近似渐变，
+     * 接缝处会露出色带（1.8.9 真机水平条纹）。固定管线的 GL_SMOOTH 本来就能插值顶点色，
+     * 所以这里必须是一个四边形 + 四次设色，而不是多次绘制。
+     */
+    @Test
+    void gradientQuadEmitsOneSmoothQuad() {
+        GlRenderer renderer = new GlRenderer(GlApi.bind(FakeGl.class), null);
+
+        assertTrue(renderer.gradientQuad(0f, 0f, 10f, 10f, dev.nocturne.ui.render.Color.WHITE,
+                dev.nocturne.ui.render.Color.WHITE, dev.nocturne.ui.render.Color.BLACK,
+                dev.nocturne.ui.render.Color.BLACK));
+
+        assertEquals(1, FakeGl.beginCalls, "一次 glBegin");
+        assertEquals(4, FakeGl.vertexCalls, "四个顶点");
+        assertEquals(4, FakeGl.colorCalls, "四个顶点各自设色，交给 GL_SMOOTH 插值");
+    }
 }

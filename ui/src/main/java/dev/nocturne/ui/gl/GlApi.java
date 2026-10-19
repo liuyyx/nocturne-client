@@ -164,6 +164,9 @@ public final class GlApi {
     private final Method texImage2D;
     /** 已解析的 {@code glTexParameteri}。 */
     private final Method texParameteri;
+    /** {@code glShadeModel}：GL_FLAT 会让渐变四边形塌成单色。 */
+    private Method shadeModelMethod;
+
     /** {@code glDisableClientState}：关闭客户态数组（立即模式绘制前必须关掉）。 */
     private Method disableClientStateMethod;
     /**
@@ -204,6 +207,13 @@ public final class GlApi {
         }
     }
 
+
+    /** {@code glShadeModel} 的枚举名。 */
+    public static final int GL_SHADE_MODEL = 0x0B54;
+    /** 平滑着色：顶点色在三角形内插值（渐变四边形的前提）。 */
+    public static final int GL_SMOOTH = 0x1D01;
+    /** 平面着色：整个图元用**一个**顶点色（渐变会塌成单色）。 */
+    public static final int GL_FLAT = 0x1D00;
 
     /** 0 号纹理单元（{@code glClientActiveTexture} 的基址）。 */
     public static final int GL_TEXTURE0 = 0x84C0;
@@ -586,6 +596,7 @@ public final class GlApi {
         // 立即模式的前提：客户态数组必须关得掉（关不掉时 glBegin/glVertex2f 会被静默忽略）。
         bound.disableClientStateMethod = Reflect.method(gl, "glDisableClientState", int.class);
         bound.clientActiveTextureMethod = Reflect.method(gl, "glClientActiveTexture", int.class);
+        bound.shadeModelMethod = Reflect.method(gl, "glShadeModel", int.class);
         bound.isEnabledMethod = Reflect.method(gl, "glIsEnabled", int.class);
         return bound;
     }
@@ -671,6 +682,17 @@ public final class GlApi {
      *
      * @param texture 纹理句柄
      */
+    public void beginQuads(int texture) {
+        ensureBatch(GL_QUADS, texture);
+    }
+
+    /**
+     * 开一个纹理四边形批次（{@code GL_QUADS} + 指定纹理）。
+     *
+     * <p>同一张图集的连续字形会合进同一个批次--这是文字路径最大的调用数来源。
+     *
+     * @param texture 纹理句柄
+     */
     public void beginTexturedQuads(int texture) {
         ensureBatch(GL_QUADS, texture);
     }
@@ -721,6 +743,18 @@ public final class GlApi {
     /** 开启某项 GL 能力（对应 {@code glEnable}）。 */
     public void enable(int cap) {
         setCap(cap, true);
+    }
+
+    /**
+     * 设置着色模型（对应 {@code glShadeModel}）。
+     *
+     * <p>{@link #GL_FLAT} 下整个图元只用<b>一个</b>顶点色，逐顶点渐变的四边形会塌成单色
+     * （1.8.9 真机现象：颜色选择器的 SV 方块整块纯白、叠加的黑色图层也看不见）。
+     * 游戏会在别处把着色模型设成 FLAT 且不还原，所以每帧显式设回 SMOOTH。
+     */
+    public void shadeModel(int mode) {
+        flushBatch();
+        Reflect.call(shadeModelMethod, null, mode);
     }
 
     /** 关闭某项 GL 能力（对应 {@code glDisable}）。 */

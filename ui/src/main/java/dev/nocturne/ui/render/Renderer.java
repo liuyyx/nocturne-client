@@ -67,6 +67,29 @@ public interface Renderer {
     /** @return 给定字号下的行高（像素） */
     float textHeight(float size);
 
+    /**
+     * 用四个角的颜色画一个**逐顶点插值**的四边形（Gouraud）。
+     *
+     * <p>颜色选择器、渐变背景这类真正需要平滑过渡的地方用它：把渐变切成若干平涂小矩形来近似，
+     * 会在接缝处露出色带（1.8.9 真机的水平条纹就是这个原因）。
+     *
+     * <p>默认实现返回 {@code false}，表示本后端没有逐顶点色——调用方应退回分段近似。
+     *
+     * @param x           左上角 x（屏幕坐标）
+     * @param y           左上角 y（屏幕坐标）
+     * @param width       宽度；小于等于 0 时实现应跳过绘制
+     * @param height      高度；小于等于 0 时实现应跳过绘制
+     * @param topLeft     左上角颜色
+     * @param topRight    右上角颜色
+     * @param bottomRight 右下角颜色
+     * @param bottomLeft  左下角颜色
+     * @return 已绘制返回 {@code true}；本后端不支持时返回 {@code false}（未做任何绘制）
+     */
+    default boolean gradientQuad(float x, float y, float width, float height, Color topLeft,
+                                Color topRight, Color bottomRight, Color bottomLeft) {
+        return false;
+    }
+
     /** 将随后的绘制裁剪到给定矩形，直到 {@link #popClip()}；支持嵌套。 */
     void pushClip(float x, float y, float width, float height);
 

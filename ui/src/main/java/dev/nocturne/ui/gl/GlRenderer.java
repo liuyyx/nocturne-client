@@ -29,6 +29,14 @@ public final class GlRenderer implements UiBackend {
     private int viewportHeight;
     /** {@link #beginFrame()} 是否已压入矩阵栈；决定 {@link #endFrame()} 是否需要还原。 */
     private boolean statePushed;
+    /** @return 进入时的 {@code GL_SHADE_MODEL} 原始值（诊断用，0 表示读不到） */
+    private int shadeModelValue() {
+        int[] value = gl.intQuery(GlApi.GL_SHADE_MODEL, 1);
+        return value == null || value.length == 0 ? 0 : value[0];
+    }
+
+    /** 是否已打印过进入时的能力位快照。 */
+    private static boolean capsLogged;
     /** 嵌套裁剪的矩形栈，元素为 {@code {x, y, width, height}}（GL 坐标系，原点左下）。 */
     private final int[][] clipStack = new int[MAX_CLIP_DEPTH][];
     /**
@@ -246,6 +254,20 @@ public final class GlRenderer implements UiBackend {
 
         // 立即模式的前提：客户态数组全部关闭（否则 glBegin/glVertex2f 被静默忽略）。
         gl.disableClientArrays();
+        // 游戏会把着色模型留成 FLAT（不还原），那样逐顶点渐变会塌成单色。
+        gl.shadeModel(GlApi.GL_SMOOTH);
+        if (!capsLogged && System.getProperty("nocturne.ui.debug") != null) {
+            capsLogged = true;
+            System.out.println("[nocturne] incoming caps: alphaTest=" + gl.isCapEnabled(0x0BC0)
+                    + " lighting=" + gl.isCapEnabled(0x0B50)
+                    + " colorMaterial=" + gl.isCapEnabled(0x0B57)
+                    + " scissor=" + gl.isCapEnabled(GlApi.GL_SCISSOR_TEST)
+                    + " depth=" + gl.isCapEnabled(GlApi.GL_DEPTH_TEST)
+                    + " cull=" + gl.isCapEnabled(GlApi.GL_CULL_FACE)
+                    + " texture2d=" + gl.isCapEnabled(GlApi.GL_TEXTURE_2D)
+                    + " blend=" + gl.isCapEnabled(GlApi.GL_BLEND)
+                    + " shadeModel=" + shadeModelValue());
+        }
         // 上一帧（世界覆盖层/组件树）可能留下裁剪测试：若 scissor 盒退化成 0 尺寸，
         // 本帧所有绘制都会被静默裁掉（不报错、颜色矩阵都对，就是看不见）。
         // 本帧的裁剪由 pushClip/popClip 重新开启，所以这里关掉是安全的。
@@ -407,6 +429,39 @@ public final class GlRenderer implements UiBackend {
             return;   // 契约：id<=0 忽略（与另外两个后端一致）
         }
         gl.deleteTexture(id);
+    }
+
+    /**
+     * 逐顶点渐变四边形：固定管线的 {@code GL_SMOOTH} 会对顶点色做双线性插值，
+     * 因此一次 {@code GL_QUADS} 就能得到真正平滑的渐变（不必切成平涂小矩形）。
+     *
+     * <p>顶点序与 {@code GlApi.fillRect} 一致（投影翻转 y 后为正面序）。
+     */
+    @Override
+    public boolean gradientQuad(float x, float y, float width, float height, Color topLeft,
+                                Color topRight, Color bottomRight, Color bottomLeft) {
+        if (width <= 0f || height <= 0f) {
+            return true;   // 空矩形：按契约跳过，但仍算「已处理」
+        }
+        gl.beginQuads(0);
+        vertexColor(bottomLeft);
+        gl.vertex(x, y + height);
+        vertexColor(bottomRight);
+        gl.vertex(x + width, y + height);
+        vertexColor(topRight);
+        gl.vertex(x + width, y);
+        vertexColor(topLeft);
+        gl.vertex(x, y);
+        return true;
+    }
+
+    /** 把颜色交给批次（{@code null} 视为全透明）。 */
+    private void vertexColor(Color color) {
+        if (color == null) {
+            gl.color(0f, 0f, 0f, 0f);
+            return;
+        }
+        gl.color(color.rf(), color.gf(), color.bf(), color.af());
     }
 
     @Override

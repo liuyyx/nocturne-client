@@ -126,6 +126,12 @@ final class BackendFaDraw extends FaDraw {
             rect(x, y, w, h, 0.0f, topLeft);
             return;
         }
+        // 固定管线等后端支持逐顶点色时一步到位：分段平涂会在接缝处露出色带（1.8.9 实测色带）。
+        if (renderer.gradientQuad(gx(x), gy(y), w * s, h * s, Color.of(modulate(topLeft)),
+                Color.of(modulate(topRight)), Color.of(modulate(bottomRight)),
+                Color.of(modulate(bottomLeft)))) {
+            return;
+        }
         // 平涂后端没有逐顶点色：沿较短边分段，每段取双线性插值后的颜色。
         boolean horizontal = w <= h;
         float extent = horizontal ? w : h;

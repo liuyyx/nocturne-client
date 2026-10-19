@@ -214,6 +214,7 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
     index = javap.JavapIndex(jar, DEFAULT_JAVAP, os.path.join(CACHE, f"javap-{version}.json"))
     problems = []
     checked = 0
+    transient_before = 0
     for canonical, entry in table["classes"].items():
         if entry.get("absent"):
             continue
@@ -248,6 +249,14 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
             else:
                 checked += 1
     index.save()
+    transient = index.transient_failures - transient_before
+    if transient:
+        # 一次瞬时失败（javap 缺失/超时/崩溃）绝不能被读成"该类在本版本不存在"：
+        # 那是把整类成员标成 absent，而 --check 依然全绿。这里显式失败。
+        problems.append(
+            f"{version}: {transient} javap call(s) failed without a verdict "
+            f"(javap missing/timed out?) — results are NOT trustworthy"
+        )
     return (problems, checked, False)
 
 

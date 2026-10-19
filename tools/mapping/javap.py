@@ -37,6 +37,14 @@ class JavapIndex:
         self.cache_path = cache_path
         self._cache: "dict[str, dict | None]" = {}
         self._dirty = False
+        # 瞬时失败计数（javap 不存在/超时/非零退出但**不是**"类不存在"）。
+        # 这些结果绝不进缓存：一次网络盘抖动或超时若被当成"该类在本版本不存在"，
+        # 生成出来的表会把整类成员标成 absent，而 --check 依然全绿——运行期表现为
+        # "功能静默失效"，排查成本极高。
+        self.transient_failures = 0
+        # jar 里的类名集合（惰性加载）：判断"类确实不存在"要比对 javap 的错误文本可靠得多——
+        # javap 的错误信息是本地化文本（中文环境走 GBK），按字符串匹配在非英文环境恒不命中。
+        self._entries: "set[str] | None" = None
         if cache_path and os.path.exists(cache_path):
             try:
                 data = json.load(open(cache_path, encoding="utf-8"))
@@ -44,6 +52,15 @@ class JavapIndex:
                     self._cache = data.get("classes", {})
             except (ValueError, OSError):
                 self._cache = {}
+
+    def _jar_entries(self) -> "set[str] | None":
+        """惰性读取 jar 的类条目集合；读取失败返回 ``None``（此时不做任何可信性判断）。"""
+        if self._entries is None:
+            try:
+                self._entries = class_entries(self.jar_path)
+            except (OSError, zipfile.BadZipFile):
+                return None
+        return self._entries
 
     def _jar_stamp(self) -> dict:
         st = os.stat(self.jar_path)
@@ -63,12 +80,21 @@ class JavapIndex:
     def class_info(self, internal_name: str) -> "dict | None":
         if internal_name in self._cache:
             return self._cache[internal_name]
-        info = self._run(internal_name)
-        self._cache[internal_name] = info
-        self._dirty = True
+        info, definitive = self._run(internal_name)
+        if definitive:
+            # 只有"javap 确实跑完并给出了结论"才缓存（结论也可能是 None＝该类不在 jar 里）。
+            self._cache[internal_name] = info
+            self._dirty = True
+        else:
+            self.transient_failures += 1
         return info
 
-    def _run(self, internal_name: str) -> "dict | None":
+    def _run(self, internal_name: str) -> "tuple[dict | None, bool]":
+        """跑一次 javap。
+
+        @return ``(信息, 结论是否可信)``。第二个值为 ``False`` 表示这次调用**没能给出结论**
+                （javap 缺失、超时、崩溃……），调用方不得把它当成"该类不存在"。
+        """
         try:
             proc = subprocess.run(
                 [self.javap_exe, "-p", "-s", "-classpath", self.jar_path, internal_name],
@@ -76,9 +102,15 @@ class JavapIndex:
                 timeout=180,
             )
         except (OSError, subprocess.SubprocessError):
-            return None
+            return None, False
         if proc.returncode != 0:
-            return None
+            # 只有"这个类根本不在 jar 里"才是可信结论。判据用 jar 条目本身，而不是 javap 的
+            # 错误文本（那是本地化字符串，非英文环境匹配不到）。类在 jar 里却失败 ⇒ 瞬时故障。
+            if self._jar_entries() is not None:
+                if internal_name not in self._jar_entries():
+                    return None, True
+                return None, False
+            return None, False
         text = proc.stdout
         supers: "list[str]" = []
         header = re.search(r"\b(?:class|interface|enum|record)\s+([\w.$]+)(.*)", text)
@@ -110,7 +142,7 @@ class JavapIndex:
             "supers": [s.replace(".", "/") for s in supers],
             "methods": dict(methods),
             "fields": dict(fields),
-        }
+        }, True
 
     def reachable(self, internal_name: str, kind: str, name: str,
                   signature: "str | None" = None) -> bool:

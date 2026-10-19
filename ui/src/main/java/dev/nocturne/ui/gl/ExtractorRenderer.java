@@ -140,6 +140,24 @@ public final class ExtractorRenderer implements UiBackend {
     private int height;
     /** 绘制调用是否已失败过（只报一次，避免每帧刷屏）。 */
     private boolean drawFailureLogged;
+
+    /**
+     * 设备像素 / GUI 逻辑像素的倍率（= 游戏的 GUI 缩放）。
+     *
+     * <p>26.x 的尺寸语义与固定管线不同：{@code guiWidth()/guiHeight()} 返回的是**GUI 缩放后**的
+     * 逻辑尺寸（例如 427x240），而真实帧缓冲是 2560x1600。{@code UiBackend.scale()} 默认返回 1，
+     * 于是字形图集按"1 设备像素/GUI 像素"栅格，游戏再把它放大 3~6 倍 → **文字必然发糊**。
+     * 这里用「帧缓冲宽 / 逻辑宽」算出真实倍率，栅格密度才是对的。
+     */
+    private int guiScale = 1;
+    /** 已解析的 {@code Minecraft#getWindow}（惰性，解析一次）。 */
+    private Method windowGetter;
+    /** 已解析的 {@code Window#getWidth}（帧缓冲物理宽）。 */
+    private Method windowWidth;
+    /** 已解析的 {@code Window#getHeight}。 */
+    private Method windowHeight;
+    /** 窗口句柄解析是否已尝试过（失败也只试一次，避免每帧刷日志）。 */
+    private boolean windowProbeResolved;
     /** 是否已就字体缺失报过一次。 */
     private boolean fontMissingLogged;
     /** 是否已打过首帧尺寸日志（只打一次）。 */
@@ -327,6 +345,7 @@ public final class ExtractorRenderer implements UiBackend {
         // 会把游戏自己后续画的内容整片裁掉——每帧开头清掉这个残留。
         resetClipStack(graphics);
         ensureFont();
+        updateGuiScale();
         // 首帧尺寸必须可见：绘制区尺寸为 0 时组件树按 0 布局，界面上一个像素都画不出来，
         // 而日志里此前只有一句"overlay attached"，看起来像装好了。
         if (!firstFrameLogged) {
@@ -344,6 +363,54 @@ public final class ExtractorRenderer implements UiBackend {
     @Override
     public String backendName() {
         return NAME;
+    }
+
+    @Override
+    public int scale() {
+        return guiScale;
+    }
+
+    /**
+     * 用「帧缓冲物理宽 / GUI 逻辑宽」算出真实设备倍率。
+     *
+     * <p>只在两边都有效时更新；拿不到窗口句柄时保持 1（退化成旧的模糊渲染，不会崩）。
+     */
+    private void updateGuiScale() {
+        if (!windowProbeResolved) {
+            windowProbeResolved = true;
+            Object mc = minecraft == null ? null : minecraft.get();
+            if (mc != null) {
+                windowGetter = method(mc.getClass(), "getWindow");
+                Object window = null;
+                if (windowGetter != null) {
+                    window = Reflect.call(windowGetter, mc);
+                }
+                if (window != null) {
+                    windowWidth = method(window.getClass(), "getWidth");
+                    windowHeight = method(window.getClass(), "getHeight");
+                }
+            }
+        }
+        if (windowWidth == null || width <= 0) {
+            return;
+        }
+        if (minecraft == null || windowGetter == null) {
+            return;
+        }
+        Object mc = minecraft.get();
+        if (mc == null) {
+            return;
+        }
+        Object window = Reflect.call(windowGetter, mc);
+        if (window == null) {
+            return;
+        }
+        int physical = intOf(windowWidth, window, 0);
+        if (physical <= 0) {
+            return;
+        }
+        int factor = Math.round((float) physical / (float) width);
+        guiScale = Math.max(1, Math.min(16, factor));
     }
 
     @Override

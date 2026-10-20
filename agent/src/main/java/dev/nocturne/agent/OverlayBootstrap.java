@@ -2,6 +2,7 @@ package dev.nocturne.agent;
 
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.game.GameBridge;
+import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.mapping.Mapping;
 import dev.nocturne.client.runtime.FrameListener;
 import dev.nocturne.client.runtime.NocturneRuntime;
@@ -97,6 +98,8 @@ public final class OverlayBootstrap implements FrameListener {
     private boolean abandoned;
     /** 是否已就 SDL 栈的绘制路径打过一次说明日志。 */
     private boolean sdlReported;
+    /** GuiGraphics 探测诊断是否已打印（每帧重试，不能刷屏）。 */
+    private static boolean guiGraphicsReported;
 
     private OverlayBootstrap(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey,
                              boolean openGuiOnInstall) {
@@ -164,9 +167,15 @@ public final class OverlayBootstrap implements FrameListener {
         // 上下文只在游戏自己的调用序列里有效，我们只能在它交给我们的绘制上下文里提交绘制。
         Class<?> extractorType = resolveLoaded(EXTRACTOR_CLASS);
         boolean sdl = extractorType != null;
+        if (extractorType == null) {
+            // 1.20–1.21：GuiGraphics 走同一套「游戏绘制 API」后端（fill / drawString / scissor），
+            // 不自己维护 GL 管线。它与 26.x 的差别只有方法名与尺寸来源，已在 ExtractorRenderer 里吸收。
+            extractorType = resolveGuiGraphics();
+        }
+        boolean gameApi = extractorType != null;
         Class<?> gl11 = null;
         GlApi gl = null;
-        if (!sdl) {
+        if (!gameApi) {
             gl11 = resolveGl11();
             if (gl11 == null) {
                 // GL 还没加载（游戏启动早期）：不计数，下一帧继续等。
@@ -183,7 +192,7 @@ public final class OverlayBootstrap implements FrameListener {
         // 26.1/26.2 上帧钩子照旧存在（GLFW 交换点），它只负责输入轮询与重绘时机——绘制本身全部提交给
         // extractor，帧回调里一次 GL 调用都不发生（这正是上面那条实测结论的落地）。
 
-        ClassLoader loader = sdl ? gameLoader
+        ClassLoader loader = gameApi ? extractorType.getClassLoader()
                 : (gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader);
         Mapping mapping = currentMapping();
         GameBridge bridge = new GameBridge(instrumentation, mapping);
@@ -196,7 +205,7 @@ public final class OverlayBootstrap implements FrameListener {
             return;
         }
         // extractor 栈不建 MinecraftTextRenderer：26.x 的 Font 没有画字方法，文字由后端自己画。
-        TextRenderer font = sdl ? null : MinecraftTextRenderer.bind(bridge);
+        TextRenderer font = gameApi ? null : MinecraftTextRenderer.bind(bridge);
         // bind 不再因"字体晚到"返回 null（改为绘制时晚绑定），所以这里只需报告是否已就绪。
         if (!gameReady) {
             log("game instance still unreachable after " + attempts
@@ -205,7 +214,7 @@ public final class OverlayBootstrap implements FrameListener {
         // 字体状态必须可见：字体没就绪时界面能开但**一个字都不显示**，而日志里此前没有任何线索。
         // 最常见的根因是映射表与目标版本/重映射环境不匹配（例如 Forge 用 SRG 名）。
         // 这里只报"是否已就绪"；真正的绑定结果由 MinecraftTextRenderer 打（含 font/gl/widthHandle）。
-        if (sdl) {
+        if (gameApi) {
             System.out.println("[nocturne] text renderer: game Font, drawn through the extractor backend"
                     + "; mapping=" + mapping.describe());
         } else {
@@ -217,8 +226,10 @@ public final class OverlayBootstrap implements FrameListener {
         client.setGameBridge(bridge);
 
         UiBackend backend;
-        if (sdl) {
-            ExtractorRenderer extractor = ExtractorRenderer.bind(extractorType, bridge::minecraft);
+        if (gameApi) {
+            ExtractorRenderer extractor = sdl
+                    ? ExtractorRenderer.bind(extractorType, bridge::minecraft)
+                    : ExtractorRenderer.bindMapped(extractorType, mapping, bridge::minecraft);
             if (extractor == null) {
                 // 绘制 API 签名不认识（这个版本的 extractor 换了形状）：报一次，之后仍按上限重试。
                 if (!sdlReported) {
@@ -230,10 +241,15 @@ public final class OverlayBootstrap implements FrameListener {
             }
             if (!sdlReported) {
                 sdlReported = true;
-                log("extractor stack (Minecraft 26.x): drawing through the game's GuiGraphicsExtractor;"
-                        + " the overlay never calls LWJGL GL"
-                        + (isSdlStack() ? " (SDL-managed context)" : " (context is only current inside"
-                                + " the game's own call sequence)"));
+                if (sdl) {
+                    log("extractor stack (Minecraft 26.x): drawing through the game's GuiGraphicsExtractor;"
+                            + " the overlay never calls LWJGL GL"
+                            + (isSdlStack() ? " (SDL-managed context)" : " (context is only current inside"
+                                    + " the game's own call sequence)"));
+                } else {
+                    log("gui-graphics stack (1.20-1.21): drawing through the game's GuiGraphics;"
+                            + " the overlay never calls LWJGL GL for UI");
+                }
             }
             // 钩子每帧从这里取后端，把当帧的绘制上下文喂进去（见 setDrawContext）。
             extractorBackend = extractor;
@@ -304,6 +320,77 @@ public final class OverlayBootstrap implements FrameListener {
      * 隔离类加载器里的类，而且不触发目标类的静态初始化（K2 / M-88）。模组路径没有句柄，退回到
      * 构造时传入的游戏类加载器，并用不初始化方式探测。
      */
+    /**
+     * 探测 1.20–1.21 的 {@code GuiGraphics} 绘制上下文。
+     *
+     * <p>不按类名写死：从映射表取 {@code Screen} 的候选运行期名，找到类后按映射后的
+     * {@code render} 方法名找「4 个参数、首参为引用类型」的那个方法，其首参类型就是
+     * {@code GuiGraphics}。这样 vanilla / Fabric / Forge / NeoForge 四种命名空间都能命中。
+     *
+     * @return 绘制上下文类；该版本没有 {@code GuiGraphics} 时返回 {@code null}
+     */
+    private Class<?> resolveGuiGraphics() {
+        Mapping mapping = currentMapping();
+        if (mapping == null) {
+            return null;
+        }
+        Class<?> screen = null;
+        for (String name : mapping.classNameCandidates(ClassType.SCREEN)) {
+            screen = resolveLoaded(name.replace('/', '.'));
+            if (screen != null) {
+                break;
+            }
+        }
+        if (screen == null) {
+            if (!guiGraphicsReported) {
+                guiGraphicsReported = true;
+                System.out.println("[nocturne] gui-graphics: Screen not loaded among "
+                        + mapping.classNameCandidates(ClassType.SCREEN));
+            }
+            return null;
+        }
+        // 方法名候选：vanilla 混淆名、Fabric intermediary、Forge SRG 各不相同，单独取一个会漏掉另外几种。
+        java.util.Set<String> renderNames = new java.util.HashSet<String>();
+        if (mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping) {
+            renderNames.addAll(((dev.nocturne.client.mapping.ObfuscatedMapping) mapping)
+                    .methodNameCandidates(ClassType.SCREEN, "render", null));
+        } else {
+            renderNames.add(mapping.methodName(ClassType.SCREEN, "render", null));
+        }
+        for (java.lang.reflect.Method candidate : screen.getMethods()) {
+            if (!renderNames.contains(candidate.getName()) || candidate.getParameterCount() != 4) {
+                continue;
+            }
+            Class<?> first = candidate.getParameterTypes()[0];
+            if (!first.isPrimitive() && first != Object.class) {
+                if (!guiGraphicsReported) {
+                    guiGraphicsReported = true;
+                    System.out.println("[nocturne] gui-graphics: context=" + first.getName()
+                            + " via " + screen.getName() + "." + candidate.getName());
+                }
+                return first;
+            }
+        }
+        StringBuilder four = new StringBuilder();
+        for (java.lang.reflect.Method m : screen.getMethods()) {
+            Class<?>[] p = m.getParameterTypes();
+            if (p.length == 4 && !p[0].isPrimitive()) {
+                four.append('\n').append("    ").append(m.getName()).append(" (")
+                        .append(p[0].getName()).append(',')
+                        .append(p[1].getName()).append(',')
+                        .append(p[2].getName()).append(',')
+                        .append(p[3].getName()).append(") -> ")
+                        .append(m.getReturnType().getName());
+            }
+        }
+        if (!guiGraphicsReported) {
+            guiGraphicsReported = true;
+            System.out.println("[nocturne] gui-graphics: no render(" + renderNames + ") on "
+                    + screen.getName() + "; 4-arg methods:" + four);
+        }
+        return null;
+    }
+
     private Class<?> resolveGl11() {
         return resolveLoaded(GL11_CLASS);
     }

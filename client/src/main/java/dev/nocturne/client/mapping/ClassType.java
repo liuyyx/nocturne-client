@@ -35,6 +35,8 @@ public enum ClassType {
     MULTI_PLAYER_GAME_MODE("net.minecraft.client.multiplayer.MultiPlayerGameMode"),
     /** 界面基类。 */
     SCREEN("net.minecraft.client.gui.screens.Screen"),
+    /** 1.20+ 的绘制上下文；26.x 已被 {@code GuiGraphicsExtractor} 取代。 */
+    GUI_GRAPHICS("net.minecraft.client.gui.GuiGraphics"),
     /** 字体渲染器。 */
     FONT_RENDERER("net.minecraft.client.gui.FontRenderer"),
     /** 物品栈。 */

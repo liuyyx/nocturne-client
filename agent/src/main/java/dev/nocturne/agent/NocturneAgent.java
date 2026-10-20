@@ -427,6 +427,66 @@ public final class NocturneAgent {
                 HUD_DRAW_DESCRIPTOR, HUD_HOOK_METHOD);
         registerGuiDrawHook(instrumentation, asmLoader, SCREEN_DRAW_CLASS, SCREEN_DRAW_METHOD,
                 SCREEN_DRAW_DESCRIPTOR, SCREEN_HOOK_METHOD);
+        // 26.x 有 GuiGraphicsExtractor：它下面的 Screen 入口是 extractRenderState*，不是 render(GuiGraphics)。
+        // 1.20–1.21 没有 extractor，改用 Screen.render(GuiGraphics,int,int,float)。
+        ClassLoader gameLoader = gameClassLoader(instrumentation);
+        if (gameLoader != null
+                && loadNoInit("net.minecraft.client.gui.GuiGraphicsExtractor", gameLoader) == null) {
+            installGuiGraphicsHook(instrumentation, asmLoader, gameLoader);
+        }
+    }
+
+    /**
+     * 为 1.20–1.21 注册 {@code Screen.render(GuiGraphics, int, int, float)} 钩子。
+     *
+     * <p>类名/方法名按映射表候选定位（vanilla 混淆名、Fabric intermediary、Forge SRG 都不同），
+     * 描述符由运行时真实方法生成——不做字符串猜测。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader       内嵌 ASM 子加载器
+     * @param gameLoader      游戏类加载器
+     */
+    private static void installGuiGraphicsHook(Instrumentation instrumentation,
+                                               EmbeddedAsmLoader asmLoader, ClassLoader gameLoader) {
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        if (mapping == null) {
+            return;
+        }
+        Class<?> screen = null;
+        for (String name : mapping.classNameCandidates(
+                dev.nocturne.client.mapping.ClassType.SCREEN)) {
+            screen = loadNoInit(name.replace('/', '.'), gameLoader);
+            if (screen != null) {
+                break;
+            }
+        }
+        if (screen == null) {
+            log("gui-graphics hook: Screen class not found among "
+                    + mapping.classNameCandidates(dev.nocturne.client.mapping.ClassType.SCREEN));
+            return;
+        }
+        java.util.Set<String> renderNames = new java.util.HashSet<String>();
+        if (mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping) {
+            renderNames.addAll(((dev.nocturne.client.mapping.ObfuscatedMapping) mapping)
+                    .methodNameCandidates(dev.nocturne.client.mapping.ClassType.SCREEN,
+                            "render", null));
+        } else {
+            renderNames.add(mapping.methodName(
+                    dev.nocturne.client.mapping.ClassType.SCREEN, "render", null));
+        }
+        for (java.lang.reflect.Method candidate : screen.getMethods()) {
+            Class<?>[] parameters = candidate.getParameterTypes();
+            if (!renderNames.contains(candidate.getName()) || parameters.length != 4
+                    || parameters[0].isPrimitive()) {
+                continue;
+            }
+            String descriptor = "(L" + parameters[0].getName().replace('.', '/') + ";IIF)V";
+            registerGuiDrawHook(instrumentation, asmLoader, screen.getName(),
+                    candidate.getName(), descriptor, SCREEN_HOOK_METHOD);
+            return;
+        }
+        log("gui-graphics hook: no 4-arg render on " + screen.getName()
+                + " for candidates " + renderNames);
     }
 
     /** vanilla 屏幕的点击入口（默认方法，屏幕经它把点击派发给子控件）。 */

@@ -279,6 +279,94 @@ public final class ExtractorRenderer implements UiBackend {
     }
 
     /**
+     * 按映射表绑定 1.20–1.21 的 {@code GuiGraphics}。
+     *
+     * <p>与 26.x 的区别只在名字：运行期是 intermediary / SRG，必须查表。方法形状完全相同
+     * （{@code fill(IIIII)} / {@code drawString(Font,String,int,int,int)} / {@code enableScissor(IIII)}）。
+     *
+     * @param type       {@code GuiGraphics} 类
+     * @param mapping    当前映射表
+     * @param minecraft  Minecraft 实例来源（字体与窗口尺寸）
+     * @return 可用后端；名字全部对不上时返回 {@code null}
+     */
+    public static ExtractorRenderer bindMapped(Class<?> type,
+                                               dev.nocturne.client.mapping.Mapping mapping,
+                                               Supplier<Object> minecraft) {
+        if (type == null || mapping == null) {
+            return null;
+        }
+        Method fill = byCandidates(type, mapping, "fill",
+                int.class, int.class, int.class, int.class, int.class);
+        Method text = byCandidates(type, mapping, "drawString",
+                null, String.class, int.class, int.class, int.class);
+        Method enableScissor = byCandidates(type, mapping, "enableScissor",
+                int.class, int.class, int.class, int.class);
+        if (fill == null || text == null) {
+            System.out.println("[nocturne] gui-graphics bind failed: fill=" + (fill != null)
+                    + " text=" + (text != null) + " scissor=" + (enableScissor != null));
+            return null;
+        }
+        return new ExtractorRenderer(type, fill, null, enableScissor, null, text, null, null, minecraft);
+    }
+
+    /** 按映射表的方法名候选逐个尝试。 */
+    private static Method byCandidates(Class<?> owner,
+                                       dev.nocturne.client.mapping.Mapping mapping,
+                                       String canonicalName, Class<?>... parameterTypes) {
+        java.util.List<String> names;
+        if (mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping) {
+            names = ((dev.nocturne.client.mapping.ObfuscatedMapping) mapping)
+                    .methodNameCandidates(dev.nocturne.client.mapping.ClassType.GUI_GRAPHICS,
+                            canonicalName, null);
+        } else {
+            names = java.util.Collections.singletonList(mapping.methodName(
+                    dev.nocturne.client.mapping.ClassType.GUI_GRAPHICS, canonicalName, null));
+        }
+        for (String name : names) {
+            Method found = method(owner, name, parameterTypes);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 只按参数类型找方法（忽略名字），用于 1.20–1.21 的混淆名环境。
+     *
+     * <p>{@code parameterTypes} 中的 {@code null} 表示「任意引用类型」。
+     *
+     * @return 第一个匹配的公开方法；没有则为 {@code null}
+     */
+    private static Method methodByTypes(Class<?> owner, Class<?>... parameterTypes) {
+        if (owner == null) {
+            return null;
+        }
+        for (Method candidate : owner.getMethods()) {
+            Class<?>[] actual = candidate.getParameterTypes();
+            if (actual.length != parameterTypes.length) {
+                continue;
+            }
+            boolean match = true;
+            for (int i = 0; i < actual.length; i++) {
+                if (parameterTypes[i] != null && parameterTypes[i] != actual[i]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                try {
+                    candidate.setAccessible(true);
+                } catch (Throwable ignored) {
+                    // 公开方法无需 setAccessible。
+                }
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
      * 绑定 26.x 的 extractor 后端。
      *
      * <p>必需项（{@code fill} / {@code text} / {@code guiWidth} / {@code guiHeight}）任一缺失就返回
@@ -293,12 +381,20 @@ public final class ExtractorRenderer implements UiBackend {
         if (extractorType == null) {
             return null;
         }
+        // 26.x：方法未混淆，按名字取。1.20–1.21：运行期是 intermediary / SRG 名，
+        // 名字对不上，改按参数类型回退（fill 与 outline 同为 (IIIII)V，仅在按名失败时才用签名）。
         Method fill = method(extractorType, "fill", int.class, int.class, int.class, int.class, int.class);
+        if (fill == null) {
+            fill = methodByTypes(extractorType, int.class, int.class, int.class, int.class, int.class);
+        }
         // 26.x 叫 text(Font,String,int,int,int)；1.20–1.21 的 GuiGraphics 叫 drawString(Font,...)，
         // 两者参数形态一致，只是名字不同——按候选列表取，命中即用。
         Method text = method(extractorType, "text", null, String.class, int.class, int.class, int.class);
         if (text == null) {
             text = method(extractorType, "drawString", null, String.class, int.class, int.class, int.class);
+        }
+        if (text == null) {
+            text = methodByTypes(extractorType, null, String.class, int.class, int.class, int.class);
         }
         // 26.x 有 guiWidth/guiHeight；1.20–1.21 的 GuiGraphics 没有尺寸方法，回退到 Window 的
         // guiScaledWidth/Height（见 beginFrame）。
@@ -310,6 +406,9 @@ public final class ExtractorRenderer implements UiBackend {
         // 可选项：缺了也能画，只是退化（描边自拼、不裁剪）。
         Method outline = method(extractorType, "outline", int.class, int.class, int.class, int.class, int.class);
         Method enableScissor = method(extractorType, "enableScissor", int.class, int.class, int.class, int.class);
+        if (enableScissor == null) {
+            enableScissor = methodByTypes(extractorType, int.class, int.class, int.class, int.class);
+        }
         Method disableScissor = method(extractorType, "disableScissor");
         return new ExtractorRenderer(extractorType, fill, outline, enableScissor, disableScissor, text,
                 guiWidth, guiHeight, minecraft);
@@ -798,7 +897,13 @@ public final class ExtractorRenderer implements UiBackend {
         }
         clipStack.pop();
         if (clipStack.isEmpty()) {
-            call(disableScissor, graphics);
+            if (disableScissor != null) {
+                call(disableScissor, graphics);
+            } else if (enableScissor != null) {
+                // 1.20–1.21 只有 enableScissor：用整个绘制区复位裁剪，
+                // 否则裁剪状态会残留到游戏自己的绘制上（表现为整片黑）。
+                call(enableScissor, graphics, 0, 0, width, height);
+            }
             return;
         }
         int[] outer = clipStack.peek();

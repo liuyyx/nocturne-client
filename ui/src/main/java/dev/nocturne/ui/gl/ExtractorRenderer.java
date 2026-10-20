@@ -156,6 +156,10 @@ public final class ExtractorRenderer implements UiBackend {
     private Method windowWidth;
     /** 已解析的 {@code Window#getHeight}。 */
     private Method windowHeight;
+    /** 已解析的 {@code Window#getGuiScaledWidth}（1.20+：GuiGraphics 没有尺寸方法时用）。 */
+    private Method guiScaledWidth;
+    /** 已解析的 {@code Window#getGuiScaledHeight}。 */
+    private Method guiScaledHeight;
     /** 窗口句柄解析是否已尝试过（失败也只试一次，避免每帧刷日志）。 */
     private boolean windowProbeResolved;
     /** 是否已就字体缺失报过一次。 */
@@ -290,10 +294,17 @@ public final class ExtractorRenderer implements UiBackend {
             return null;
         }
         Method fill = method(extractorType, "fill", int.class, int.class, int.class, int.class, int.class);
+        // 26.x 叫 text(Font,String,int,int,int)；1.20–1.21 的 GuiGraphics 叫 drawString(Font,...)，
+        // 两者参数形态一致，只是名字不同——按候选列表取，命中即用。
         Method text = method(extractorType, "text", null, String.class, int.class, int.class, int.class);
+        if (text == null) {
+            text = method(extractorType, "drawString", null, String.class, int.class, int.class, int.class);
+        }
+        // 26.x 有 guiWidth/guiHeight；1.20–1.21 的 GuiGraphics 没有尺寸方法，回退到 Window 的
+        // guiScaledWidth/Height（见 beginFrame）。
         Method guiWidth = method(extractorType, "guiWidth");
         Method guiHeight = method(extractorType, "guiHeight");
-        if (fill == null || text == null || guiWidth == null || guiHeight == null) {
+        if (fill == null || text == null) {
             return null;
         }
         // 可选项：缺了也能画，只是退化（描边自拼、不裁剪）。
@@ -333,8 +344,20 @@ public final class ExtractorRenderer implements UiBackend {
             return;
         }
         // 只在读到有效尺寸时更新：保留最近一次有效值（见 clearFrame 的说明）。
+        // 1.20–1.21 的 GuiGraphics 没有尺寸方法：回退到 Window 的 GUI 缩放尺寸。
         int measuredWidth = intOf(guiWidth, graphics, 0);
         int measuredHeight = intOf(guiHeight, graphics, 0);
+        if (measuredWidth <= 0 || measuredHeight <= 0) {
+            int[] scaled = guiScaledSize();
+            if (scaled != null) {
+                if (measuredWidth <= 0) {
+                    measuredWidth = scaled[0];
+                }
+                if (measuredHeight <= 0) {
+                    measuredHeight = scaled[1];
+                }
+            }
+        }
         if (measuredWidth > 0) {
             width = measuredWidth;
         }
@@ -388,6 +411,8 @@ public final class ExtractorRenderer implements UiBackend {
                 if (window != null) {
                     windowWidth = method(window.getClass(), "getWidth");
                     windowHeight = method(window.getClass(), "getHeight");
+                    guiScaledWidth = method(window.getClass(), "getGuiScaledWidth");
+                    guiScaledHeight = method(window.getClass(), "getGuiScaledHeight");
                 }
             }
         }
@@ -411,6 +436,34 @@ public final class ExtractorRenderer implements UiBackend {
         }
         int factor = Math.round((float) physical / (float) width);
         guiScale = Math.max(1, Math.min(16, factor));
+    }
+
+    /**
+     * 读窗口的 GUI 缩放尺寸（逻辑像素）。
+     *
+     * <p>1.20–1.21 的 {@code GuiGraphics} 不提供尺寸方法，而组件布局必须拿到逻辑尺寸，
+     * 否则界面按 0 排版、一个像素都画不出来。
+     *
+     * @return {@code {width, height}}；窗口不可用时为 {@code null}
+     */
+    private int[] guiScaledSize() {
+        if (!windowProbeResolved) {
+            updateGuiScale();
+        }
+        if (guiScaledWidth == null || guiScaledHeight == null || minecraft == null || windowGetter == null) {
+            return null;
+        }
+        Object mc = minecraft.get();
+        if (mc == null) {
+            return null;
+        }
+        Object window = Reflect.call(windowGetter, mc);
+        if (window == null) {
+            return null;
+        }
+        int scaledWidth = intOf(guiScaledWidth, window, 0);
+        int scaledHeight = intOf(guiScaledHeight, window, 0);
+        return scaledWidth > 0 && scaledHeight > 0 ? new int[]{scaledWidth, scaledHeight} : null;
     }
 
     @Override

@@ -160,7 +160,13 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
   注入器会提示，请在设置里改成别的键。
 - ~~图集整张重传~~ **已修**：新增字形改为 `glTexSubImage2D` 只传变化的脏矩形；
   首秒实测 `full/s=7`（每张图集一次）+ `sub/s=136`，稳态为 0/0。
-- **`FontRasterizer` 的 `scale` 一帧滞后**：`bind()` 用上一帧的缩放，缩放变化那一帧会触发一次整册图集重建。
+- ~~`FontRasterizer` 的 `scale` 一帧滞后~~ **已修**：`bind()` 移到 `updateScale()` 之后，按本帧缩放绑定。
+- **`gl-core`（1.13–1.21）文字渲染为黑块**（2026-10-20 发现，**未修**）：
+  1.21.11 + Fabric 上界面布局/开关/滑块/色块/裁剪全部正确，但文字是纯黑矩形。
+  真机证据：`atlas=true`、`backend=gl-core`、图集上传句柄 996、字形四边形
+  `argb=0x35ece9e1` 与 UV 正确、上传源像素 `p0=0x0dffffff`（白 + 覆盖度）、`texImage2D` 已解析、
+  无 REFLECT FAIL/GL 错误 ⇒ 问题在「采样到的纹理为黑」，不在坐标/颜色/UV。
+  下一步：图集上传后做 `glGetTexImage` 回读，区分「GPU 纹理未写入」与「采样器指向别的单元」。
 
 ## 文档索引
 

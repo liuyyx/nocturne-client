@@ -36,8 +36,8 @@ import java.awt.event.KeyEvent;
  */
 public final class GuiOverlay implements FrameListener {
 
-    /** 右 Shift 的键码，统一采用 AWT VK 码；输入后端负责翻译到 LWJGL2 / GLFW / SDL。 */
-    public static final int KEY_RIGHT_SHIFT = 54;
+    /** 右 Shift 的规范键码（AWT 数值区之外的哨兵，与 {@code KeyMap.VK_RIGHT_SHIFT} 一致）。 */
+    public static final int KEY_RIGHT_SHIFT = 0x1F01;
     /** Esc 的键码（AWT VK_ESCAPE）；用于派发键盘事件使 Esc 关闭可达。 */
     private static final int KEY_ESCAPE = 27;
 

@@ -148,9 +148,9 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
 
 ### 已知问题
 
-- **数字键 6 与右 Shift 的哨兵值冲突**：`KeyMap` 把 54 当作右 Shift 哨兵，而 54 就是 `VK_6`；
-  在界面里按 6 会触发开关、且 `KeyChars` 会把它当 `'6'`。彻底修法是把哨兵移出 AWT 数值区，
-  需要 `client/agent/injector` 三处一起改（尚未做）。
+- ~~数字键 6 与右 Shift 的哨兵值冲突~~ **已修**：右 Shift 改用 AWT 数值区之外的哨兵
+  `0x1F01`（`KeyMap.VK_RIGHT_SHIFT`），数字 6 恢复为普通按键。跨模块契约 K1-b：
+  `client` / `agent` / `ui` / `injector` / `core` 五处的取值必须一起改。
 - **右 Shift 与第三方客户端冲突**：目标装了 FPSMaster 之类时，它的 ClickGUI 也绑在右 Shift。
   注入器会提示，请在设置里改成别的键。
 - **图集整张重传**：每新增一个字形就重传 1024²（4 MB）并逐像素展开，首次打开界面有明显卡顿。

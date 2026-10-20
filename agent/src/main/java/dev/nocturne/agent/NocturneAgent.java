@@ -20,12 +20,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class NocturneAgent {
 
     /**
-     * 右 Shift 的 AWT 虚拟键码（VK_RIGHT_SHIFT）。
+     * 右 Shift 的规范键码（跨模块契约 K1-b）。
      *
-     * <p>注入器写给 agent 的 {@code guiKey} 统一是 AWT VK 码，右 Shift 即 54（跨任务契约 K1）；
-     * 运行时到 LWJGL2/GLFW 键码的翻译由 {@code dev.nocturne.client.input.KeyMap} 完成。
+     * <p>取值在 AWT 数值区之外：AWT 没有右 Shift 常量，历史实现借用了 LWJGL2 的 54，
+     * 而 54 正是 {@code VK_6}——于是按数字 6 会开关界面。现在用 {@code 0x1F01} 作哨兵，
+     * 与 {@code dev.nocturne.client.input.KeyMap#VK_RIGHT_SHIFT} 保持一致；
+     * 到 LWJGL2/GLFW/SDL 键码的翻译由 KeyMap 完成。
      */
-    public static final int VK_RIGHT_SHIFT = 54;
+    public static final int VK_RIGHT_SHIFT = 0x1F01;
 
     /**
      * 是否已经启动过一次。

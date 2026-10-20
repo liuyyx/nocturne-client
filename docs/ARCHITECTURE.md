@@ -68,7 +68,7 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 ### 3.2 agent（被注入侧）
 
 1. `premain` / `agentmain` → 同一个 `start()`，`AtomicBoolean` CAS 保证幂等。
-2. 解析 agent 参数 `guiKey=`（畸形输入一律回退 `VK_RIGHT_SHIFT`）。
+2. 解析 agent 参数 `guiKey=`（畸形输入一律回退右 Shift 的哨兵 `0x1F01`）。
 3. 在**守护线程** `nocturne-init` 上依次 `boot → installFrameHook → installOverlay`
    （在 `premain` 里同步初始化会拖死待插桩 JVM 的类加载）。
 4. 两个 ASM9 转换器（未命中或解析失败一律返回 `null`，JVM 沿用原字节码——**绝不让插桩导致类加载失败**）：

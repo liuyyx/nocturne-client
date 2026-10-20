@@ -29,11 +29,11 @@ class KeyCodesTest {
         assertEquals(123, KeyCodes.codeFor("F12"));
     }
 
-    /** 修饰键：左半边用 AWT 原生值，右半边用与 RSHIFT=54 相同的后端右变体哨兵值。 */
+    /** 修饰键：左半边用 AWT 原生值，右半边用后端右变体的哨兵值（右 Shift 为 0x1F01）。 */
     @Test
     void resolvesModifiers() {
         assertEquals(16, KeyCodes.codeFor("LSHIFT"));
-        assertEquals(54, KeyCodes.codeFor("RSHIFT"));
+        assertEquals(0x1F01, KeyCodes.codeFor("RSHIFT"));
         assertEquals(17, KeyCodes.codeFor("LCTRL"));
         assertEquals(157, KeyCodes.codeFor("RCTRL"));
         assertEquals(18, KeyCodes.codeFor("LALT"));
@@ -85,14 +85,15 @@ class KeyCodesTest {
     }
 
     /**
-     * 右 Shift 哨兵 54 与 AWT 的 VK_6 数值相同：正向必须仍解析成 54（绑定默认值可用），
-     * 反向必须归还数字键 "6"，否则录制数字 6 会被当成右 Shift、且往返不再成立。
+     * 右 Shift 哨兵 5 右 Shift 用 0x1F01：历史上借用的 54 正是 VK_6，导致「按 6 开关界面」，
+     * 现在数字 6 与右 Shift 各自有唯一编码，正反查都成立。
      */
     @Test
     void rightShiftSentinelDoesNotShadowDigitSix() {
-        assertEquals(54, KeyCodes.codeFor("RSHIFT"));
-        assertEquals("6", KeyCodes.nameForVk(54));
-        assertEquals(48 + 6, KeyCodes.codeFor("6"));
+        assertEquals(0x1F01, KeyCodes.codeFor("RSHIFT"), "右 Shift 用 AWT 数值区之外的哨兵");
+        assertEquals(54, KeyCodes.codeFor("6"), "数字 6 仍是 VK_6");
+        assertEquals("6", KeyCodes.nameForVk(54), "反向表里 54 必须是 6");
+        assertEquals("RSHIFT", KeyCodes.nameForVk(0x1F01), "哨兵必须能反查回 RSHIFT");
     }
 
     /** 表外 VK 用 {@code KEY<code>} 表达，且能被 {@link KeyCodes#codeFor(String)} 原样解析回来。 */
@@ -111,12 +112,12 @@ class KeyCodesTest {
         assertEquals(116, KeyCodes.codeFor("CTRL+F5"));
     }
 
-    /** 无法识别的键名退回右 Shift(54)；绝不能返回 0，0 在后端里代表「没有这个键」。 */
+    /** 无法识别的键名退回右 Shift（0x1F01）；绝不能返回 0，0 在后端里代表「没有这个键」。 */
     @Test
     void unknownNamesFallBackToRightShift() {
-        assertEquals(54, KeyCodes.codeFor("SOMETHINGWEIRD"));
-        assertEquals(54, KeyCodes.codeFor(null));
-        assertEquals(54, KeyCodes.codeFor(""));
+        assertEquals(0x1F01, KeyCodes.codeFor("SOMETHINGWEIRD"));
+        assertEquals(0x1F01, KeyCodes.codeFor(null));
+        assertEquals(0x1F01, KeyCodes.codeFor(""));
     }
 
     /**
@@ -126,13 +127,13 @@ class KeyCodesTest {
      */
     @Test
     void buildsOptionsStringInAgreedFormat() {
-        assertEquals("guiKey=54", KeyCodes.attachOptions("RSHIFT", null));
+        assertEquals("guiKey=7937", KeyCodes.attachOptions("RSHIFT", null));
         assertEquals("guiKey=82", KeyCodes.attachOptions("R", null));
         assertEquals("guiKey=116", KeyCodes.attachOptions("CTRL+F5", null));
         // 版本标签来自启动器（实例名），必须被压成版本号再传
-        assertEquals("guiKey=54,mcVersion=1.8.9", KeyCodes.attachOptions("RSHIFT", "1.8.9优化"));
-        assertEquals("guiKey=54,mcVersion=26.3", KeyCodes.attachOptions("RSHIFT", "26.3-Fabric 0.19.5"));
+        assertEquals("guiKey=7937,mcVersion=1.8.9", KeyCodes.attachOptions("RSHIFT", "1.8.9优化"));
+        assertEquals("guiKey=7937,mcVersion=26.3", KeyCodes.attachOptions("RSHIFT", "26.3-Fabric 0.19.5"));
         // 判定不出时不传这一项，agent 侧按未知处理（退化为恒等映射并打日志）
-        assertEquals("guiKey=54", KeyCodes.attachOptions("RSHIFT", "\u2014"));
+        assertEquals("guiKey=7937", KeyCodes.attachOptions("RSHIFT", "\u2014"));
     }
 }

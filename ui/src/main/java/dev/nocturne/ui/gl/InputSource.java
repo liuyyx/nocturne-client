@@ -41,7 +41,8 @@ public interface InputSource {
     /**
      * 查询某个键是否按住。
      *
-     * @param key 键码，统一为 <b>AWT VK 码</b>（如 {@code VK_ESCAPE=27}、{@code VK_RIGHT_SHIFT=54}），
+     * @param key 键码，统一为 <b>AWT VK 码</b>（如 {@code VK_ESCAPE=27}），右 Shift 用
+     *             {@code 0x1F01} 哨兵（AWT 无该常量，且不能借用 {@code VK_6} 的 54），
      *            与 {@link GuiOverlay#KEY_RIGHT_SHIFT} 同源；实现类负责翻译到 LWJGL2 / GLFW 的
      *            键码后再查询——两代键码彼此无关，直接透传必然失效。
      * @return 按住返回 true

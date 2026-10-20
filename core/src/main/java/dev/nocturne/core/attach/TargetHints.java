@@ -22,8 +22,8 @@ public final class TargetHints {
             {"fpsmaster", "FPSMaster"},
     };
 
-    /** 我们的默认 GUI 键（AWT VK_RIGHT_SHIFT）；只有用默认键时才谈得上冲突。 */
-    public static final int DEFAULT_GUI_KEY_VK = 54;
+    /** 我们的默认 GUI 键（右 Shift 的规范哨兵 0x1F01）；只有用默认键时才谈得上冲突。 */
+    public static final int DEFAULT_GUI_KEY_VK = 0x1F01;
 
     /** 工具类，禁止实例化。 */
     private TargetHints() {

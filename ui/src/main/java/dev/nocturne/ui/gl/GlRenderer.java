@@ -35,6 +35,12 @@ public final class GlRenderer implements UiBackend {
         return value == null || value.length == 0 ? 0 : value[0];
     }
 
+    /** 物理视口原点与尺寸（{@code glGetIntegerv(GL_VIEWPORT)} 的原始值）。 */
+    private int viewportOriginX;
+    private int viewportOriginY;
+    private int rawViewportWidth;
+    private int rawViewportHeight;
+
     /** 是否已打印过进入时的能力位快照。 */
     private static boolean capsLogged;
     /** 嵌套裁剪的矩形栈，元素为 {@code {x, y, width, height}}（GL 坐标系，原点左下）。 */
@@ -209,6 +215,11 @@ public final class GlRenderer implements UiBackend {
         }
         int[] rawViewport = gl.viewport();
         if (rawViewport != null && rawViewport[2] > 0 && rawViewport[3] > 0) {
+            // 视口原点不一定是 (0,0)（子视口/分屏）；裁剪框必须相对原点换算，否则整体错位。
+            viewportOriginX = rawViewport[0];
+            viewportOriginY = rawViewport[1];
+            rawViewportWidth = rawViewport[2];
+            rawViewportHeight = rawViewport[3];
             // 逻辑尺寸 = 物理 / uiScale：ortho、绘制坐标、width()/height() 三者同源（见 uiScale 注释）。
             // 固定像素尺寸的界面在高分屏上"十分小"，就是缺这一层缩放。
             uiScale = resolveUiScale(rawViewport[2], rawViewport[3]);
@@ -572,19 +583,21 @@ public final class GlRenderer implements UiBackend {
     private int[] toScissorBox(float x, float y, float width, float height) {
         // GUI 坐标是**逻辑**坐标（已按 uiScale 缩小），而 glScissor 用的是窗口物理像素：
         // 这里必须乘回去，否则裁剪框会缩在左上角（放大后内容被裁掉大半）。
+        // 同时必须**相对视口原点**换算：视口不在 (0,0) 时（子视口/分屏），裁剪框整体偏移。
         int scale = uiScale;
-        int x0 = Math.round(x * scale);
-        int y0 = Math.round(y * scale);
+        int limitWidth = rawViewportWidth > 0 ? rawViewportWidth : viewportWidth * scale;
+        int limitHeight = rawViewportHeight > 0 ? rawViewportHeight : viewportHeight * scale;
+        int x0 = viewportOriginX + Math.round(x * scale);
+        int y0 = viewportOriginY + Math.round(y * scale);
         int x1 = x0 + Math.max(0, Math.round(width * scale));
         int y1 = y0 + Math.max(0, Math.round(height * scale));
-        int limitWidth = viewportWidth * scale;
-        int limitHeight = viewportHeight * scale;
         if (limitWidth > 0 && limitHeight > 0) {
-            x0 = clamp(x0, 0, limitWidth);
-            x1 = clamp(x1, 0, limitWidth);
-            y0 = clamp(y0, 0, limitHeight);
-            y1 = clamp(y1, 0, limitHeight);
-            return new int[]{x0, limitHeight - y1, x1 - x0, y1 - y0};
+            x0 = clamp(x0, viewportOriginX, viewportOriginX + limitWidth);
+            x1 = clamp(x1, viewportOriginX, viewportOriginX + limitWidth);
+            y0 = clamp(y0, viewportOriginY, viewportOriginY + limitHeight);
+            y1 = clamp(y1, viewportOriginY, viewportOriginY + limitHeight);
+            return new int[]{x0, viewportOriginY + limitHeight - (y1 - viewportOriginY),
+                    x1 - x0, y1 - y0};
         }
         // 视口未知时不与视口求交，仅保证宽高非负。
         int sx = Math.max(0, x0);

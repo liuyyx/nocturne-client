@@ -179,9 +179,15 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
   5. **全尺寸回读**（4 MB 缓冲）：`atlas upload 1024x1024 glError=0 texel0=255,255,255,13`
      ⇒ 图集**确实写进了 GPU**，上传无错。
 
-  ⇒ 结论：纹理内容、绑定、单元、采样器、顶点色都正确，唯一对不上的是 **UV 属性**
-  （直出采样得到黑 ⇒ `vUV` 落在图集的空白区）。下一步：`glGetAttribLocation(program,"aUV")`
-  与首个四边形顶点缓冲的 dump，确认 `aUV` 是否真的在 location 1、偏移 8 处读到 (u,v)。
+  6. **属性与顶点数据**：`aPos=0`、`aUV=1`；首个纹理四边形的顶点
+     `v0=(352.0,217.9, 0.040039062,0.0)`、`v1=(360.0,217.9, 0.047851562,0.0)`
+     ⇒ UV 与 CPU 侧完全一致。
+
+  ⇒ 至此「上传内容 / 绑定 / 单元 / 采样器位置 / 顶点属性 / UV 数据」全部核对无误，
+  但直出采样仍是黑。剩余可疑点收敛到两处（需要 `glGetUniformi` 取采样器**值**——
+  注意 LWJGL3 的签名是 `(int,int,IntBuffer)`，用 `int[]` 查会拿到 -1）：
+  ① `uSampler` 的值不是 0；② 这一帧期间 program 被游戏切走（我们只在 beginFrame 里 useProgram）。
+  下一步就查这两条，不需要再改其他状态。
   （已修的相关缺陷：`ModernGlApi` 的类候选表缺 `GL13`，`glActiveTexture` 句柄为 null
   导致纹理绑到游戏的活动单元；现已加入 `GL13C/GL13`，并把 `activeTexture` 列为
   `hasTextures()` 的必要条件。）

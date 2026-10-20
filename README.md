@@ -176,8 +176,12 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
      回读正确；但**尚未对 1024² 图集本身做过回读**（此前用 4 字节缓冲读 1024² 纹理
      直接导致 JVM 崩溃——回读必须分配全尺寸缓冲）。
 
-  ⇒ 下一步就一件事：上传 1024² 图集后，用 4 MB 缓冲 `glGetTexImage` 回读并检查
-  `glGetError()`，确认 `glTexImage2D` 是否真的写入了这张纹理。
+  5. **全尺寸回读**（4 MB 缓冲）：`atlas upload 1024x1024 glError=0 texel0=255,255,255,13`
+     ⇒ 图集**确实写进了 GPU**，上传无错。
+
+  ⇒ 结论：纹理内容、绑定、单元、采样器、顶点色都正确，唯一对不上的是 **UV 属性**
+  （直出采样得到黑 ⇒ `vUV` 落在图集的空白区）。下一步：`glGetAttribLocation(program,"aUV")`
+  与首个四边形顶点缓冲的 dump，确认 `aUV` 是否真的在 location 1、偏移 8 处读到 (u,v)。
   （已修的相关缺陷：`ModernGlApi` 的类候选表缺 `GL13`，`glActiveTexture` 句柄为 null
   导致纹理绑到游戏的活动单元；现已加入 `GL13C/GL13`，并把 `activeTexture` 列为
   `hasTextures()` 的必要条件。）

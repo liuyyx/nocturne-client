@@ -463,7 +463,7 @@ public final class FaClickGui implements OverlayGui {
                     + FaTheme.fonts.getClass().getSimpleName()
                     + " atlas=" + FontRasterizer.atlasActive());
         }
-        draw.begin(renderer, scale);
+        draw.begin(renderer, scale, backendScale);
         ctx.draw = draw;
         ctx.dt = dt;
         drawFrame();

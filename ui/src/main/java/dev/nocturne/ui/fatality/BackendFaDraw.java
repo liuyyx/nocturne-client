@@ -25,6 +25,8 @@ final class BackendFaDraw extends FaDraw {
 
     /** 当前绘制面。 */
     private Renderer renderer;
+    /** 设计单位到物理像素的密度。 */
+    private float density = 1.0f;
     /** 累积平移 x（设备像素）。 */
     private float tx;
     /** 累积平移 y（设备像素）。 */
@@ -43,18 +45,30 @@ final class BackendFaDraw extends FaDraw {
     /**
      * 开始一帧。
      *
-     * @param target       本帧绘制面
-     * @param initialScale 设计单位到设备像素的缩放（{@code FaClickGui.scale}）
+     * @param target        本帧绘制面
+     * @param initialScale  设计单位到设备像素的缩放（{@code FaClickGui.scale}）
+     * @param physicalScale 逻辑像素到物理像素的倍率（高 DPI 下 &gt; 1）
      */
-    void begin(Renderer target, float initialScale) {
+    void begin(Renderer target, float initialScale, float physicalScale) {
         renderer = target;
         tx = 0.0f;
         ty = 0.0f;
         s = initialScale <= 0f ? 1.0f : initialScale;
+        density = s * (physicalScale <= 0f ? 1.0f : physicalScale);
         alpha = 1.0f;
         clip = null;
         saved.clear();
         savedClips.clear();
+    }
+
+    /**
+     * @return 设计单位到**物理**像素的密度（阴影/圆角环纹理的栅格密度）
+     *
+     * <p>字形图集一直按物理像素栅格；阴影与圆角环若按逻辑像素栅格，在高 DPI 屏上会被放大
+     * {@code backendScale} 倍而发糊。这里统一到物理像素，两套纹理的清晰度一致。
+     */
+    float density() {
+        return density;
     }
 
     /** @return 设计单位到设备像素的缩放 */
@@ -88,7 +102,7 @@ final class BackendFaDraw extends FaDraw {
             rect(x, y, w, h, r, argb);
             return;
         }
-        int cornerTexture = RasterTextures.cornerRing(renderer, r, t, s);
+        int cornerTexture = RasterTextures.cornerRing(renderer, r, t, density);
         if (cornerTexture > 0) {
             // 四条直边用普通矩形，四个角用纹理化的四分之一环（UV 翻转复用同一张）。
             rect(x + r, y, w - 2.0f * r, t, 0.0f, argb);
@@ -158,7 +172,7 @@ final class BackendFaDraw extends FaDraw {
             return;
         }
         int color = modulate(argb);
-        int texture = RasterTextures.shadow(renderer, w, h, radius, sigma, s);
+        int texture = RasterTextures.shadow(renderer, w, h, radius, sigma, density);
         if (texture > 0) {
             float margin = (float) Math.ceil(sigma * 3.0f);
             renderer.texturedQuad(texture, gx(x - margin), gy(y - margin),

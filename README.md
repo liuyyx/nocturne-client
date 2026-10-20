@@ -120,11 +120,13 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
 每秒打印一行：
 
 ```
-[nocturne] draw batches/s=… vertices/s=… tex batches/s=… text/s=…
+[nocturne] draw batches/s=… vertices/s=… tex batches/s=… text/s=… upload full/s=… sub/s=…
 ```
 
 - `batches/s`：本秒提交的 `glBegin` 次数；`tex batches/s`：其中带纹理的批次数。
 - `text/s`：**游戏字体路径**的调用数。走字形图集时它恒为 0，这是预期值，不是故障。
+- `upload full/s` / `sub/s`：整张纹理上传与子区域上传次数。图集新增字形只走 `sub`；
+  `full` 在稳态应为 0（每张图集只在创建时整传一次）。
 - 另有一次性诊断：`fonts: atlas=… renderer=… textures=… registry=…`、
   `gui render: backend=… scale=… backendScale=… atlas=…`、`text renderer bound: …`。
 - `GL ERROR 1282` 是 `GL_INVALID_OPERATION`，几乎总是「状态调用落在批次内」或「在 `glBegin` 内做查询」。
@@ -153,7 +155,8 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
   `client` / `agent` / `ui` / `injector` / `core` 五处的取值必须一起改。
 - **右 Shift 与第三方客户端冲突**：目标装了 FPSMaster 之类时，它的 ClickGUI 也绑在右 Shift。
   注入器会提示，请在设置里改成别的键。
-- **图集整张重传**：每新增一个字形就重传 1024²（4 MB）并逐像素展开，首次打开界面有明显卡顿。
+- ~~图集整张重传~~ **已修**：新增字形改为 `glTexSubImage2D` 只传变化的脏矩形；
+  首秒实测 `full/s=7`（每张图集一次）+ `sub/s=136`，稳态为 0/0。
 - **`FontRasterizer` 的 `scale` 一帧滞后**：`bind()` 用上一帧的缩放，缩放变化那一帧会触发一次整册图集重建。
 
 ## 文档索引

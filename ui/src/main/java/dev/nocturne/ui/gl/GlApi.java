@@ -164,6 +164,9 @@ public final class GlApi {
     private final Method texImage2D;
     /** 已解析的 {@code glTexParameteri}。 */
     private final Method texParameteri;
+    /** {@code glTexSubImage2D}：只更新纹理的一块区域（图集增量上传）。 */
+    private final Method texSubImage2D;
+
     /** {@code glShadeModel}：GL_FLAT 会让渐变四边形塌成单色。 */
     private Method shadeModelMethod;
 
@@ -256,7 +259,8 @@ public final class GlApi {
                   Method bindTexture, Method matrixMode, Method loadIdentity, Method ortho,
                   Method getIntegerv, Method getIntegervBuffer, Method scissor,
                   Method genTexturesArray, Method genTexturesBuffer, Method deleteTexturesArray,
-                  Method deleteTexturesBuffer, Method texImage2D, Method texParameteri,
+                  Method deleteTexturesBuffer, Method texImage2D, Method texSubImage2D,
+                  Method texParameteri,
                   Method pixelStorei,
                   StateManager state) {
         this.color4f = color4f;
@@ -289,6 +293,7 @@ public final class GlApi {
         this.deleteTexturesArray = deleteTexturesArray;
         this.deleteTexturesBuffer = deleteTexturesBuffer;
         this.texImage2D = texImage2D;
+        this.texSubImage2D = texSubImage2D;
         this.texParameteri = texParameteri;
         this.pixelStorei = pixelStorei;
         this.textureBuffer = ByteBuffer.allocateDirect(16 * Integer.BYTES)
@@ -586,8 +591,10 @@ public final class GlApi {
                 Reflect.method(gl, "glDeleteTextures", int[].class),
                 orElse(Reflect.method(gl, "glDeleteTextures", int.class, IntBuffer.class),
                         Reflect.method(gl, "glDeleteTextures", IntBuffer.class)),
-                // glTexImage2D 两代签名一致（最后一段都是 ByteBuffer）。
+                // glTexImage2D / glTexSubImage2D 两代签名一致（最后一段都是 ByteBuffer）。
                 Reflect.method(gl, "glTexImage2D", int.class, int.class, int.class, int.class,
+                        int.class, int.class, int.class, int.class, ByteBuffer.class),
+                Reflect.method(gl, "glTexSubImage2D", int.class, int.class, int.class, int.class,
                         int.class, int.class, int.class, int.class, ByteBuffer.class),
                 Reflect.method(gl, "glTexParameteri", int.class, int.class, int.class),
                 Reflect.method(gl, "glPixelStorei", int.class, int.class),
@@ -614,6 +621,10 @@ public final class GlApi {
     private int batchTexture;
     /** 统计：提交的批次数（UI 一次 draw call ≈ 一个批次）。 */
     private int batchCount;
+    /** 自上次清零以来整张纹理上传次数（诊断用）。 */
+    private int uploadFull;
+    /** 自上次清零以来子区域上传次数（诊断用）。 */
+    private int uploadRegions;
     /** 自上次清零以来「带纹理」的批次数（诊断用）。 */
     private int texturedBatches;
     /** 统计：提交的顶点数。 */
@@ -698,6 +709,14 @@ public final class GlApi {
     }
 
     /** @return 上次清零以来提交的 {@code {批次数, 顶点数}}，并清零（诊断用）。 */
+    /** 自上次清零以来的纹理上传次数 {@code {整张, 子区域}}（诊断用）。 */
+    public int[] takeUploadCounts() {
+        int[] out = {uploadFull, uploadRegions};
+        uploadFull = 0;
+        uploadRegions = 0;
+        return out;
+    }
+
     public int[] takeBatchCounts() {
         int[] out = {batchCount, vertexCount, texturedBatches};
         batchCount = 0;
@@ -1029,6 +1048,55 @@ public final class GlApi {
     }
 
     /**
+     * 只上传纹理的一块子矩形（对应 {@code glTexSubImage2D}）。
+     *
+     * <p>字形图集每新增一个字形就会变脏；整张 1024² 是 4 MB，逐字形重传会造成明显卡顿。
+     * 这里只传变化的那一小块。
+     *
+     * @param x      子矩形左上角 x（像素）
+     * @param y      子矩形左上角 y（像素）
+     * @param w      子矩形宽
+     * @param h      子矩形高
+     * @param width  整张纹理宽（{@code argb} 的行跨度）
+     * @param argb   整张纹理的像素
+     * @return 成功返回 {@code true}
+     */
+    public boolean uploadTextureRegion(int x, int y, int w, int h, int width, int[] argb) {
+        flushBatch();   // glTexSubImage2D 不能落在 glBegin/glEnd 之间
+        if (texSubImage2D == null || w <= 0 || h <= 0 || argb == null) {
+            return false;
+        }
+        uploadRegions++;
+        int needed = w * h * 4;
+        ByteBuffer buffer = pixelBuffer;
+        if (buffer == null || buffer.capacity() < needed) {
+            buffer = ByteBuffer.allocateDirect(needed).order(ByteOrder.nativeOrder());
+            pixelBuffer = buffer;
+        }
+        buffer.clear();
+        for (int row = 0; row < h; row++) {
+            int base = (y + row) * width + x;
+            for (int col = 0; col < w; col++) {
+                int pixel = argb[base + col];
+                buffer.put((byte) ((pixel >> 16) & 0xFF));
+                buffer.put((byte) ((pixel >> 8) & 0xFF));
+                buffer.put((byte) (pixel & 0xFF));
+                buffer.put((byte) ((pixel >>> 24) & 0xFF));
+            }
+        }
+        buffer.flip();
+        if (pixelStorei != null) {
+            Reflect.call(pixelStorei, null, GL_UNPACK_ALIGNMENT, 4);
+            Reflect.call(pixelStorei, null, GL_UNPACK_ROW_LENGTH, 0);
+            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_ROWS, 0);
+            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_PIXELS, 0);
+        }
+        Reflect.call(texSubImage2D, null, GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA,
+                GL_UNSIGNED_BYTE, buffer);
+        return true;
+    }
+
+    /**
      * 上传一张 RGBA 纹理的全量像素。
      *
      * <p>像素格式固定为非预乘 {@code 0xAARRGGBB}、行优先、左上原点——与本类的
@@ -1044,6 +1112,7 @@ public final class GlApi {
         if (texImage2D == null || width <= 0 || height <= 0 || argb == null) {
             return false;
         }
+        uploadFull++;
         int needed = width * height * 4;
         ByteBuffer buffer = pixelBuffer;
         if (buffer == null || buffer.capacity() < needed) {

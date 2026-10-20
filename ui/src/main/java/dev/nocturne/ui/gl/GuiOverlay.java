@@ -497,10 +497,12 @@ public final class GuiOverlay implements FrameListener {
                 if (now - batchLoggedAt >= 1000L) {
                     batchLoggedAt = now;
                     int[] counts = ((GlRenderer) renderer).takeBatchCounts();
+                    int[] uploads = ((GlRenderer) renderer).takeUploadCounts();
                     System.out.println("[nocturne] draw batches/s=" + counts[0]
                             + " vertices/s=" + counts[1]
                             + " tex batches/s=" + counts[2]
-                            + " text/s=" + MinecraftTextRenderer.takeDrawCalls());
+                            + " text/s=" + MinecraftTextRenderer.takeDrawCalls()
+                            + " upload full/s=" + uploads[0] + " sub/s=" + uploads[1]);
                 }
             }
         }

@@ -90,6 +90,27 @@ public interface Renderer {
         return false;
     }
 
+    /**
+     * 只更新纹理的一个子矩形（图集新增字形时用，避免每加一个字就重传整张 4 MB 图）。
+     *
+     * <p>默认实现退回 {@link #uploadTexture}（整张上传），因此所有后端都保持正确；
+     * 支持 {@code glTexSubImage2D} 的后端应覆盖它。
+     *
+     * @param texture       已有纹理句柄
+     * @param width         整张纹理宽
+     * @param height        整张纹理高
+     * @param argb          整张纹理的像素（{@code 0xAARRGGBB}，按行）
+     * @param x             子矩形左上角 x
+     * @param y             子矩形左上角 y
+     * @param regionWidth   子矩形宽
+     * @param regionHeight  子矩形高
+     * @return 纹理句柄；失败时返回 0
+     */
+    default int uploadTextureRegion(int texture, int width, int height, int[] argb,
+                                    int x, int y, int regionWidth, int regionHeight) {
+        return uploadTexture(texture, width, height, argb);
+    }
+
     /** 将随后的绘制裁剪到给定矩形，直到 {@link #popClip()}；支持嵌套。 */
     void pushClip(float x, float y, float width, float height);
 

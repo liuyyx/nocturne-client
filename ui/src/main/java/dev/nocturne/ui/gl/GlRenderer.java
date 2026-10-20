@@ -297,6 +297,15 @@ public final class GlRenderer implements UiBackend {
         return gl.takeBatchCounts();
     }
 
+    /**
+     * 取出上一秒的纹理上传统计（诊断用）。
+     *
+     * @return {@code {整张上传次数, 子区域上传次数}}
+     */
+    public int[] takeUploadCounts() {
+        return gl.takeUploadCounts();
+    }
+
     @Override
     public void endFrame() {
         if (statePushed) {
@@ -421,6 +430,23 @@ public final class GlRenderer implements UiBackend {
             return id;
         }
         return handle;
+    }
+
+    /**
+     * 局部更新纹理（{@code glTexSubImage2D}）：图集新增字形时只传变化的那一小块。
+     *
+     * <p>不允许落到整张上传的旧路径——那正是首帧卡顿的来源（1024² = 4 MB × 每个新字形）。
+     */
+    @Override
+    public int uploadTextureRegion(int texture, int width, int height, int[] argb,
+                                   int x, int y, int regionWidth, int regionHeight) {
+        if (texture <= 0 || !gl.hasTextures() || argb == null
+                || regionWidth <= 0 || regionHeight <= 0) {
+            return uploadTexture(texture, width, height, argb);
+        }
+        gl.bindTexture2D(texture);
+        return gl.uploadTextureRegion(x, y, regionWidth, regionHeight, width, argb)
+                ? texture : uploadTexture(texture, width, height, argb);
     }
 
     @Override

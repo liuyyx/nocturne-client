@@ -96,6 +96,11 @@ final class GlyphAtlas {
     private boolean full;
     /** 是否有未上传的改动。 */
     private boolean dirty;
+    /** 脏矩形（左/上/右/下，半开区间）；{@code dirty} 为真时有效。 */
+    private int dirtyX0;
+    private int dirtyY0;
+    private int dirtyX1;
+    private int dirtyY1;
     /** 纹理句柄；0 表示尚未上传。 */
     private int texture;
 
@@ -246,6 +251,7 @@ final class GlyphAtlas {
         pending = null;
         pendingWidth = 0;
         pendingHeight = 0;
+        markDirty(originX, originY, width, height);
         float u0 = originX / (float) SIZE;
         float v0 = originY / (float) SIZE;
         float u1 = (originX + width) / (float) SIZE;
@@ -265,13 +271,35 @@ final class GlyphAtlas {
             return texture;
         }
         if (dirty) {
-            int updated = renderer.uploadTexture(texture, SIZE, SIZE, pixels);
+            // 只传变化的那一块：整张 1024² 是 4 MB，逐字形重传会让首次打开界面明显卡顿。
+            int updated = renderer.uploadTextureRegion(texture, SIZE, SIZE, pixels,
+                    dirtyX0, dirtyY0, dirtyX1 - dirtyX0, dirtyY1 - dirtyY0);
+            if (updated <= 0) {
+                // 后端不支持局部上传（或失败）：退回整张，保证画面正确。
+                updated = renderer.uploadTexture(texture, SIZE, SIZE, pixels);
+            }
             if (updated > 0) {
                 texture = updated;
                 dirty = false;
             }
         }
         return texture;
+    }
+
+    /** 把一块区域并入脏矩形。 */
+    private void markDirty(int x, int y, int w, int h) {
+        if (!dirty) {
+            dirty = true;
+            dirtyX0 = x;
+            dirtyY0 = y;
+            dirtyX1 = x + w;
+            dirtyY1 = y + h;
+            return;
+        }
+        dirtyX0 = Math.min(dirtyX0, x);
+        dirtyY0 = Math.min(dirtyY0, y);
+        dirtyX1 = Math.max(dirtyX1, x + w);
+        dirtyY1 = Math.max(dirtyY1, y + h);
     }
 
     /** 释放纹理。 */

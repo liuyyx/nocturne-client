@@ -302,10 +302,19 @@ public final class NocturneAgent {
         if (instrumentation == null) {
             return null;
         }
+        // 类名按映射表候选匹配：Fabric 运行期是 net.minecraft.class_310，硬编码 Mojmap 名找不到，
+        // 返回 null 会让 1.20–1.21 的 GuiGraphics 钩子整条被跳过（界面永远不画）。
+        java.util.Set<String> wanted = new java.util.HashSet<String>();
+        wanted.add("net.minecraft.client.Minecraft");
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        if (mapping != null) {
+            for (String name : mapping.classNameCandidates(
+                    dev.nocturne.client.mapping.ClassType.MINECRAFT)) {
+                wanted.add(name.replace('/', '.'));
+            }
+        }
         for (Class<?> type : instrumentation.getAllLoadedClasses()) {
-            String name = type.getName();
-            if ("net.minecraft.client.Minecraft".equals(name)
-                    || "net.minecraft.client.gui.Hud".equals(name)) {
+            if (wanted.contains(type.getName())) {
                 return type.getClassLoader();
             }
         }
@@ -430,8 +439,9 @@ public final class NocturneAgent {
         // 26.x 有 GuiGraphicsExtractor：它下面的 Screen 入口是 extractRenderState*，不是 render(GuiGraphics)。
         // 1.20–1.21 没有 extractor，改用 Screen.render(GuiGraphics,int,int,float)。
         ClassLoader gameLoader = gameClassLoader(instrumentation);
-        if (gameLoader != null
-                && loadNoInit("net.minecraft.client.gui.GuiGraphicsExtractor", gameLoader) == null) {
+        Class<?> extractorProbe = gameLoader == null ? null
+                : loadNoInit("net.minecraft.client.gui.GuiGraphicsExtractor", gameLoader);
+        if (gameLoader != null && extractorProbe == null) {
             installGuiGraphicsHook(instrumentation, asmLoader, gameLoader);
         }
     }

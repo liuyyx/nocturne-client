@@ -166,10 +166,21 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
   真机证据：`atlas=true`、`backend=gl-core`、图集上传句柄 996、字形四边形
   `argb=0x35ece9e1` 与 UV 正确、上传源像素 `p0=0x0dffffff`（白 + 覆盖度）、`texImage2D` 已解析、
   无 REFLECT FAIL/GL 错误 ⇒ 问题在「采样到的纹理为黑」，不在坐标/颜色/UV。
-  后续已用 `glGetTexImage` 回读排除「纹理未写入」：1×1 白纹理读回 `255,255,255,255`、
-  阴影纹理读回 `255,255,255,0` ⇒ **GPU 侧数据正确**，问题在采样（采样器/纹理单元/UV 传递）。
-  下一步：在 `texturedQuad` 里把片元着色器临时切成纯色做 A/B（一次注入即可判定是
-  「纹理分支」还是「顶点色/UV 属性」），再定位具体状态。
+  已做的判定实验：
+  1. **A/B**：强制 `uTexture=false`（纯色分支）时文字变成**白块** ⇒ 几何/顶点色正常，
+     执行的是纹理分支，且该分支采样到**黑**。
+  2. **绑定状态**（`texturedQuad` 内、`drawTriangles` 前读回）：`bound=996`
+     （正是图集句柄）、`unit=GL_TEXTURE0(33984)`、`samplerLoc=2` ⇒ 绑定与单元都正确。
+  3. **着色器直出**：把片元改成 `vec4(texture(...).rgb, 1.0)` 后仍是黑 ⇒ **采样值本身是黑**。
+  4. 图集上传源数组正确（`p0=0x0dffffff`），1×1 白纹理与阴影纹理的 `glGetTexImage`
+     回读正确；但**尚未对 1024² 图集本身做过回读**（此前用 4 字节缓冲读 1024² 纹理
+     直接导致 JVM 崩溃——回读必须分配全尺寸缓冲）。
+
+  ⇒ 下一步就一件事：上传 1024² 图集后，用 4 MB 缓冲 `glGetTexImage` 回读并检查
+  `glGetError()`，确认 `glTexImage2D` 是否真的写入了这张纹理。
+  （已修的相关缺陷：`ModernGlApi` 的类候选表缺 `GL13`，`glActiveTexture` 句柄为 null
+  导致纹理绑到游戏的活动单元；现已加入 `GL13C/GL13`，并把 `activeTexture` 列为
+  `hasTextures()` 的必要条件。）
 
 ## 文档索引
 

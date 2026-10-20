@@ -306,7 +306,8 @@ public final class ModernGlApi {
 
     /** @return 是否具备绘制纹理所需的最小句柄集（生成 / 绑定 / 上传 / 采样参数都由本类包装）。 */
     public boolean hasTextures() {
-        return genTextures != null && bindTexture != null && texImage2D != null
+        // activeTexture 必须可用：没有它就无法保证纹理绑在我们采样的那个单元上。
+        return activeTexture != null && genTextures != null && bindTexture != null && texImage2D != null
                 && texParameteri != null;
     }
 
@@ -462,6 +463,9 @@ public final class ModernGlApi {
         String[] owners = {
                 "org.lwjgl.opengl.GL30C", "org.lwjgl.opengl.GL30",
                 "org.lwjgl.opengl.GL20C", "org.lwjgl.opengl.GL20",
+                // glActiveTexture 从 GL13 起：不列它的话句柄为 null，调用被静默跳过，
+                // 纹理就绑到游戏当时的活动单元上，而采样器固定看 0 号单元——表现为文字全是黑块。
+                "org.lwjgl.opengl.GL13C", "org.lwjgl.opengl.GL13",
                 "org.lwjgl.opengl.GL15C", "org.lwjgl.opengl.GL15",
                 "org.lwjgl.opengl.GL11C", "org.lwjgl.opengl.GL11",
                 "org.lwjgl.opengl.GL14C", "org.lwjgl.opengl.GL14",

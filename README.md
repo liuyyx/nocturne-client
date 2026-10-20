@@ -166,7 +166,10 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
   真机证据：`atlas=true`、`backend=gl-core`、图集上传句柄 996、字形四边形
   `argb=0x35ece9e1` 与 UV 正确、上传源像素 `p0=0x0dffffff`（白 + 覆盖度）、`texImage2D` 已解析、
   无 REFLECT FAIL/GL 错误 ⇒ 问题在「采样到的纹理为黑」，不在坐标/颜色/UV。
-  下一步：图集上传后做 `glGetTexImage` 回读，区分「GPU 纹理未写入」与「采样器指向别的单元」。
+  后续已用 `glGetTexImage` 回读排除「纹理未写入」：1×1 白纹理读回 `255,255,255,255`、
+  阴影纹理读回 `255,255,255,0` ⇒ **GPU 侧数据正确**，问题在采样（采样器/纹理单元/UV 传递）。
+  下一步：在 `texturedQuad` 里把片元着色器临时切成纯色做 A/B（一次注入即可判定是
+  「纹理分支」还是「顶点色/UV 属性」），再定位具体状态。
 
 ## 文档索引
 

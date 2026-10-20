@@ -164,6 +164,9 @@ public final class GlApi {
     private final Method texImage2D;
     /** 已解析的 {@code glTexParameteri}。 */
     private final Method texParameteri;
+    /** {@code glActiveTexture}：切换**服务端**纹理单元（影响后续 glBindTexture 的目标单元）。 */
+    private final Method activeTexture;
+
     /** {@code glTexSubImage2D}：只更新纹理的一块区域（图集增量上传）。 */
     private final Method texSubImage2D;
 
@@ -210,6 +213,9 @@ public final class GlApi {
         }
     }
 
+
+    /** 纹理矩阵（{@code glMatrixMode} 的取值）。 */
+    public static final int GL_TEXTURE = 0x1702;
 
     /** {@code glShadeModel} 的枚举名。 */
     public static final int GL_SHADE_MODEL = 0x0B54;
@@ -260,7 +266,7 @@ public final class GlApi {
                   Method getIntegerv, Method getIntegervBuffer, Method scissor,
                   Method genTexturesArray, Method genTexturesBuffer, Method deleteTexturesArray,
                   Method deleteTexturesBuffer, Method texImage2D, Method texSubImage2D,
-                  Method texParameteri,
+                  Method activeTexture, Method texParameteri,
                   Method pixelStorei,
                   StateManager state) {
         this.color4f = color4f;
@@ -294,6 +300,7 @@ public final class GlApi {
         this.deleteTexturesBuffer = deleteTexturesBuffer;
         this.texImage2D = texImage2D;
         this.texSubImage2D = texSubImage2D;
+        this.activeTexture = activeTexture;
         this.texParameteri = texParameteri;
         this.pixelStorei = pixelStorei;
         this.textureBuffer = ByteBuffer.allocateDirect(16 * Integer.BYTES)
@@ -596,6 +603,8 @@ public final class GlApi {
                         int.class, int.class, int.class, int.class, ByteBuffer.class),
                 Reflect.method(gl, "glTexSubImage2D", int.class, int.class, int.class, int.class,
                         int.class, int.class, int.class, int.class, ByteBuffer.class),
+                // 活动纹理单元是全局状态：游戏可能在 0/1 号之间切换过后不还原（1.8.9 的光照贴图走 1 号）。
+                Reflect.method(gl, "glActiveTexture", int.class),
                 Reflect.method(gl, "glTexParameteri", int.class, int.class, int.class),
                 Reflect.method(gl, "glPixelStorei", int.class, int.class),
                 // 状态类调用优先走游戏的 GlStateManager（缓存一致），解析不到时为 null。
@@ -771,6 +780,17 @@ public final class GlApi {
      * （1.8.9 真机现象：颜色选择器的 SV 方块整块纯白、叠加的黑色图层也看不见）。
      * 游戏会在别处把着色模型设成 FLAT 且不还原，所以每帧显式设回 SMOOTH。
      */
+    /**
+     * 选择当前**服务端**纹理单元（对应 {@code glActiveTexture}）。
+     *
+     * <p>纹理绑定作用于「当前活动单元」：游戏把单元切到 1 号（光照贴图）后不还原时，
+     * 我们绑定的图集会落到 1 号，而绘制采样的是 0 号——结果是纹理四边形采到别的东西。
+     */
+    public void activeTexture(int unit) {
+        flushBatch();
+        Reflect.call(activeTexture, null, unit);
+    }
+
     public void shadeModel(int mode) {
         flushBatch();
         Reflect.call(shadeModelMethod, null, mode);

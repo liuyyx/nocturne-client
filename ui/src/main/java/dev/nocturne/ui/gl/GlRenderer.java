@@ -256,6 +256,13 @@ public final class GlRenderer implements UiBackend {
         gl.disableClientArrays();
         // 游戏会把着色模型留成 FLAT（不还原），那样逐顶点渐变会塌成单色。
         gl.shadeModel(GlApi.GL_SMOOTH);
+        // 活动纹理单元与纹理矩阵都是全局状态：1.8.9 的光照贴图会在 1 号单元上绑定/启用，
+        // 且 EntityRenderer 会切到 GL_TEXTURE 矩阵后不还原。不在这里复位的话，
+        // 我们绑定到「错误的单元」或纹理坐标被残留矩阵变换，纹理四边形就会采错区域。
+        gl.activeTexture(GlApi.GL_TEXTURE0);
+        gl.matrixMode(GlApi.GL_TEXTURE);
+        gl.loadIdentity();
+        gl.matrixMode(GlApi.GL_MODELVIEW);
         if (!capsLogged && System.getProperty("nocturne.ui.debug") != null) {
             capsLogged = true;
             System.out.println("[nocturne] incoming caps: alphaTest=" + gl.isCapEnabled(0x0BC0)

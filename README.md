@@ -45,6 +45,9 @@
    `boundTexture()`/`viewport()` 写脏，导致所有图集拿到同一个纹理名、互相覆盖。
 3. **`GL_TRIANGLE_FAN` 是连续条带，不能跨调用合批**。两次 `beginFan()` 之间必须 `glEnd()`——
    否则后一组的中心点会与前一组最后一个顶点连成巨大三角面（半透明圆角块会出现横贯斜纹）。
+4. **全局纹理状态每帧复位**：活动纹理单元（`glActiveTexture(GL_TEXTURE0)`）与纹理矩阵
+   （`glMatrixMode(GL_TEXTURE)` + `loadIdentity`），以及 `glShadeModel(GL_SMOOTH)`。
+   1.8.9 的光照贴图会在 1 号单元绑定、EntityRenderer 会切纹理矩阵，游戏都不还原。
 
 能力位与纹理绑定还要**先经游戏的 `GlStateManager`（1.8.9 混淆名 `bfl`）同步缓存，再无条件下发真实 GL 调用**——
 只发裸 GL 会让游戏缓存与真实状态脱钩（1.8.9 的剔除缓存就是这样让整个界面被背面剔除的）。

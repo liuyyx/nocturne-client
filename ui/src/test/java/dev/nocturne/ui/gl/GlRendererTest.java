@@ -190,12 +190,14 @@ class GlRendererTest {
         assertEquals(1, renderer.scale());
         assertEquals(1280, renderer.width());
         assertEquals(720, renderer.height());
-        // 投影矩阵被压入并重置后切回模型视图，两次切换说明矩阵栈确实被接管
-        assertEquals(2, FakeGl.matrixModeCalls);
+        // 投影矩阵被压入并重置后切回模型视图；随后复位纹理矩阵（游戏会留下非单位阵）
+        // 再切回模型视图。四次切换说明矩阵栈与纹理矩阵都被接管。
+        assertEquals(4, FakeGl.matrixModeCalls);
         assertEquals(GlApi.GL_MODELVIEW, FakeGl.lastMatrixMode);
         assertEquals(1, FakeGl.orthoCalls);
-        // 矩阵模式的有序序列必须恰好是 PROJECTION → MODELVIEW
-        assertEquals(java.util.Arrays.asList(GlApi.GL_PROJECTION, GlApi.GL_MODELVIEW),
+        // 矩阵模式的有序序列：PROJECTION → MODELVIEW → TEXTURE → MODELVIEW
+        assertEquals(java.util.Arrays.asList(GlApi.GL_PROJECTION, GlApi.GL_MODELVIEW,
+                        GlApi.GL_TEXTURE, GlApi.GL_MODELVIEW),
                 FakeGl.matrixModeSequence);
         // glLoadIdentity 与 glOrtho 都必须发生在已切到投影矩阵之后
         for (int i : FakeGl.indicesMatchingPrefix("ortho@")) {
@@ -210,8 +212,8 @@ class GlRendererTest {
         assertArrayEquals(new double[]{0d, 1280d, 720d, 0d, -1d, 1d}, FakeGl.lastOrtho, 1e-6);
 
         renderer.endFrame();
-        // 还原同样切换两次（投影 + 模型视图），累计四次
-        assertEquals(4, FakeGl.matrixModeCalls);
+        // 还原同样切换两次（投影 + 模型视图）：本帧共 4 + 2 = 6 次
+        assertEquals(6, FakeGl.matrixModeCalls);
         assertEquals(FakeGl.pushMatrixCalls, FakeGl.popMatrixCalls, "matrix push/pop must balance");
     }
 

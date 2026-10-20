@@ -225,6 +225,8 @@ public final class FontRasterizer implements FaFont.Provider {
         private final FontRasterizer owner;
         private final int fontId;
         private final int pxSize;
+        /** 最近一次 {@link #glyph(int)} 返回的字形所属图集（可能已被替换）。 */
+        private GlyphAtlas glyphAtlas;
         private final float designSize;
 
         RasterFont(FontRasterizer owner, int fontId, int pxSize, float designSize) {
@@ -290,8 +292,10 @@ public final class FontRasterizer implements FaFont.Provider {
                     continue;
                 }
                 if (glyph.width > 0 && glyph.height > 0) {
-                    // texture 可能刚被上传（dirty 刷新），每次都重新取一次句柄。
-                    texture = atlas.texture(renderer);
+                    // 句柄必须取自**字形所在**的图集：图集写满时旧图集已被释放，
+                    // 继续用旧对象的句柄会把新 UV 画到一张空纹理上。
+                    GlyphAtlas source = glyphAtlas == null ? atlas : glyphAtlas;
+                    texture = source.texture(renderer);
                     float gx = deviceX + (pen + glyph.bearingX) * perPx;
                     float gy = deviceY + glyph.bearingY * perPx;
                     renderer.texturedQuad(texture, gx, gy, glyph.width * perPx, glyph.height * perPx,
@@ -302,20 +306,35 @@ public final class FontRasterizer implements FaFont.Provider {
         }
 
         /** 取字形；图集写满时淘汰重建并重试一次。 */
+        /**
+         * 取一个字形，并把「它来自哪张图集」记录到 {@link #glyphAtlas}。
+         *
+         * <p>图集写满时 {@code owner.atlas(previous, …)} 会淘汰旧图集并新建一张，旧句柄随即释放。
+         * 因此绘制时必须用这里记下的图集取纹理——否则会拿旧（已释放）句柄配新图集的 UV，
+         * 采样到别的字形或空白。绘制是单线程的（见类注释），字段安全。
+         */
         private GlyphAtlas.Glyph glyph(int codePoint) {
             GlyphAtlas atlas = owner.atlas(null, fontId, pxSize);
             if (atlas == null) {
+                glyphAtlas = null;
                 return null;
             }
             GlyphAtlas.Glyph glyph = atlas.glyph(codePoint);
             if (glyph != null) {
+                glyphAtlas = atlas;
                 return glyph;
             }
             if (!atlas.full()) {
+                glyphAtlas = atlas;
                 return null;
             }
             GlyphAtlas replacement = owner.atlas(atlas, fontId, pxSize);
-            return replacement == null ? null : replacement.glyph(codePoint);
+            if (replacement == null) {
+                glyphAtlas = null;
+                return null;
+            }
+            glyphAtlas = replacement;
+            return replacement.glyph(codePoint);
         }
     }
 

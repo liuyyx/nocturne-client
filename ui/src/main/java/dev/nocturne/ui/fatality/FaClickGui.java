@@ -445,16 +445,6 @@ public final class FaClickGui implements OverlayGui {
             backendScale = 1;
             backendName = renderer.getClass().getSimpleName();
         }
-        // 字体句柄每帧按「后端 + 缩放」同步：换了后端或缩放，字形图集必须整体重建。
-        FaTheme.fonts = FontRasterizer.bind(renderer, scale, backendScale);
-        if (!fontDiagLogged && System.getProperty("nocturne.ui.debug") != null) {
-            fontDiagLogged = true;
-            System.out.println("[nocturne] gui render: backend=" + backendName + " scale=" + scale
-                    + " backendScale=" + backendScale + " fonts="
-                    + FaTheme.fonts.getClass().getSimpleName()
-                    + " atlas=" + FontRasterizer.atlasActive());
-        }
-
         long now = System.nanoTime();
         float dt = lastNanos == 0L ? 1.0f / 60.0f : Math.min(0.1f, (now - lastNanos) / 1.0e9f);
         lastNanos = now;
@@ -462,6 +452,16 @@ public final class FaClickGui implements OverlayGui {
         // 按住鼠标时重算缩放会把正在拖的控件挪走，所以等松开再算。
         if (!mouseDown) {
             updateScale();
+        }
+        // 字体句柄必须按**本帧**的缩放绑定：先前放在 updateScale() 之前，缩放变化那一帧
+        // 会按旧密度栅格、下一帧再整册重建一次图集（一次性闪烁 + 两倍栅格开销）。
+        FaTheme.fonts = FontRasterizer.bind(renderer, scale, backendScale);
+        if (!fontDiagLogged && System.getProperty("nocturne.ui.debug") != null) {
+            fontDiagLogged = true;
+            System.out.println("[nocturne] gui render: backend=" + backendName + " scale=" + scale
+                    + " backendScale=" + backendScale + " fonts="
+                    + FaTheme.fonts.getClass().getSimpleName()
+                    + " atlas=" + FontRasterizer.atlasActive());
         }
         draw.begin(renderer, scale);
         ctx.draw = draw;

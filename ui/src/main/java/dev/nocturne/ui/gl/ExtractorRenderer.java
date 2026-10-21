@@ -349,10 +349,27 @@ public final class ExtractorRenderer implements UiBackend {
         Method scaleMatrix = null;
         if (pose != null) {
             Class<?> matrix = pose.getReturnType();
-            pushMatrix = Reflect.method(matrix, "pushMatrix");
-            popMatrix = Reflect.method(matrix, "popMatrix");
-            // JOML 的 scale(float,float) 继承自 Matrix3x2f；Reflect.method 只查本类，需要沿继承链找。
-            scaleMatrix = methodInHierarchy(matrix, "scale", float.class, float.class);
+            if (methodInHierarchy(matrix, "pushMatrix") != null) {
+                // 1.21.11+：JOML Matrix3x2fStack（2D）。
+                pushMatrix = methodInHierarchy(matrix, "pushMatrix");
+                popMatrix = methodInHierarchy(matrix, "popMatrix");
+                scaleMatrix = methodInHierarchy(matrix, "scale", float.class, float.class);
+            } else {
+                // 1.20–1.21.10：PoseStack（3D）；Fabric 运行期名是 method_22903/22909/22905。
+                pushMatrix = methodInHierarchy(matrix, "pushPose");
+                if (pushMatrix == null) {
+                    pushMatrix = methodInHierarchy(matrix, "method_22903");
+                }
+                popMatrix = methodInHierarchy(matrix, "popPose");
+                if (popMatrix == null) {
+                    popMatrix = methodInHierarchy(matrix, "method_22909");
+                }
+                scaleMatrix = methodInHierarchy(matrix, "scale", float.class, float.class, float.class);
+                if (scaleMatrix == null) {
+                    scaleMatrix = methodInHierarchy(matrix, "method_22905",
+                            float.class, float.class, float.class);
+                }
+            }
         }
         Method fill = byCandidates(type, mapping, "fill",
                 int.class, int.class, int.class, int.class, int.class);
@@ -812,7 +829,11 @@ public final class ExtractorRenderer implements UiBackend {
             Object pose = Reflect.call(poseMethod, graphics);
             if (pose != null) {
                 Reflect.call(pushMatrix, pose);
-                Reflect.call(scaleMatrix, pose, factor, factor);
+                if (scaleMatrix.getParameterCount() == 2) {
+                    Reflect.call(scaleMatrix, pose, factor, factor);
+                } else {
+                    Reflect.call(scaleMatrix, pose, factor, factor, 1.0f);
+                }
                 call(this.text, graphics, fontInstance, text,
                         Math.round(x / factor), Math.round(y / factor), color.argb);
                 Reflect.call(popMatrix, pose);
@@ -837,7 +858,8 @@ public final class ExtractorRenderer implements UiBackend {
         // 必须走四参重载（带实参 text）：三参重载是「无参方法 + 兜底值」，
         // 传进来会落成 intOf(fontWidth, font, fallback=length*6)，于是 Font.width(String)
         // 根本没被调用，宽度恒等于 length×6——测试里 FakeFont 对任何文本都返回同一个值，掩盖了它。
-        float factor = size > 0f ? size / NATIVE_FONT_PX : 1f;
+        // 只有能缩放绘制的后端才同步缩放度量；26.x 没有 pose，保持原口径（否则度量与绘制会分叉）。
+        float factor = size > 0f && poseMethod != null ? size / NATIVE_FONT_PX : 1f;
         return intOf(widthHandle, fontInstance, text, text.length() * 6) * factor;
     }
 

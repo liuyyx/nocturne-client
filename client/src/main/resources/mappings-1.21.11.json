@@ -639,6 +639,20 @@
             "forge": "(IIII)V",
             "neoforge": "(IIII)V"
           }
+        },
+        "pose": {
+          "names": {
+            "vanilla": "e",
+            "fabric": "method_51448",
+            "forge": "pose",
+            "neoforge": "pose"
+          },
+          "signatures": {
+            "vanilla": "()Lorg/joml/Matrix3x2fStack;",
+            "fabric": "()Lorg/joml/Matrix3x2fStack;",
+            "forge": "()Lorg/joml/Matrix3x2fStack;",
+            "neoforge": "()Lorg/joml/Matrix3x2fStack;"
+          }
         }
       }
     },

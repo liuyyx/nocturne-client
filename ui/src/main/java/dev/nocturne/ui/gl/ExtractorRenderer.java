@@ -129,6 +129,17 @@ public final class ExtractorRenderer implements UiBackend {
 
     /** 本帧的绘制上下文；由钩子在 {@code extractRenderState} 期间设置。 */
     private volatile Object frame;
+    /** {@code GuiGraphics.pose()}（1.20+ 的 2D 矩阵栈）。 */
+    private final Method poseMethod;
+    /** {@code Matrix3x2fStack.pushMatrix()}。 */
+    private final Method pushMatrix;
+    /** {@code Matrix3x2fStack.popMatrix()}。 */
+    private final Method popMatrix;
+    /** {@code Matrix3x2fStack.scale(float, float)}。 */
+    private final Method scaleMatrix;
+    /** 字体的原生像素高度（MC 字体 9px）；缩放基准。 */
+    private static final float NATIVE_FONT_PX = 9f;
+
     /** 映射表；用于按运行期名字解析字体度量（{@code Font.width} 在 Fabric 下是 method_1727）。 */
     private final dev.nocturne.client.mapping.Mapping mapping;
     /** 字体来源（按映射表解析；{@code null} 时退回按名读字段）。 */
@@ -142,6 +153,11 @@ public final class ExtractorRenderer implements UiBackend {
     /** 本帧绘制区宽高（逻辑像素）；未知为 0。 */
     private int width;
     private int height;
+    /*
+     * GUI 缩放（物理像素 / 逻辑像素）由 {@link #guiScale} 承担：
+     * 组件树按「设计单位 × scale」排版。1.20+ 的 GuiGraphics 用逻辑坐标，若 scale 恒为 1，
+     * 字体（逻辑 9px）相对 427 宽的布局显得过大，标签会被 FaTheme.fit 大面积截断。
+     */
     /** 绘制调用是否已失败过（只报一次，避免每帧刷屏）。 */
     private boolean drawFailureLogged;
 
@@ -175,7 +191,7 @@ public final class ExtractorRenderer implements UiBackend {
                               Method disableScissor, Method text, Method guiWidth, Method guiHeight,
                               Supplier<Object> minecraft) {
         this(extractorType, fill, outline, enableScissor, disableScissor, text, guiWidth, guiHeight,
-                minecraft, null, null, null, null, null, null, null);
+                minecraft, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     private ExtractorRenderer(Class<?> extractorType, Method fill, Method outline, Method enableScissor,
@@ -184,7 +200,9 @@ public final class ExtractorRenderer implements UiBackend {
                               Method guiScaledWidth, Method guiScaledHeight,
                               Method physicalWidth, Method physicalHeight,
                               Supplier<Object> fontSource,
-                              dev.nocturne.client.mapping.Mapping mapping) {
+                              dev.nocturne.client.mapping.Mapping mapping,
+                              Method poseMethod, Method pushMatrix, Method popMatrix,
+                              Method scaleMatrix) {
         this.fill = fill;
         this.outline = outline;
         this.enableScissor = enableScissor;
@@ -203,6 +221,10 @@ public final class ExtractorRenderer implements UiBackend {
         this.windowProbeResolved = windowGetter != null;
         this.fontSource = fontSource;
         this.mapping = mapping;
+        this.poseMethod = poseMethod;
+        this.pushMatrix = pushMatrix;
+        this.popMatrix = popMatrix;
+        this.scaleMatrix = scaleMatrix;
         // 句柄 0 保留为"无效"（Renderer 契约：id<=0 表示新建），因此先占一个空槽。
         textures.add(null);
         // 纹理支路：一次把 26.1–26.3 上签名一致的入口全部绑定；缺任何一项就整条支路关掉，
@@ -321,6 +343,16 @@ public final class ExtractorRenderer implements UiBackend {
         if (type == null || mapping == null) {
             return null;
         }
+        Method pose = byCandidates(type, mapping, "pose");
+        Method pushMatrix = null;
+        Method popMatrix = null;
+        Method scaleMatrix = null;
+        if (pose != null) {
+            Class<?> matrix = pose.getReturnType();
+            pushMatrix = Reflect.method(matrix, "pushMatrix");
+            popMatrix = Reflect.method(matrix, "popMatrix");
+            scaleMatrix = Reflect.method(matrix, "scale", float.class, float.class);
+        }
         Method fill = byCandidates(type, mapping, "fill",
                 int.class, int.class, int.class, int.class, int.class);
         Method text = byCandidates(type, mapping, "drawString",
@@ -352,7 +384,7 @@ public final class ExtractorRenderer implements UiBackend {
                         "getHeight");
         return new ExtractorRenderer(type, fill, null, enableScissor, null, text, null, null,
                 minecraft, windowGetter, scaledWidth, scaledHeight, physicalWidth, physicalHeight,
-                fontSource, mapping);
+                fontSource, mapping, pose, pushMatrix, popMatrix, scaleMatrix);
     }
 
     /** 按映射表的方法名候选逐个尝试。 */
@@ -502,6 +534,9 @@ public final class ExtractorRenderer implements UiBackend {
         if (measuredWidth <= 0 || measuredHeight <= 0) {
             int[] scaled = guiScaledSize();
             if (scaled != null) {
+                updateUiScale(scaled[0]);
+            }
+            if (scaled != null) {
                 if (measuredWidth <= 0) {
                     measuredWidth = scaled[0];
                 }
@@ -627,6 +662,33 @@ public final class ExtractorRenderer implements UiBackend {
         return scaledWidth > 0 && scaledHeight > 0 ? new int[]{scaledWidth, scaledHeight} : null;
     }
 
+    /**
+     * 由「物理宽 / 逻辑宽」推算 GUI 缩放；只在拿到有效值时更新。
+     *
+     * @param logicalWidth 本帧的逻辑宽度
+     */
+    private void updateUiScale(int logicalWidth) {
+        if (logicalWidth <= 0 || windowWidth == null || minecraft == null || windowGetter == null) {
+            return;
+        }
+        Object mc = minecraft.get();
+        if (mc == null) {
+            return;
+        }
+        Object window = Reflect.call(windowGetter, mc);
+        if (window == null) {
+            return;
+        }
+        int physical = intOf(windowWidth, window, 0);
+        if (physical <= 0) {
+            return;
+        }
+        int factor = Math.round(physical / (float) logicalWidth);
+        if (factor > 0) {
+            guiScale = Math.max(1, Math.min(16, factor));
+        }
+    }
+
     @Override
     public int width() {
         return width;
@@ -728,7 +790,23 @@ public final class ExtractorRenderer implements UiBackend {
         if (graphics == null || fontInstance == null) {
             return;
         }
-        // size 被忽略：26.x 的 Font 只有原生行高一种尺寸，度量与绘制都用它，布局自洽。
+        // 游戏字体是固定 9px；设计字号 size 可能更小。按 size/9 缩放矩阵，
+        // 使「绘制出来的字宽」与 textWidth 返回的宽度一致（否则 1.21 的 427 逻辑空间里
+        // 字体相对布局过大，标签会被 FaTheme.fit 大面积截断）。
+        float factor = size > 0f ? size / NATIVE_FONT_PX : 1f;
+        boolean scaled = Math.abs(factor - 1f) > 0.01f && poseMethod != null && pushMatrix != null
+                && popMatrix != null && scaleMatrix != null;
+        if (scaled) {
+            Object pose = Reflect.call(poseMethod, graphics);
+            if (pose != null) {
+                Reflect.call(pushMatrix, pose);
+                Reflect.call(scaleMatrix, pose, factor, factor);
+                call(this.text, graphics, fontInstance, text,
+                        Math.round(x / factor), Math.round(y / factor), color.argb);
+                Reflect.call(popMatrix, pose);
+                return;
+            }
+        }
         call(this.text, graphics, fontInstance, text, Math.round(x), Math.round(y), color.argb);
     }
 
@@ -747,7 +825,8 @@ public final class ExtractorRenderer implements UiBackend {
         // 必须走四参重载（带实参 text）：三参重载是「无参方法 + 兜底值」，
         // 传进来会落成 intOf(fontWidth, font, fallback=length*6)，于是 Font.width(String)
         // 根本没被调用，宽度恒等于 length×6——测试里 FakeFont 对任何文本都返回同一个值，掩盖了它。
-        return intOf(widthHandle, fontInstance, text, text.length() * 6);
+        float factor = size > 0f ? size / NATIVE_FONT_PX : 1f;
+        return intOf(widthHandle, fontInstance, text, text.length() * 6) * factor;
     }
 
     @Override

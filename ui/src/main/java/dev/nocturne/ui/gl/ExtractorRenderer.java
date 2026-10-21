@@ -351,7 +351,8 @@ public final class ExtractorRenderer implements UiBackend {
             Class<?> matrix = pose.getReturnType();
             pushMatrix = Reflect.method(matrix, "pushMatrix");
             popMatrix = Reflect.method(matrix, "popMatrix");
-            scaleMatrix = Reflect.method(matrix, "scale", float.class, float.class);
+            // JOML 的 scale(float,float) 继承自 Matrix3x2f；Reflect.method 只查本类，需要沿继承链找。
+            scaleMatrix = methodInHierarchy(matrix, "scale", float.class, float.class);
         }
         Method fill = byCandidates(type, mapping, "fill",
                 int.class, int.class, int.class, int.class, int.class);
@@ -385,6 +386,17 @@ public final class ExtractorRenderer implements UiBackend {
         return new ExtractorRenderer(type, fill, null, enableScissor, null, text, null, null,
                 minecraft, windowGetter, scaledWidth, scaledHeight, physicalWidth, physicalHeight,
                 fontSource, mapping, pose, pushMatrix, popMatrix, scaleMatrix);
+    }
+
+    /** 沿继承链查找方法（JOML 的矩阵方法多定义在父类上）。 */
+    private static Method methodInHierarchy(Class<?> type, String name, Class<?>... parameterTypes) {
+        for (Class<?> current = type; current != null; current = current.getSuperclass()) {
+            Method found = Reflect.method(current, name, parameterTypes);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     /** 按映射表的方法名候选逐个尝试。 */

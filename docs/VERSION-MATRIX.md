@@ -36,6 +36,9 @@
 | 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（156 具名成员；vanilla 名与旧表逐项一致） |
 | 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（150） |
 | 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（162，`--javap` 通过） |
+| 1.21.4 | ✅ **真机已实测**（BMWClient 整合包 + Fabric：`backend=gui-extractor`、`Screen.render` 钩子织入；我方 UI 渲染正常，被整合包自带 LiquidBounce 菜单覆盖） | ✅ | ✅ 已产出 | ✅ 可见（三列面板 + 中文标签） |
+| 1.21.10 | ✅ **真机已实测**（`1.21.10-opal` + Fabric：`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`overlay active`） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 文字） |
+| 1.21.11 | ✅ **真机已实测**（`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`FaClickGui` 完整显示，文字按设计字号缩放） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 中文标签，无截断） |
 | 1.20.1 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（166，`--javap` 通过；forge 名用真实 Forge jar 校验 149/149） |
 | 1.21.4 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（166，`--javap` 通过） |
 | 1.21.10 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（166） |

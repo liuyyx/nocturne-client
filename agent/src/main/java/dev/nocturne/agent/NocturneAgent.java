@@ -456,6 +456,19 @@ public final class NocturneAgent {
      * @param asmLoader       内嵌 ASM 子加载器
      * @param gameLoader      游戏类加载器
      */
+    /** 首参类型是否具备 {@code fill(int×5,void)}（GuiGraphics 的特征，PoseStack 没有）。 */
+    private static boolean hasFill(Class<?> type) {
+        for (java.lang.reflect.Method method : type.getMethods()) {
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length == 5 && parameters[0] == int.class && parameters[1] == int.class
+                    && parameters[2] == int.class && parameters[3] == int.class
+                    && parameters[4] == int.class && method.getReturnType() == void.class) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void installGuiGraphicsHook(Instrumentation instrumentation,
                                                EmbeddedAsmLoader asmLoader, ClassLoader gameLoader) {
         dev.nocturne.client.mapping.Mapping mapping = currentMapping();
@@ -488,6 +501,10 @@ public final class NocturneAgent {
             Class<?>[] parameters = candidate.getParameterTypes();
             if (!renderNames.contains(candidate.getName()) || parameters.length != 4
                     || parameters[0].isPrimitive()) {
+                continue;
+            }
+            if (!hasFill(parameters[0])) {
+                // 1.13–1.19 的 render(PoseStack,...) 形状相同但不是 GuiGraphics，跳过。
                 continue;
             }
             String descriptor = "(L" + parameters[0].getName().replace('.', '/') + ";IIF)V";

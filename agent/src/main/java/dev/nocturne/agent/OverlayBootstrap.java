@@ -363,7 +363,7 @@ public final class OverlayBootstrap implements FrameListener {
                 continue;
             }
             Class<?> first = candidate.getParameterTypes()[0];
-            if (!first.isPrimitive() && first != Object.class) {
+            if (!first.isPrimitive() && first != Object.class && hasFill(first)) {
                 if (!guiGraphicsReported) {
                     guiGraphicsReported = true;
                     System.out.println("[nocturne] gui-graphics: context=" + first.getName()
@@ -390,6 +390,26 @@ public final class OverlayBootstrap implements FrameListener {
                     + screen.getName() + "; 4-arg methods:" + four);
         }
         return null;
+    }
+
+    /**
+     * 首参是否真的是 {@code GuiGraphics}。
+     *
+     * <p>1.13–1.19 的 {@code Screen.render(PoseStack,int,int,float)} 与 1.20+ 的
+     * {@code render(GuiGraphics,int,int,float)} 形状完全相同，只看参数个数会把 PoseStack 当成
+     * 绘制上下文（1.16.5 实测：误走 extractor 后端，界面一个像素都不画）。用「有没有
+     * {@code fill(int,int,int,int,int)}」区分——GuiGraphics 有，PoseStack 没有。
+     */
+    private static boolean hasFill(Class<?> type) {
+        for (java.lang.reflect.Method method : type.getMethods()) {
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length == 5 && parameters[0] == int.class && parameters[1] == int.class
+                    && parameters[2] == int.class && parameters[3] == int.class
+                    && parameters[4] == int.class && method.getReturnType() == void.class) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Class<?> resolveGl11() {

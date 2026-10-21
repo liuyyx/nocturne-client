@@ -80,7 +80,7 @@
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`（旧界面）；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
-| 1.16.5 | ✅ **真机已实测**（`vanilla-1.16.5` + LWJGL3：attach → `agentmain` → `glfwSwapBuffers` 帧钩子 live → 叠加层 attach；`tmp/mc1165*.log`） | ✅ | ✅ 已产出 | ✅ 可见（`backend=gl-core`、`screen=ClickGui`，三列面板 + FullBright 行可点选；修过 `glLinkProgram` 缺失 + 视口回退游戏 Window；toggle 用扩展右 Shift；文字待复验） |
+| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3，`backend=gl-core`、`FaClickGui` 三列 + 中文标签完整，无截断/重叠；`Screen.render(PoseStack,…)` 不会被误判成 GuiGraphics） | ✅ | ✅ 已产出 | ✅ 可见（`tmp/mc1165-final.png`） |
 | 26.2 | ✅ **真机已实测**（修复后） | ✅ 帧钩子按设计不注册（GLFW 交换点只驱动输入轮询） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor; input=glfw`；`GuiDrawHook` 织入成功；截图 `docs/research/fatality-26.2-fixed.png`） |
 | 26.2（Vulkan） | ⏳ | 未验 | ✅ 已产出 | ⏳ 待真机（26.2 的图形 API 需在游戏设置里手动切换，本次实测的是 OpenGL 路径） |
 | 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转） |

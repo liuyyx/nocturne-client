@@ -111,6 +111,20 @@
             "forge": "()I",
             "neoforge": "()I"
           }
+        },
+        "getGuiScaledWidth": {
+          "names": {
+            "vanilla": "o",
+            "fabric": "method_4486",
+            "forge": "getGuiScaledWidth",
+            "neoforge": "getGuiScaledWidth"
+          },
+          "signatures": {
+            "vanilla": "()I",
+            "fabric": "()I",
+            "forge": "()I",
+            "neoforge": "()I"
+          }
         }
       },
       "fields": {}

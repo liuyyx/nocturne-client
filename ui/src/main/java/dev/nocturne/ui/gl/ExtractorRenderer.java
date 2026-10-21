@@ -129,6 +129,10 @@ public final class ExtractorRenderer implements UiBackend {
 
     /** 本帧的绘制上下文；由钩子在 {@code extractRenderState} 期间设置。 */
     private volatile Object frame;
+    /** 映射表；用于按运行期名字解析字体度量（{@code Font.width} 在 Fabric 下是 method_1727）。 */
+    private final dev.nocturne.client.mapping.Mapping mapping;
+    /** 字体来源（按映射表解析；{@code null} 时退回按名读字段）。 */
+    private final Supplier<Object> fontSource;
     /** 字体实例；未就绪时为 {@code null}（每帧重试，见 {@link #ensureFont()}）。 */
     private volatile Object font;
     /** {@code Font.width(String)}。 */
@@ -170,6 +174,17 @@ public final class ExtractorRenderer implements UiBackend {
     private ExtractorRenderer(Class<?> extractorType, Method fill, Method outline, Method enableScissor,
                               Method disableScissor, Method text, Method guiWidth, Method guiHeight,
                               Supplier<Object> minecraft) {
+        this(extractorType, fill, outline, enableScissor, disableScissor, text, guiWidth, guiHeight,
+                minecraft, null, null, null, null, null, null, null);
+    }
+
+    private ExtractorRenderer(Class<?> extractorType, Method fill, Method outline, Method enableScissor,
+                              Method disableScissor, Method text, Method guiWidth, Method guiHeight,
+                              Supplier<Object> minecraft, Method windowGetter,
+                              Method guiScaledWidth, Method guiScaledHeight,
+                              Method physicalWidth, Method physicalHeight,
+                              Supplier<Object> fontSource,
+                              dev.nocturne.client.mapping.Mapping mapping) {
         this.fill = fill;
         this.outline = outline;
         this.enableScissor = enableScissor;
@@ -178,6 +193,16 @@ public final class ExtractorRenderer implements UiBackend {
         this.guiWidth = guiWidth;
         this.guiHeight = guiHeight;
         this.minecraft = minecraft;
+        // 1.20–1.21：GuiGraphics 没有尺寸方法，窗口句柄与 GUI 缩放尺寸在绑定时就解析好
+        // （运行期名字是 intermediary，构造后再按 Mojmap 名找必然落空）。
+        this.windowGetter = windowGetter;
+        this.guiScaledWidth = guiScaledWidth;
+        this.guiScaledHeight = guiScaledHeight;
+        this.windowWidth = physicalWidth;
+        this.windowHeight = physicalHeight;
+        this.windowProbeResolved = windowGetter != null;
+        this.fontSource = fontSource;
+        this.mapping = mapping;
         // 句柄 0 保留为"无效"（Renderer 契约：id<=0 表示新建），因此先占一个空槽。
         textures.add(null);
         // 纹理支路：一次把 26.1–26.3 上签名一致的入口全部绑定；缺任何一项就整条支路关掉，
@@ -291,7 +316,8 @@ public final class ExtractorRenderer implements UiBackend {
      */
     public static ExtractorRenderer bindMapped(Class<?> type,
                                                dev.nocturne.client.mapping.Mapping mapping,
-                                               Supplier<Object> minecraft) {
+                                               Supplier<Object> minecraft,
+                                               Supplier<Object> fontSource) {
         if (type == null || mapping == null) {
             return null;
         }
@@ -306,21 +332,48 @@ public final class ExtractorRenderer implements UiBackend {
                     + " text=" + (text != null) + " scissor=" + (enableScissor != null));
             return null;
         }
-        return new ExtractorRenderer(type, fill, null, enableScissor, null, text, null, null, minecraft);
+        Object mc = minecraft == null ? null : minecraft.get();
+        Class<?> mcType = mc == null ? null : mc.getClass();
+        Method windowGetter = mcType == null ? null
+                : byCandidates(mcType, mapping, dev.nocturne.client.mapping.ClassType.MINECRAFT,
+                        "getWindow");
+        Class<?> windowType = windowGetter == null ? null : windowGetter.getReturnType();
+        Method scaledWidth = windowType == null ? null
+                : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
+                        "getGuiScaledWidth");
+        Method scaledHeight = windowType == null ? null
+                : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
+                        "getGuiScaledHeight");
+        Method physicalWidth = windowType == null ? null
+                : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
+                        "getWidth");
+        Method physicalHeight = windowType == null ? null
+                : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
+                        "getHeight");
+        return new ExtractorRenderer(type, fill, null, enableScissor, null, text, null, null,
+                minecraft, windowGetter, scaledWidth, scaledHeight, physicalWidth, physicalHeight,
+                fontSource, mapping);
     }
 
     /** 按映射表的方法名候选逐个尝试。 */
     private static Method byCandidates(Class<?> owner,
                                        dev.nocturne.client.mapping.Mapping mapping,
                                        String canonicalName, Class<?>... parameterTypes) {
+        return byCandidates(owner, mapping, dev.nocturne.client.mapping.ClassType.GUI_GRAPHICS,
+                canonicalName, parameterTypes);
+    }
+
+    private static Method byCandidates(Class<?> owner,
+                                       dev.nocturne.client.mapping.Mapping mapping,
+                                       dev.nocturne.client.mapping.ClassType type,
+                                       String canonicalName, Class<?>... parameterTypes) {
         java.util.List<String> names;
         if (mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping) {
             names = ((dev.nocturne.client.mapping.ObfuscatedMapping) mapping)
-                    .methodNameCandidates(dev.nocturne.client.mapping.ClassType.GUI_GRAPHICS,
-                            canonicalName, null);
+                    .methodNameCandidates(type, canonicalName, null);
         } else {
-            names = java.util.Collections.singletonList(mapping.methodName(
-                    dev.nocturne.client.mapping.ClassType.GUI_GRAPHICS, canonicalName, null));
+            names = java.util.Collections.singletonList(
+                    mapping.methodName(type, canonicalName, null));
         }
         for (String name : names) {
             Method found = method(owner, name, parameterTypes);
@@ -549,7 +602,8 @@ public final class ExtractorRenderer implements UiBackend {
         if (!windowProbeResolved) {
             updateGuiScale();
         }
-        if (guiScaledWidth == null || guiScaledHeight == null || minecraft == null || windowGetter == null) {
+        // getGuiScaledHeight 不是必需的：缺失时用物理宽高比例换算（见下）。
+        if (guiScaledWidth == null || minecraft == null || windowGetter == null) {
             return null;
         }
         Object mc = minecraft.get();
@@ -562,6 +616,14 @@ public final class ExtractorRenderer implements UiBackend {
         }
         int scaledWidth = intOf(guiScaledWidth, window, 0);
         int scaledHeight = intOf(guiScaledHeight, window, 0);
+        if (scaledWidth > 0 && scaledHeight <= 0) {
+            // 没有 getGuiScaledHeight：用物理宽高比例换算（GUI 缩放是等比整数）。
+            int physicalWidthValue = intOf(windowWidth, window, 0);
+            int physicalHeightValue = intOf(windowHeight, window, 0);
+            if (physicalWidthValue > 0 && physicalHeightValue > 0) {
+                scaledHeight = Math.round(scaledWidth * physicalHeightValue / (float) physicalWidthValue);
+            }
+        }
         return scaledWidth > 0 && scaledHeight > 0 ? new int[]{scaledWidth, scaledHeight} : null;
     }
 
@@ -939,7 +1001,7 @@ public final class ExtractorRenderer implements UiBackend {
         if (instance == null) {
             return;
         }
-        Object candidate = fieldValue(instance, "font");
+        Object candidate = fontSource != null ? fontSource.get() : fieldValue(instance, "font");
         if (candidate == null) {
             if (!fontMissingLogged) {
                 fontMissingLogged = true;
@@ -949,7 +1011,16 @@ public final class ExtractorRenderer implements UiBackend {
             return;
         }
         font = candidate;
-        fontWidth = method(candidate.getClass(), "width", String.class);
+        if (mapping != null) {
+            // Font.width(String)：Fabric 运行期是 method_1727，硬编码 "width" 会度量失败，
+            // 组件按 0 宽度布局，标签与数值就会叠在一起。
+            Method mappedWidth = byCandidates(candidate.getClass(), mapping,
+                    dev.nocturne.client.mapping.ClassType.FONT, "width", String.class);
+            if (mappedWidth != null) {
+                fontWidth = mappedWidth;
+            }
+        }
+        fontWidth = fontWidth != null ? fontWidth : method(candidate.getClass(), "width", String.class);
         lineHeight = intField(candidate, "lineHeight", FALLBACK_LINE_HEIGHT);
     }
 

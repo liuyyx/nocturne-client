@@ -39,6 +39,8 @@ public enum ClassType {
     GUI_GRAPHICS("net.minecraft.client.gui.GuiGraphics"),
     /** 字体渲染器。 */
     FONT_RENDERER("net.minecraft.client.gui.FontRenderer"),
+    /** 1.13+ 的字体类（1.8.9 用 {@link #FONT_RENDERER}）。 */
+    FONT("net.minecraft.client.gui.Font"),
     /** 物品栈。 */
     ITEM_STACK("net.minecraft.world.item.ItemStack"),
     /** 药水效果类型（夜视等）；1.8.9 名 Potion。 */

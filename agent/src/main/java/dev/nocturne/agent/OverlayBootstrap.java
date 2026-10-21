@@ -229,7 +229,8 @@ public final class OverlayBootstrap implements FrameListener {
         if (gameApi) {
             ExtractorRenderer extractor = sdl
                     ? ExtractorRenderer.bind(extractorType, bridge::minecraft)
-                    : ExtractorRenderer.bindMapped(extractorType, mapping, bridge::minecraft);
+                    : ExtractorRenderer.bindMapped(extractorType, mapping, bridge::minecraft,
+                            () -> bridge.readField(bridge.minecraft(), ClassType.MINECRAFT, "font"));
             if (extractor == null) {
                 // 绘制 API 签名不认识（这个版本的 extractor 换了形状）：报一次，之后仍按上限重试。
                 if (!sdlReported) {

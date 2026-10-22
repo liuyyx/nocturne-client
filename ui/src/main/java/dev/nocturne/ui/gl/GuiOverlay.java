@@ -237,6 +237,12 @@ public final class GuiOverlay implements FrameListener {
         if (glfw >= 0 && dev.nocturne.client.runtime.InputBlock.consumePressed(glfw, 250_000_000L)) {
             return true;
         }
+        // Windows 的 keybd_event(0xA1) 在 GLFW 里落到 340（LEFT_SHIFT），与映射表的 344 不同；
+        // 开关键两者都接受（右 Shift 是哨兵，不会和普通键冲突）。
+        if (vk == dev.nocturne.client.input.KeyMap.VK_RIGHT_SHIFT
+                && dev.nocturne.client.runtime.InputBlock.consumePressed(340, 250_000_000L)) {
+            return true;
+        }
         return input.keyDown(vk);
     }
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
@@ -280,7 +286,8 @@ public final class GuiOverlay implements FrameListener {
         // 我们的界面开着时短路游戏自己的输入入口：否则同一次点击/按键会同时打在后面的原生界面上
         //（点模块顺带按到「回到游戏」、Esc 顺带打开暂停菜单）。状态放在 bootstrap 层，游戏类看得到。
         InputBlock.setBlocked(gui.isOpen());
-        boolean toggleDown = input.keyDown(toggleKey);
+        // 事件驱动优先：1.21.1 的 glfwGetKey 在合成按键下恒为 0（游戏回调却正常）。
+        boolean toggleDown = keyPressed(toggleKey);
         if (toggleDown && !toggleWasDown) {
             gui.toggle();
             if (gui.isOpen()) {

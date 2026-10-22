@@ -30,6 +30,8 @@ public final class InputBlock {
     private static volatile int lastPressedKey = -1;
     /** 最近一次按下的时间戳（纳秒），用于消费后过期。 */
     private static volatile long lastPressedAt;
+    /** 按键诊断计数（仅 debug）。 */
+    private static int debugKeys;
 
     /**
      * 记录一次按键（由织入 {@code KeyboardHandler.keyPress} 的字节码调用）。
@@ -42,6 +44,9 @@ public final class InputBlock {
      */
     public static void recordKey(int glfwKey, int action) {
         if (action == 1) {
+            if (System.getProperty("nocturne.ui.debug") != null && debugKeys++ < 12) {
+                System.out.println("[nocturne] recordKey glfw=" + glfwKey);
+            }
             lastPressedKey = glfwKey;
             lastPressedAt = System.nanoTime();
         }

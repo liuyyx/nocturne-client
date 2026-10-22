@@ -79,10 +79,16 @@ public final class GuiDrawHook {
                 }
             }
             method.invoke(null, args);
-        } catch (Throwable ignored) {
+        } catch (Throwable error) {
             // 类还没就绪或签名变化：这一帧不驱动，下一帧再试。
+            if (System.getProperty("nocturne.ui.debug") != null && reported++ < 3) {
+                System.out.println("[nocturne] gui draw hook runtime failed: " + error);
+            }
         }
     }
+
+    /** 反射桥失败日志计数（仅 debug）。 */
+    private static int reported;
 
     private GuiDrawHook() {
     }

@@ -108,6 +108,9 @@ public final class ModernRenderer implements UiBackend {
     private final int[][] clipStack = new int[MAX_CLIP_DEPTH][];
     /** 当前裁剪嵌套深度（含因栈满被忽略的层）；为 0 表示未启用裁剪。 */
     private int clipDepth;
+    /** 纹理诊断：上传/绘制各打印前几次（-Dnocturne.ui.debug）。 */
+    private int uploadDiag;
+    private int quadDiag;
     /** 裁剪栈溢出是否已提示过。 */
     private boolean clipOverflowWarned;
 
@@ -631,6 +634,11 @@ public final class ModernRenderer implements UiBackend {
             return id;
         }
         gl.bindTexture2D(whiteTexture);
+        if (uploadDiag < 4 && System.getProperty("nocturne.ui.debug") != null) {
+            uploadDiag++;
+            System.out.println("[nocturne] tex upload: handle=" + handle + " " + width + "x" + height
+                    + " sample=" + Integer.toHexString(argb[Math.min(argb.length - 1, (height / 2) * width + width / 2)]));
+        }
         return handle;
     }
 
@@ -656,6 +664,13 @@ public final class ModernRenderer implements UiBackend {
         i = vertex(i, x, y, u0, v0);
         i = vertex(i, x + width, y + height, u1, v1);
         i = vertex(i, x, y + height, u0, v1);
+        if (quadDiag < 4 && System.getProperty("nocturne.ui.debug") != null) {
+            quadDiag++;
+            System.out.println("[nocturne] tex quad: tex=" + texture + " argb=" + Integer.toHexString(argb)
+                    + " uv=" + u0 + "," + v0 + ".." + u1 + "," + v1
+                    + " size=" + width + "x" + height
+                    + " isTex=" + gl.isTextureHandle(texture));
+        }
         gl.uniform1i(textureFlagLocation, 1);
         gl.activeTexture(ModernGlApi.GL_TEXTURE0);
         gl.bindTexture2D(texture);

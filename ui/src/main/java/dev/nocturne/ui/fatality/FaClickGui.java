@@ -1230,10 +1230,16 @@ public final class FaClickGui implements OverlayGui {
         keepOnScreen();
     }
 
-    /** 保证窗口标题栏与左边缘始终可点。 */
+    /**
+     * 把窗口完整夹进绘制区。
+     *
+     * <p>旧规则只保证「左边缘 60px 可点」，窗口放大/切分辨率后可以有一半留在屏幕外：
+     * 布局按比例保存（{@link LayoutStore}）时尤其明显——小窗口时拖到左上角，全屏后按同一比例
+     * 还原就贴着左上、右侧和底部被裁。改成整窗可见；窗口比绘制区还大时退化为贴左上。
+     */
     private void keepOnScreen() {
-        wx = clamp(wx, 4.0f - ww + 60.0f, sw - 60.0f);
-        wy = clamp(wy, 4.0f, sh - FaTheme.HEADER_H);
+        wx = clamp(wx, 4.0f, Math.max(4.0f, sw - ww - 4.0f));
+        wy = clamp(wy, 4.0f, Math.max(4.0f, sh - wh - 4.0f));
     }
 
     /** 夹取到 {@code [min, max]}；{@code max < min} 时取 {@code min}。 */

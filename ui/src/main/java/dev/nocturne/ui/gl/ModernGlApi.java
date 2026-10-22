@@ -172,6 +172,10 @@ public final class ModernGlApi {
     private Method texParameteri;
     /** {@code glPixelStorei(int, int)}。 */
     private Method pixelStorei;
+    /** {@code glGetError()}；诊断用，可选。 */
+    private Method getError;
+    /** {@code glIsTexture(int)}；诊断用，可选。 */
+    private Method isTexture;
     /** {@code glActiveTexture(int)}。 */
     private Method activeTexture;
     /** {@code glUniform1i(int, int)}。 */
@@ -179,6 +183,8 @@ public final class ModernGlApi {
 
     /** 纹理句柄读写与像素上传复用的直接缓冲；不足时按需扩容。 */
     private java.nio.ByteBuffer pixelStaging;
+    /** glGetError 诊断计数。 */
+    private int uploadErrors;
 
 
     /** 复用的直接缓冲区，避免每次上传都 {@code memAlloc}；不足时按需扩容。 */
@@ -295,6 +301,8 @@ public final class ModernGlApi {
         api.genTextures = find(loader, "glGenTextures", int[].class);
         api.deleteTextures = find(loader, "glDeleteTextures", int[].class);
         api.bindTexture = find(loader, "glBindTexture", int.class, int.class);
+        api.getError = find(loader, "glGetError");
+        api.isTexture = find(loader, "glIsTexture", int.class);
         api.texImage2D = find(loader, "glTexImage2D", int.class, int.class, int.class, int.class,
                 int.class, int.class, int.class, int.class, java.nio.ByteBuffer.class);
         api.texParameteri = find(loader, "glTexParameteri", int.class, int.class, int.class);
@@ -312,6 +320,11 @@ public final class ModernGlApi {
     }
 
     /** @return 新建纹理句柄；不可用或失败时为 0 */
+    /** @return 纹理名是否有效（诊断用） */
+    public Object isTextureHandle(int handle) {
+        return isTexture == null ? null : Reflect.call(isTexture, null, handle);
+    }
+
     public int genTexture() {
         if (genTextures == null) {
             return 0;
@@ -403,6 +416,11 @@ public final class ModernGlApi {
         }
         Reflect.call(texImage2D, null, GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                 GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+        if (System.getProperty("nocturne.ui.debug") != null && uploadErrors < 4) {
+            uploadErrors++;
+            Object error = getError == null ? null : Reflect.call(getError, null);
+            System.out.println("[nocturne] texImage2D " + width + "x" + height + " err=" + error);
+        }
         return true;
     }
 

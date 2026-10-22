@@ -165,9 +165,12 @@ public final class OverlayBootstrap implements FrameListener {
         //     上下文**，在那里 `glCreateShader` 同样直接 native abort（实测：JVM 整个挂掉）。
         // 因此判定条件取「有没有 GuiGraphicsExtractor」而不是「是不是 SDL 栈」——26.1/26.2 的 GL
         // 上下文只在游戏自己的调用序列里有效，我们只能在它交给我们的绘制上下文里提交绘制。
-        Class<?> extractorType = resolveLoaded(EXTRACTOR_CLASS);
+        // 诊断开关：-Dnocturne.ui.backend=gl 强制走 GL 后端（1.20-1.21 用来对比
+        // 「游戏绘制 API（无自定义纹理）」与「自带 GL 管线（有纹理/字形图集）」两条路的差异）。
+        boolean forceGl = "gl".equalsIgnoreCase(System.getProperty("nocturne.ui.backend", ""));
+        Class<?> extractorType = forceGl ? null : resolveLoaded(EXTRACTOR_CLASS);
         boolean sdl = extractorType != null;
-        if (extractorType == null) {
+        if (extractorType == null && !forceGl) {
             // 1.20–1.21：GuiGraphics 走同一套「游戏绘制 API」后端（fill / drawString / scissor），
             // 不自己维护 GL 管线。它与 26.x 的差别只有方法名与尺寸来源，已在 ExtractorRenderer 里吸收。
             extractorType = resolveGuiGraphics();

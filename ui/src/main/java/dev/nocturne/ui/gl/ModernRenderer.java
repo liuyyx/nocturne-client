@@ -637,7 +637,9 @@ public final class ModernRenderer implements UiBackend {
         if (uploadDiag < 4 && System.getProperty("nocturne.ui.debug") != null) {
             uploadDiag++;
             System.out.println("[nocturne] tex upload: handle=" + handle + " " + width + "x" + height
-                    + " sample=" + Integer.toHexString(argb[Math.min(argb.length - 1, (height / 2) * width + width / 2)]));
+                    + " cpu0=" + Integer.toHexString(argb[0])
+                    + " sample=" + Integer.toHexString(argb[Math.min(argb.length - 1, (height / 2) * width + width / 2)])
+                    + " gpu=" + gl.readBackPixels(handle, width, height));
         }
         return handle;
     }

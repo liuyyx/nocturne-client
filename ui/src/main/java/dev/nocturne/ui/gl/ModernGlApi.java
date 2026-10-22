@@ -176,6 +176,8 @@ public final class ModernGlApi {
     private Method getError;
     /** {@code glIsTexture(int)}；诊断用，可选。 */
     private Method isTexture;
+    /** {@code glGetTexImage(int,int,int,int,int,ByteBuffer)}；诊断用，可选。 */
+    private Method getTexImage;
     /** {@code glActiveTexture(int)}。 */
     private Method activeTexture;
     /** {@code glUniform1i(int, int)}。 */
@@ -303,6 +305,8 @@ public final class ModernGlApi {
         api.bindTexture = find(loader, "glBindTexture", int.class, int.class);
         api.getError = find(loader, "glGetError");
         api.isTexture = find(loader, "glIsTexture", int.class);
+        api.getTexImage = find(loader, "glGetTexImage", int.class, int.class, int.class, int.class,
+                java.nio.ByteBuffer.class);
         api.texImage2D = find(loader, "glTexImage2D", int.class, int.class, int.class, int.class,
                 int.class, int.class, int.class, int.class, java.nio.ByteBuffer.class);
         api.texParameteri = find(loader, "glTexParameteri", int.class, int.class, int.class);
@@ -320,6 +324,25 @@ public final class ModernGlApi {
     }
 
     /** @return 新建纹理句柄；不可用或失败时为 0 */
+    /** 回读纹理左上角 4 个像素（RGBA，诊断用）；失败返回 null。 */
+    public String readBackPixels(int handle, int width, int height) {
+        if (getTexImage == null) {
+            return "no-getTexImage";
+        }
+        java.nio.ByteBuffer out = java.nio.ByteBuffer.allocateDirect(width * height * 4)
+                .order(java.nio.ByteOrder.nativeOrder());
+        activeTexture(GL_TEXTURE0);
+        bindTexture2D(handle);
+        Reflect.call(getTexImage, null, GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, out);
+        Object error = getError == null ? null : Reflect.call(getError, null);
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < Math.min(8, width * height); i++) {
+            b.append(String.format("%02x%02x%02x%02x ", out.get(i * 4) & 0xFF, out.get(i * 4 + 1) & 0xFF,
+                    out.get(i * 4 + 2) & 0xFF, out.get(i * 4 + 3) & 0xFF));
+        }
+        return b.toString() + "err=" + error;
+    }
+
     /** @return 纹理名是否有效（诊断用） */
     public Object isTextureHandle(int handle) {
         return isTexture == null ? null : Reflect.call(isTexture, null, handle);

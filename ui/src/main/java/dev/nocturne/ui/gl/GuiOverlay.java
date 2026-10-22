@@ -216,6 +216,10 @@ public final class GuiOverlay implements FrameListener {
     private long batchLoggedAt;
 
     private boolean wasOpenForPointer;
+    /** 输入诊断计数（-Dnocturne.ui.debug）。 */
+    private int debugInput;
+    /** 上一次打印的按下状态（只在变化时打印）。 */
+    private boolean debugLastDown;
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
     private boolean pointerGrabbedBeforeGui;
 
@@ -293,6 +297,17 @@ public final class GuiOverlay implements FrameListener {
 
         // 滚轮增量每帧取出并清零：界面关闭期间也必须消费，否则打开瞬间会把
         // 关闭期间累积的增量一次性滚动出来。
+        if (System.getProperty("nocturne.ui.debug") != null && open) {
+            boolean down = input.mouseDown(BUTTON_LEFT);
+            if (down != debugLastDown || debugInput < 6) {
+                debugInput++;
+                debugLastDown = down;
+                System.out.println("[nocturne] input state: mx="
+                        + Math.round(input.mouseX() * 100) / 100.0
+                        + " my=" + Math.round(input.mouseY() * 100) / 100.0
+                        + " left=" + down + " grab=" + input.isPointerGrabbed());
+            }
+        }
         double scroll = input.scrollDelta();
 
         if (!gui.isOpen()) {

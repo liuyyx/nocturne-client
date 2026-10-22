@@ -724,7 +724,9 @@ public final class FaClickGui implements OverlayGui {
         float x = Math.max(wx + 103.0f, logoRight() + 14.0f);
         for (int i = 0; i <= index; i++) {
             Category value = categories.get(i);
-            float labelW = iconsOnly ? 0.0f : TAB_GAP + font.width(value.name());
+            // 标签按“翻译后”的宽度算：绘制走 FaStrings.t（中文更宽），用枚举名算会让命中区
+            // 从第三个 Tab 起整体左移，表现为「点杂项没反应」。
+            float labelW = iconsOnly ? 0.0f : TAB_GAP + font.width(FaStrings.t(value.name()));
             float w = TAB_PAD + TAB_ICON + labelW + TAB_PAD;
             if (i == index) {
                 return new float[]{x, wy + (FaTheme.HEADER_H - TAB_H) * 0.5f, w, TAB_H};
@@ -1152,6 +1154,21 @@ public final class FaClickGui implements OverlayGui {
         }
         if (FaContext.inside(mx, my, wx, wy, ww, FaTheme.HEADER_H)) {
             boolean iconsOnly = tabsIconsOnly();
+            if (System.getProperty("nocturne.ui.debug") != null) {
+                StringBuilder trace = new StringBuilder("[nocturne] header click at ");
+                trace.append(Math.round(mx * 10) / 10.0).append(',').append(Math.round(my * 10) / 10.0)
+                        .append(" header=").append(Math.round(wx)).append(',').append(Math.round(wy))
+                        .append(' ').append(Math.round(ww)).append('x').append(FaTheme.HEADER_H);
+                for (int i = 0; i < categories.size(); i++) {
+                    float[] b = tabBounds(i, iconsOnly);
+                    trace.append(" | ").append(categories.get(i)).append('=')
+                            .append(Math.round(b[0] * 10) / 10.0).append(',')
+                            .append(Math.round(b[1] * 10) / 10.0).append(' ')
+                            .append(Math.round(b[2] * 10) / 10.0).append('x')
+                            .append(Math.round(b[3] * 10) / 10.0);
+                }
+                System.out.println(trace);
+            }
             for (int i = 0; i < categories.size(); i++) {
                 float[] b = tabBounds(i, iconsOnly);
                 if (FaContext.inside(mx, my, b[0], b[1], b[2], b[3])) {

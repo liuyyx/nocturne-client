@@ -48,6 +48,10 @@ public final class ReflectiveInput implements InputSource {
     private final IntSupplier surfaceWidth;
     /** 绘制区域高度提供者。 */
     private final IntSupplier surfaceHeight;
+    /** 最近一次有效的绘制区尺寸：某些帧后端还报 0，退化成 1:1 会让点击整体偏移一倍。 */
+    private int lastSurfaceWidth;
+    /** 同上（高度）。 */
+    private int lastSurfaceHeight;
 
     // ---- LWJGL2（Minecraft ≤ 1.12）句柄，不可用时为 null ----
     private final Method mouseGetX;
@@ -389,7 +393,10 @@ public final class ReflectiveInput implements InputSource {
         // 并在那一刻强制重发期望模式。只在跳变时重发（而非每帧按实际模式纠偏）是为了
         // 不跟游戏自身的指针管理打架——原生界面（背包/暂停）会主动把模式设为 NORMAL。
         boolean focusRegained = pollFocusRegained();
-        if (!focusRegained && pointerGrabApplied && pointerGrabLast == grabbed) {
+        // 「释放」必须每帧重申：游戏在游戏内状态会持续把光标改回 DISABLED，只发一次的话
+        // 下一帧就被覆盖，界面收不到真实光标位置（1.21.11 实测：点击全部落空）。
+        // 捕获（grabbed=true）仍然幂等，避免与游戏自身的指针管理互相覆盖。
+        if (grabbed && !focusRegained && pointerGrabApplied && pointerGrabLast == grabbed) {
             return;
         }
         applyPointerGrab(grabbed);
@@ -576,6 +583,11 @@ public final class ReflectiveInput implements InputSource {
     /** @return 绘制区域宽度 / 窗口宽度；任一未知时退化为 1（即不做缩放） */
     private double scaleX() {
         int surface = surfaceWidth.getAsInt();
+        if (surface > 0) {
+            lastSurfaceWidth = surface;
+        } else {
+            surface = lastSurfaceWidth;
+        }
         int window = windowWidth();
         return surface > 0 && window > 0 ? (double) surface / window : 1d;
     }
@@ -583,6 +595,11 @@ public final class ReflectiveInput implements InputSource {
     /** @return 绘制区域高度 / 窗口高度；任一未知时退化为 1 */
     private double scaleY() {
         int surface = surfaceHeight.getAsInt();
+        if (surface > 0) {
+            lastSurfaceHeight = surface;
+        } else {
+            surface = lastSurfaceHeight;
+        }
         int window = windowHeight();
         return surface > 0 && window > 0 ? (double) surface / window : 1d;
     }

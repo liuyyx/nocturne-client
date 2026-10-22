@@ -581,12 +581,17 @@ public final class NocturneAgent {
             return;
         }
         // 键盘与按键绑定：界面开着时游戏不该再响应按键（移动、攻击、使用、打字、Esc 开菜单）。
-        registerInputBlock(instrumentation, asmLoader, KEY_PRESS_CLASS, KEY_PRESS_METHOD,
+        // 运行期类名：Fabric 是 intermediary（class_309），必须查映射表，写死 Mojang 名会
+        // "注册成功但 patched=false"（1.21.1 实测）。
+        String keyHandler = mappedClassName(dev.nocturne.client.mapping.ClassType.KEYBOARD_HANDLER);
+        // 方法名同理：Fabric 运行期是 method_1466，写死 keyPress 会让 transform 不命中（patched=false）。
+        String keyPressName = mappedMethodName(dev.nocturne.client.mapping.ClassType.KEYBOARD_HANDLER,
+                "keyPress", "keyPress");
+        registerInputBlock(instrumentation, asmLoader, keyHandler, keyPressName,
                 KEY_PRESS_DESCRIPTOR);
         // 1.13–1.21 的签名是 keyPress(long, int, int, int, int)：这条同时负责记录按键事件
         // （InputBlock.recordKey），叠加层的键盘输入改为事件驱动。
-        registerInputBlock(instrumentation, asmLoader, KEY_PRESS_CLASS, KEY_PRESS_METHOD,
-                "(JIIII)V");
+        registerInputBlock(instrumentation, asmLoader, keyHandler, keyPressName, "(JIIII)V");
         registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, KEY_MAPPING_SET_ALL, "()V");
         registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, "set",
                 KEY_MAPPING_SET_DESCRIPTOR);
@@ -629,6 +634,39 @@ public final class NocturneAgent {
      * @param method          目标方法名
      * @param descriptor      目标方法描述符
      */
+    /** @return 映射表里该方法的运行期名；映射不可用时退回规范名。 */
+    private static String mappedMethodName(dev.nocturne.client.mapping.ClassType type,
+                                           String canonical, String fallback) {
+        try {
+            dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+            if (mapping != null) {
+                String name = mapping.methodName(type, canonical, null);
+                if (name != null && !name.isEmpty() && !name.equals(canonical)) {
+                    return name;
+                }
+            }
+        } catch (Throwable ignored) {
+            // 映射未就绪：退回规范名。
+        }
+        return fallback;
+    }
+
+    /** @return 映射表里该类的运行期名；映射不可用时退回规范名。 */
+    private static String mappedClassName(dev.nocturne.client.mapping.ClassType type) {
+        try {
+            dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+            if (mapping != null) {
+                String name = mapping.className(type);
+                if (name != null && !name.isEmpty()) {
+                    return name;
+                }
+            }
+        } catch (Throwable ignored) {
+            // 映射未就绪：退回规范名。
+        }
+        return type.canonicalName();
+    }
+
     private static void registerInputBlockIfLoaded(Instrumentation instrumentation,
                                                    EmbeddedAsmLoader asmLoader, String targetClass,
                                                    String method, String descriptor) {
@@ -677,7 +715,15 @@ public final class NocturneAgent {
                 break;
             }
         }
-        log("input block registered on " + targetClass + "." + method);
+        boolean patched = false;
+        try {
+            java.lang.reflect.Method probe = transformer.getClass().getMethod("patched");
+            patched = Boolean.TRUE.equals(probe.invoke(transformer));
+        } catch (Throwable ignored) {
+            // 别的 transformer 没有 patched()，不影响注册结果。
+        }
+        log("input block registered on " + targetClass + "." + method
+                + " patched=" + patched + " desc=" + descriptor);
     }
 
     /**

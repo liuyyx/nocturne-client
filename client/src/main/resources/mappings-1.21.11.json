@@ -3347,6 +3347,31 @@
           }
         }
       }
+    },
+    "net/minecraft/client/KeyboardHandler": {
+      "names": {
+        "vanilla": "",
+        "fabric": "net/minecraft/class_309",
+        "forge": "net.minecraft.client.KeyboardHandler",
+        "neoforge": "net.minecraft.client.KeyboardHandler"
+      },
+      "methods": {
+        "keyPress": {
+          "names": {
+            "vanilla": "",
+            "fabric": "method_1466",
+            "forge": "keyPress",
+            "neoforge": "keyPress"
+          },
+          "signatures": {
+            "vanilla": "(JIIII)V",
+            "fabric": "(JIIII)V",
+            "forge": "(JIIII)V",
+            "neoforge": "(JIIII)V"
+          }
+        }
+      },
+      "fields": {}
     }
   }
 }

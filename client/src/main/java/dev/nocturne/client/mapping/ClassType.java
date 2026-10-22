@@ -33,6 +33,8 @@ public enum ClassType {
     ITEM_ENTITY("net.minecraft.world.entity.item.ItemEntity"),
     /** 多人游戏模式。 */
     MULTI_PLAYER_GAME_MODE("net.minecraft.client.multiplayer.MultiPlayerGameMode"),
+    /** 键盘输入入口（{@code KeyboardHandler.keyPress}）。 */
+    KEYBOARD_HANDLER("net.minecraft.client.KeyboardHandler"),
     /** 界面基类。 */
     SCREEN("net.minecraft.client.gui.screens.Screen"),
     /** 1.20+ 的绘制上下文；26.x 已被 {@code GuiGraphicsExtractor} 取代。 */

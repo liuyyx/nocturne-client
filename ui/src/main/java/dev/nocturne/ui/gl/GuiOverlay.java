@@ -234,16 +234,51 @@ public final class GuiOverlay implements FrameListener {
      */
     private boolean keyPressed(int vk) {
         int glfw = dev.nocturne.client.input.KeyMap.glfw(vk);
-        if (glfw >= 0 && dev.nocturne.client.runtime.InputBlock.consumePressed(glfw, 250_000_000L)) {
+        if (glfw >= 0 && consumeKey(glfw)) {
             return true;
         }
         // Windows 的 keybd_event(0xA1) 在 GLFW 里落到 340（LEFT_SHIFT），与映射表的 344 不同；
         // 开关键两者都接受（右 Shift 是哨兵，不会和普通键冲突）。
-        if (vk == dev.nocturne.client.input.KeyMap.VK_RIGHT_SHIFT
-                && dev.nocturne.client.runtime.InputBlock.consumePressed(340, 250_000_000L)) {
+        if (vk == dev.nocturne.client.input.KeyMap.VK_RIGHT_SHIFT && consumeKey(340)) {
             return true;
         }
         return input.keyDown(vk);
+    }
+
+    /** bootstrap 层 {@code InputBlock.consumePressed} 的方法句柄。 */
+    private static java.lang.reflect.Method consumePressedMethod;
+    /** 句柄解析失败只报一次。 */
+    private static boolean consumePressedFailed;
+
+    /**
+     * 从 <b>bootstrap</b> 取 {@code InputBlock.consumePressed}。
+     *
+     * <p>{@code InputBlock} 被追加到 bootstrap 搜索路径（游戏类加载器看得到），而本类由 agent
+     * 加载器加载——直接静态调用读到的是 agent jar 里那份，静态字段与游戏写入的不是同一份
+     * （1.21.1 实测：recordKey 打印 340，这边恒为 false）。与 FrameDispatcher 同一套处理。
+     *
+     * @param glfwKey GLFW 键码
+     * @return 本帧是否消费到该键
+     */
+    private static boolean consumeKey(int glfwKey) {
+        if (consumePressedFailed) {
+            return false;
+        }
+        try {
+            java.lang.reflect.Method method = consumePressedMethod;
+            if (method == null) {
+                Class<?> type = Class.forName("dev.nocturne.client.runtime.InputBlock", true, null);
+                method = type.getMethod("consumePressed", int.class, long.class);
+                consumePressedMethod = method;
+            }
+            return Boolean.TRUE.equals(method.invoke(null, glfwKey, 250_000_000L));
+        } catch (Throwable error) {
+            consumePressedFailed = true;
+            if (System.getProperty("nocturne.ui.debug") != null) {
+                System.out.println("[nocturne] InputBlock bridge failed: " + error);
+            }
+            return false;
+        }
     }
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
     private boolean pointerGrabbedBeforeGui;

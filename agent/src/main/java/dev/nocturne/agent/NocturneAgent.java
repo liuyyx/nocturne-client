@@ -717,8 +717,11 @@ public final class NocturneAgent {
             // 类还没加载：交给新加载路径的 transformer。
         }
         if (target == null) {
+            String wanted = targetClass.replace('.', '/');
             for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-                if (targetClass.equals(loaded.getName())) {
+                String name = loaded.getName();
+                if (targetClass.equals(name) || name.replace('.', '/').equals(wanted)
+                        || name.endsWith("." + targetClass.substring(targetClass.lastIndexOf('.') + 1))) {
                     target = loaded;
                     break;
                 }

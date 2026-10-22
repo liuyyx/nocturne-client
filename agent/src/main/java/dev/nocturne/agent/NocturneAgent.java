@@ -705,14 +705,30 @@ public final class NocturneAgent {
             log("could not register input block on " + targetClass + ": " + t);
             return;
         }
-        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-            if (targetClass.equals(loaded.getName())) {
-                try {
-                    instrumentation.retransformClasses(loaded);
-                } catch (Throwable t) {
-                    log("retransform " + targetClass + " for input block failed: " + t);
+        // 优先用游戏类加载器直接取类：Fabric/Forge 的隔离加载器下 getAllLoadedClasses 不一定
+        // 返回我们期望的名字，导致「注册成功但从未 retransform」（patched=false，1.21.1 实测）。
+        Class<?> target = null;
+        try {
+            ClassLoader gameLoader = gameClassLoader(instrumentation);
+            if (gameLoader != null) {
+                target = Class.forName(targetClass, false, gameLoader);
+            }
+        } catch (Throwable ignored) {
+            // 类还没加载：交给新加载路径的 transformer。
+        }
+        if (target == null) {
+            for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+                if (targetClass.equals(loaded.getName())) {
+                    target = loaded;
+                    break;
                 }
-                break;
+            }
+        }
+        if (target != null) {
+            try {
+                instrumentation.retransformClasses(target);
+            } catch (Throwable t) {
+                log("retransform " + targetClass + " for input block failed: " + t);
             }
         }
         boolean patched = false;

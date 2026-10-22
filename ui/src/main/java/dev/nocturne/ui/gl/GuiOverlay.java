@@ -267,7 +267,11 @@ public final class GuiOverlay implements FrameListener {
         try {
             java.lang.reflect.Method method = consumePressedMethod;
             if (method == null) {
-                Class<?> type = Class.forName("dev.nocturne.client.runtime.InputBlock", true, null);
+                Class<?> type = Class.forName("dev.nocturne.bootstrap.KeySink", true, null);
+                if (System.getProperty("nocturne.ui.debug") != null) {
+                    System.out.println("[nocturne] InputBlock bridge cls="
+                            + System.identityHashCode(type) + " loader=" + type.getClassLoader());
+                }
                 method = type.getMethod("consumePressed", int.class, long.class);
                 consumePressedMethod = method;
             }

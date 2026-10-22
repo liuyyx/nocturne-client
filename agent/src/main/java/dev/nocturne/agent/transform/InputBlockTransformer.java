@@ -124,8 +124,10 @@ public final class InputBlockTransformer implements ClassFileTransformer {
                             if ("(JIIII)V".equals(targetDescriptor)) {
                                 super.visitVarInsn(Opcodes.ILOAD, 3);
                                 super.visitVarInsn(Opcodes.ILOAD, 5);
-                                super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, "recordKey",
-                                        "(II)V", false);
+                                // 必须指向只存在于 bootstrap 的 KeySink：hookOwner（InputBlock）
+                                // 在 agent jar 里还有一份，Knot 会加载它，静态字段互不可见。
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,
+                                        "dev/nocturne/bootstrap/KeySink", "recordKey", "(II)V", false);
                             }
                             Label continueLabel = new Label();
                             super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, hookMethod,

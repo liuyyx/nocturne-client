@@ -45,7 +45,9 @@ public final class InputBlock {
     public static void recordKey(int glfwKey, int action) {
         if (action == 1) {
             if (System.getProperty("nocturne.ui.debug") != null && debugKeys++ < 12) {
-                System.out.println("[nocturne] recordKey glfw=" + glfwKey);
+                System.out.println("[nocturne] recordKey glfw=" + glfwKey
+                        + " cls=" + System.identityHashCode(InputBlock.class)
+                        + " loader=" + InputBlock.class.getClassLoader());
             }
             lastPressedKey = glfwKey;
             lastPressedAt = System.nanoTime();

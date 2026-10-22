@@ -260,6 +260,7 @@ public final class NocturneAgent {
         }
         String[] entries = {
                 "dev/nocturne/agent/GuiDrawHook.class",
+                "dev/nocturne/bootstrap/KeySink.class",
                 "dev/nocturne/client/runtime/FrameDispatcher.class",
                 "dev/nocturne/client/runtime/FrameListener.class",
                 "dev/nocturne/client/runtime/InputBlock.class",

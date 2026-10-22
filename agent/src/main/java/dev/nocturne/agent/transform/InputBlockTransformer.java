@@ -60,8 +60,8 @@ public final class InputBlockTransformer implements ClassFileTransformer {
     private final String hookMethod;
     /** 是否真的插桩成功（诊断用）。 */
     private final AtomicBoolean patched = new AtomicBoolean(false);
-    /** 匹配诊断是否已打印（仅 debug）。 */
-    private volatile boolean loggedMatch;
+    /** transform 调用计数（仅 debug）。 */
+    private int transformCalls;
 
     /**
      * @param targetClass  目标类（点号或斜杠形式，构造器内归一化）
@@ -87,11 +87,10 @@ public final class InputBlockTransformer implements ClassFileTransformer {
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
-        if (System.getProperty("nocturne.ui.debug") != null && className != null
-                && className.contains("class_309") && !loggedMatch) {
-            loggedMatch = true;
-            System.out.println("[nocturne] input block transform saw " + className
-                    + " target=" + targetClassInternalName + " method=" + targetMethod
+        if (System.getProperty("nocturne.ui.debug") != null && transformCalls < 3) {
+            transformCalls++;
+            System.out.println("[nocturne] input block transform #" + transformCalls + " class="
+                    + className + " target=" + targetClassInternalName + " method=" + targetMethod
                     + " desc=" + targetDescriptor);
         }
         if (className == null || !className.equals(targetClassInternalName)) {

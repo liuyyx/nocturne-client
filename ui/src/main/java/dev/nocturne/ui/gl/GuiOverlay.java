@@ -300,6 +300,11 @@ public final class GuiOverlay implements FrameListener {
                 java.util.Arrays.fill(charWasDown, false);
             }
         }
+        if (System.getProperty("nocturne.ui.debug") != null && (debugFrames % 30) == 0) {
+            System.out.println("[nocturne] toggle probe: down=" + toggleDown
+                    + " was=" + toggleWasDown + " open=" + gui.isOpen()
+                    + " key=" + toggleKey);
+        }
         toggleWasDown = toggleDown;
 
         // 指针捕获交接（不是每帧强制）：

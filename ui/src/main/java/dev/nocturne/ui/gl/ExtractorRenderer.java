@@ -66,31 +66,31 @@ public final class ExtractorRenderer implements UiBackend {
      * 在 26.3 从 {@code com.mojang.blaze3d.pipeline} 变成了 {@code com.mojang.renderpearl.api.pipeline}
      * ——反射按字段取值不受类型包名影响，这正是走反射而不是编译期链接的原因。
      */
-    private final Object guiTexturedPipeline;
+    private Object guiTexturedPipeline;
     /** {@code GuiGraphicsExtractor.blit(RenderPipeline, Identifier, int x, int y, float u, float v, int w, int h, int uWidth, int vHeight, int texW, int texH, int color)}。 */
-    private final Method blit;
+    private Method blit;
     /** {@code TextureManager.register(Identifier, AbstractTexture)}。 */
-    private final Method registerTexture;
+    private Method registerTexture;
     /** {@code TextureManager.release(Identifier)}。 */
-    private final Method releaseTexture;
+    private Method releaseTexture;
     /** {@code Minecraft.getTextureManager()}。 */
-    private final Method getTextureManager;
+    private Method getTextureManager;
     /** {@code DynamicTexture(String, int, int, boolean)}。 */
-    private final java.lang.reflect.Constructor<?> newDynamicTexture;
+    private java.lang.reflect.Constructor<?> newDynamicTexture;
     /** {@code DynamicTexture.getPixels()}。 */
-    private final Method getPixels;
+    private Method getPixels;
     /** {@code DynamicTexture.upload()}。 */
-    private final Method uploadTexture;
+    private Method uploadTexture;
     /** {@code AbstractTexture.close()}；删除纹理时释放 GpuTexture。 */
-    private final Method closeTexture;
+    private Method closeTexture;
     /** {@code NativeImage.setPixel(int, int, int)}（入参为 ARGB，内部转 ABGR）。 */
-    private final Method setPixel;
+    private Method setPixel;
     /** {@code NativeImage.getPointer()}；批量写像素用的原生地址。 */
-    private final Method getPointer;
+    private Method getPointer;
     /** {@code MemoryUtil.memByteBuffer(long, int)}；把原生地址包成可写的直接缓冲。 */
-    private final Method memByteBuffer;
+    private Method memByteBuffer;
     /** {@code Identifier.fromNamespaceAndPath(String, String)}。 */
-    private final Method newIdentifier;
+    private Method newIdentifier;
 
     /** 已注册的纹理；下标即对外的纹理句柄（0 保留为"无效"）。 */
     private final java.util.List<RegisteredTexture> textures = new java.util.ArrayList<RegisteredTexture>();
@@ -99,9 +99,41 @@ public final class ExtractorRenderer implements UiBackend {
     /** ARGB→ABGR 的转换暂存，避免每次上传分配。 */
     private int[] pixelScratch;
     /** 纹理支路是否可用（探针全绿）。 */
-    private final boolean textureSupport;
+    private boolean textureSupport;
+    /** 1.21.6+ / 1.20-1.21 的「无 pipeline」blit：{@code (Identifier,int,int,int,int,float,float,float,float)}。 */
+    private Method blitSimple;
+    /** 旧版无颜色 blit：{@code (Identifier,int,int,int,int,int,int,int,int)}（x,y,u,v,w,h,texW,texH）。 */
+    private Method blitPixel;
+    /** {@code NativeImage.applyToPixels(IntUnaryOperator)}；写像素的批量入口。 */
+    private Method applyPixels;
+    /** {@code NativeImage.getPixels()} 返回 {@code int[]}（1.21.6+ 的数组访问器）。 */
+    private Method getPixelsArray;
+    /** 注册入口本身就会上传（1.21.11 的 TextureManager.register(Identifier, TextureContents)）。 */
+    private boolean registerUploads;
+    /** 旧版 {@code new ResourceLocation(ns, path)}。 */
+    private java.lang.reflect.Constructor<?> identifierCtor;
     /** 纹理支路首次失败的诊断是否已打印（只报一次）。 */
     private boolean textureFailureLogged;
+    /** 上传诊断计数。 */
+    private int uploadDiag;
+    /** 绘制诊断计数。 */
+    private int drawDiag;
+
+    private void quadDiag(String message) {
+        if (System.getProperty("nocturne.ui.debug") == null || drawDiag >= 4) {
+            return;
+        }
+        drawDiag++;
+        System.out.println("[nocturne] extractor quad: " + message);
+    }
+
+    private static int bx0(float value) {
+        return Math.round(value);
+    }
+
+    private static int by0(float value) {
+        return Math.round(value);
+    }
 
     /**
      * 一张已注册到游戏纹理管理器的动态纹理。
@@ -400,9 +432,216 @@ public final class ExtractorRenderer implements UiBackend {
         Method physicalHeight = windowType == null ? null
                 : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
                         "getHeight");
-        return new ExtractorRenderer(type, fill, null, enableScissor, null, text, null, null,
-                minecraft, windowGetter, scaledWidth, scaledHeight, physicalWidth, physicalHeight,
-                fontSource, mapping, pose, pushMatrix, popMatrix, scaleMatrix);
+        ExtractorRenderer renderer = new ExtractorRenderer(type, fill, null, enableScissor, null,
+                text, null, null, minecraft, windowGetter, scaledWidth, scaledHeight,
+                physicalWidth, physicalHeight, fontSource, mapping, pose, pushMatrix, popMatrix,
+                scaleMatrix);
+        // 1.20–1.21 的自定义纹理：类名在 Fabric 运行期是 intermediary（class_XXXX），
+        // 方法名也是 method_XXXXX，因此按候选名解析，而不是沿用 26.x 的 Mojang 名。
+        renderer.bindTextures(type.getClassLoader(), type);
+        return renderer;
+    }
+
+    /**
+     * 绑定 1.20–1.21 的自定义纹理支路。
+     *
+     * <p>Fabric 运行期是 intermediary：{@code DynamicTexture}/{@code TextureManager}/
+     * {@code ResourceLocation} 的类名是 {@code class_1043}/{@code class_1060}/{@code class_2960}，
+     * 方法名是 {@code method_xxxxx}；而 {@code com.mojang.blaze3d.*} 不参与重映射
+     * （{@code NativeImage} 名字稳定）。因此每个句柄都给「Mojang 名 → intermediary 名」候选。
+     *
+     * <p>绘制入口按优先级选：带 RenderPipeline 的 13 参 {@code blit}（26.x，可调制颜色）、
+     * 1.21.6+ 的 {@code blit(Identifier,x,y,w,h,u0,v0,u1,v1)}、1.20–1.21.5 的
+     * {@code blit(Identifier,x,y,u,v,w,h,texW,texH,color)}。后两者不需要 pipeline 实例
+     * （{@code RenderPipelines.GUI_TEXTURED} 在 intermediary 下没有稳定名）。
+     */
+    private void bindTextures(ClassLoader loader, Class<?> extractorType) {
+        if (System.getProperty("nocturne.ui.debug") != null) {
+            System.out.println("[nocturne] bindTextures loader=" + loader
+                    + " probeTM=" + Reflect.loadWithoutInit("net.minecraft.class_1060", loader)
+                    + " probeNI=" + Reflect.loadWithoutInit("com.mojang.blaze3d.platform.NativeImage", loader)
+                    + " extractor=" + extractorType.getName());
+        }
+        Class<?> identifier = loadAny(loader, "net.minecraft.resources.Identifier",
+                "net.minecraft.resources.ResourceLocation", "net.minecraft.class_2960");
+        Class<?> textureManager = loadAny(loader,
+                "net.minecraft.client.renderer.texture.TextureManager", "net.minecraft.class_1060");
+        Class<?> abstractTexture = loadAny(loader,
+                "net.minecraft.client.renderer.texture.AbstractTexture", "net.minecraft.class_1044");
+        Class<?> dynamicTexture = loadAny(loader,
+                "net.minecraft.client.renderer.texture.DynamicTexture", "net.minecraft.class_1043");
+        Class<?> minecraft = loadAny(loader, "net.minecraft.client.Minecraft", "net.minecraft.class_310");
+        // Fabric 1.21.x 连 blaze3d 包一起重映射：NativeImage 运行期是 class_1011。
+        Class<?> nativeImage = loadAny(loader, "com.mojang.blaze3d.platform.NativeImage",
+                "net.minecraft.class_1011");
+        if (identifier == null || textureManager == null || abstractTexture == null
+                || dynamicTexture == null || minecraft == null || nativeImage == null) {
+            reportTextureSupport();
+            return;
+        }
+        if (newIdentifier == null && identifierCtor == null) {
+            newIdentifier = methodAny(identifier, new String[]{"fromNamespaceAndPath", "method_60655"},
+                    String.class, String.class);
+            if (newIdentifier == null) {
+                try {
+                    identifierCtor = identifier.getConstructor(String.class, String.class);
+                } catch (Throwable ignored) {
+                    // 1.21 之前才有 public 构造；拿不到就说明连 Identifier 都造不出来。
+                }
+            }
+        }
+        if (registerTexture == null) {
+            // 1.21.11 起 TextureManager 的注册入口是 register(Identifier, TextureContents)，
+            // 注册时就把 NativeImage 交给 GPU；旧的 register(Identifier, AbstractTexture) +
+            // DynamicTexture.upload() 在这版上不再产生可采样纹理（实测：上传成功、采样全透明）。
+            for (Method candidate : textureManager.getMethods()) {
+                Class<?>[] parameters = candidate.getParameterTypes();
+                if (parameters.length == 2 && parameters[0] == identifier
+                        && parameters[1].isAssignableFrom(dynamicTexture)
+                        && !parameters[1].equals(abstractTexture)) {
+                    registerTexture = candidate;
+                    registerUploads = true;
+                    break;
+                }
+            }
+        }
+        if (registerTexture == null) {
+            registerTexture = methodAny(textureManager, new String[]{"register", "method_4616"},
+                    identifier, abstractTexture);
+        }
+        if (releaseTexture == null) {
+            releaseTexture = methodAny(textureManager, new String[]{"release", "method_4615"},
+                    identifier);
+        }
+        if (getTextureManager == null) {
+            getTextureManager = methodAny(minecraft,
+                    new String[]{"getTextureManager", "method_1531"});
+        }
+        if (newDynamicTexture == null) {
+            newDynamicTexture = constructor(dynamicTexture, String.class, int.class, int.class,
+                    boolean.class);
+        }
+        if (getPixels == null) {
+            getPixels = methodAny(dynamicTexture, new String[]{"getPixels", "method_4525"});
+        }
+        if (uploadTexture == null) {
+            uploadTexture = methodAny(dynamicTexture, new String[]{"upload", "method_4524"});
+        }
+        if (closeTexture == null) {
+            closeTexture = methodAny(abstractTexture, new String[]{"close"});
+        }
+        if (setPixel == null) {
+            setPixel = methodAny(nativeImage, new String[]{"setPixel", "method_4305"},
+                    int.class, int.class, int.class);
+        }
+        if (getPointer == null) {
+            getPointer = methodAny(nativeImage, new String[]{"getPointer"});
+        }
+        if (applyPixels == null) {
+            applyPixels = methodAny(nativeImage, new String[]{"applyToPixels", "method_48462"},
+                    java.util.function.IntUnaryOperator.class);
+        }
+        if (getPixelsArray == null) {
+            for (Method candidate : nativeImage.getMethods()) {
+                if (candidate.getParameterCount() == 0 && candidate.getReturnType() == int[].class) {
+                    getPixelsArray = candidate;
+                    break;
+                }
+            }
+        }
+        // 无 pipeline 的绘制重载：按参数形状匹配（名字在 intermediary 下是 method_xxxxx）。
+        for (Method candidate : extractorType.getMethods()) {
+            Class<?>[] parameters = candidate.getParameterTypes();
+            if (parameters.length < 5 || parameters[0] != identifier) {
+                continue;
+            }
+            if (parameters.length == 9 && parameters[1] == int.class && parameters[2] == int.class
+                    && parameters[3] == int.class && parameters[4] == int.class
+                    && parameters[5] == float.class && parameters[6] == float.class
+                    && parameters[7] == float.class && parameters[8] == float.class) {
+                blitSimple = candidate;
+            } else if (parameters.length == 10 && allInts(parameters, 1, 9)) {
+                blitPixel = candidate;
+            }
+        }
+        // 1.21.6+ 的 TextureManager 只接受 ReloadableTexture（抽象类，必须由 Java 子类实现
+        // loadContents），反射构造不出来；DynamicTexture 在这版上不再产生可采样纹理。
+        // 与其让文字全部消失，不如关掉纹理支路、回到游戏字体 + ASCII 图标。
+        Class<?> reloadable = loadAny(loader,
+                "net.minecraft.client.renderer.texture.ReloadableTexture", "net.minecraft.class_10537");
+        boolean modernTextureApi = false;
+        if (reloadable != null) {
+            for (Method candidate : textureManager.getMethods()) {
+                Class<?>[] parameters = candidate.getParameterTypes();
+                if (parameters.length == 2 && parameters[0] == identifier
+                        && parameters[1] == reloadable) {
+                    modernTextureApi = true;
+                    break;
+                }
+            }
+        }
+        boolean drawable = blit != null || blitSimple != null || blitPixel != null;
+        textureSupport = !modernTextureApi && drawable && (newIdentifier != null || identifierCtor != null)
+                && registerTexture != null && getTextureManager != null && newDynamicTexture != null
+                && getPixels != null && uploadTexture != null
+                && (setPixel != null || applyPixels != null || getPixelsArray != null);
+        reportTextureSupport();
+    }
+
+    /** @return {@code [from, to)} 区间的参数是否全是 {@code int} */
+    private static boolean allInts(Class<?>[] parameters, int from, int to) {
+        for (int i = from; i < to; i++) {
+            if (parameters[i] != int.class) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 按候选名加载类；全部失败返回 {@code null}。 */
+    private static Class<?> loadAny(ClassLoader loader, String... names) {
+        for (String name : names) {
+            Class<?> type = Reflect.loadWithoutInit(name, loader);
+            if (type != null) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    /** 按候选名找方法；全部失败返回 {@code null}。 */
+    private static Method methodAny(Class<?> owner, String[] names, Class<?>... parameterTypes) {
+        if (owner == null) {
+            return null;
+        }
+        for (String name : names) {
+            Method found = Reflect.method(owner, name, parameterTypes);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    /** 打印纹理支路的能力（缺陷排查时最需要的一行）；可用时不打印。 */
+    private void reportTextureSupport() {
+        if (textureSupport) {
+            return;
+        }
+        System.out.println("[nocturne] extractor backend: custom textures unavailable"
+                + " (pipeline=" + (guiTexturedPipeline != null)
+                + " blit=" + (blit != null)
+                + " blitSimple=" + (blitSimple != null)
+                + " blitPixel=" + (blitPixel != null)
+                + " register=" + (registerTexture != null)
+                + " textureManager=" + (getTextureManager != null)
+                + " dynamicTexture=" + (newDynamicTexture != null)
+                + " pixels=" + (getPixels != null)
+                + " upload=" + (uploadTexture != null)
+                + " setPixel=" + (setPixel != null)
+                + " applyPixels=" + (applyPixels != null)
+                + " identifier=" + (newIdentifier != null || identifierCtor != null)
+                + "); glyphs fall back to the game font and icons to ASCII");
     }
 
     /** 沿继承链查找方法（JOML 的矩阵方法多定义在父类上）。 */
@@ -895,6 +1134,7 @@ public final class ExtractorRenderer implements UiBackend {
         }
         Object manager = textureManager();
         if (manager == null) {
+            diag("manager=null");
             return id;
         }
         RegisteredTexture target = id > 0 && id < textures.size() ? textures.get(id) : null;
@@ -905,21 +1145,39 @@ public final class ExtractorRenderer implements UiBackend {
         }
         if (target == null) {
             int index = textures.size();
-            Object identifier = Reflect.call(newIdentifier, null, NAMESPACE, "ui/atlas_" + index);
+            Object identifier = createIdentifier("ui/atlas_" + index);
             Object texture = createTexture("nocturne/ui/atlas_" + index, width, height);
             if (identifier == null || texture == null) {
+                diag("identifier=" + identifier + " texture=" + texture);
                 return id;
             }
-            // 注册必须在写入像素之前：blit 通过注册名解析纹理，没注册就是空指针。
-            Reflect.call(registerTexture, manager, identifier, texture);
             target = new RegisteredTexture(identifier, texture, width, height);
             textures.add(target);
             id = index;
+            if (!registerUploads && !writePixels(target, argb)) {
+                diag("writePixels failed (pointer=" + (getPointer != null)
+                        + " apply=" + (applyPixels != null) + " array=" + (getPixelsArray != null)
+                        + " setPixel=" + (setPixel != null) + ")");
+                return id;
+            }
+            // 旧路径：注册必须在写入像素之前（blit 通过注册名解析纹理）。
+            // 新路径（registerUploads）：注册动作自己取当前像素上传，因此必须排在写像素之后。
+            Reflect.call(registerTexture, manager, identifier, texture);
+            diag("ok id=" + id + " " + target.width + "x" + target.height
+                    + " registerUploads=" + registerUploads);
+            return id;
+        }
+        if (registerUploads) {
+            return id;
         }
         if (!writePixels(target, argb)) {
+            diag("writePixels failed (pointer=" + (getPointer != null)
+                    + " apply=" + (applyPixels != null) + " array=" + (getPixelsArray != null)
+                    + " setPixel=" + (setPixel != null) + ")");
             return id;
         }
         Reflect.call(uploadTexture, target.texture);
+        diag("ok id=" + id + " " + target.width + "x" + target.height);
         return id;
     }
 
@@ -953,8 +1211,11 @@ public final class ExtractorRenderer implements UiBackend {
         }
         RegisteredTexture target = textures.get(texture);
         if (target == null) {
+            quadDiag("missing tex=" + texture + " size=" + textures.size());
             return;
         }
+        quadDiag("tex=" + texture + " " + bx0(x) + "," + by0(y) + " " + width + "x" + height
+                + " uv=" + u0 + "," + v0 + ".." + u1 + "," + v1);
         // blit 的位置与 UV 都是整数：位置取整（26.x 没有浮点变体），UV 由归一化坐标换算回纹素。
         int bx = Math.round(x);
         int by = Math.round(y);
@@ -964,8 +1225,48 @@ public final class ExtractorRenderer implements UiBackend {
         float vStart = v0 * target.height;
         int uSpan = Math.round((u1 - u0) * target.width);
         int vSpan = Math.round((v1 - v0) * target.height);
-        call(blit, graphics, guiTexturedPipeline, target.identifier,
-                bx, by, uStart, vStart, bw, bh, uSpan, vSpan, target.width, target.height, argb);
+        if (blit != null && guiTexturedPipeline != null) {
+            call(blit, graphics, guiTexturedPipeline, target.identifier,
+                    bx, by, uStart, vStart, bw, bh, uSpan, vSpan, target.width, target.height, argb);
+            return;
+        }
+        // 1.21.6+：UV 归一化、无调制色（我们的图集是白化字形，白色即所需颜色）。
+        if (blitSimple != null) {
+            call(blitSimple, graphics, target.identifier, bx, by, bw, bh, u0, v0, u1, v1);
+            return;
+        }
+        // 1.20–1.21.5：(Identifier, x, y, u, v, w, h, texW, texH, color)，UV 为纹素。
+        if (blitPixel != null) {
+            call(blitPixel, graphics, target.identifier, bx, by,
+                    Math.round(uStart), Math.round(vStart), bw, bh, target.width, target.height, argb);
+        }
+    }
+
+    /** 造一个 {@code ResourceLocation}/{@code Identifier}；两种构造方式都失败时返回 {@code null}。 */
+    private Object createIdentifier(String path) {
+        if (newIdentifier != null) {
+            Object identifier = Reflect.call(newIdentifier, null, NAMESPACE, path);
+            if (identifier != null) {
+                return identifier;
+            }
+        }
+        if (identifierCtor != null) {
+            try {
+                return identifierCtor.newInstance(NAMESPACE, path);
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /** 纹理上传诊断（仅 -Dnocturne.ui.debug，前 4 次）。 */
+    private void diag(String message) {
+        if (System.getProperty("nocturne.ui.debug") == null || uploadDiag >= 4) {
+            return;
+        }
+        uploadDiag++;
+        System.out.println("[nocturne] extractor upload: " + message);
     }
 
     /** @return 纹理管理器；游戏实例尚未就绪时返回 {@code null} */
@@ -1021,19 +1322,47 @@ public final class ExtractorRenderer implements UiBackend {
             // 与 NativeImage.setPixel 内部一致：ABGR 布局（A<<24|B<<16|G<<8|R）。
             pixelScratch[i] = (value & 0xFF00FF00) | ((value >>> 16) & 0xFF) | ((value & 0xFF) << 16);
         }
-        Object pointer = Reflect.call(getPointer, pixels);
-        if (!(pointer instanceof Number)) {
-            return false;
+        if (getPointer != null && memByteBuffer != null) {
+            Object pointer = Reflect.call(getPointer, pixels);
+            if (pointer instanceof Number) {
+                long address = ((Number) pointer).longValue();
+                Object buffer = Reflect.call(memByteBuffer, null, address, count * 4);
+                if (buffer instanceof java.nio.ByteBuffer) {
+                    java.nio.ByteBuffer view = ((java.nio.ByteBuffer) buffer)
+                            .order(java.nio.ByteOrder.nativeOrder());
+                    view.asIntBuffer().put(pixelScratch, 0, count);
+                    return true;
+                }
+            }
         }
-        long address = ((Number) pointer).longValue();
-        Object buffer = Reflect.call(memByteBuffer, null, address, count * 4);
-        if (!(buffer instanceof java.nio.ByteBuffer)) {
-            return false;
+        // 1.21.6+ 去掉了 getPointer：用 applyToPixels 逐像素写（lambda 调用无反射开销）。
+        if (applyPixels != null) {
+            final int[] source = pixelScratch;
+            final int[] cursor = {0};
+            java.util.function.IntUnaryOperator writer = value ->
+                    cursor[0] < count ? source[cursor[0]++] : value;
+            Object result = Reflect.call(applyPixels, pixels, writer);
+            if (result != null || cursor[0] > 0) {
+                return true;
+            }
         }
-        java.nio.ByteBuffer view = ((java.nio.ByteBuffer) buffer)
-                .order(java.nio.ByteOrder.nativeOrder());
-        view.asIntBuffer().put(pixelScratch, 0, count);
-        return true;
+        // 再退一步：数组访问器（若是内部数组引用，直接写即可）。
+        if (getPixelsArray != null) {
+            Object raw = Reflect.call(getPixelsArray, pixels);
+            if (raw instanceof int[] && ((int[]) raw).length >= count) {
+                System.arraycopy(pixelScratch, 0, raw, 0, count);
+                return true;
+            }
+        }
+        // 最后退到逐像素 setPixel（1M 次反射，慢但正确）。
+        if (setPixel != null) {
+            int width = target.width;
+            for (int i = 0; i < count; i++) {
+                Reflect.call(setPixel, pixels, i % width, i / width, pixelScratch[i]);
+            }
+            return true;
+        }
+        return false;
     }
 
     /** 把动态纹理注册进游戏自己的纹理管理器时用的命名空间。 */

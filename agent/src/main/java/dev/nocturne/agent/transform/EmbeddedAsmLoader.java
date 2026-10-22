@@ -58,9 +58,11 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     private static final String CALLBACK_TRANSFORMER_CLASS =
             "dev.nocturne.agent.transform.CallbackHookTransformer";
     /** 钩子所在类内部名（斜杠形式）。 */
-    private static final String HOOK_OWNER = "dev/nocturne/client/runtime/NocturneRuntime";
+    // 必须指向 bootstrap 层的中立类：Forge 的模块化 classloader 看不到 agent jar，
+    // 直接调 NocturneRuntime.onFrame 会 NoClassDefFoundError（1.20.1 Forge 实测）。
+    private static final String HOOK_OWNER = "dev/nocturne/client/runtime/FrameDispatcher";
     /** 钩子方法名。 */
-    private static final String HOOK_METHOD = "onFrame";
+    private static final String HOOK_METHOD = "dispatch";
 
     /** ASM 类名（点号）→ 字节码，构造时一次性从内嵌 jar 读出。 */
     private final Map<String, byte[]> asmClasses;

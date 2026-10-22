@@ -1,6 +1,5 @@
 package dev.nocturne.agent;
 
-import dev.nocturne.client.runtime.NocturneRuntime;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -45,6 +44,46 @@ public final class GuiDrawHook {
     /** 是否已尝试过解析上述句柄（失败也只试一次，避免每帧刷日志）。 */
     private static volatile boolean screenProbeResolved;
 
+    /** {@code dev.nocturne.client.runtime.NocturneRuntime} 的类与缓存方法（经 system 加载器解析）。 */
+    private static volatile Class<?> runtimeType;
+    private static volatile Method runtimeSetDrawContext;
+    private static volatile Method runtimeOnFrame;
+
+    /**
+     * 调用 {@code NocturneRuntime} 的静态方法。
+     *
+     * <p>本类会被织进 Forge 的模块化 classloader（{@code TransformingClassLoader}），那里看不到
+     * agent 的类；直接静态调用会 {@code NoClassDefFoundError}（1.20.1 Forge 实测崩溃）。
+     * 因此改为「按 system 加载器反射解析 + 缓存句柄」，失败时静默跳过——钩子绝不抛异常。
+     */
+    private static void runtime(String name, Object... args) {
+        try {
+            Class<?> type = runtimeType;
+            if (type == null) {
+                type = Class.forName("dev.nocturne.client.runtime.NocturneRuntime", false,
+                        ClassLoader.getSystemClassLoader());
+                runtimeType = type;
+            }
+            Method method;
+            if ("setDrawContext".equals(name)) {
+                method = runtimeSetDrawContext;
+                if (method == null) {
+                    method = type.getMethod("setDrawContext", Object.class);
+                    runtimeSetDrawContext = method;
+                }
+            } else {
+                method = runtimeOnFrame;
+                if (method == null) {
+                    method = type.getMethod("onFrame");
+                    runtimeOnFrame = method;
+                }
+            }
+            method.invoke(null, args);
+        } catch (Throwable ignored) {
+            // 类还没就绪或签名变化：这一帧不驱动，下一帧再试。
+        }
+    }
+
     private GuiDrawHook() {
     }
 
@@ -79,12 +118,12 @@ public final class GuiDrawHook {
      */
     private static void drive(Object graphics) {
         try {
-            NocturneRuntime.setDrawContext(graphics);
+            runtime("setDrawContext", graphics);
             try {
-                NocturneRuntime.onFrame();
+                runtime("onFrame");
             } finally {
                 // 绘制上下文只在这次调用期间有效：用完立刻释放，避免后端持有已失效的对象。
-                NocturneRuntime.setDrawContext(null);
+                runtime("setDrawContext", null);
             }
         } catch (Throwable t) {
             // 绝不把异常带回游戏的绘制路径。

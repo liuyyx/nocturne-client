@@ -259,6 +259,7 @@ public final class NocturneAgent {
             return;
         }
         String[] entries = {
+                "dev/nocturne/agent/GuiDrawHook.class",
                 "dev/nocturne/client/runtime/FrameDispatcher.class",
                 "dev/nocturne/client/runtime/FrameListener.class",
                 "dev/nocturne/client/runtime/InputBlock.class",
@@ -289,6 +290,23 @@ public final class NocturneAgent {
             }
             instrumentation.appendToBootstrapClassLoaderSearch(
                     new java.util.jar.JarFile(jar.toFile()));
+            // Forge 用模块化 TransformingClassLoader 加载被织入的类；它只认 system / bootstrap
+            // 搜索路径。不把 agent 自身也挂上去，织进 Screen.render 的 GuiDrawHook 会
+            // NoClassDefFoundError（1.20.1 Forge 实测崩溃）。
+            try {
+                java.security.CodeSource source = NocturneAgent.class.getProtectionDomain()
+                        .getCodeSource();
+                if (source != null && source.getLocation() != null) {
+                    java.io.File self = new java.io.File(source.getLocation().toURI());
+                    if (self.isFile() && self.getName().endsWith(".jar")) {
+                        instrumentation.appendToSystemClassLoaderSearch(
+                                new java.util.jar.JarFile(self));
+                        log("system search path: " + self.getName());
+                    }
+                }
+            } catch (Throwable ignored) {
+                log("system search path: skipped (" + ignored + ")");
+            }
             log("bootstrap bridge installed: " + entries.length + " classes from " + jar.getFileName());
         } catch (Throwable t) {
             log("bootstrap bridge failed: " + t);

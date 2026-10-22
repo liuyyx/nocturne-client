@@ -260,7 +260,8 @@ public final class NocturneAgent {
         }
         String[] entries = {
                 "dev/nocturne/agent/GuiDrawHook.class",
-                "dev/nocturne/bootstrap/KeySink.class",
+                // KeySink 不在交付 jar 的编译产物里，而是以资源形式随包（见 dist 的 bridgeKeySink）。
+                "nocturne-bootstrap/KeySink.class",
                 "dev/nocturne/client/runtime/FrameDispatcher.class",
                 "dev/nocturne/client/runtime/FrameListener.class",
                 "dev/nocturne/client/runtime/InputBlock.class",
@@ -279,7 +280,9 @@ public final class NocturneAgent {
                             log("bootstrap bridge: entry missing " + entry);
                             continue;
                         }
-                        out.putNextEntry(new java.util.zip.ZipEntry(entry));
+                        String target = entry.startsWith("nocturne-bootstrap/")
+                                ? "dev/nocturne/bootstrap/KeySink.class" : entry;
+                        out.putNextEntry(new java.util.zip.ZipEntry(target));
                         byte[] buffer = new byte[8192];
                         int read;
                         while ((read = in.read(buffer)) != -1) {

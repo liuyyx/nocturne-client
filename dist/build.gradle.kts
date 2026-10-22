@@ -60,6 +60,24 @@ val packAsmPayload = tasks.register<JavaExec>("packAsmPayload") {
  *
  * <p>只有注入这一条路径：不再产出加载器元数据，也不再有模组形态。
  */
+/**
+ * 预编译的 KeySink：作为**资源**（而不是编译产物）进交付 jar，路径 {@code nocturne-bootstrap/KeySink.class}。
+ *
+ * <p>agent 的 bootstrap bridge 会把它改写成 {@code dev/nocturne/bootstrap/KeySink.class} 打进
+ * bootstrap 搜索路径；交付 jar 自身不含这个类，Knot 因此拿不到第二份。
+ */
+val bridgeKeySink = tasks.register<Copy>("bridgeKeySink") {
+    group = "build"
+    description = "Copies the prebuilt KeySink class as a bridge resource."
+    // 取 client 的编译输出（agent 依赖 client，编译顺序由 Gradle 保证）。
+    from(project(":client").layout.buildDirectory.file(
+            "classes/java/main/dev/nocturne/bootstrap/KeySink.class"))
+    into(layout.buildDirectory.dir("generated/bridge-resources/nocturne-bootstrap"))
+    rename { "KeySink.class" }
+    // 显式依赖 client 的编译输出（Gradle 不允许隐式使用其它任务的产物）。
+    dependsOn(project(":client").tasks.named("compileJava"))
+}
+
 val distJar = tasks.register<Jar>("distJar") {
     // 归入 build 分组，便于与普通 jar 区分。
     group = "build"
@@ -86,8 +104,14 @@ val distJar = tasks.register<Jar>("distJar") {
         )
     }
 
+    // KeySink 只能由 bootstrap bridge 提供：顶层再排除一次，确保任何来源（工程产物或依赖解包）
+    // 都不会把编译版带进交付 jar。
+    exclude("dev/nocturne/bootstrap/**")
     // 先并入本模块自身的 class 与资源输出。
     from(sourceSets.main.get().output)
+    // 预编译的 KeySink（仅作为资源，见 bridgeKeySink）。
+    dependsOn(bridgeKeySink)
+    from(layout.buildDirectory.dir("generated/bridge-resources"))
 
     // 打包第三方运行时依赖（帧钩子用的 ASM、映射用的 gson），
     // 使交付 jar 自包含，可直接投放到任意 JVM。
@@ -98,6 +122,10 @@ val distJar = tasks.register<Jar>("distJar") {
         // 这里排除的是「zipTree 展开出来的类文件」：CopySpec 的 exclude 会沿 spec 树继承，
         // 因此对解包内容同样生效。ASM 的类不进 jar 根，改以加密载荷作为资源内嵌（见下方）。
         exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
+        // KeySink 必须是「全局唯一」：只能由 bootstrap bridge 提供。若交付 jar 里也有它，
+        // Fabric 的 KnotClassLoader 会自己加载一份，静态字段与 bootstrap 那份互不可见
+        // （1.21.1 实测：recordKey 写 Knot 份、叠加层读 bootstrap 份）。
+        exclude("dev/nocturne/bootstrap/**")
         // 目录条目也得排：zipTree 会把 "org/objectweb/" 这样的目录带进来，在 jar 里留下一个
         // 空的 org/objectweb/（无意义，而且看起来像「ASM 被展开了」的误导信号）。
         exclude("org/objectweb/")

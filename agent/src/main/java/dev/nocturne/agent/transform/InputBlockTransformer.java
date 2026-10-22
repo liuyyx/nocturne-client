@@ -111,6 +111,14 @@ public final class InputBlockTransformer implements ClassFileTransformer {
 
                         /** 插入 {@code if (hook()) return <handled>;} 并补上分支目标的满帧。 */
                         private void inject() {
+                            // 键盘入口 (J I I I I)：把 key/action 记进 InputBlock，供叠加层事件驱动地
+                            // 读取。1.21.1 实测 glfwGetKey 在合成按键下恒为 0，只有游戏自己的回调可靠。
+                            if ("(JIIII)V".equals(targetDescriptor)) {
+                                super.visitVarInsn(Opcodes.ILOAD, 3);
+                                super.visitVarInsn(Opcodes.ILOAD, 5);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, "recordKey",
+                                        "(II)V", false);
+                            }
                             Label continueLabel = new Label();
                             super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, hookMethod,
                                     HOOK_DESCRIPTOR, false);

@@ -583,6 +583,10 @@ public final class NocturneAgent {
         // 键盘与按键绑定：界面开着时游戏不该再响应按键（移动、攻击、使用、打字、Esc 开菜单）。
         registerInputBlock(instrumentation, asmLoader, KEY_PRESS_CLASS, KEY_PRESS_METHOD,
                 KEY_PRESS_DESCRIPTOR);
+        // 1.13–1.21 的签名是 keyPress(long, int, int, int, int)：这条同时负责记录按键事件
+        // （InputBlock.recordKey），叠加层的键盘输入改为事件驱动。
+        registerInputBlock(instrumentation, asmLoader, KEY_PRESS_CLASS, KEY_PRESS_METHOD,
+                "(JIIII)V");
         registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, KEY_MAPPING_SET_ALL, "()V");
         registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, "set",
                 KEY_MAPPING_SET_DESCRIPTOR);

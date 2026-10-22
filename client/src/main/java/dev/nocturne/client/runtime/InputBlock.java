@@ -26,6 +26,45 @@ public final class InputBlock {
      */
     private static volatile boolean disabled;
 
+    /** 最近一次按下的 GLFW 键码（-1 表示没有新按键）。 */
+    private static volatile int lastPressedKey = -1;
+    /** 最近一次按下的时间戳（纳秒），用于消费后过期。 */
+    private static volatile long lastPressedAt;
+
+    /**
+     * 记录一次按键（由织入 {@code KeyboardHandler.keyPress} 的字节码调用）。
+     *
+     * <p>为什么不用 GLFW 轮询：1.21.1 真机实测 {@code glfwGetKey} 在合成按键下恒为 0，
+     * 而游戏自己的回调能收到（Esc 能开暂停菜单、T 能开聊天）。事件驱动是唯一可靠来源。
+     *
+     * @param glfwKey GLFW 键码
+     * @param action  GLFW 动作（1 = 按下）
+     */
+    public static void recordKey(int glfwKey, int action) {
+        if (action == 1) {
+            lastPressedKey = glfwKey;
+            lastPressedAt = System.nanoTime();
+        }
+    }
+
+    /**
+     * 取出并清除一次「刚按下」的按键。
+     *
+     * @param glfwKey 期望的 GLFW 键码
+     * @param windowNanos 有效窗口（超过则视为过期，避免界面打开瞬间消费到很久以前的按键）
+     * @return 命中返回 {@code true}
+     */
+    public static boolean consumePressed(int glfwKey, long windowNanos) {
+        if (lastPressedKey != glfwKey) {
+            return false;
+        }
+        if (System.nanoTime() - lastPressedAt > windowNanos) {
+            return false;
+        }
+        lastPressedKey = -1;
+        return true;
+    }
+
     private InputBlock() {
     }
 

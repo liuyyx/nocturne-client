@@ -168,6 +168,13 @@ public final class OverlayBootstrap implements FrameListener {
         // 诊断开关：-Dnocturne.ui.backend=gl 强制走 GL 后端（1.20-1.21 用来对比
         // 「游戏绘制 API（无自定义纹理）」与「自带 GL 管线（有纹理/字形图集）」两条路的差异）。
         boolean forceGl = "gl".equalsIgnoreCase(System.getProperty("nocturne.ui.backend", ""));
+        // 1.21.1 的 GuiGraphics 路径实测整屏被填成纯红（fill 的调用序列与该版本不符），
+        // 而 gl-core 在同一版本上完整可用（真图标 + 图集 + 744x540）。这里按版本走白名单。
+        if (!forceGl && currentMapping() != null
+                && currentMapping().describe().contains("1.21.1 ")) {
+            forceGl = true;
+            log("1.21.1: GuiGraphics path is unusable, forcing gl-core");
+        }
         Class<?> extractorType = forceGl ? null : resolveLoaded(EXTRACTOR_CLASS);
         boolean sdl = extractorType != null;
         if (extractorType == null && !forceGl) {

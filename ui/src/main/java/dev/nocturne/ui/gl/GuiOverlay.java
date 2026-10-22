@@ -218,8 +218,27 @@ public final class GuiOverlay implements FrameListener {
     private boolean wasOpenForPointer;
     /** 输入诊断计数（-Dnocturne.ui.debug）。 */
     private int debugInput;
+    /** 帧计数（探针用）。 */
+    private int debugFrames;
     /** 上一次打印的按下状态（只在变化时打印）。 */
     private boolean debugLastDown;
+
+    /**
+     * 读取一次「刚按下」的按键：事件驱动优先，轮询兜底。
+     *
+     * <p>1.21.1 真机实测 {@code glfwGetKey} 在合成按键下恒为 0（游戏自己的回调却正常收到），
+     * 所以以 {@code InputBlock} 记录的按键事件为准；没有事件时再问轮询，兼容旧路径。
+     *
+     * @param vk AWT VK 码
+     * @return 本帧是否按下
+     */
+    private boolean keyPressed(int vk) {
+        int glfw = dev.nocturne.client.input.KeyMap.glfw(vk);
+        if (glfw >= 0 && dev.nocturne.client.runtime.InputBlock.consumePressed(glfw, 250_000_000L)) {
+            return true;
+        }
+        return input.keyDown(vk);
+    }
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
     private boolean pointerGrabbedBeforeGui;
 
@@ -244,9 +263,9 @@ public final class GuiOverlay implements FrameListener {
             lastY = input.mouseY();
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
-            escapeWasDown = input.keyDown(KEY_ESCAPE);
+            escapeWasDown = keyPressed(KEY_ESCAPE);
             // 开关键也要取样：否则「用外部方式打开时开关键正按着」会在下一帧被当成新按下而立刻关掉界面。
-            toggleWasDown = input.keyDown(toggleKey);
+            toggleWasDown = keyPressed(toggleKey);
             java.util.Arrays.fill(charWasDown, false);
         }
     }
@@ -270,7 +289,7 @@ public final class GuiOverlay implements FrameListener {
                 lastY = my;
                 leftWasDown = input.mouseDown(BUTTON_LEFT);
                 rightWasDown = input.mouseDown(BUTTON_RIGHT);
-                escapeWasDown = input.keyDown(KEY_ESCAPE);
+                escapeWasDown = keyPressed(KEY_ESCAPE);
                 java.util.Arrays.fill(charWasDown, false);
             }
         }
@@ -298,6 +317,15 @@ public final class GuiOverlay implements FrameListener {
         // 滚轮增量每帧取出并清零：界面关闭期间也必须消费，否则打开瞬间会把
         // 关闭期间累积的增量一次性滚动出来。
         if (System.getProperty("nocturne.ui.debug") != null && open) {
+            debugFrames++;
+        }
+        if (System.getProperty("nocturne.ui.debug") != null && open && (debugFrames % 30) == 0) {
+            System.out.println("[nocturne] key probe: esc=" + input.keyDown(KEY_ESCAPE)
+                    + " toggle=" + input.keyDown(toggleKey)
+                    + " grab=" + input.isPointerGrabbed()
+                    + " backend=" + input.describe());
+        }
+        if (System.getProperty("nocturne.ui.debug") != null && open) {
             boolean down = input.mouseDown(BUTTON_LEFT);
             if (down != debugLastDown || debugInput < 6) {
                 debugInput++;
@@ -314,7 +342,7 @@ public final class GuiOverlay implements FrameListener {
             // 关闭状态保持输入基准同步，避免重开首帧把陈旧按下态误判为新事件
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
-            escapeWasDown = input.keyDown(KEY_ESCAPE);
+            escapeWasDown = keyPressed(KEY_ESCAPE);
             lastX = mx;
             lastY = my;
             java.util.Arrays.fill(charWasDown, false);

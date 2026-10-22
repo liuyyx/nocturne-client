@@ -101,6 +101,10 @@ public final class ModernRenderer implements UiBackend {
     private int screenY;
     /** 缓存的视口宽度，用于检测视口变化。 */
     private int screenWidth;
+    /** 帧缓冲（物理）宽：绘制坐标是 GUI 逻辑坐标，scissor 仍要按物理像素下发。 */
+    private int physicalWidth;
+    /** 帧缓冲（物理）高。 */
+    private int physicalHeight;
     /** 缓存的视口高度，用于检测视口变化。 */
     private int screenHeight;
 
@@ -355,6 +359,13 @@ public final class ModernRenderer implements UiBackend {
     }
 
     @Override
+    public int scale() {
+        // 物理像素 / GUI 逻辑像素：字形按这个密度栅格才不会糊。
+        return screenWidth > 0 && physicalWidth > 0
+                ? Math.max(1, Math.round((float) physicalWidth / screenWidth)) : 1;
+    }
+
+    @Override
     public int width() {
         return screenWidth;
     }
@@ -418,11 +429,59 @@ public final class ModernRenderer implements UiBackend {
         if (viewport == null) {
             return;
         }
+        if (viewport[2] > 0 && viewport[3] > 0) {
+            physicalWidth = viewport[2];
+            physicalHeight = viewport[3];
+        }
+        // 绘制坐标统一用 GUI 逻辑尺寸（与 extractor / 固定管线一致），否则同一个 744x540 的
+        // 界面在 guiScale=2 的窗口里只有一半大——1.21.1 实测就是这个问题。
+        int[] gui = windowGuiScaled();
+        if (gui != null && gui[2] > 0 && gui[3] > 0) {
+            if (gui[2] != screenWidth || gui[3] != screenHeight || screenX != 0 || screenY != 0) {
+                setViewport(0, 0, gui[2], gui[3]);
+            }
+            return;
+        }
         if (viewport[2] > 0 && viewport[3] > 0
                 && (viewport[0] != screenX || viewport[1] != screenY
                 || viewport[2] != screenWidth || viewport[3] != screenHeight)) {
             setViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
         }
+    }
+
+    /** @return GUI 逻辑尺寸 {@code {0,0,w,h}}；读不到时为 {@code null}（1.12 及更早没有 Window）。 */
+    private int[] windowGuiScaled() {
+        if (bridge == null) {
+            return null;
+        }
+        try {
+            Object minecraft = bridge.minecraft();
+            if (minecraft == null) {
+                return null;
+            }
+            Object window = bridge.callMapped(minecraft,
+                    dev.nocturne.client.mapping.ClassType.MINECRAFT, "getWindow");
+            if (window == null) {
+                return null;
+            }
+            Object w = bridge.callMapped(window,
+                    dev.nocturne.client.mapping.ClassType.WINDOW, "getGuiScaledWidth");
+            Object h = bridge.callMapped(window,
+                    dev.nocturne.client.mapping.ClassType.WINDOW, "getGuiScaledHeight");
+            int width = w instanceof Number ? ((Number) w).intValue() : 0;
+            int height = h instanceof Number ? ((Number) h).intValue() : 0;
+            if (width > 0 && height <= 0 && physicalWidth > 0 && physicalHeight > 0) {
+                // 某些版本只暴露 getGuiScaledWidth：GUI scale 是整数，用它反推高度。
+                int guiScale = Math.max(1, Math.round((float) physicalWidth / width));
+                height = Math.max(1, physicalHeight / guiScale);
+            }
+            if (width > 0 && height > 0) {
+                return new int[]{0, 0, width, height};
+            }
+        } catch (Throwable ignored) {
+            // 版本缺方法属于正常结果：回落到物理尺寸。
+        }
+        return null;
     }
 
     /**
@@ -746,7 +805,15 @@ public final class ModernRenderer implements UiBackend {
         x1 = clamp(x1, 0, vw);
         y0 = clamp(y0, 0, vh);
         y1 = clamp(y1, 0, vh);
-        return new int[]{screenX + x0, screenY + vh - y1, x1 - x0, y1 - y0};
+        // scissor 的单位是帧缓冲像素，而绘制坐标是 GUI 逻辑像素。
+        float sx = physicalWidth > 0 ? (float) physicalWidth / vw : 1f;
+        float sy = physicalHeight > 0 ? (float) physicalHeight / vh : 1f;
+        int px0 = Math.round(x0 * sx);
+        int px1 = Math.round(x1 * sx);
+        int py0 = Math.round(y0 * sy);
+        int py1 = Math.round(y1 * sy);
+        int pw = physicalHeight > 0 ? physicalHeight : vh;
+        return new int[]{screenX + px0, screenY + pw - py1, px1 - px0, py1 - py0};
     }
 
     /** 把 {@code value} 夹取到 {@code [lo, hi]}。 */

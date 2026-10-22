@@ -125,6 +125,20 @@
             "forge": "()I",
             "neoforge": "()I"
           }
+        },
+        "getGuiScaledHeight": {
+          "names": {
+            "vanilla": "",
+            "fabric": "method_4487",
+            "forge": "m_57410_",
+            "neoforge": "getGuiScaledHeight"
+          },
+          "signatures": {
+            "vanilla": "()I",
+            "fabric": "()I",
+            "forge": "()I",
+            "neoforge": "()I"
+          }
         }
       },
       "fields": {}

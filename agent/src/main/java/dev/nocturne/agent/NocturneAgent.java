@@ -1105,7 +1105,9 @@ public final class NocturneAgent {
      * @return 字节码；条目不存在时为 {@code null}
      */
     private static byte[] readFromJar(java.io.File jar, String internalName) {
-        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar)) {
+        // 显式 UTF-8：中文实例名（"测试-1.21.1-Fabric"）在默认字符集下会让 ZipFile 打不开。
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar,
+                java.nio.charset.StandardCharsets.UTF_8)) {
             java.util.zip.ZipEntry entry = zip.getEntry(internalName + ".class");
             if (entry == null) {
                 return null;

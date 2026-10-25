@@ -327,6 +327,10 @@ public final class NocturneAgent {
      * @return 游戏类加载器（从已加载的游戏类取）；取不到返回 {@code null}
      */
     private static ClassLoader gameClassLoader(Instrumentation instrumentation) {
+        ClassLoader cached = cachedGameLoader;
+        if (cached != null) {
+            return cached;
+        }
         if (instrumentation == null) {
             return null;
         }
@@ -387,6 +391,7 @@ public final class NocturneAgent {
             try {
                 ClassLoader loader = gameClassLoader(instrumentation);
                 if (loader != null) {
+                    cachedGameLoader = loader;
                     log("game loader ready: " + loader.getClass().getName());
                     exposeAgentJarToGameLoader(instrumentation);
                     return;
@@ -460,6 +465,15 @@ public final class NocturneAgent {
      * 两个类不能互换，转换器按「类名+方法名+描述符」精确匹配，写错就是静默不织入。
      */
     private static final String HUD_DRAW_CLASS = "net.minecraft.client.gui.Hud";
+    /**
+     * 最近一次解析到的游戏类加载器。
+     *
+     * <p>缓存的原因：{@code gameClassLoader} 靠「扫描已加载类找游戏主类」实现，在启动期会
+     * 反复返回 null（主类可能中途被隔离加载器重新定义）。{@code awaitGameLoader} 已经确认过
+     * 加载器存在，后续步骤直接复用它，避免同一进程内再次查询时又拿到 null。
+     */
+    private static volatile ClassLoader cachedGameLoader;
+
     /** Mixin 目标类：1.21.1 的 {@code Screen}（intermediary 名）。 */
     private static final String SCREEN_MIXIN_CLASS = "net/minecraft/class_437";
 
@@ -966,10 +980,13 @@ public final class NocturneAgent {
                 log("mixin: agent jar not resolvable");
                 return false;
             }
-            environment.getMethod("addConfiguration", java.net.URL.class)
-                    .invoke(env, jar.toURI().toURL());
-            log("mixin channel registered: " + targetClass + "." + targetMethod + descriptor
-                    + " from " + jar.getName());
+            // Mixin 0.8.7 的入参是**配置资源名**，不是 URL；资源由 MixinService 在当前环境
+            // 的 classpath 上解析。agent jar 已通过 addUrlFwd 暴露给 KnotClassLoader，所以
+            // 根目录的 nocturne.mixins.json 一定可解析。
+            environment.getMethod("addConfiguration", String.class)
+                    .invoke(env, "nocturne.mixins.json");
+            log("mixin channel registered: nocturne.mixins.json -> "
+                    + targetClass + "." + targetMethod + descriptor);
             return true;
         } catch (Throwable t) {
             log("mixin channel failed: " + t);

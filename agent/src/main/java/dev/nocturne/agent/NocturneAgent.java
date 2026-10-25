@@ -1007,6 +1007,17 @@ public final class NocturneAgent {
      */
     private static byte[] readClassFromFabricJar(String internalName) {
         // 候选根：游戏工作目录（Fabric 启动时就是实例目录）、以及向上两级（.minecraft）。
+        // Fabric 自己设的系统属性：直接指向重映射后的游戏 jar。
+        String gameJar = System.getProperty("fabric.gameJarPath");
+        if (gameJar != null && !gameJar.isEmpty()) {
+            byte[] bytes = readFromJar(new java.io.File(gameJar), internalName);
+            if (bytes != null) {
+                log("redefine: bytes from " + gameJar);
+                return bytes;
+            }
+        }
+        log("redefine: user.dir=" + System.getProperty("user.dir")
+                + " fabric.gameJarPath=" + gameJar);
         java.util.List<java.io.File> roots = new java.util.ArrayList<java.io.File>();
         String userDir = System.getProperty("user.dir");
         if (userDir != null) {
@@ -1035,31 +1046,51 @@ public final class NocturneAgent {
         if (root == null || !root.isDirectory()) {
             return null;
         }
+        // 直接就是实例目录（Fabric 启动时 user.dir 即实例目录）。
+        byte[] direct = scanRemappedJars(new java.io.File(root, ".fabric/remappedJars"), internalName);
+        if (direct != null) {
+            return direct;
+        }
         java.io.File versions = new java.io.File(root, "versions");
         java.io.File[] instances = versions.listFiles();
         if (instances == null) {
             return null;
         }
         for (java.io.File instance : instances) {
-            java.io.File remapped = new java.io.File(instance, ".fabric/remappedJars");
-            java.io.File[] mods = remapped.listFiles();
-            if (mods == null) {
+            byte[] bytes = scanRemappedJars(
+                    new java.io.File(instance, ".fabric/remappedJars"), internalName);
+            if (bytes != null) {
+                return bytes;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 扫描一个 remappedJars 目录下的所有 jar，按内部名取字节码。
+     *
+     * @param remapped    {@code .fabric/remappedJars} 目录
+     * @param internalName 内部名
+     * @return 字节码；未找到时为 {@code null}
+     */
+    private static byte[] scanRemappedJars(java.io.File remapped, String internalName) {
+        java.io.File[] mods = remapped == null ? null : remapped.listFiles();
+        if (mods == null) {
+            return null;
+        }
+        for (java.io.File mod : mods) {
+            java.io.File[] jars = mod.listFiles();
+            if (jars == null) {
                 continue;
             }
-            for (java.io.File mod : mods) {
-                java.io.File[] jars = mod.listFiles();
-                if (jars == null) {
+            for (java.io.File jar : jars) {
+                if (!jar.getName().endsWith(".jar")) {
                     continue;
                 }
-                for (java.io.File jar : jars) {
-                    if (!jar.getName().endsWith(".jar")) {
-                        continue;
-                    }
-                    byte[] bytes = readFromJar(jar, internalName);
-                    if (bytes != null) {
-                        log("redefine: bytes from " + jar.getAbsolutePath());
-                        return bytes;
-                    }
+                byte[] bytes = readFromJar(jar, internalName);
+                if (bytes != null) {
+                    log("redefine: bytes from " + jar.getAbsolutePath());
+                    return bytes;
                 }
             }
         }

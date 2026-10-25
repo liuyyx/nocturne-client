@@ -153,13 +153,17 @@ public final class NocturneAgent {
                     // 映射表先选再 boot：下游（boot 内部、叠加层、游戏桥、模块）不应拿到
                     // 兜底的恒等映射再被永久缓存（M-84 注释原意）。
                     selectMapping(instrumentation);
-                    NocturneClient.boot(instrumentation);
                     // premain 阶段游戏类加载器尚未建立，而帧钩子与绘制钩子注入的调用都由**游戏的**
                     // 类加载器解析（它看不到 agent jar）。不等它就注册钩子，钩子一触发就是
                     // NoClassDefFoundError 崩游戏（实测 FrameDispatcher 加载失败）。
                     if ("premain".equals(via)) {
                         awaitGameLoader(instrumentation);
                     }
+                    // Mixin 配置必须尽早注册：Mixin 只处理**首次加载**的类，而 NocturneClient.boot
+                    // 会触达 Screen（模块注册表会解析界面相关类型）。放在 boot 之前，Screen 尚未
+                    // 加载，配置才能在它定义时生效（1.21.1 实测：放在 boot 之后注册成功但不织入）。
+                    installMixinChannelEarly(instrumentation, via);
+                    NocturneClient.boot(instrumentation);
                     installFrameHook(instrumentation);
                     installOverlay(instrumentation);
                 } catch (Throwable t) {
@@ -407,6 +411,29 @@ public final class NocturneAgent {
             }
         }
         log("game loader not ready within 120s; hooks registered without exposure");
+    }
+
+    /**
+     * 尽早注册 Mixin 配置（在任何游戏界面类被加载之前）。
+     *
+     * <p>Mixin 只在类**首次定义**时介入；一旦 {@code Screen} 已加载，后续 {@code addConfiguration}
+     * 注册成功但不会有任何织入（1.21.1 实测：日志显示注册成功、却没有 woven 输出）。
+     *
+     * <p>只对 Fabric 生效：其它加载器下游戏类可以被 {@code Instrumentation} 改写，不需要 Mixin。
+     *
+     * @param instrumentation 插桩句柄
+     * @param via             触发来源（{@code premain}/{@code agentmain}）
+     */
+    private static void installMixinChannelEarly(Instrumentation instrumentation, String via) {
+        ClassLoader loader = gameClassLoader(instrumentation);
+        if (loader == null
+                || !"net.fabricmc.loader.impl.launch.knot.KnotClassLoader"
+                .equals(loader.getClass().getName())) {
+            return;
+        }
+        installMixinChannel(instrumentation, loader,
+                SCREEN_MIXIN_CLASS, SCREEN_MIXIN_METHOD, SCREEN_MIXIN_DESCRIPTOR,
+                SCREEN_HOOK_METHOD);
     }
 
     private static void installFrameHook(Instrumentation instrumentation) {
@@ -980,11 +1007,17 @@ public final class NocturneAgent {
                 log("mixin: agent jar not resolvable");
                 return false;
             }
-            // Mixin 0.8.7 的入参是**配置资源名**，不是 URL；资源由 MixinService 在当前环境
-            // 的 classpath 上解析。agent jar 已通过 addUrlFwd 暴露给 KnotClassLoader，所以
-            // 根目录的 nocturne.mixins.json 一定可解析。
-            environment.getMethod("addConfiguration", String.class)
-                    .invoke(env, "nocturne.mixins.json");
+            // 用 Mixins.addConfiguration（MixinEnvironment 上的同名方法已废弃，8.x 会移除）。
+            // 入参是**配置资源名**，不是 URL；资源由 MixinService 在当前环境的 classpath 上解析，
+            // agent jar 已通过 addUrlFwd 暴露给 KnotClassLoader，所以根目录的 json 一定可解析。
+            try {
+                Class<?> mixins = Class.forName("org.spongepowered.asm.mixin.Mixins", true, gameLoader);
+                mixins.getMethod("addConfiguration", String.class)
+                        .invoke(null, "nocturne.mixins.json");
+            } catch (Throwable fallback) {
+                environment.getMethod("addConfiguration", String.class)
+                        .invoke(env, "nocturne.mixins.json");
+            }
             log("mixin channel registered: nocturne.mixins.json -> "
                     + targetClass + "." + targetMethod + descriptor);
             return true;

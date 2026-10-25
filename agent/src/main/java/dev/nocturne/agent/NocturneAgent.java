@@ -928,21 +928,101 @@ public final class NocturneAgent {
      * @param method      目标方法名（仅用于日志）
      * @return 改写后的字节码；无变化时为 {@code null}
      */
+    /**
+     * 从类的 code source（通常是游戏的 intermediary jar）读原始字节码。
+     *
+     * <p>存在的原因：Fabric 的 {@code KnotClassLoader} 用 {@code defineClass} 定义游戏类，
+     * 既不暴露 {@code .class} 资源，也不让 JVM 的转换链回调后注册的 transformer。
+     * 但原始字节码一直在它的 code source jar 里，可以直接读。
+     *
+     * @param target       目标类
+     * @param internalName 内部名（斜杠形式）
+     * @return 字节码；拿不到时为 {@code null}
+     */
+    private static byte[] readClassFromCodeSource(Class<?> target, String internalName) {
+        try {
+            java.security.CodeSource source = target.getProtectionDomain().getCodeSource();
+            if (source == null || source.getLocation() == null) {
+                return null;
+            }
+            java.io.File file = new java.io.File(source.getLocation().toURI());
+            if (!file.isFile()) {
+                return null;
+            }
+            try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(file)) {
+                java.util.zip.ZipEntry entry = zip.getEntry(internalName + ".class");
+                if (entry == null) {
+                    return null;
+                }
+                try (java.io.InputStream stream = zip.getInputStream(entry)) {
+                    java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                    byte[] chunk = new byte[8192];
+                    int read;
+                    while ((read = stream.read(chunk)) >= 0) {
+                        buffer.write(chunk, 0, read);
+                    }
+                    return buffer.toByteArray();
+                }
+            }
+        } catch (Throwable t) {
+            log("redefine: code source read failed for " + internalName + " -> " + t);
+            return null;
+        }
+    }
+
+    /**
+     * 跑一遍转换器并判断结果是否有变化。
+     *
+     * @param target       目标类
+     * @param transformer  转换器
+     * @param internalName 内部名
+     * @param original     原始字节码
+     * @return 改写后的字节码；无变化时为 {@code null}
+     */
+    private static byte[] transformBytes(Class<?> target, ClassFileTransformer transformer,
+                                         String internalName, byte[] original) {
+        try {
+            byte[] patched = transformer.transform(target.getClassLoader(), internalName, target,
+                    null, original);
+            if (patched == null || java.util.Arrays.equals(original, patched)) {
+                return null;
+            }
+            return patched;
+        } catch (Throwable t) {
+            log("redefine: transform failed for " + internalName + " -> " + t);
+            return null;
+        }
+    }
+
     private static byte[] patchBytes(Class<?> target, ClassFileTransformer transformer,
                                      String internalName, String method) {
         byte[] original;
-        try (java.io.InputStream in = target.getResourceAsStream("/" + internalName + ".class")) {
-            if (in == null) {
+        // 两类来源都试：Class.getResourceAsStream 走类自身的归属加载器；ClassLoader 路径走
+        // 类路径根。Fabric 的 KnotClassLoader 对游戏类往往只对后者有响应。
+        java.io.InputStream in = target.getResourceAsStream("/" + internalName + ".class");
+        if (in == null && target.getClassLoader() != null) {
+            in = target.getClassLoader().getResourceAsStream(internalName + ".class");
+        }
+        if (in == null) {
+            // 第三条路：Fabric 的 KnotClassLoader 不把游戏类暴露成 .class 资源，但原始字节码
+            // 就在它的 code source（client-intermediary.jar）里。直接从那个 jar 读。
+            byte[] fromJar = readClassFromCodeSource(target, internalName);
+            if (fromJar == null) {
+                log("redefine: class bytes unavailable for " + internalName);
                 return null;
             }
+            return transformBytes(target, transformer, internalName, fromJar);
+        }
+        try (java.io.InputStream stream = in) {
             java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
             byte[] chunk = new byte[8192];
             int read;
-            while ((read = in.read(chunk)) >= 0) {
+            while ((read = stream.read(chunk)) >= 0) {
                 buffer.write(chunk, 0, read);
             }
             original = buffer.toByteArray();
         } catch (Throwable t) {
+            log("redefine: read failed for " + internalName + " -> " + t);
             return null;
         }
         try {
@@ -953,6 +1033,7 @@ public final class NocturneAgent {
             }
             return patched;
         } catch (Throwable t) {
+            log("redefine: transform failed for " + internalName + " -> " + t);
             return null;
         }
     }

@@ -915,6 +915,48 @@ public final class NocturneAgent {
         log("hud render hook: render(GuiGraphics-like, *) not found in " + hud.getName());
     }
 
+    /**
+     * 手动跑一遍转换器，得到改写后的字节码；没有变化时返回 {@code null}。
+     *
+     * <p>为什么不用 {@code retransformClasses}：Fabric 的 {@code KnotClassLoader} 用
+     * {@code defineClass} 直接定义游戏类，JVM 的转换链不会回调后注册的 transformer
+     * （1.21.1 实测：通道与可改性都正常，{@code transform} 却一次都没执行）。
+     *
+     * @param target      目标类（已加载）
+     * @param transformer 转换器
+     * @param internalName 目标类内部名（斜杠形式）
+     * @param method      目标方法名（仅用于日志）
+     * @return 改写后的字节码；无变化时为 {@code null}
+     */
+    private static byte[] patchBytes(Class<?> target, ClassFileTransformer transformer,
+                                     String internalName, String method) {
+        byte[] original;
+        try (java.io.InputStream in = target.getResourceAsStream("/" + internalName + ".class")) {
+            if (in == null) {
+                return null;
+            }
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            int read;
+            while ((read = in.read(chunk)) >= 0) {
+                buffer.write(chunk, 0, read);
+            }
+            original = buffer.toByteArray();
+        } catch (Throwable t) {
+            return null;
+        }
+        try {
+            byte[] patched = transformer.transform(target.getClassLoader(), internalName, target,
+                    null, original);
+            if (patched == null || java.util.Arrays.equals(original, patched)) {
+                return null;
+            }
+            return patched;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private static void registerGuiDrawHook(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                             String targetClass, String method, String descriptor,
                                             String hookMethod) {
@@ -959,10 +1001,21 @@ public final class NocturneAgent {
         // 目标类可能已被加载：显式重转换一次，否则要等下一次加载（那时可能永远不重载）。
         for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
             if (targetClass.equals(loaded.getName())) {
+                // 走 redefineClasses 而不是 retransformClasses：Fabric 的 KnotClassLoader 用
+                // defineClass 直接定义游戏类，JVM 的 retransform 链不会回调我们的 transformer
+                // （1.21.1 实测：addTransformer 成功、类 modifiable、但 transform 从不执行）。
+                // redefine 是独立通道：我们自己跑一遍 transformer，把结果直接交给 JVM。
                 try {
-                    instrumentation.retransformClasses(loaded);
+                    byte[] patched = patchBytes(loaded, transformer, targetClass, method);
+                    if (patched == null) {
+                        log("redefine skipped (no bytecode change): " + targetClass + "." + method);
+                    } else {
+                        instrumentation.redefineClasses(
+                                new java.lang.instrument.ClassDefinition(loaded, patched));
+                        log("redefine applied: " + targetClass + "." + method + " (" + patched.length + "B)");
+                    }
                 } catch (Throwable t) {
-                    log("retransform " + targetClass + " failed: " + t);
+                    log("redefine " + targetClass + " failed: " + t);
                 }
                 break;
             }

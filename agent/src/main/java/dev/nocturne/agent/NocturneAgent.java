@@ -951,6 +951,11 @@ public final class NocturneAgent {
             log("could not register gui draw hook on " + targetClass + ": " + t);
             return;
         }
+        // 诊断：确认转换器实例与接口由同一加载器解析。子加载器若自己定义了一份
+        // ClassFileTransformer，JVM 会把它当成"不是 ClassFileTransformer"而静默跳过。
+        log("transformer impl loader=" + transformer.getClass().getClassLoader()
+                + " class=" + transformer.getClass().getName()
+                + " ifaceLoader=" + ClassFileTransformer.class.getClassLoader());
         // 目标类可能已被加载：显式重转换一次，否则要等下一次加载（那时可能永远不重载）。
         for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
             if (targetClass.equals(loaded.getName())) {

@@ -369,6 +369,17 @@ public final class NocturneAgent {
             log("no Instrumentation: frame hook skipped");
             return;
         }
+        // 诊断：确认插桩通道本身可用。Fabric 下出现过「addTransformer 成功、transform 从不执行」
+        // 的情况（1.21.1 实测），必须先排除通道/可改性这两层，再怀疑目标类。
+        log("instrumentation: retransform=" + instrumentation.isRetransformClassesSupported()
+                + " redefine=" + instrumentation.isRedefineClassesSupported());
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            String name = loaded.getName();
+            if ("net.minecraft.class_329".equals(name) || "org.lwjgl.glfw.GLFW".equals(name)) {
+                log("instrumentation: " + name + " modifiable="
+                        + instrumentation.isModifiableClass(loaded));
+            }
+        }
         // GUI 绘制钩子先注册（26.x 的 GUI 入口；其时机未必有有效 GL，但成本很低）。
         installGuiDrawHook(instrumentation);
         installInputBlocks(instrumentation);

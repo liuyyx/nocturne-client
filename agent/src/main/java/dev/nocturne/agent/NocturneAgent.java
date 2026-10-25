@@ -994,6 +994,105 @@ public final class NocturneAgent {
         }
     }
 
+    /**
+     * 从 Fabric 的重映射产物里读原始字节码。
+     *
+     * <p>Fabric 把游戏类重映射后放在
+     * {@code <实例>/.fabric/remappedJars/minecraft-<版本>-<loader>/client-intermediary.jar}，
+     * 而 {@code KnotClassLoader} 用 {@code defineClass} 定义这些类，不暴露 {@code .class}
+     * 资源、code source 也不指向可读文件（1.21.1 实测三条路都为空）。
+     *
+     * @param internalName 内部名（斜杠形式）
+     * @return 字节码；找不到时为 {@code null}
+     */
+    private static byte[] readClassFromFabricJar(String internalName) {
+        // 候选根：游戏工作目录（Fabric 启动时就是实例目录）、以及向上两级（.minecraft）。
+        java.util.List<java.io.File> roots = new java.util.ArrayList<java.io.File>();
+        String userDir = System.getProperty("user.dir");
+        if (userDir != null) {
+            java.io.File dir = new java.io.File(userDir);
+            roots.add(dir);
+            roots.add(new java.io.File(dir, "versions"));
+            roots.add(new java.io.File(dir, ".minecraft"));
+        }
+        for (java.io.File root : roots) {
+            byte[] found = findRemappedJar(root, internalName);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 在候选根下搜索 Fabric 的 remappedJars 目录并读目标条目。
+     *
+     * @param root         搜索起点
+     * @param internalName 内部名
+     * @return 字节码；未找到时为 {@code null}
+     */
+    private static byte[] findRemappedJar(java.io.File root, String internalName) {
+        if (root == null || !root.isDirectory()) {
+            return null;
+        }
+        java.io.File versions = new java.io.File(root, "versions");
+        java.io.File[] instances = versions.listFiles();
+        if (instances == null) {
+            return null;
+        }
+        for (java.io.File instance : instances) {
+            java.io.File remapped = new java.io.File(instance, ".fabric/remappedJars");
+            java.io.File[] mods = remapped.listFiles();
+            if (mods == null) {
+                continue;
+            }
+            for (java.io.File mod : mods) {
+                java.io.File[] jars = mod.listFiles();
+                if (jars == null) {
+                    continue;
+                }
+                for (java.io.File jar : jars) {
+                    if (!jar.getName().endsWith(".jar")) {
+                        continue;
+                    }
+                    byte[] bytes = readFromJar(jar, internalName);
+                    if (bytes != null) {
+                        log("redefine: bytes from " + jar.getAbsolutePath());
+                        return bytes;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 从 jar 中读一个条目。
+     *
+     * @param jar          目标 jar
+     * @param internalName 内部名
+     * @return 字节码；条目不存在时为 {@code null}
+     */
+    private static byte[] readFromJar(java.io.File jar, String internalName) {
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar)) {
+            java.util.zip.ZipEntry entry = zip.getEntry(internalName + ".class");
+            if (entry == null) {
+                return null;
+            }
+            try (java.io.InputStream stream = zip.getInputStream(entry)) {
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                byte[] chunk = new byte[8192];
+                int read;
+                while ((read = stream.read(chunk)) >= 0) {
+                    buffer.write(chunk, 0, read);
+                }
+                return buffer.toByteArray();
+            }
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private static byte[] patchBytes(Class<?> target, ClassFileTransformer transformer,
                                      String internalName, String method) {
         byte[] original;
@@ -1007,6 +1106,9 @@ public final class NocturneAgent {
             // 第三条路：Fabric 的 KnotClassLoader 不把游戏类暴露成 .class 资源，但原始字节码
             // 就在它的 code source（client-intermediary.jar）里。直接从那个 jar 读。
             byte[] fromJar = readClassFromCodeSource(target, internalName);
+            if (fromJar == null) {
+                fromJar = readClassFromFabricJar(internalName);
+            }
             if (fromJar == null) {
                 log("redefine: class bytes unavailable for " + internalName);
                 return null;

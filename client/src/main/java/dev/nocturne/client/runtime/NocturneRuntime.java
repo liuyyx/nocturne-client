@@ -133,6 +133,13 @@ public final class NocturneRuntime {
             }
             try {
                 addMethod.invoke(null, wrapper);
+                if (System.getProperty("nocturne.ui.debug") != null && countMethod != null) {
+                    // 计数是判断「监听器真的进了分发器」的唯一直接证据：界面打开却一帧都不画，
+                    // 要么没注册上、要么分发时读的是另一份列表，这里一眼能分开。
+                    System.out.println("[nocturne] listener added: "
+                            + listener.getClass().getSimpleName()
+                            + " count=" + countMethod.invoke(null));
+                }
             } catch (Throwable t) {
                 System.out.println("[nocturne] addListener failed: " + t);
             }

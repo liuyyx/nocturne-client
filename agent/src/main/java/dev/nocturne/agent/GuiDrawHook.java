@@ -64,25 +64,25 @@ public final class GuiDrawHook {
                         ClassLoader.getSystemClassLoader());
                 runtimeType = type;
             }
-            Method method;
             if ("setDrawContext".equals(name)) {
-                method = runtimeSetDrawContext;
+                java.lang.reflect.Method method = runtimeSetDrawContext;
                 if (method == null) {
                     method = type.getMethod("setDrawContext", Object.class);
                     runtimeSetDrawContext = method;
                 }
-            } else {
-                method = runtimeOnFrame;
-                if (method == null) {
-                    method = type.getMethod("onFrame");
-                    runtimeOnFrame = method;
-                }
+                // 显式释放时传的是 runtime("setDrawContext", null)：varargs 数组本身为 null。
+                method.invoke(null, args == null ? null : (args.length > 0 ? args[0] : null));
+                return;
             }
-            method.invoke(null, args);
+            java.lang.reflect.Method method = runtimeOnFrame;
+            if (method == null) {
+                method = type.getMethod("onFrame");
+                runtimeOnFrame = method;
+            }
+            method.invoke(null);
         } catch (Throwable error) {
-            // 类还没就绪或签名变化：这一帧不驱动，下一帧再试。
             if (System.getProperty("nocturne.ui.debug") != null && reported++ < 3) {
-                System.out.println("[nocturne] gui draw hook runtime failed: " + error);
+                System.out.println("[nocturne] gui draw hook runtime failed: " + name + " -> " + error);
             }
         }
     }

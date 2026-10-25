@@ -1321,25 +1321,35 @@ public final class NocturneAgent {
         }
         // 两类情况：目标类已加载 → 显式 retransform 立刻打补丁；尚未加载 → 保持注册，
         // 待其首次加载时由 transformer 自动处理。
+        // 同名类可能有多份（Fabric 下 LWJGL 常被 KnotClassLoader 与会话加载器各加载一次），
+        // 只改第一份会让「钩子已注册」与「钩子从未触发」同时成立（实测）。这里全部改写。
+        int patchedCount = 0;
         for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-            if (targetInternalName.replace('/', '.').equals(loaded.getName())) {
-                // 已加载 → 必须立刻打补丁。Fabric 环境里 retransformClasses 不会回调
-                // transformer（KnotClassLoader 直接用 defineClass），只能自己跑一遍再 redefine。
-                // GLFW / Display 是第三方库、不会被 Mixin 改写，所以 redefine 的结构校验能过。
-                try {
-                    byte[] patched = patchBytes(loaded, transformer, targetInternalName, method);
-                    if (patched == null) {
-                        log("frame hook: no bytecode change for " + targetInternalName);
-                    } else {
-                        instrumentation.redefineClasses(
-                                new java.lang.instrument.ClassDefinition(loaded, patched));
-                        log("frame hook registered on " + targetInternalName + "; awaiting first frame");
-                    }
-                } catch (Throwable t) {
-                    log("redefine failed for " + targetInternalName + ": " + t);
-                }
-                return;
+            if (!targetInternalName.replace('/', '.').equals(loaded.getName())) {
+                continue;
             }
+            ClassLoader owner = loaded.getClassLoader();
+            // 已加载 → 必须立刻打补丁。Fabric 环境里 retransformClasses 不会回调 transformer
+            // （KnotClassLoader 直接用 defineClass），只能自己跑一遍再 redefine。
+            // GLFW / Display 是第三方库、不会被 Mixin 改写，所以 redefine 的结构校验能过。
+            try {
+                byte[] patched = patchBytes(loaded, transformer, targetInternalName, method);
+                if (patched == null) {
+                    log("frame hook: no bytecode change for " + targetInternalName
+                            + " loader=" + owner);
+                    continue;
+                }
+                instrumentation.redefineClasses(
+                        new java.lang.instrument.ClassDefinition(loaded, patched));
+                patchedCount++;
+                log("frame hook registered on " + targetInternalName + " loader=" + owner
+                        + "; awaiting first frame");
+            } catch (Throwable t) {
+                log("redefine failed for " + targetInternalName + " loader=" + owner + ": " + t);
+            }
+        }
+        if (patchedCount > 0) {
+            return;
         }
         log(targetInternalName + " not loaded yet; frame hook will apply when it loads");
     }

@@ -9,10 +9,9 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 
 /**
- * 状态指示点：一个带柔和光晕的圆点，颜色反映上一次操作的结果。
+ * 状态指示点：紧凑的实心圆点，颜色反映当前操作状态。
  *
- * <p>光晕与圆点分两层绘制：先画大 6px、alpha 更低的一层，再画实心圆点本体。状态切换时颜色会在
- * 约 150ms 内平滑过渡，避免从「空闲灰」突变成「成功绿」时的闪烁。
+ * <p>状态切换时颜色会在约 150ms 内平滑过渡，动画速度遵循用户偏好。
  */
 public final class StatusDot extends JComponent {
 
@@ -44,7 +43,7 @@ public final class StatusDot extends JComponent {
      *
      * <p>必须在 EDT 上调用。
      *
-     * @param state 圆点与光晕共用的目标色；传 {@code null} 视为回到空闲色
+     * @param state 圆点目标色；传 {@code null} 视为回到空闲色
      */
     public void setState(Color state) {
         target = state != null ? state : AppTheme.TEXT_MUTED;
@@ -101,18 +100,14 @@ public final class StatusDot extends JComponent {
         return new Color(red, green, blue);
     }
 
-    /** 绘制光晕与圆点本体。 */
+    /** 绘制紧凑的实心状态点，不使用外发光。 */
     @Override
     protected void paintComponent(Graphics g) {
-        // 复制一份 Graphics2D，避免抗锯齿提示泄漏到同一绘制周期里的其他组件。
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        // 圆点直径取宽高中较小者再留 3px 边距，使光晕层有落点；下限 4px 防止被压扁成点。
-        int size = Math.max(4, Math.min(getWidth(), getHeight()) - 6);
+        int size = Math.max(5, Math.min(getWidth(), getHeight()) - 6);
         int x = (getWidth() - size) / 2;
         int y = (getHeight() - size) / 2;
-        g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 55));
-        g2.fillOval(x - 3, y - 3, size + 6, size + 6);
         g2.setColor(color);
         g2.fillOval(x, y, size, size);
         g2.dispose();

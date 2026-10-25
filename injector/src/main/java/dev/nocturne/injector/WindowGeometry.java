@@ -17,17 +17,17 @@ import java.awt.Rectangle;
 public final class WindowGeometry {
 
     /** 窗口宽度占屏幕宽度的比例。 */
-    private static final double WIDTH_RATIO = 0.42;
+    private static final double WIDTH_RATIO = 0.58;
     /** 窗口高度占屏幕高度的比例。 */
-    private static final double HEIGHT_RATIO = 0.52;
-    /** 最小宽度（逻辑像素）。 */
-    private static final int MIN_WIDTH = 640;
-    /** 最小高度（逻辑像素）。 */
-    private static final int MIN_HEIGHT = 440;
-    /** 最大宽度（逻辑像素）；宽屏上防止窗口过分横跨。 */
-    private static final int MAX_WIDTH = 900;
-    /** 最大高度（逻辑像素）。 */
-    private static final int MAX_HEIGHT = 640;
+    private static final double HEIGHT_RATIO = 0.70;
+    /** 双栏工作台的最小宽度（逻辑像素）。 */
+    private static final int MIN_WIDTH = 900;
+    /** 150% 应用缩放下仍保留完整侧栏与操作栏的最小高度。 */
+    private static final int MIN_HEIGHT = 640;
+    /** 宽屏上限制内容拉伸。 */
+    private static final int MAX_WIDTH = 1120;
+    /** 高度上限，避免日志区在大屏上占比过大。 */
+    private static final int MAX_HEIGHT = 760;
 
     /** 工具类，不允许实例化。 */
     private WindowGeometry() {

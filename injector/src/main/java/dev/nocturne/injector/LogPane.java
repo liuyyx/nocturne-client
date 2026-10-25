@@ -64,15 +64,14 @@ public final class LogPane extends JPanel {
     public LogPane() {
         super(new BorderLayout());
         setOpaque(false);
-        // 日志是整条构图的最后一段：顶缘发丝线把它与操作坞分开，不再套卡片。
-        setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, AppTheme.BORDER_SOFT));
+        AppTheme.styleCard(this);
 
         area.setEditable(false);
         area.setOpaque(true);
-        area.setBackground(AppTheme.BACKGROUND);
-        // 等宽族，字号继承自 L&F 基础字体（绝不用绝对磅值），并随运行时缩放更新。
+        area.setBackground(AppTheme.PANEL);
+        // 等宽字体随应用缩放更新，正文保持安静的终端式密度。
         AppTheme.bindMonospacedFont(area, AppTheme.TYPE_MONO);
-        area.setBorder(BorderFactory.createEmptyBorder(10, 24, 10, 24));
+        area.setBorder(BorderFactory.createEmptyBorder(9, 14, 9, 14));
         area.setDragEnabled(false);
 
         // 禁止横向滚动：行宽由窗口决定，横向滚动条会挤掉底缘。JTextPane 默认按宽度折行。

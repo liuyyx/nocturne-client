@@ -18,10 +18,9 @@ import java.awt.event.KeyEvent;
 import java.util.function.Consumer;
 
 /**
- * 设置对话框：GUI 快捷键录制 + 三个滑块。
+ * 设置对话框：GUI 快捷键录制、动画速度与界面缩放。
  *
- * <p>视觉与主窗口同一套「夜航信标」token：分区用发丝线小标题，录制框是抬升底 + 琥珀聚焦描边，
- * 收尾的「完成」用主按钮样式。拖动过程中改动实时生效，关闭对话框时才落盘（见 {@link #dispose()}）。
+ * <p>沿用主工作台的暖石墨与琥珀设计令牌，分区用细分隔线，避免在小对话框里堆叠卡片。
  */
 public final class SettingsDialog extends JDialog {
 

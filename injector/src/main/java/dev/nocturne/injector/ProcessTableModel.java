@@ -38,7 +38,7 @@ public final class ProcessTableModel extends AbstractTableModel {
     }
 
     /** 列标题，顺序即列索引顺序。 */
-    private static final String[] COLUMNS = {"进程", "PID", "版本"};
+    private static final String[] COLUMNS = {"游戏进程", "PROCESS ID", "游戏版本"};
 
     /** 当前行数据；所有读方法都在 EDT 上访问，无需同步。 */
     private final List<Row> rows = new ArrayList<Row>();

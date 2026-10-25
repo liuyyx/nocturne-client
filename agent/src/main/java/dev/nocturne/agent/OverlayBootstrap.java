@@ -149,12 +149,28 @@ public final class OverlayBootstrap implements FrameListener {
         tryInstall();
     }
 
+    /** 每类等待原因只打印一次（热路径，不能每帧刷屏）。 */
+    private final java.util.Set<String> debugLogged = new java.util.HashSet<String>();
+
+    /**
+     * 判断某类等待原因是否还没打印过；打印过就返回 {@code false}。
+     *
+     * @param key 原因键
+     * @return 首次调用返回 {@code true}
+     */
+    private boolean debugOnce(String key) {
+        return System.getProperty("nocturne.ui.debug") != null && debugLogged.add(key);
+    }
+
     /** 尝试安装一次；任何一步不满足就返回等下一帧。 */
     private void tryInstall() {
         // 不直接解引用 NocturneClient.get()：客户端若尚未 boot 完成，取不到就下一帧再试，
         // 且不消耗重试次数（L-53）。
         NocturneClient client = NocturneClient.get();
         if (client == null) {
+            if (debugOnce("client")) {
+                log("install wait: NocturneClient not ready");
+            }
             return;
         }
         // 26.x（有 GuiGraphicsExtractor）走另一条绘制路径：那里**不能碰 LWJGL 的 GL 绑定**。
@@ -189,10 +205,16 @@ public final class OverlayBootstrap implements FrameListener {
             gl11 = resolveGl11();
             if (gl11 == null) {
                 // GL 还没加载（游戏启动早期）：不计数，下一帧继续等。
+                if (debugOnce("gl11")) {
+                    log("install wait: GL11 class not resolvable");
+                }
                 return;
             }
             gl = GlApi.bind(gl11);
             if (gl == null) {
+                if (debugOnce("glbind")) {
+                    log("install wait: GlApi.bind returned null");
+                }
                 return;
             }
         }
@@ -212,6 +234,9 @@ public final class OverlayBootstrap implements FrameListener {
         // 窗口耗尽仍不可用就按"无字"安装，绝不因为字体问题让整个界面装不上。
         boolean gameReady = bridge.minecraft() != null;
         if (!gameReady && attempts <= GAME_WAIT_ATTEMPTS) {
+            if (debugOnce("game")) {
+                log("install wait: Minecraft instance not ready (attempts=" + attempts + ")");
+            }
             return;
         }
         // extractor 栈不建 MinecraftTextRenderer：26.x 的 Font 没有画字方法，文字由后端自己画。

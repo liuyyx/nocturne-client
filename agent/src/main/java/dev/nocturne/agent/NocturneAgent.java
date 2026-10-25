@@ -958,28 +958,6 @@ public final class NocturneAgent {
             }
         }
         log("scroll hook registered on " + WHEEL_EVENT_CLASS + "." + WHEEL_EVENT_METHOD);
-        // THROWAWAY-DIAG：键盘事件探针（判定"按键没反应"是系统层没送到还是我们读数错），验完删除。
-        ClassFileTransformer keyTransformer = asmLoader.createCallbackTransformer(WHEEL_EVENT_CLASS,
-                "handleKeyEvent", WHEEL_EVENT_DESCRIPTOR, "dev/nocturne/agent/KeyHook", "onEvent",
-                false);
-        if (keyTransformer != null) {
-            try {
-                instrumentation.addTransformer(keyTransformer, true);
-            } catch (Throwable t) {
-                log("could not register key probe: " + t);
-            }
-            for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
-                if (WHEEL_EVENT_CLASS.equals(loaded.getName())) {
-                    try {
-                        instrumentation.retransformClasses(loaded);
-                    } catch (Throwable t) {
-                        log("retransform " + WHEEL_EVENT_CLASS + " for key probe failed: " + t);
-                    }
-                    break;
-                }
-            }
-        }
-        log("key probe registered on " + WHEEL_EVENT_CLASS + ".handleKeyEvent");
         // 界面开着时游戏不该再自己处理滚轮（否则滚轮会顺带切快捷栏）。
         registerInputBlock(instrumentation, asmLoader, "net.minecraft.client.MouseHandler", "onScroll",
                 MOUSE_SCROLL_DESCRIPTOR);

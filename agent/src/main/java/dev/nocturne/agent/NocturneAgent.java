@@ -939,6 +939,50 @@ public final class NocturneAgent {
      * @param internalName 内部名（斜杠形式）
      * @return 字节码；拿不到时为 {@code null}
      */
+    /**
+     * 从目标类的加载器自身 URL 里读原始字节码。
+     *
+     * <p>首选路径：Fabric 的 {@code KnotClassLoader} 继承 {@link java.net.URLClassLoader}，
+     * 它的 URL 列表就是重映射后的游戏 jar。这比猜目录可靠——加载器必然知道自己的 jar 在哪。
+     *
+     * @param target       目标类
+     * @param internalName 内部名（斜杠形式）
+     * @return 字节码；拿不到时为 {@code null}
+     */
+    private static byte[] readClassFromLoaderUrls(Class<?> target, String internalName) {
+        ClassLoader loader = target.getClassLoader();
+        if (!(loader instanceof java.net.URLClassLoader)) {
+            log("redefine: " + internalName + " loader is not URLClassLoader ("
+                    + (loader == null ? "bootstrap" : loader.getClass().getName()) + ")");
+            return null;
+        }
+        java.net.URL[] urls = ((java.net.URLClassLoader) loader).getURLs();
+        if (urls == null || urls.length == 0) {
+            log("redefine: " + internalName + " loader has no URLs");
+            return null;
+        }
+        for (java.net.URL url : urls) {
+            if (url == null || !"file".equals(url.getProtocol())) {
+                continue;
+            }
+            try {
+                java.io.File file = new java.io.File(url.toURI());
+                if (!file.isFile() || !file.getName().endsWith(".jar")) {
+                    continue;
+                }
+                byte[] bytes = readFromJar(file, internalName);
+                if (bytes != null) {
+                    log("redefine: bytes from loader url " + file.getAbsolutePath());
+                    return bytes;
+                }
+            } catch (Throwable ignored) {
+                // 单个 URL 解析失败不影响其它候选。
+            }
+        }
+        log("redefine: " + internalName + " not found in " + urls.length + " loader urls");
+        return null;
+    }
+
     private static byte[] readClassFromCodeSource(Class<?> target, String internalName) {
         try {
             java.security.CodeSource source = target.getProtectionDomain().getCodeSource();
@@ -1044,6 +1088,8 @@ public final class NocturneAgent {
      */
     private static byte[] findRemappedJar(java.io.File root, String internalName) {
         if (root == null || !root.isDirectory()) {
+            log("redefine: root not a directory: "
+                    + (root == null ? "null" : root.getAbsolutePath()));
             return null;
         }
         // 直接就是实例目录（Fabric 启动时 user.dir 即实例目录）。
@@ -1131,6 +1177,9 @@ public final class NocturneAgent {
 
     private static byte[] patchBytes(Class<?> target, ClassFileTransformer transformer,
                                      String internalName, String method) {
+        // 调用方传的是点号形式的类名（targetClass），jar 条目与资源路径都用斜杠形式。
+        // 不转的话 zip.getEntry("net.minecraft.class_437.class") 永远查不到（1.21.1 实测）。
+        internalName = internalName.replace('.', '/');
         byte[] original;
         // 两类来源都试：Class.getResourceAsStream 走类自身的归属加载器；ClassLoader 路径走
         // 类路径根。Fabric 的 KnotClassLoader 对游戏类往往只对后者有响应。
@@ -1141,7 +1190,10 @@ public final class NocturneAgent {
         if (in == null) {
             // 第三条路：Fabric 的 KnotClassLoader 不把游戏类暴露成 .class 资源，但原始字节码
             // 就在它的 code source（client-intermediary.jar）里。直接从那个 jar 读。
-            byte[] fromJar = readClassFromCodeSource(target, internalName);
+            byte[] fromJar = readClassFromLoaderUrls(target, internalName);
+            if (fromJar == null) {
+                fromJar = readClassFromCodeSource(target, internalName);
+            }
             if (fromJar == null) {
                 fromJar = readClassFromFabricJar(internalName);
             }

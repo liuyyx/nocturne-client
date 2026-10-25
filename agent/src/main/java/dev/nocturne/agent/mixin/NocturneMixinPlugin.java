@@ -80,8 +80,11 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        // 目标类名在配置里，只有命中时才让 mixin 参与；其余类一律跳过，零开销。
-        return targetClass != null && targetClass.replace('/', '.').equals(targetClassName);
+        // 无条件的理由是：{@code @Mixin(targets = ...)} 已经限定了目标类，本方法只需回答
+        // 「这个 mixin 要不要参与」。而 {@code targetClass} 静态字段只在 agent 形态下由
+        // {@code installMixinChannel} 注入——mod 形态下没有人调用它（配置由 fabric.mod.json
+        // 交给 Mixin），若在这里依赖它就永远是 null → mixin 静默不生效（实测）。
+        return true;
     }
 
     @Override
@@ -116,9 +119,11 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
         String cls = targetClass;
         String method = targetMethod;
         String descriptor = targetDescriptor;
-        String owner = hookOwner;
-        String hook = hookMethod;
-        if (cls == null || method == null || descriptor == null || owner == null || hook == null) {
+        String owner = hookOwner == null ? "dev/nocturne/agent/GuiDrawHook" : hookOwner;
+        String hook = hookMethod == null ? "onScreenDraw" : hookMethod;
+        if (cls == null || method == null || descriptor == null) {
+            // mod 形态：没有 agent 侧配置，按「形如 (GuiGraphics-like, ...)V 的绘制方法」自动挑选。
+            autoApply(node, owner, hook);
             return;
         }
         if (node == null || !cls.equals(node.name)) {
@@ -140,6 +145,71 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
                         + " -> " + owner + "." + hook);
             }
             return;
+        }
+    }
+
+    /**
+     * mod 形态下的自动挑选：在目标类里找「返回 void、首个形参是引用类型、参数个数≥2」的方法。
+     *
+     * <p>Screen 上符合这个形状的绘制入口只有 {@code render(GuiGraphics, int, int, float)}；
+     * {@code renderBackground} 等没有这个形状。找不到时什么都不做（mixin 变成纯空壳）。
+     *
+     * @param node  目标类节点
+     * @param owner 钩子类内部名
+     * @param hook  钩子方法名
+     */
+    private static void autoApply(ClassNode node, String owner, String hook) {
+        if (node == null) {
+            return;
+        }
+        for (MethodNode candidate : node.methods) {
+            if (!"V".equals(returnType(candidate.desc))) {
+                continue;
+            }
+            org.objectweb.asm.Type[] arguments;
+            try {
+                arguments = org.objectweb.asm.Type.getArgumentTypes(candidate.desc);
+            } catch (Throwable t) {
+                continue;
+            }
+            if (arguments.length < 2) {
+                continue;
+            }
+            if (arguments[0].getSort() != org.objectweb.asm.Type.OBJECT
+                    && arguments[0].getSort() != org.objectweb.asm.Type.ARRAY) {
+                continue;
+            }
+            InsnList insn = new InsnList();
+            insn.add(new VarInsnNode(Opcodes.ALOAD,
+                    firstReferenceSlot(candidate.access, candidate.desc)));
+            insn.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, hook,
+                    "(Ljava/lang/Object;)V", false));
+            candidate.instructions.insert(insn);
+            candidate.maxStack = Math.max(candidate.maxStack, 2);
+            if (!woven) {
+                woven = true;
+                System.out.println("[nocturne] mixin woven (auto): " + node.name + "."
+                        + candidate.name + candidate.desc + " -> " + owner + "." + hook);
+            }
+            return;
+        }
+        if (!woven) {
+            woven = true;
+            System.out.println("[nocturne] mixin: no draw entry found in " + node.name);
+        }
+    }
+
+    /**
+     * 从方法描述符取返回类型描述符。
+     *
+     * @param descriptor 方法描述符
+     * @return 返回类型描述符（如 {@code V}）
+     */
+    private static String returnType(String descriptor) {
+        try {
+            return org.objectweb.asm.Type.getReturnType(descriptor).getDescriptor();
+        } catch (Throwable t) {
+            return "V";
         }
     }
 

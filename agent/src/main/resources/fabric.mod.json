@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "nocturne",
+  "version": "0.1.0",
+  "name": "Nocturne",
+  "description": "Nocturne client UI.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.nocturne.agent.mod.NocturneModEntry"
+    ]
+  },
+  "mixins": [
+    "nocturne.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0"
+  }
+}

@@ -75,6 +75,33 @@ public final class NocturneAgent {
      * @param agentArgs 代理参数字符串（{@code -javaagent:...=args} 中 {@code =} 之后的部分），可能为 null
      * @param instrumentation JVM 注入的插桩句柄，用于类转换与重转换
      */
+    /**
+     * Fabric mod 形态的启动入口（无 {@link Instrumentation}）。
+     *
+     * <p>mod 形态下不靠字节码改写注入钩子：{@code fabric.mod.json} 的 {@code mixins} 字段
+     * 让 fabric loader 在初始化阶段把 {@code nocturne.mixins.json} 交给 Mixin，
+     * {@code ScreenRenderMixin} 因此能在 {@code Screen} 首次定义时织入
+     * {@code GuiDrawHook.onScreenDraw}。
+     *
+     * <p>这里只负责启动客户端并让叠加层可用；映射表按运行期实际版本选择。
+     */
+    public static void startAsMod() {
+        if (!STARTED.compareAndSet(false, true)) {
+            return;
+        }
+        log("agent loaded via fabric mod");
+        try {
+            // mod 形态下游戏类加载器就是本类的加载器。
+            cachedGameLoader = NocturneAgent.class.getClassLoader();
+            selectMapping(null);
+            NocturneClient.boot(null);
+            installOverlay(null);
+        } catch (Throwable error) {
+            STARTED.set(false);
+            log("mod initialisation failed: " + error);
+        }
+    }
+
     public static void premain(String agentArgs, Instrumentation instrumentation) {
         start("premain", agentArgs, instrumentation);
     }

@@ -325,6 +325,37 @@ public final class ObfuscatedMapping implements Mapping {
      * <p>{@code descriptor} 不参与查找：表中以规范名为键，每个命名空间的描述符在
      * {@link #methodCandidates} 里与名字成对给出。
      */
+    /**
+     * 取某命名空间下方法的**配套描述符**。
+     *
+     * <p>描述符与名字必须同命名空间：SRG 名的描述符里是 Mojmap 类名，原版混淆名的描述符里是
+     * 混淆类名，混用会让插件按错误的类型去匹配方法（实测：拿 vanilla 名去注册、运行时是
+     * intermediary 名，钩子永远不命中）。
+     *
+     * @param owner         所属类
+     * @param canonicalName 规范方法名
+     * @param descriptor    区分重载用的描述符（可空）
+     * @param namespace     目标命名空间（{@code vanilla}/{@code fabric}/{@code forge}/{@code neoforge}）
+     * @return 配套描述符；该命名空间没有签名时为 {@code null}
+     */
+    /**
+     * 取某命名空间下的类名。
+     *
+     * @param type      类类型
+     * @param namespace 目标命名空间（{@code vanilla}/{@code fabric}/{@code forge}/{@code neoforge}）
+     * @return 类名（点号形式）；该命名空间没有时为 {@code null}
+     */
+    public String classNameIn(ClassType type, String namespace) {
+        ClassData data = classes.get(type.canonicalName());
+        return data == null || data.names == null ? null : data.names.get(namespace);
+    }
+
+    public String signatureIn(ClassType owner, String canonicalName, String descriptor,
+                              String namespace) {
+        MemberData member = methodMember(owner, canonicalName);
+        return member == null || member.signatures == null ? null : member.signatures.get(namespace);
+    }
+
     @Override
     public String methodName(ClassType owner, String canonicalName, String descriptor) {
         return methodCandidates(owner, canonicalName).get(0).name();

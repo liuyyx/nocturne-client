@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "dev.nocturne.agent.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "plugin": "dev.nocturne.agent.mixin.NocturneMixinPlugin",
+  "client": [
+    "ScreenRenderMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

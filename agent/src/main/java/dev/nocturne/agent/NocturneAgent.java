@@ -154,6 +154,12 @@ public final class NocturneAgent {
                     // 兜底的恒等映射再被永久缓存（M-84 注释原意）。
                     selectMapping(instrumentation);
                     NocturneClient.boot(instrumentation);
+                    // premain 阶段游戏类加载器尚未建立，而帧钩子与绘制钩子注入的调用都由**游戏的**
+                    // 类加载器解析（它看不到 agent jar）。不等它就注册钩子，钩子一触发就是
+                    // NoClassDefFoundError 崩游戏（实测 FrameDispatcher 加载失败）。
+                    if ("premain".equals(via)) {
+                        awaitGameLoader(instrumentation);
+                    }
                     installFrameHook(instrumentation);
                     installOverlay(instrumentation);
                 } catch (Throwable t) {
@@ -364,6 +370,40 @@ public final class NocturneAgent {
         return false;
     }
 
+    /**
+     * 等待游戏的隔离类加载器出现（仅 {@code premain} 需要）。
+     *
+     * <p>{@code premain} 在游戏主类加载之前执行，此时还没有 {@code KnotClassLoader}。而钩子注入的
+     * 调用由游戏加载器解析，它看不到 agent jar——不等它就直接注册钩子，第一次帧交换就会抛
+     * {@code NoClassDefFoundError}（实测：{@code dev.nocturne.client.runtime.FrameDispatcher}）。
+     *
+     * <p>就绪后立刻把 agent jar 暴露给它（{@code addUrlFwd}），这样后续注入的每个调用都能解析。
+     *
+     * @param instrumentation 插桩句柄
+     */
+    private static void awaitGameLoader(Instrumentation instrumentation) {
+        long deadline = System.currentTimeMillis() + 120_000L;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                ClassLoader loader = gameClassLoader(instrumentation);
+                if (loader != null) {
+                    log("game loader ready: " + loader.getClass().getName());
+                    exposeAgentJarToGameLoader(instrumentation);
+                    return;
+                }
+            } catch (Throwable ignored) {
+                // 类加载表在启动期会剧烈变化，单次查询失败不代表没就绪。
+            }
+            try {
+                Thread.sleep(200L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        log("game loader not ready within 120s; hooks registered without exposure");
+    }
+
     private static void installFrameHook(Instrumentation instrumentation) {
         if (instrumentation == null) {
             log("no Instrumentation: frame hook skipped");
@@ -420,6 +460,15 @@ public final class NocturneAgent {
      * 两个类不能互换，转换器按「类名+方法名+描述符」精确匹配，写错就是静默不织入。
      */
     private static final String HUD_DRAW_CLASS = "net.minecraft.client.gui.Hud";
+    /** Mixin 目标类：1.21.1 的 {@code Screen}（intermediary 名）。 */
+    private static final String SCREEN_MIXIN_CLASS = "net/minecraft/class_437";
+
+    /** Mixin 目标方法：{@code Screen.render(GuiGraphics, int, int, float)}。 */
+    private static final String SCREEN_MIXIN_METHOD = "method_25394";
+
+    /** Mixin 目标方法描述符。 */
+    private static final String SCREEN_MIXIN_DESCRIPTOR = "(Lnet/minecraft/class_332;IIF)V";
+
     /** 目标方法名。 */
     private static final String HUD_DRAW_METHOD = "extractRenderState";
     /** 目标方法描述符：首个引用形参即绘制上下文。 */
@@ -460,6 +509,16 @@ public final class NocturneAgent {
      * 不关心它具体是什么类型（把具体类型写进描述符会让钩子在类加载顺序变化时失配）。
      */
     private static void installGuiDrawHook(Instrumentation instrumentation) {
+        // Fabric 优先：KnotClassLoader 用 defineClass 定义游戏类，Instrumentation 的两条改写路径
+        // 对它都不可靠（三条路都实测过，见 installMixinChannel 的说明）。
+        ClassLoader fabricLoader = gameClassLoader(instrumentation);
+        if (fabricLoader != null && "net.fabricmc.loader.impl.launch.knot.KnotClassLoader"
+                .equals(fabricLoader.getClass().getName())) {
+            installMixinChannel(instrumentation, fabricLoader,
+                    SCREEN_MIXIN_CLASS, SCREEN_MIXIN_METHOD, SCREEN_MIXIN_DESCRIPTOR,
+                    SCREEN_HOOK_METHOD);
+            return;
+        }
         EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
         if (asmLoader == null) {
             log("embedded ASM unavailable; gui draw hook skipped");
@@ -474,7 +533,10 @@ public final class NocturneAgent {
         ClassLoader gameLoader = gameClassLoader(instrumentation);
         Class<?> extractorProbe = gameLoader == null ? null
                 : loadNoInit("net.minecraft.client.gui.GuiGraphicsExtractor", gameLoader);
-        if (gameLoader != null && extractorProbe == null) {
+        if (extractorProbe == null) {
+            // premain 阶段拿不到游戏加载器（游戏还没启动类加载），但这时正是注册 transformer
+            // 的最佳时机：目标类尚未加载，首次加载一定会回调我们。所以这里不依赖 gameLoader，
+            // 类名/描述符全部走映射表（纯字符串），注册后等类加载即可。
             installGuiGraphicsHook(instrumentation, asmLoader, gameLoader);
         }
     }
@@ -512,6 +574,11 @@ public final class NocturneAgent {
         // method_1753）。它和 Screen 是两条独立的绘制路径：只挂 Screen 时，世界内界面
         // "逻辑已打开"却一帧都不画（toggle probe open=true、overlay active 不增加）。
         installHudRenderHook(instrumentation, asmLoader, gameLoader);
+        if (gameLoader == null) {
+            // premain 分支：不加载类，直接用映射表里的类名 + 方法名 + 描述符注册。
+            installGuiGraphicsHookByMapping(instrumentation, asmLoader, mapping);
+            return;
+        }
         Class<?> screen = null;
         for (String name : mapping.classNameCandidates(
                 dev.nocturne.client.mapping.ClassType.SCREEN)) {
@@ -856,6 +923,191 @@ public final class NocturneAgent {
      * @param descriptor      目标方法描述符（首个形参须是引用类型）
      * @param hookMethod      {@link GuiDrawHook} 上的入口方法名
      */
+    /**
+     * 通过 Fabric 的 Mixin 通道注册绘制钩子。
+     *
+     * <p><b>为什么必须走这条路</b>：{@code KnotClassLoader} 用 {@code defineClass} 直接定义
+     * 游戏类，{@code retransformClasses} 不会回调后注册的 transformer；{@code redefineClasses}
+     * 又会因为 Mixin 已给 {@code Screen} 追加了三个 Fabric 接口而结构校验失败。Mixin 本身就是
+     * {@code KnotClassLoader} 的合作伙伴，是唯一能在类定义前拿到字节码的通道。
+     *
+     * <p><b>前提</b>：必须在目标类首次加载之前注册（Mixin 不处理已加载的类）。因此这条路径只在
+     * {@code -javaagent} 启动期注入时生效；attach 到已运行的游戏时目标类早已加载，会静默跳过。
+     *
+     * @param instrumentation 插桩句柄
+     * @param gameLoader      游戏类加载器（{@code KnotClassLoader}）
+     * @param targetClass     目标类内部名（斜杠形式）
+     * @param targetMethod    目标方法名
+     * @param descriptor      目标方法描述符
+     * @param hookMethod      {@link GuiDrawHook} 上的入口方法名
+     * @return 注册成功返回 {@code true}
+     */
+    private static boolean installMixinChannel(Instrumentation instrumentation, ClassLoader gameLoader,
+                                               String targetClass, String targetMethod,
+                                               String descriptor, String hookMethod) {
+        if (gameLoader == null) {
+            return false;
+        }
+        try {
+            // 1. 配置插件（插件类由 KnotClassLoader 加载，与 agent 侧不是同一份，必须显式传递）。
+            Class<?> plugin = Class.forName("dev.nocturne.agent.mixin.NocturneMixinPlugin",
+                    true, gameLoader);
+            plugin.getMethod("configure", String.class, String.class, String.class,
+                    String.class, String.class)
+                    .invoke(null, targetClass, targetMethod, descriptor,
+                            GUI_HOOK_OWNER, hookMethod);
+
+            // 2. 找到 Mixin 环境并注册配置。
+            Class<?> environment = Class.forName("org.spongepowered.asm.mixin.MixinEnvironment",
+                    true, gameLoader);
+            Object env = environment.getMethod("getDefaultEnvironment").invoke(null);
+            java.io.File jar = agentJar();
+            if (jar == null) {
+                log("mixin: agent jar not resolvable");
+                return false;
+            }
+            environment.getMethod("addConfiguration", java.net.URL.class)
+                    .invoke(env, jar.toURI().toURL());
+            log("mixin channel registered: " + targetClass + "." + targetMethod + descriptor
+                    + " from " + jar.getName());
+            return true;
+        } catch (Throwable t) {
+            log("mixin channel failed: " + t);
+            return false;
+        }
+    }
+
+    /**
+     * 定位 agent 自身的 jar 文件（Mixin 的配置文件就在它的根目录下）。
+     *
+     * @return jar 文件；无法定位时为 {@code null}
+     */
+    private static java.io.File agentJar() {
+        try {
+            java.security.CodeSource source = NocturneAgent.class.getProtectionDomain().getCodeSource();
+            if (source == null || source.getLocation() == null) {
+                return null;
+            }
+            java.io.File file = new java.io.File(source.getLocation().toURI());
+            return file.isFile() ? file : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 按类内部名从映射表里取 {@code render} 的签名，转成 JVM 描述符。
+     *
+     * @param mapping  映射表
+     * @param internal 类的内部名（斜杠形式，vanilla/fabric/forge 命名空间之一）
+     * @return 描述符；该命名空间没有签名时为 {@code null}
+     */
+    private static String descriptorForUnused(dev.nocturne.client.mapping.Mapping mapping, String internal) {
+        if (!(mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping)) {
+            return mapping.methodDescriptor(dev.nocturne.client.mapping.ClassType.SCREEN, "render");
+        }
+        try {
+            java.lang.reflect.Method method = mapping.getClass()
+                    .getMethod("signatureFor", String.class, String.class);
+            Object signature = method.invoke(mapping, internal, "render");
+            if (signature instanceof String && !((String) signature).isEmpty()) {
+                return (String) signature;
+            }
+        } catch (Throwable ignored) {
+            // 没有该方法时退回默认命名空间。
+        }
+        return mapping.methodDescriptor(dev.nocturne.client.mapping.ClassType.SCREEN, "render");
+    }
+
+    /**
+     * 取某命名空间下 {@code Screen} 类的内部名。
+     *
+     * @param mapping   映射表
+     * @param namespace 目标命名空间
+     * @return 内部名；该命名空间没有类名时为 {@code null}
+     */
+    private static String internalForClass(dev.nocturne.client.mapping.Mapping mapping,
+                                           String namespace) {
+        if (!(mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping)) {
+            java.util.List<String> names = mapping.classNameCandidates(
+                    dev.nocturne.client.mapping.ClassType.SCREEN);
+            return names.isEmpty() ? null : names.get(0).replace('.', '/');
+        }
+        try {
+            java.lang.reflect.Method method = mapping.getClass()
+                    .getMethod("classNameIn", dev.nocturne.client.mapping.ClassType.class,
+                            String.class);
+            Object name = method.invoke(mapping,
+                    dev.nocturne.client.mapping.ClassType.SCREEN, namespace);
+            return name instanceof String && !((String) name).isEmpty()
+                    ? ((String) name).replace('.', '/') : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 用映射表（纯字符串）注册 {@code Screen.render} 钩子，不依赖任何类已被加载。
+     *
+     * <p>只在 {@code premain} 阶段使用：那时游戏类加载器还没建立，但目标类也还没加载，
+     * 正是注册 transformer 的最佳时机。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader       内嵌 ASM 子加载器
+     * @param mapping         当前版本的映射表
+     */
+    private static void installGuiGraphicsHookByMapping(Instrumentation instrumentation,
+                                                        EmbeddedAsmLoader asmLoader,
+                                                        dev.nocturne.client.mapping.Mapping mapping) {
+        java.util.List<String> screenNames = mapping.classNameCandidates(
+                dev.nocturne.client.mapping.ClassType.SCREEN);
+        java.util.List<String> methodNames;
+        if (mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping) {
+            methodNames = ((dev.nocturne.client.mapping.ObfuscatedMapping) mapping)
+                    .methodNameCandidates(dev.nocturne.client.mapping.ClassType.SCREEN,
+                            "render", null);
+        } else {
+            methodNames = java.util.Collections.singletonList(
+                    mapping.methodName(dev.nocturne.client.mapping.ClassType.SCREEN,
+                            "render", null));
+        }
+        if (screenNames.isEmpty() || methodNames.isEmpty()) {
+            log("gui-graphics hook (premain): empty mapping candidates");
+            return;
+        }
+        // 运行时用哪个命名空间取决于加载器（vanilla 混淆名 / Fabric intermediary / Forge SRG），
+        // premain 阶段判断不出，索性把「所有类名 × 所有方法名」的组合全部注册一遍：
+        // 对未命中的组合，转换器按原样返回 null，零副作用。
+        int registered = 0;
+        if (mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping) {
+            dev.nocturne.client.mapping.ObfuscatedMapping table =
+                    (dev.nocturne.client.mapping.ObfuscatedMapping) mapping;
+            // 名字与描述符必须同命名空间配套，否则参数类型对不上、钩子永不命中。
+            for (String namespace : new String[]{"vanilla", "fabric", "forge", "neoforge"}) {
+                String method = null;
+                for (String candidate : methodNames) {
+                    if (candidate != null && !candidate.isEmpty()) {
+                        method = candidate;
+                        break;
+                    }
+                }
+                String descriptor = table.signatureIn(
+                        dev.nocturne.client.mapping.ClassType.SCREEN, "render", null, namespace);
+                if (method == null || descriptor == null) {
+                    continue;
+                }
+                String internal = internalForClass(mapping, namespace);
+                if (internal == null) {
+                    continue;
+                }
+                registerGuiDrawHook(instrumentation, asmLoader, internal, method, descriptor,
+                        SCREEN_HOOK_METHOD);
+                registered++;
+            }
+        }
+        log("gui-graphics hook (premain): " + registered + " namespace combinations registered");
+    }
+
     /**
      * 为 1.20–1.21 注册 HUD 绘制钩子 {@code Gui.render(GuiGraphics, DeltaTracker)}。
      *

@@ -1,0 +1,170 @@
+package dev.nocturne.agent.mixin;
+
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.Opcodes;
+import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
+import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Mixin 配置插件：在目标类被 Mixin 处理完之后，直接把钩子调用插进指定方法。
+ *
+ * <p><b>为什么用 {@code postApply} 而不是 {@code @Inject}</b>：{@code @Inject} 的注入方法必须
+ * 精确声明目标方法的全部形参类型，而 {GuiGraphics} 一类在不同 Minecraft 版本里的名字完全不同
+ * （1.21.1 是 {@code class_332}、26.x 是 {@code GuiGraphicsExtractor}）。{@code postApply}
+ * 拿到的是 ASM {@code ClassNode}，只要「类名 + 方法名 + 描述符」三者对上就能插，与版本无关。
+ *
+ * <p><b>为什么这是 Fabric 下唯一可靠的注入通道</b>：{@code KnotClassLoader} 用 {@code defineClass}
+ * 直接定义游戏类，JVM 的 {@code retransformClasses} 不会回调后注册的 transformer，
+ * {@code redefineClasses} 又会因为 Mixin 已改写类头（追加接口）而结构校验失败。Mixin 本身就是
+ * {@code KnotClassLoader} 的合作伙伴，是唯一能在类定义前拿到字节码的路径。
+ *
+ * <p>配置由 agent 侧通过 {@link #configure} 注入：插件类由游戏的 {@code KnotClassLoader} 加载，
+ * 与 agent 侧的 {@code NocturneAgent} 不是同一个类加载器，静态字段也不会共享，因此必须显式传递。
+ */
+public final class NocturneMixinPlugin implements IMixinConfigPlugin {
+
+    /** 目标类内部名（斜杠形式）。 */
+    private static volatile String targetClass;
+
+    /** 目标方法名。 */
+    private static volatile String targetMethod;
+
+    /** 目标方法描述符。 */
+    private static volatile String targetDescriptor;
+
+    /** 钩子类内部名（斜杠形式）。 */
+    private static volatile String hookOwner;
+
+    /** 钩子方法名（形如 {@code (Ljava/lang/Object;)V}，首参为被注入方法的首个引用形参）。 */
+    private static volatile String hookMethod;
+
+    /** 是否已织入（用于日志去重）。 */
+    private static volatile boolean woven;
+
+    /**
+     * 配置插件的目标与钩子。
+     *
+     * <p>必须在 {@code MixinEnvironment.addConfiguration} 之前调用，否则插件生效时目标为空。
+     *
+     * @param targetClass      目标类内部名
+     * @param targetMethod     目标方法名
+     * @param targetDescriptor 目标方法描述符
+     * @param hookOwner        钩子类内部名
+     * @param hookMethod       钩子方法名
+     */
+    public static void configure(String targetClass, String targetMethod, String targetDescriptor,
+                                 String hookOwner, String hookMethod) {
+        NocturneMixinPlugin.targetClass = targetClass;
+        NocturneMixinPlugin.targetMethod = targetMethod;
+        NocturneMixinPlugin.targetDescriptor = targetDescriptor;
+        NocturneMixinPlugin.hookOwner = hookOwner;
+        NocturneMixinPlugin.hookMethod = hookMethod;
+        NocturneMixinPlugin.woven = false;
+    }
+
+    @Override
+    public void onLoad(String mixinPackage) {
+    }
+
+    @Override
+    public String getRefMapperConfig() {
+        return null;
+    }
+
+    @Override
+    public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        // 目标类名在配置里，只有命中时才让 mixin 参与；其余类一律跳过，零开销。
+        return targetClass != null && targetClass.replace('/', '.').equals(targetClassName);
+    }
+
+    @Override
+    public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {
+    }
+
+    @Override
+    public List<String> getMixins() {
+        return null;
+    }
+
+    @Override
+    public void preApply(String targetClassName, ClassNode targetClassNode, String mixinClassName,
+                         IMixinInfo mixinInfo) {
+    }
+
+    /**
+     * Mixin 应用完成后直接改写目标方法。
+     *
+     * <p>插入位置在方法开头：先让叠加层有机会绘制，再让游戏画自己的内容——这样界面不会被
+     * 目标方法后续的绘制盖住。钩子只接收首个引用形参（GuiGraphics / PoseStack 一类），
+     * 其余形参不需要。
+     *
+     * @param targetClassName 目标类名（点号形式）
+     * @param node            目标类的 ASM 节点
+     * @param mixinClassName  mixin 类名
+     * @param mixinInfo       mixin 元信息
+     */
+    @Override
+    public void postApply(String targetClassName, ClassNode node, String mixinClassName,
+                          IMixinInfo mixinInfo) {
+        String cls = targetClass;
+        String method = targetMethod;
+        String descriptor = targetDescriptor;
+        String owner = hookOwner;
+        String hook = hookMethod;
+        if (cls == null || method == null || descriptor == null || owner == null || hook == null) {
+            return;
+        }
+        if (node == null || !cls.equals(node.name)) {
+            return;
+        }
+        for (MethodNode candidate : node.methods) {
+            if (!method.equals(candidate.name) || !descriptor.equals(candidate.desc)) {
+                continue;
+            }
+            InsnList insn = new InsnList();
+            insn.add(new VarInsnNode(Opcodes.ALOAD, firstReferenceSlot(candidate.access, descriptor)));
+            insn.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, hook, "(Ljava/lang/Object;)V", false));
+            candidate.instructions.insert(insn);
+            // maxStack 可能因为多压了一个引用而不够；+2 覆盖返回值与临时槽位。
+            candidate.maxStack = Math.max(candidate.maxStack, 2);
+            if (!woven) {
+                woven = true;
+                System.out.println("[nocturne] mixin woven: " + cls + "." + method + descriptor
+                        + " -> " + owner + "." + hook);
+            }
+            return;
+        }
+    }
+
+    /**
+     * 计算方法首个引用形参在局部变量表里的槽位。
+     *
+     * @param access     方法访问标志（决定是否含 {@code this}）
+     * @param descriptor 方法描述符
+     * @return 槽位；没有引用形参时返回 -1
+     */
+    private static int firstReferenceSlot(int access, String descriptor) {
+        org.objectweb.asm.Type[] arguments;
+        try {
+            arguments = org.objectweb.asm.Type.getArgumentTypes(descriptor);
+        } catch (Throwable t) {
+            return -1;
+        }
+        int slot = (access & Opcodes.ACC_STATIC) != 0 ? 0 : 1;
+        for (org.objectweb.asm.Type argument : arguments) {
+            if (argument.getSort() == org.objectweb.asm.Type.OBJECT
+                    || argument.getSort() == org.objectweb.asm.Type.ARRAY) {
+                return slot;
+            }
+            slot += argument.getSize();
+        }
+        return -1;
+    }
+}

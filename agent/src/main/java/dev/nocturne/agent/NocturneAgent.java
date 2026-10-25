@@ -90,6 +90,10 @@ public final class NocturneAgent {
             return;
         }
         log("agent loaded via fabric mod");
+        // mod 形态没有 agent 参数通道，用系统属性提供同样的验收开关。
+        if (Boolean.getBoolean("nocturne.openGui")) {
+            openGuiOnInstall = true;
+        }
         try {
             // mod 形态下游戏类加载器就是本类的加载器。
             cachedGameLoader = NocturneAgent.class.getClassLoader();

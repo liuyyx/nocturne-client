@@ -1323,12 +1323,20 @@ public final class NocturneAgent {
         // 待其首次加载时由 transformer 自动处理。
         for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
             if (targetInternalName.replace('/', '.').equals(loaded.getName())) {
+                // 已加载 → 必须立刻打补丁。Fabric 环境里 retransformClasses 不会回调
+                // transformer（KnotClassLoader 直接用 defineClass），只能自己跑一遍再 redefine。
+                // GLFW / Display 是第三方库、不会被 Mixin 改写，所以 redefine 的结构校验能过。
                 try {
-                    instrumentation.retransformClasses(loaded);
-                    // 只注册成功、不代表钩子已经跑起来：真正「live」由 NocturneRuntime 首帧日志确认。
-                    log("frame hook registered on " + targetInternalName + "; awaiting first frame");
+                    byte[] patched = patchBytes(loaded, transformer, targetInternalName, method);
+                    if (patched == null) {
+                        log("frame hook: no bytecode change for " + targetInternalName);
+                    } else {
+                        instrumentation.redefineClasses(
+                                new java.lang.instrument.ClassDefinition(loaded, patched));
+                        log("frame hook registered on " + targetInternalName + "; awaiting first frame");
+                    }
                 } catch (Throwable t) {
-                    log("retransform failed for " + targetInternalName + ": " + t);
+                    log("redefine failed for " + targetInternalName + ": " + t);
                 }
                 return;
             }

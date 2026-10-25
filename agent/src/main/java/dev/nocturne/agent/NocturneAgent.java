@@ -1047,7 +1047,8 @@ public final class NocturneAgent {
             return null;
         }
         // 直接就是实例目录（Fabric 启动时 user.dir 即实例目录）。
-        byte[] direct = scanRemappedJars(new java.io.File(root, ".fabric/remappedJars"), internalName);
+        byte[] direct = scanRemappedJars(java.nio.file.Paths.get(root.getAbsolutePath(),
+                ".fabric", "remappedJars").toFile(), internalName);
         if (direct != null) {
             return direct;
         }
@@ -1076,6 +1077,8 @@ public final class NocturneAgent {
     private static byte[] scanRemappedJars(java.io.File remapped, String internalName) {
         java.io.File[] mods = remapped == null ? null : remapped.listFiles();
         if (mods == null) {
+            log("redefine: remapped missing: " + (remapped == null ? "null"
+                    : remapped.getAbsolutePath() + " isDir=" + remapped.isDirectory()));
             return null;
         }
         for (java.io.File mod : mods) {

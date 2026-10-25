@@ -907,13 +907,35 @@ public final class NocturneAgent {
     private static void registerGuiDrawHook(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                             String targetClass, String method, String descriptor,
                                             String hookMethod) {
-        ClassFileTransformer transformer = asmLoader.createCallbackTransformer(
+        final ClassFileTransformer transformer = asmLoader.createCallbackTransformer(
                 targetClass, method, descriptor, GUI_HOOK_OWNER, hookMethod, true);
         if (transformer == null) {
             return;
         }
+        // 诊断包装：确认转换器真的被调用过。Fabric 环境里 retransformClasses 会静默不生效
+        // （目标类被 Mixin 改写过、或转换器被后续 transformer 覆盖），只靠 addTransformer
+        // 成功无法判断钩子是否落地。
+        ClassFileTransformer wrapper = new ClassFileTransformer() {
+            @Override
+            public byte[] transform(ClassLoader loader, String className, Class<?> beingRedefined,
+                                    java.security.ProtectionDomain domain, byte[] classfileBuffer) {
+                if (className == null || !className.equals(targetClass)) {
+                    return null;
+                }
+                try {
+                    byte[] out = transformer.transform(loader, className, beingRedefined, domain,
+                            classfileBuffer);
+                    log("hook transform: " + className + "." + method
+                            + " -> " + (out == null ? "unchanged" : out.length + "B"));
+                    return out;
+                } catch (Throwable t) {
+                    log("hook transform failed: " + className + "." + method + " -> " + t);
+                    return null;
+                }
+            }
+        };
         try {
-            instrumentation.addTransformer(transformer, true);
+            instrumentation.addTransformer(wrapper, true);
         } catch (Throwable t) {
             log("could not register gui draw hook on " + targetClass + ": " + t);
             return;

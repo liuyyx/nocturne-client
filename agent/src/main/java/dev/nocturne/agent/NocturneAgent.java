@@ -497,6 +497,10 @@ public final class NocturneAgent {
         if (mapping == null) {
             return;
         }
+        // 1.20–1.21 的 HUD 入口是 Gui.render(GuiGraphics, DeltaTracker)（1.21.1 实测
+        // method_1753）。它和 Screen 是两条独立的绘制路径：只挂 Screen 时，世界内界面
+        // "逻辑已打开"却一帧都不画（toggle probe open=true、overlay active 不增加）。
+        installHudRenderHook(instrumentation, asmLoader, gameLoader);
         Class<?> screen = null;
         for (String name : mapping.classNameCandidates(
                 dev.nocturne.client.mapping.ClassType.SCREEN)) {
@@ -841,6 +845,47 @@ public final class NocturneAgent {
      * @param descriptor      目标方法描述符（首个形参须是引用类型）
      * @param hookMethod      {@link GuiDrawHook} 上的入口方法名
      */
+    /**
+     * 为 1.20–1.21 注册 HUD 绘制钩子 {@code Gui.render(GuiGraphics, DeltaTracker)}。
+     *
+     * <p>类名按「官方名 → intermediary 混淆名」依次探测；描述符由运行时真实方法生成，
+     * 不做字符串猜测。首个形参用 {@code hasFill} 校验是 GuiGraphics（PoseStack 没有 fill）。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader       内嵌 ASM 子加载器
+     * @param gameLoader      游戏类加载器
+     */
+    private static void installHudRenderHook(Instrumentation instrumentation,
+                                             EmbeddedAsmLoader asmLoader, ClassLoader gameLoader) {
+        Class<?> hud = null;
+        for (String name : new String[]{"net.minecraft.client.gui.Gui", "net.minecraft.class_329"}) {
+            hud = loadNoInit(name, gameLoader);
+            if (hud != null) {
+                break;
+            }
+        }
+        if (hud == null) {
+            log("hud render hook: Gui class not found");
+            return;
+        }
+        for (java.lang.reflect.Method method : hud.getDeclaredMethods()) {
+            if (!"render".equals(method.getName())) {
+                continue;
+            }
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length != 2 || parameters[0] == null || !hasFill(parameters[0])) {
+                continue;
+            }
+            String descriptor = "(L" + parameters[0].getName().replace('.', '/')
+                    + ";L" + parameters[1].getName().replace('.', '/') + ";)V";
+            registerGuiDrawHook(instrumentation, asmLoader,
+                    hud.getName().replace('.', '/'), "render", descriptor, HUD_HOOK_METHOD);
+            log("hud render hook: " + hud.getName() + ".render" + descriptor);
+            return;
+        }
+        log("hud render hook: render(GuiGraphics-like, *) not found in " + hud.getName());
+    }
+
     private static void registerGuiDrawHook(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                             String targetClass, String method, String descriptor,
                                             String hookMethod) {

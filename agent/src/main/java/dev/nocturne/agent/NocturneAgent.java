@@ -1281,6 +1281,8 @@ public final class NocturneAgent {
                     if (patched == null) {
                         log("redefine skipped (no bytecode change): " + targetClass + "." + method);
                     } else {
+                        log("redefine: " + targetClass + " super=" + loaded.getSuperclass()
+                                + " ifaces=" + java.util.Arrays.toString(loaded.getInterfaces()));
                         instrumentation.redefineClasses(
                                 new java.lang.instrument.ClassDefinition(loaded, patched));
                         log("redefine applied: " + targetClass + "." + method + " (" + patched.length + "B)");

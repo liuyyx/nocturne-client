@@ -62,13 +62,40 @@ public final class NocturneRuntime {
      *
      * @return 可用时返回 true；bootstrap 层没有该类（理论上不会）时返回 false
      */
+    /**
+     * 按「本类加载器 → bootstrap → system」的顺序加载分发器。
+     *
+     * @return 分发器类
+     * @throws ClassNotFoundException 三种加载器都找不到
+     */
+    private static Class<?> loadDispatcher() throws ClassNotFoundException {
+        ClassLoader own = NocturneRuntime.class.getClassLoader();
+        if (own != null) {
+            try {
+                return Class.forName(DISPATCHER_CLASS, true, own);
+            } catch (ClassNotFoundException ignored) {
+                // 落到 bootstrap。
+            }
+        }
+        try {
+            return Class.forName(DISPATCHER_CLASS, true, null);
+        } catch (ClassNotFoundException ignored) {
+            return Class.forName(DISPATCHER_CLASS, true, ClassLoader.getSystemClassLoader());
+        }
+    }
+
     private static synchronized boolean bindDispatcher() {
         if (dispatchMethod != null) {
             return true;
         }
         try {
-            // 第三个参数为 null = 用 bootstrap 加载器：游戏加载器会拦截同名类，必须绕开它。
-            Class<?> dispatcher = Class.forName(DISPATCHER_CLASS, true, null);
+            // 解析顺序：
+            // 1) 本类加载器 —— Fabric mod 形态下所有类都在 KnotClassLoader，这是唯一存在的一份；
+            //    直接取 bootstrap 会 ClassNotFoundException（实测每帧刷屏）。
+            // 2) bootstrap —— agent 形态下分发器由 bootstrap bridge 提供，游戏加载器会拦截同名类，
+            //    必须绕开它。
+            // 3) system —— 兜底。
+            Class<?> dispatcher = loadDispatcher();
             dispatchMethod = dispatcher.getMethod("dispatch");
             addMethod = dispatcher.getMethod("add", Runnable.class);
             removeMethod = dispatcher.getMethod("remove", Runnable.class);

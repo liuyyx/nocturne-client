@@ -56,12 +56,34 @@ public final class GuiDrawHook {
      * agent 的类；直接静态调用会 {@code NoClassDefFoundError}（1.20.1 Forge 实测崩溃）。
      * 因此改为「按 system 加载器反射解析 + 缓存句柄」，失败时静默跳过——钩子绝不抛异常。
      */
+    /**
+     * 解析 {@code NocturneRuntime} 所在的类加载器。
+     *
+     * <p>先试本类的加载器（Fabric mod 形态下两者同在 {@code KnotClassLoader}，这是唯一能找到的一份）；
+     * 再退回 system 加载器（agent 形态下 agent jar 挂在 system 搜索路径上）。
+     * 顺序不能颠倒：mod 形态下 agent jar 不在 system 路径，先试 system 会拿到 {@code null}。
+     *
+     * @return 运行时的类
+     * @throws ClassNotFoundException 两种加载器都找不到
+     */
+    private static Class<?> resolveRuntime() throws ClassNotFoundException {
+        ClassLoader own = GuiDrawHook.class.getClassLoader();
+        if (own != null) {
+            try {
+                return Class.forName("dev.nocturne.client.runtime.NocturneRuntime", false, own);
+            } catch (ClassNotFoundException ignored) {
+                // 落到 system 再试。
+            }
+        }
+        return Class.forName("dev.nocturne.client.runtime.NocturneRuntime", false,
+                ClassLoader.getSystemClassLoader());
+    }
+
     private static void runtime(String name, Object... args) {
         try {
             Class<?> type = runtimeType;
             if (type == null) {
-                type = Class.forName("dev.nocturne.client.runtime.NocturneRuntime", false,
-                        ClassLoader.getSystemClassLoader());
+                type = resolveRuntime();
                 runtimeType = type;
             }
             if ("setDrawContext".equals(name)) {

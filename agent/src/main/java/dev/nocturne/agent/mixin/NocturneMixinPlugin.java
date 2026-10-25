@@ -158,9 +158,27 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
      * @param owner 钩子类内部名
      * @param hook  钩子方法名
      */
+    /** 已知的绘制入口方法名，按优先级排列（intermediary / 官方名）。 */
+    private static final String[] DRAW_METHODS = {
+        "method_25394", "render", "method_47413"
+    };
+
     private static void autoApply(ClassNode node, String owner, String hook) {
         if (node == null) {
             return;
+        }
+        // 先按已知方法名精确挑：同名的绘制方法在 Screen 上有多个（renderBackground 等），
+        // 「返回 void + 首参引用」这种形状不足以唯一确定主绘制入口（实测挑到了
+        // method_47413，它不是每帧都被调用的那个）。
+        for (String wanted : DRAW_METHODS) {
+            for (MethodNode candidate : node.methods) {
+                if (!wanted.equals(candidate.name)) {
+                    continue;
+                }
+                if (inject(node, candidate, owner, hook)) {
+                    return;
+                }
+            }
         }
         for (MethodNode candidate : node.methods) {
             if (!"V".equals(returnType(candidate.desc))) {
@@ -179,24 +197,42 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
                     && arguments[0].getSort() != org.objectweb.asm.Type.ARRAY) {
                 continue;
             }
-            InsnList insn = new InsnList();
-            insn.add(new VarInsnNode(Opcodes.ALOAD,
-                    firstReferenceSlot(candidate.access, candidate.desc)));
-            insn.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, hook,
-                    "(Ljava/lang/Object;)V", false));
-            candidate.instructions.insert(insn);
-            candidate.maxStack = Math.max(candidate.maxStack, 2);
-            if (!woven) {
-                woven = true;
-                System.out.println("[nocturne] mixin woven (auto): " + node.name + "."
-                        + candidate.name + candidate.desc + " -> " + owner + "." + hook);
+            if (inject(node, candidate, owner, hook)) {
+                return;
             }
-            return;
         }
         if (!woven) {
             woven = true;
             System.out.println("[nocturne] mixin: no draw entry found in " + node.name);
         }
+    }
+
+    /**
+     * 往指定方法开头插入钩子调用。
+     *
+     * @param node      目标类节点（仅用于日志）
+     * @param candidate 目标方法
+     * @param owner     钩子类内部名
+     * @param hook      钩子方法名
+     * @return 插入成功返回 {@code true}
+     */
+    private static boolean inject(ClassNode node, MethodNode candidate, String owner, String hook) {
+        int slot = firstReferenceSlot(candidate.access, candidate.desc);
+        if (slot < 0) {
+            return false;
+        }
+        InsnList insn = new InsnList();
+        insn.add(new VarInsnNode(Opcodes.ALOAD, slot));
+        insn.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, hook,
+                "(Ljava/lang/Object;)V", false));
+        candidate.instructions.insert(insn);
+        candidate.maxStack = Math.max(candidate.maxStack, 2);
+        if (!woven) {
+            woven = true;
+            System.out.println("[nocturne] mixin woven (auto): " + node.name + "."
+                    + candidate.name + candidate.desc + " -> " + owner + "." + hook);
+        }
+        return true;
     }
 
     /**

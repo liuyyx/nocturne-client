@@ -869,17 +869,35 @@ public final class NocturneAgent {
             return;
         }
         for (java.lang.reflect.Method method : hud.getDeclaredMethods()) {
-            if (!"render".equals(method.getName())) {
+            // 不按名字过滤：intermediary 环境里 HUD 入口叫 method_1753，官方名才是 render。
+            // 判定依据只有「形如 (GuiGraphics, *)V」这一条。
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length != 2 || parameters[0] == null
+                    || method.getReturnType() != void.class) {
                 continue;
             }
-            Class<?>[] parameters = method.getParameterTypes();
-            if (parameters.length != 2 || parameters[0] == null || !hasFill(parameters[0])) {
+            // 判定首参是 GuiGraphics：优先按映射表给的类名，其次退回 hasFill 特征。
+            // 1.21.1 的 class_332 不满足 hasFill（fill 全是带 RenderType 的重载），
+            // 所以类名匹配是主路径。
+            String graphicsName = parameters[0].getName();
+            boolean isGraphics = false;
+            dev.nocturne.client.mapping.Mapping hookMapping = currentMapping();
+            if (hookMapping != null) {
+                for (String candidate : hookMapping.classNameCandidates(
+                        dev.nocturne.client.mapping.ClassType.GUI_GRAPHICS)) {
+                    if (candidate.replace('/', '.').equals(graphicsName)) {
+                        isGraphics = true;
+                        break;
+                    }
+                }
+            }
+            if (!isGraphics && !hasFill(parameters[0])) {
                 continue;
             }
             String descriptor = "(L" + parameters[0].getName().replace('.', '/')
                     + ";L" + parameters[1].getName().replace('.', '/') + ";)V";
             registerGuiDrawHook(instrumentation, asmLoader,
-                    hud.getName().replace('.', '/'), "render", descriptor, HUD_HOOK_METHOD);
+                    hud.getName().replace('.', '/'), method.getName(), descriptor, HUD_HOOK_METHOD);
             log("hud render hook: " + hud.getName() + ".render" + descriptor);
             return;
         }

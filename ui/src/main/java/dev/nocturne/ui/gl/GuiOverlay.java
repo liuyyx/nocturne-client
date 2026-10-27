@@ -262,7 +262,7 @@ public final class GuiOverlay implements FrameListener {
      */
     private static boolean consumeKey(int glfwKey) {
         if (consumePressedFailed) {
-            return false;
+            return InputBlock.consumePressed(glfwKey, 250_000_000L);
         }
         try {
             java.lang.reflect.Method method = consumePressedMethod;
@@ -431,7 +431,7 @@ public final class GuiOverlay implements FrameListener {
 
         // 键盘：Esc 关闭可达；其余按键与字符交给界面自己处理（修饰位按 AWT 约定）。
         int modifiers = currentModifiers();
-        boolean escapeDown = input.keyDown(KEY_ESCAPE);
+        boolean escapeDown = keyPressed(KEY_ESCAPE);
         if (escapeDown && !escapeWasDown) {
             gui.keyPressed(KEY_ESCAPE, modifiers);
         }

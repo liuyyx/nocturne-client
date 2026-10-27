@@ -146,7 +146,7 @@ final class FaColorPopup extends FaPopup implements FaKeySink {
         float hx = hueX();
         float segment = SV_H / 6.0f;
         for (int i = 0; i < 6; i++) {
-            ctx.draw.vertical(hx, sy + i * segment, HUE_W, segment + 0.5f, FaTheme.alpha(HUES[i], a),
+            ctx.draw.vertical(hx, sy + i * segment, HUE_W, segment, FaTheme.alpha(HUES[i], a),
                     FaTheme.alpha(HUES[i + 1], a));
         }
         ctx.draw.rect(hx - 1.5f, sy + hue * SV_H - 1.0f, HUE_W + 3.0f, 2.0f, 1.0f,
@@ -156,7 +156,7 @@ final class FaColorPopup extends FaPopup implements FaKeySink {
         float aw = w - PAD * 2.0f;
         checker(ctx, sx, ay, aw, ALPHA_H, a);
         int rgb = current() & 0xFFFFFF;
-        ctx.draw.horizontal(sx, ay, aw, ALPHA_H, FaTheme.alpha(0x00000000, a), FaTheme.alpha(0xFF000000 | rgb, a));
+        ctx.draw.horizontal(sx, ay, aw, ALPHA_H, rgb, FaTheme.alpha(0xFF000000 | rgb, a));
         ctx.draw.rect(sx + alpha * aw - 1.0f, ay - 1.5f, 2.0f, ALPHA_H + 3.0f, 1.0f,
                 FaTheme.alpha(0xFFFFFFFF, a));
 

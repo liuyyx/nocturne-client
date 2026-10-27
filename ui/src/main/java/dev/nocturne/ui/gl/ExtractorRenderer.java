@@ -57,6 +57,10 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     private final Method guiHeight;
     /** Minecraft 实例来源；字体（{@code Minecraft.font}）必须从实例上取，而实例在构造期可能还没就绪。 */
     private final Supplier<Object> minecraft;
+    /** ImmediatelyFast HUD 合批接口；仅在真正绘制覆盖层时检查。 */
+    private Method hudBatchActive;
+    private Method flushHudBatch;
+    private boolean hudBatchResolved;
 
     // ── 纹理支路（26.1–26.3 共用；签名已用 javap 在三个版本的 client jar 上核对）────────────
     /**
@@ -916,6 +920,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             height = 0;
             return;
         }
+        flushPendingHudBatch(graphics);
         // 只在读到有效尺寸时更新：保留最近一次有效值（见 clearFrame 的说明）。
         // 1.20–1.21 的 GuiGraphics 没有尺寸方法：回退到 Window 的 GUI 缩放尺寸。
         int measuredWidth = intOf(guiWidth, graphics, 0);
@@ -951,6 +956,31 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             firstFrameLogged = true;
             System.out.println("[nocturne] extractor backend first frame: " + width + "x" + height
                     + ", font=" + (font == null ? "pending" : font.getClass().getSimpleName()));
+        }
+    }
+
+    /**
+     * 强制提交已有 HUD 批次，让准星等原生内容先于我们的覆盖层。
+     * ImmediatelyFast 的公开入口会保存并恢复渲染状态；未安装或接口不存在时不改变原有路径。
+     */
+    private void flushPendingHudBatch(Object graphics) {
+        if (!hudBatchResolved) {
+            hudBatchResolved = true;
+            Class<?> batching = Reflect.loadWithoutInit(
+                    "net.raphimc.immediatelyfast.feature.batching.BatchingBuffers",
+                    graphics.getClass().getClassLoader());
+            hudBatchActive = Reflect.method(batching, "isHudBatching");
+            flushHudBatch = Reflect.method(batching, "tryForceDrawHudBuffers");
+        }
+        if (hudBatchActive == null || flushHudBatch == null) {
+            return;
+        }
+        try {
+            if (Boolean.TRUE.equals(hudBatchActive.invoke(null, (Object[]) null))) {
+                flushHudBatch.invoke(null, (Object[]) null);
+            }
+        } catch (Throwable ignored) {
+            // 可选兼容入口失效时继续原有渲染，不能影响游戏。
         }
     }
 
@@ -1265,6 +1295,18 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     @Override
     public boolean supportsTextures() {
         return textureSupport;
+    }
+
+    /** 当前实际采用的纹理绘制入口能否应用 ARGB 调制。 */
+    @Override
+    public boolean supportsTextureTint() {
+        if (blit != null && guiTexturedPipeline != null) {
+            return true;
+        }
+        if (blitColored != null) {
+            return setColorMethod != null;
+        }
+        return blitSimple == null && blitPixel != null;
     }
 
     @Override

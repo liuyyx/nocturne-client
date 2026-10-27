@@ -16,13 +16,11 @@ import java.util.Deque;
  * 绘制。所有绘制调用都把设计单位换算成设备坐标（后端逻辑像素）后再下发；裁剪用
  * {@link Renderer#pushClip}/{@link Renderer#popClip}，本类额外维护求交后的矩形（嵌套裁剪取交集）。
  *
- * <p>渐变（{@code quad}）按较短边分段近似；阴影与圆角描边的角弧走 {@link RasterTextures} 生成的
- * 纹理（后端不支持纹理时退化为矩形堆叠近似）。
+ * <p>渐变（{@code quad}）优先使用逐顶点色，其次使用缓存纹理，无纹理时分块近似；阴影与圆角描边的角弧走
+ * {@link RasterTextures} 生成的纹理（后端不支持纹理时退化为矩形堆叠近似）。
  */
 final class BackendFaDraw extends FaDraw {
 
-    /** 渐变分段上限：再多也看不出来，只是白白多几次绘制调用。 */
-    private static final int GRADIENT_MAX_SEGMENTS = 64;
 
     /** 当前绘制面。 */
     private Renderer renderer;
@@ -143,6 +141,11 @@ final class BackendFaDraw extends FaDraw {
         }
     }
 
+    private static int normalizeAlpha(int color, int maxAlpha) {
+        int normalized = Math.round((color >>> 24) * 255f / maxAlpha);
+        return (color & 0xFFFFFF) | normalized << 24;
+    }
+
     @Override
     void quad(float x, float y, float w, float h, int topLeft, int topRight, int bottomRight,
               int bottomLeft) {
@@ -159,22 +162,47 @@ final class BackendFaDraw extends FaDraw {
                 Color.of(modulate(bottomLeft)))) {
             return;
         }
-        // 平涂后端没有逐顶点色：沿较短边分段，每段取双线性插值后的颜色。
-        boolean horizontal = w <= h;
-        float extent = horizontal ? w : h;
-        int segments = Math.max(1, Math.min(GRADIENT_MAX_SEGMENTS, (int) Math.ceil(extent)));
-        float step = extent / segments;
-        for (int i = 0; i < segments; i++) {
-            float tm = (i + 0.5f) / segments;
-            if (horizontal) {
-                // 段中心处的上下两端色各取一次，再用平均值当作该段的平涂色。
-                int top = FaTheme.mix(topLeft, topRight, tm);
-                int bottom = FaTheme.mix(bottomLeft, bottomRight, tm);
-                rect(x + i * step, y, step + 0.5f, h, 0.0f, FaTheme.mix(top, bottom, 0.5f));
-            } else {
-                int left = FaTheme.mix(topLeft, bottomLeft, tm);
-                int right = FaTheme.mix(topRight, bottomRight, tm);
-                rect(x, y + i * step, w, step + 0.5f, 0.0f, FaTheme.mix(left, right, 0.5f));
+        // 游戏绘制后端优先使用缓存纹理，避免每帧逐像素反射调用 fill。
+        int left = Math.round(gx(x)), top = Math.round(gy(y));
+        int right = Math.round(gx(x + w)), bottom = Math.round(gy(y + h));
+        if (right <= left || bottom <= top) {
+            return;
+        }
+        // 有调制能力时把公共透明度放到绘制色；否则烘入缓存纹理，不能假定游戏 blit 支持调色。
+        int maxAlpha = Math.max(Math.max(topLeft >>> 24, topRight >>> 24),
+                Math.max(bottomRight >>> 24, bottomLeft >>> 24));
+        if (maxAlpha == 0 || alpha() == 0) {
+            return;
+        }
+        boolean tintable = renderer.supportsTextureTint();
+        int texture = tintable
+                ? RasterTextures.gradient(renderer, right - left, bottom - top,
+                        normalizeAlpha(topLeft, maxAlpha), normalizeAlpha(topRight, maxAlpha),
+                        normalizeAlpha(bottomRight, maxAlpha), normalizeAlpha(bottomLeft, maxAlpha))
+                : RasterTextures.gradient(renderer, right - left, bottom - top,
+                        modulate(topLeft), modulate(topRight), modulate(bottomRight), modulate(bottomLeft));
+        if (texture > 0) {
+            renderer.texturedQuad(texture, left, top, right - left, bottom - top, 0f, 0f, 1f, 1f,
+                    tintable ? modulate(maxAlpha << 24 | 0xFFFFFF) : 0xFFFFFFFF);
+            return;
+        }
+        // 无纹理时使用有界分块；相邻块共用整数边界，避免重叠混合或留下黑缝。
+        boolean variesX = topLeft != topRight || bottomLeft != bottomRight;
+        boolean variesY = topLeft != bottomLeft || topRight != bottomRight;
+        int columns = variesX ? Math.min(32, right - left) : 1;
+        int rows = variesY ? Math.min(32, bottom - top) : 1;
+        for (int row = 0; row < rows; row++) {
+            float v = variesY ? (row + 0.5f) / rows : 0.5f;
+            int rowLeft = FaTheme.mix(topLeft, bottomLeft, v);
+            int rowRight = FaTheme.mix(topRight, bottomRight, v);
+            int y1 = top + row * (bottom - top) / rows;
+            int y2 = top + (row + 1) * (bottom - top) / rows;
+            for (int column = 0; column < columns; column++) {
+                float u = variesX ? (column + 0.5f) / columns : 0.5f;
+                int x1 = left + column * (right - left) / columns;
+                int x2 = left + (column + 1) * (right - left) / columns;
+                renderer.rect(x1, y1, x2 - x1, y2 - y1,
+                        Color.of(modulate(FaTheme.mix(rowLeft, rowRight, u))));
             }
         }
     }

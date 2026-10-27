@@ -67,6 +67,47 @@ public final class RasterTextures {
     }
 
     /**
+     * 缓存四角 RGBA 渐变。像素尺寸与目标逻辑尺寸一致，兼容只支持像素 UV 的游戏 blit。
+     * 颜色为非预乘 ARGB，与其他纹理及游戏混合管线一致。
+     */
+    public static int gradient(Renderer renderer, int width, int height,
+                               int topLeft, int topRight, int bottomRight, int bottomLeft) {
+        if (!renderer.supportsTextures() || width <= 0 || height <= 0) {
+            return 0;
+        }
+        bind(renderer);
+        String key = "gradient|" + width + "x" + height + "|" + topLeft + "|" + topRight
+                + "|" + bottomRight + "|" + bottomLeft;
+        Integer cached = CACHE.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        int[] pixels = new int[width * height];
+        for (int y = 0; y < height; y++) {
+            float v = (y + 0.5f) / height;
+            for (int x = 0; x < width; x++) {
+                float u = (x + 0.5f) / width;
+                pixels[y * width + x] = interpolate(topLeft, topRight, bottomRight, bottomLeft, u, v);
+            }
+        }
+        int id = renderer.uploadTexture(0, width, height, pixels);
+        if (id > 0) {
+            CACHE.put(key, id);
+        }
+        return id;
+    }
+
+    private static int interpolate(int tl, int tr, int br, int bl, float u, float v) {
+        int result = 0;
+        for (int shift = 0; shift <= 24; shift += 8) {
+            float top = ((tl >>> shift) & 255) * (1f - u) + ((tr >>> shift) & 255) * u;
+            float bottom = ((bl >>> shift) & 255) * (1f - u) + ((br >>> shift) & 255) * u;
+            result |= Math.round(top * (1f - v) + bottom * v) << shift;
+        }
+        return result;
+    }
+
+    /**
      * 取（或生成）一块圆角矩形的柔和阴影纹理。
      *
      * @param renderer 绘制面（用于上传）

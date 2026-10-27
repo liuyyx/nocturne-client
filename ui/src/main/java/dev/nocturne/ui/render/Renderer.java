@@ -139,7 +139,7 @@ public interface Renderer {
     void deleteTexture(int id);
 
     /**
-     * 以 {@code argb} 调制绘制一张纹理。
+     * 绘制一张纹理；支持调制时以 {@code argb} 乘上纹理颜色，否则参见 {@link #supportsTextureTint()}。
      *
      * <p>{@code uv} 为 0..1 的归一化纹理坐标；{@code u0/v0} 是左上角、{@code u1/v1} 是右下角。
      * {@code texture} 小于等于 0、宽高小于等于 0 或 {@code argb} 的 alpha 为 0 时跳过绘制。
@@ -149,6 +149,17 @@ public interface Renderer {
      */
     void texturedQuad(int texture, float x, float y, float width, float height,
                       float u0, float v0, float u1, float v1, int argb);
+
+    /**
+     * 纹理绘制入口是否能够应用 {@code argb} 调制。
+     *
+     * <p>少数游戏绘制入口没有调色参数；调用方可将颜色和透明度烘入纹理，再用白色绘制。
+     *
+     * @return 支持调制返回 {@code true}
+     */
+    default boolean supportsTextureTint() {
+        return true;
+    }
 
     /**
      * 本后端是否支持纹理栅格。

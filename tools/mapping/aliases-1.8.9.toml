@@ -175,6 +175,19 @@ mcp = "rotationPitch"
 scope = "net/minecraft/entity/Entity"
 note = "1.8.9 的实体俯仰字段；现代改名 xRot（1.17+），语义相同"
 
+# 原生库存人物绘制会临时改动身体和头部朝向；异常时由外层 finally 还原。
+[fields.yBodyRot]
+mcp = "renderYawOffset"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[fields.yHeadRot]
+mcp = "rotationYawHead"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[fields.yHeadRotO]
+mcp = "prevRotationYawHead"
+scope = "net/minecraft/entity/EntityLivingBase"
+
 [methods.getEyePosition]
 mcp = "getPositionEyes"
 scope = "net/minecraft/entity/Entity"
@@ -672,6 +685,11 @@ scope = "net/minecraft/client/Minecraft"
 [methods.respawnPlayer]
 mcp = "respawnPlayer"
 scope = "net/minecraft/client/entity/EntityPlayerSP"
+
+# 旧版 GuiInventory 的静态玩家模型入口；签名 (IIIFFL<EntityLivingBase>;)V。
+[methods.drawEntityOnScreen]
+mcp = "drawEntityOnScreen"
+scope = "net/minecraft/client/gui/inventory/GuiInventory"
 
 # FontRenderer: MCP 1.8.9 collapses all three to obf "a"; drawString is
 # overloaded, so pin the (String,int,int,int) variant the table records.

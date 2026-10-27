@@ -48,6 +48,12 @@ abstract class FaDraw {
     void item(Object stack, float x, float y, float size) {
     }
 
+    /** 用游戏的库存人物预览入口绘制真实玩家；缺少原生入口时返回 false，不画替身。 */
+    boolean player(Object player, float x, float y, float width, float height,
+                   float mouseX, float mouseY) {
+        return false;
+    }
+
     /** 压入变换/透明度/裁剪状态，{@link Scope#close()} 时恢复。 */
     abstract Scope push();
 

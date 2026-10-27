@@ -10,7 +10,7 @@ import dev.nocturne.ui.render.Renderer;
  * 圆角由三个矩形加四个三角扇四分之一圆拼成——在 UI 这种小尺寸下已经够用，
  * 且不需要着色器或模板缓冲。
  */
-public final class GlRenderer implements UiBackend {
+public final class GlRenderer implements UiBackend, PlayerModelPreview {
 
     /** 每个 90° 圆角细分的扇形三角数；6 段在 UI 尺寸下已足够平滑。 */
     private static final int CORNER_STEPS = 6;
@@ -19,6 +19,9 @@ public final class GlRenderer implements UiBackend {
     private final GlApi gl;
     /** 文本渲染器；构造时 {@code null} 会被替换为 {@link TextRenderer#NONE}。 */
     private final TextRenderer text;
+    /** 库存界面原生静态模型方法；查映射只在首次有玩家的帧执行。 */
+    private LegacyInventoryPlayerPreview playerPreview;
+    private boolean previewAttempted;
 
     /** 裁剪栈的最大嵌套层数；超出后更深的裁剪被忽略，而不是扩容。 */
     private static final int MAX_CLIP_DEPTH = 8;
@@ -183,6 +186,87 @@ public final class GlRenderer implements UiBackend {
     @Override
     public boolean ready() {
         return gl.hasMatrixControl();
+    }
+
+    @Override
+    public boolean drawPlayer(Object player, float left, float top, float right, float bottom,
+                              float mouseX, float mouseY) {
+        if (player == null || !statePushed || right - left < 16.0f || bottom - top < 24.0f) {
+            return false;
+        }
+        dev.nocturne.client.NocturneClient client = dev.nocturne.client.NocturneClient.get();
+        dev.nocturne.client.game.GameBridge bridge = client == null ? null : client.gameBridge();
+        if (bridge == null) {
+            return false;
+        }
+        if (!previewAttempted) {
+            playerPreview = LegacyInventoryPlayerPreview.bind(bridge.mapping(), bridge.gameLoader());
+            previewAttempted = true;
+            if (playerPreview == null) {
+                System.out.println("[nocturne] legacy inventory player preview method unavailable");
+            }
+        }
+        if (playerPreview == null) {
+            return false;
+        }
+
+        int center = Math.round((left + right) * 0.5f);
+        int feet = Math.round(bottom - 3.0f);
+        int size = Math.max(1, Math.round(Math.min((right - left) * 0.52f, (bottom - top) * 0.43f)));
+        // 游戏原生助手会开启深度、纹理与照明；不能让这些状态/矩阵影响后续卡片或游戏。
+        gl.flushBatch();
+        boolean depth = gl.isCapEnabled(GlApi.GL_DEPTH_TEST);
+        boolean texture = gl.isCapEnabled(GlApi.GL_TEXTURE_2D);
+        boolean blend = gl.isCapEnabled(GlApi.GL_BLEND);
+        boolean cull = gl.isCapEnabled(GlApi.GL_CULL_FACE);
+        boolean scissor = gl.isCapEnabled(GlApi.GL_SCISSOR_TEST);
+        boolean lighting = gl.isCapEnabled(0x0B50);
+        int binding = gl.boundTexture();
+        gl.matrixMode(GlApi.GL_PROJECTION);
+        gl.pushMatrix();
+        gl.loadIdentity();
+        gl.ortho(0d, viewportWidth, viewportHeight, 0d, -1000d, 1000d);
+        gl.matrixMode(GlApi.GL_MODELVIEW);
+        gl.pushMatrix();
+        gl.loadIdentity();
+        try {
+            gl.enable(GlApi.GL_DEPTH_TEST);
+            gl.enable(GlApi.GL_TEXTURE_2D);
+            return playerPreview.draw(bridge, player, center, feet, size,
+                    center - mouseX, (feet - size) - mouseY);
+        } finally {
+            gl.matrixMode(GlApi.GL_MODELVIEW);
+            gl.popMatrix();
+            gl.matrixMode(GlApi.GL_PROJECTION);
+            gl.popMatrix();
+            gl.matrixMode(GlApi.GL_MODELVIEW);
+            restoreCap(GlApi.GL_DEPTH_TEST, depth);
+            restoreCap(GlApi.GL_TEXTURE_2D, texture);
+            restoreCap(GlApi.GL_BLEND, blend);
+            restoreCap(GlApi.GL_CULL_FACE, cull);
+            restoreCap(GlApi.GL_SCISSOR_TEST, scissor);
+            restoreCap(0x0B50, lighting);
+            if (scissor && clipDepth > 0) {
+                int[] box = clipStack[Math.min(clipDepth, MAX_CLIP_DEPTH) - 1];
+                if (box != null) {
+                    gl.scissor(box[0], box[1], box[2], box[3]);
+                }
+            }
+            gl.activeTexture(GlApi.GL_TEXTURE0);
+            if (binding >= 0) {
+                gl.bindTexture2D(binding);
+            }
+            gl.blendFunc(GlApi.GL_SRC_ALPHA, GlApi.GL_ONE_MINUS_SRC_ALPHA);
+            gl.color(1f, 1f, 1f, 1f);
+        }
+    }
+
+    private void restoreCap(int cap, boolean enabled) {
+        if (enabled) {
+            gl.enable(cap);
+        } else {
+            gl.disable(cap);
+        }
     }
 
     /**

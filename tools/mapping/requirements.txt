@@ -12,6 +12,8 @@
 com/mojang/blaze3d/platform/Window
 com/mojang/blaze3d/platform/Window#getWidth()
 com/mojang/blaze3d/platform/Window#getHeight()
+com/mojang/blaze3d/platform/Window#getGuiScaledWidth()
+com/mojang/blaze3d/platform/Window#getGuiScaledHeight()
 
 net/minecraft/client/Minecraft
 net/minecraft/client/Minecraft#currentScreen
@@ -36,6 +38,10 @@ net/minecraft/client/Options#fov
 net/minecraft/client/Options#gamma
 net/minecraft/client/Options#sensitivity
 
+# FOV 从 1.16.5 起是 OptionInstance；Fabric intermediary 下 get() 需要映射。
+net/minecraft/client/OptionInstance
+net/minecraft/client/OptionInstance#get()
+
 net/minecraft/client/gui/FontRenderer
 net/minecraft/client/gui/FontRenderer#drawString()
 net/minecraft/client/gui/FontRenderer#drawStringWithShadow()
@@ -56,6 +62,10 @@ net/minecraft/client/gui/screens/inventory/CraftingScreen
 net/minecraft/client/gui/screens/inventory/CreativeModeInventoryScreen
 
 net/minecraft/client/gui/screens/inventory/InventoryScreen
+net/minecraft/client/gui/screens/inventory/InventoryScreen#drawEntityOnScreen()
+net/minecraft/client/gui/screens/inventory/InventoryScreen#renderEntityInInventory()
+net/minecraft/client/gui/screens/inventory/InventoryScreen#renderEntityInInventoryFollowsMouse()
+net/minecraft/client/gui/screens/inventory/InventoryScreen#extractEntityInInventoryFollowsMouse()
 
 net/minecraft/client/multiplayer/ClientLevel
 net/minecraft/client/multiplayer/ClientLevel#entitiesForRendering()
@@ -164,6 +174,9 @@ net/minecraft/world/entity/LivingEntity#xRotO
 net/minecraft/world/entity/LivingEntity#xxa
 net/minecraft/world/entity/LivingEntity#yRotO
 net/minecraft/world/entity/LivingEntity#zza
+net/minecraft/world/entity/LivingEntity#yBodyRot
+net/minecraft/world/entity/LivingEntity#yHeadRot
+net/minecraft/world/entity/LivingEntity#yHeadRotO
 net/minecraft/world/entity/LivingEntity#distanceToSqr()
 net/minecraft/world/entity/LivingEntity#getEyePosition()
 net/minecraft/world/entity/LivingEntity#getHealth()

@@ -1,7 +1,7 @@
 # 版本矩阵
 
 映射表现已覆盖 **1.8.9 – 26.3 的全部 66 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
-下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
+>下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
@@ -247,6 +247,7 @@
 | 1.12.2 | Forge | `gl-fixed` | ⏳ 待真机 |
 | 1.16.5 | Forge | `gl-core` | ⏳ 待真机 |
 | 1.20.1 | Forge / Fabric | `gl-core` | ⏳ 待真机 |
+| 1.21.1 | Fabric mod | `gui-extractor` | ✅ **已实测**（Mixin 绘制/输入钩子织入；修复 `NativeImage` 原图写入、独立 UV 区域的 11 参 `blit`、2× 栅格密度与 alpha 混合后，文字和柔和阴影正常；滚轮走 `ScrollState`，日志确认 `view.scroll` 从 34 连续变化到 404 且物品栏不滚动。原生 Screen 跳过 HUD 时释放 `InputBlock` 已落地，返回按钮未单独复验） |
 | 1.21.8 | Fabric / NeoForge | `gl-core` | ⏳ 待真机 |
 | 1.21.11 | Fabric | `gl-core` | ✅ **已实测**（Fabric 0.19.5 + LWJGL 3.3.3 + NVIDIA 610.74：注入 → `backend=gl-core; input=glfw` → `overlay active; screen=FaClickGui`，新界面三列渲染正常、颜色 chip/滑条/图集文字都在；截图 `docs/research/fatality-1.21.11-glcore.png`。**首轮注入直接 `nvoglv64` ACCESS_VIOLATION 崩 JVM**，根因与修复见下方 P4-E） |
 | 26.1 | Fabric / NeoForge | `gui-extractor` | ⏳ 待真机 |
@@ -272,6 +273,6 @@
 
 | 项 | 现状 | 缺什么 |
 |---|---|---|
-| 3D 玩家预览（Render 分类的 Preview 卡片） | 卡片、拖拽旋转、ESP/Nametags 开关都在，**模型不画**，卡片显示 "Preview unavailable" 占位 | 映射表里没有实体渲染面（`RenderManager` / `EntityRenderDispatcher` / `RenderTarget` / 皮肤纹理类的 `methods`/`fields` 为空），需要先扩 `tools/mapping` 的表；26.x 另有一条硬约束——SDL 栈上任何 LWJGL GL 调用都会让 JVM abort，所以**必须**走游戏自己的 PiP/`GuiRenderState` 提交，不能自建 FBO |
+| 3D 玩家预览（Render 分类 Player 卡片） | 已接游戏原生库存人物入口：1.8.9–1.14.4 固定管线 6 参、1.15–1.19.3 PoseStack 7 参、1.20–26.3 GuiGraphics 7/10 参；旋转字段在 `finally` 中恢复。仅声明实现覆盖，未逐版本真机验收 | 不需要自建 `EntityRenderDispatcher` 或 FBO；`INVENTORY_SCREEN` 的方法与玩家朝向字段已进映射表。SDL 仍只走游戏绘制队列 |
 | 物品图标（预览卡的装备行）、原版槽位选择器、按键绑定行、子设置抽屉、文本/区间/槽位设置行 | 未移植 | 本项目没有对应的 `Value` 类型（无 TextValue / BoundsNumberValue / SlotValue / KeyValue / GroupValue / MultiBoolValue），也没有物品渲染通路 |
 | HUD / HUD 编辑器 | 已随旧 UI 库删除 | 用户确认删除；需要时按新绘制层重写 |

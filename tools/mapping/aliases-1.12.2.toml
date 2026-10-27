@@ -171,6 +171,28 @@ scope = "net/minecraft/entity/Entity"
 mcp = "getPositionVector"
 scope = "net/minecraft/entity/Entity"
 
+# 1.12.2 的相机朝向仍由 Entity.rotationYaw/rotationPitch 字段承载。
+[fields.yRot]
+mcp = "rotationYaw"
+scope = "net/minecraft/entity/Entity"
+
+[fields.xRot]
+mcp = "rotationPitch"
+scope = "net/minecraft/entity/Entity"
+
+# 原生库存人物绘制会临时改动身体和头部朝向；异常时由外层 finally 还原。
+[fields.yBodyRot]
+mcp = "renderYawOffset"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[fields.yHeadRot]
+mcp = "rotationYawHead"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[fields.yHeadRotO]
+mcp = "prevRotationYawHead"
+scope = "net/minecraft/entity/EntityLivingBase"
+
 [methods.getEyePosition]
 mcp = "getPositionEyes"
 scope = "net/minecraft/entity/Entity"
@@ -664,6 +686,11 @@ scope = "net/minecraft/client/Minecraft"
 [methods.respawnPlayer]
 mcp = "respawnPlayer"
 scope = "net/minecraft/client/entity/EntityPlayerSP"
+
+# 旧版 GuiInventory 的静态玩家模型入口；签名 (IIIFFL<EntityLivingBase>;)V。
+[methods.drawEntityOnScreen]
+mcp = "drawEntityOnScreen"
+scope = "net/minecraft/client/gui/inventory/GuiInventory"
 
 # FontRenderer: MCP 1.8.9 collapses all three to obf "a"; drawString is
 # overloaded, so pin the (String,int,int,int) variant the table records.

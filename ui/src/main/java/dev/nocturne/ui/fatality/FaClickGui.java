@@ -92,6 +92,8 @@ public final class FaClickGui implements OverlayGui {
     private int viewportHeight;
     /** 逻辑像素 → 物理像素（用于字形栅格密度）。 */
     private int backendScale = 1;
+    /** 字形与光栅纹理的独立密度；可与实际 GUI 逻辑倍率不同。 */
+    private int rasterScale = 1;
     /** 字体诊断只打印一次（-Dnocturne.ui.debug）。 */
     private boolean fontDiagLogged;
     /** 当前绘制后端名（诊断展示）。 */
@@ -440,9 +442,11 @@ public final class FaClickGui implements OverlayGui {
         if (renderer instanceof UiBackend) {
             UiBackend backend = (UiBackend) renderer;
             backendScale = Math.max(1, backend.scale());
+            rasterScale = Math.max(1, backend.rasterScale());
             backendName = backend.backendName();
         } else {
             backendScale = 1;
+            rasterScale = 1;
             backendName = renderer.getClass().getSimpleName();
         }
         long now = System.nanoTime();
@@ -455,15 +459,15 @@ public final class FaClickGui implements OverlayGui {
         }
         // 字体句柄必须按**本帧**的缩放绑定：先前放在 updateScale() 之前，缩放变化那一帧
         // 会按旧密度栅格、下一帧再整册重建一次图集（一次性闪烁 + 两倍栅格开销）。
-        FaTheme.fonts = FontRasterizer.bind(renderer, scale, backendScale);
+        FaTheme.fonts = FontRasterizer.bind(renderer, scale, rasterScale);
         if (!fontDiagLogged && System.getProperty("nocturne.ui.debug") != null) {
             fontDiagLogged = true;
             System.out.println("[nocturne] gui render: backend=" + backendName + " scale=" + scale
-                    + " backendScale=" + backendScale + " fonts="
+                    + " backendScale=" + backendScale + " rasterScale=" + rasterScale + " fonts="
                     + FaTheme.fonts.getClass().getSimpleName()
                     + " atlas=" + FontRasterizer.atlasActive());
         }
-        draw.begin(renderer, scale, backendScale);
+        draw.begin(renderer, scale, rasterScale);
         ctx.draw = draw;
         ctx.dt = dt;
         drawFrame();

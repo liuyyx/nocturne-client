@@ -31,6 +31,12 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/KeyboardHandler": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/Minecraft": {
             "names": {
                 "vanilla": "bcc",
@@ -214,6 +220,12 @@
             }
         },
         "net/minecraft/client/MouseHandler": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/OptionInstance": {
             "absent": true,
             "names": {},
             "methods": {},
@@ -403,7 +415,27 @@
                 "vanilla": "bgh",
                 "fabric": "net.minecraft.class_490"
             },
-            "methods": {},
+            "methods": {
+                "drawEntityOnScreen": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2486"
+                    },
+                    "signatures": {
+                        "vanilla": "(IIIFFLsa;)V",
+                        "fabric": "(IIIFFLnet/minecraft/class_1309;)V"
+                    }
+                },
+                "extractEntityInInventoryFollowsMouse": {
+                    "absent": true
+                },
+                "renderEntityInInventory": {
+                    "absent": true
+                },
+                "renderEntityInInventoryFollowsMouse": {
+                    "absent": true
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
@@ -1210,7 +1242,14 @@
                     }
                 },
                 "xRot": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "w",
+                        "fabric": "field_5965"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F"
+                    }
                 },
                 "xRotO": {
                     "names": {
@@ -1223,7 +1262,14 @@
                     }
                 },
                 "yRot": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "v",
+                        "fabric": "field_6031"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F"
+                    }
                 },
                 "yRotO": {
                     "names": {
@@ -1428,6 +1474,36 @@
                     "names": {
                         "vanilla": "bd",
                         "fabric": "field_6212"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F"
+                    }
+                },
+                "yBodyRot": {
+                    "names": {
+                        "vanilla": "aM",
+                        "fabric": "field_6283"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F"
+                    }
+                },
+                "yHeadRot": {
+                    "names": {
+                        "vanilla": "aO",
+                        "fabric": "field_6241"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F"
+                    }
+                },
+                "yHeadRotO": {
+                    "names": {
+                        "vanilla": "aP",
+                        "fabric": "field_6259"
                     },
                     "descriptors": {
                         "vanilla": "F",

@@ -354,9 +354,11 @@ public final class ReflectiveInput implements InputSource {
             // Windows 上一格为 120、macOS 为 1；统一归一化成「每格 ±1」，与 GLFW 同量纲。
             return ((Number) wheel).doubleValue() / LWJGL2_WHEEL_DIVISOR;
         }
-        // 原子取出并清零：回调线程随时可能累加，读后清零若不是原子的会丢失增量。
-        long bits = pendingScrollBits.getAndSet(Double.doubleToRawLongBits(0d));
-        return Double.longBitsToDouble(bits);
+        double direct = Double.longBitsToDouble(
+                pendingScrollBits.getAndSet(Double.doubleToRawLongBits(0d)));
+        double shared = dev.nocturne.client.runtime.ScrollState.take();
+        // Mixin 与直接 GLFW 回调若同时存在，只取共享事件并丢掉 direct，避免同一次滚动翻倍。
+        return shared != 0d ? shared : direct;
     }
 
 

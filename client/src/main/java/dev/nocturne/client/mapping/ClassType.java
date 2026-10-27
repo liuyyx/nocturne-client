@@ -12,6 +12,8 @@ public enum ClassType {
     MINECRAFT("net.minecraft.client.Minecraft"),
     /** 游戏设置对象（承载 gamma 等选项）。 */
     OPTIONS("net.minecraft.client.Options"),
+    /** 封装可调选项（Options#fov 在新版本中返回它）；读取值必须走映射方法 get。 */
+    OPTION_INSTANCE("net.minecraft.client.OptionInstance"),
     /** 本地玩家。 */
     LOCAL_PLAYER("net.minecraft.client.player.LocalPlayer"),
     /** 其他玩家。 */
@@ -37,6 +39,8 @@ public enum ClassType {
     KEYBOARD_HANDLER("net.minecraft.client.KeyboardHandler"),
     /** 界面基类。 */
     SCREEN("net.minecraft.client.gui.screens.Screen"),
+    /** 物品栏界面：调用游戏原生玩家模型绘制方法。 */
+    INVENTORY_SCREEN("net.minecraft.client.gui.screens.inventory.InventoryScreen"),
     /** 1.20+ 的绘制上下文；26.x 已被 {@code GuiGraphicsExtractor} 取代。 */
     GUI_GRAPHICS("net.minecraft.client.gui.GuiGraphics"),
     /** 字体渲染器。 */

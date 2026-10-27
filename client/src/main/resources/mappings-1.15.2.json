@@ -123,6 +123,15 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/KeyboardHandler": {
+            "names": {
+                "vanilla": "dbl",
+                "fabric": "net.minecraft.class_309",
+                "forge": "net.minecraft.client.KeyboardListener"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/Minecraft": {
             "names": {
                 "vanilla": "dbn",
@@ -384,6 +393,12 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/OptionInstance": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/Options": {
             "names": {
                 "vanilla": "dbr",
@@ -597,7 +612,29 @@
                 "fabric": "net.minecraft.class_490",
                 "forge": "net.minecraft.client.gui.screen.inventory.InventoryScreen"
             },
-            "methods": {},
+            "methods": {
+                "drawEntityOnScreen": {
+                    "absent": true
+                },
+                "extractEntityInInventoryFollowsMouse": {
+                    "absent": true
+                },
+                "renderEntityInInventory": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2486",
+                        "forge": "func_228187_a_"
+                    },
+                    "signatures": {
+                        "vanilla": "(IIIFFLakz;)V",
+                        "fabric": "(IIIFFLnet/minecraft/class_1309;)V",
+                        "forge": "(IIIFFLnet/minecraft/entity/LivingEntity;)V"
+                    }
+                },
+                "renderEntityInInventoryFollowsMouse": {
+                    "absent": true
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
@@ -1879,6 +1916,42 @@
                         "vanilla": "aZ",
                         "fabric": "field_6212",
                         "forge": "field_70702_br"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "yBodyRot": {
+                    "names": {
+                        "vanilla": "aI",
+                        "fabric": "field_6283",
+                        "forge": "field_70761_aq"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "yHeadRot": {
+                    "names": {
+                        "vanilla": "aK",
+                        "fabric": "field_6241",
+                        "forge": "field_70759_as"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "yHeadRotO": {
+                    "names": {
+                        "vanilla": "aL",
+                        "fabric": "field_6259",
+                        "forge": "field_70758_at"
                     },
                     "descriptors": {
                         "vanilla": "F",

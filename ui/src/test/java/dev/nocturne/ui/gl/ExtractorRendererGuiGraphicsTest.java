@@ -1,6 +1,8 @@
 package dev.nocturne.ui.gl;
 
 import org.junit.jupiter.api.Test;
+import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.mapping.Mapping;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,4 +73,75 @@ class ExtractorRendererGuiGraphicsTest {
         assertEquals(0, renderer.width());
         assertEquals(0, renderer.height());
     }
+
+    public static final class FakeWindow {
+        public int a() { return 854; }
+        public int b() { return 480; }
+        public int c() { return 1708; }
+        public int d() { return 960; }
+    }
+
+    public static final class FakeMinecraft {
+        private final FakeWindow window = new FakeWindow();
+        public String a() { return "wrong no-arg method"; }
+        public FakeWindow b() { return window; }
+    }
+
+    @Test
+    void lateWindowBindingUsesMappedNamesInsteadOfMojmapLiterals() {
+        Object[] minecraft = {null};
+        ExtractorRenderer renderer = ExtractorRenderer.bindMapped(FakeGuiGraphics.class,
+                new WindowMapping(), () -> minecraft[0], () -> null);
+        assertNotNull(renderer);
+        minecraft[0] = new FakeMinecraft();
+        renderer.setFrame(new FakeGuiGraphics());
+        renderer.beginFrame();
+        assertEquals(854, renderer.width());
+        assertEquals(480, renderer.height());
+    }
+
+    private static final class WindowMapping implements Mapping {
+        @Override
+        public String describe() { return "window-test"; }
+
+        @Override
+        public String className(ClassType type) { return type.canonicalName(); }
+
+        @Override
+        public String methodName(ClassType owner, String name, String descriptor) {
+            if (owner == ClassType.MINECRAFT) return "a";
+            if ("getGuiScaledWidth".equals(name)) return "a";
+            if ("getGuiScaledHeight".equals(name)) return "b";
+            if ("getWidth".equals(name)) return "c";
+            if ("getHeight".equals(name)) return "d";
+            return name;
+        }
+
+        @Override
+        public java.util.List<String> methodNameCandidates(ClassType owner, String name,
+                                                            String descriptor) {
+            if (owner == ClassType.MINECRAFT) {
+                return java.util.Arrays.asList("a", "b");
+            }
+            return Mapping.super.methodNameCandidates(owner, name, descriptor);
+        }
+
+        @Override
+        public String methodDescriptor(ClassType owner, String name) {
+            if (owner == ClassType.MINECRAFT) {
+                return "()L" + FakeWindow.class.getName().replace('.', '/') + ";";
+            }
+            if (owner != ClassType.WINDOW) {
+                return null;
+            }
+            return "()I";
+        }
+
+        @Override
+        public String fieldName(ClassType owner, String name) { return name; }
+
+        @Override
+        public boolean isIdentity() { return false; }
+    }
+
 }

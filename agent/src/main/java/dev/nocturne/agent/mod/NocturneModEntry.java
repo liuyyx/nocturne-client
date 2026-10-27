@@ -1,6 +1,7 @@
 package dev.nocturne.agent.mod;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 
 /**
  * Fabric 模组入口。
@@ -19,10 +20,13 @@ public final class NocturneModEntry implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         try {
-            // 反射调用：NocturneAgent 在 agent jar 与本 mod 之间共享同一份实现，但直接引用会让
-            // 类初始化顺序变得敏感（agent 侧的部分静态字段依赖 Instrumentation）。
+            // 模组入口没有 agent 参数；版本必须从 Fabric 的 Minecraft 元数据取得，
+            // 否则下游会选恒等映射，在 intermediary 环境里找不到游戏主类。
+            String version = FabricLoader.getInstance().getModContainer("minecraft")
+                    .orElseThrow(() -> new IllegalStateException("Minecraft mod metadata missing"))
+                    .getMetadata().getVersion().getFriendlyString();
             Class<?> agent = Class.forName("dev.nocturne.agent.NocturneAgent");
-            agent.getMethod("startAsMod").invoke(null);
+            agent.getMethod("startAsMod", String.class).invoke(null, version);
         } catch (Throwable error) {
             System.out.println("[nocturne] mod entry failed: " + error);
         }

@@ -95,7 +95,7 @@ public final class GuiOverlay implements FrameListener {
     private boolean loggedFirstDraw;
 
     /** 世界覆盖层绘制面：把当前后端包成 client 侧接口（模块只认它）。 */
-    private final OverlayDraw overlayDraw;
+    private final BackendOverlayDraw overlayDraw;
     /** 相机状态读取器；每帧刷新它持有的投影。 */
     private final CameraState camera;
     /** 世界覆盖层异常是否已记录过（限流，避免每帧刷屏）。 */
@@ -267,8 +267,7 @@ public final class GuiOverlay implements FrameListener {
         try {
             java.lang.reflect.Method method = consumePressedMethod;
             if (method == null) {
-                Class<?> type = Class.forName("dev.nocturne.bootstrap.KeySink", true,
-                        dev.nocturne.ui.gl.GuiOverlay.class.getClassLoader());
+                Class<?> type = Class.forName("dev.nocturne.bootstrap.KeySink", true, null);
                 if (System.getProperty("nocturne.ui.debug") != null) {
                     System.out.println("[nocturne] InputBlock bridge cls="
                             + System.identityHashCode(type) + " loader=" + type.getClassLoader());
@@ -282,7 +281,9 @@ public final class GuiOverlay implements FrameListener {
             if (System.getProperty("nocturne.ui.debug") != null) {
                 System.out.println("[nocturne] InputBlock bridge failed: " + error);
             }
-            return false;
+            // attach 形态有全局唯一的 bootstrap KeySink；mod 形态没有 Instrumentation，
+            // 无法安装它，但 Mixin 与 GuiOverlay 都在 Knot 中，本地 InputBlock 恰好是同一份。
+            return InputBlock.consumePressed(glfwKey, 250_000_000L);
         }
     }
     /** 打开界面之前游戏的指针捕获状态；关闭时原样恢复。 */
@@ -323,9 +324,23 @@ public final class GuiOverlay implements FrameListener {
         double mx = input.mouseX();
         double my = input.mouseY();
 
-        // 我们的界面开着时短路游戏自己的输入入口：否则同一次点击/按键会同时打在后面的原生界面上
-        //（点模块顺带按到「回到游戏」、Esc 顺带打开暂停菜单）。状态放在 bootstrap 层，游戏类看得到。
-        InputBlock.setBlocked(gui.isOpen());
+        // 原生 Screen 优先：它出现时不能再短路 MouseHandler/KeyboardHandler，否则暂停菜单
+        // 连“回到游戏”都点不了。自绘 GUI 保持绘制，但在原生 Screen 存活期间暂停输入分发。
+        boolean nativeScreen = hasNativeScreen();
+        InputBlock.setBlocked(gui.isOpen() && !nativeScreen);
+        if (nativeScreen && gui.isOpen()) {
+            input.setPointerGrabbed(false);
+            input.scrollDelta(); // 丢弃原生界面期间的滚轮，返回后不得补发。
+            leftWasDown = input.mouseDown(BUTTON_LEFT);
+            rightWasDown = input.mouseDown(BUTTON_RIGHT);
+            toggleWasDown = keyPressed(toggleKey);
+            escapeWasDown = keyPressed(KEY_ESCAPE);
+            lastX = mx;
+            lastY = my;
+            java.util.Arrays.fill(charWasDown, false);
+            drawFrame();
+            return;
+        }
         // 事件驱动优先：1.21.1 的 glfwGetKey 在合成按键下恒为 0（游戏回调却正常）。
         boolean toggleDown = keyPressed(toggleKey);
         if (toggleDown && !toggleWasDown) {
@@ -563,6 +578,23 @@ public final class GuiOverlay implements FrameListener {
 
     /** TEMP-DIAG：probe 模式的日志限流。 */
 
+
+    /** @return 游戏当前是否显示原生 Screen；桥不可用时按没有处理，不阻断自绘 GUI。 */
+    private boolean hasNativeScreen() {
+        try {
+            NocturneClient client = NocturneClient.get();
+            dev.nocturne.client.game.GameBridge bridge = client == null ? null : client.gameBridge();
+            Object minecraft = bridge == null ? null : bridge.minecraft();
+            if (minecraft == null) {
+                return false;
+            }
+            return bridge.readField(minecraft, dev.nocturne.client.mapping.ClassType.MINECRAFT,
+                    "currentScreen") != null || bridge.readField(minecraft,
+                    dev.nocturne.client.mapping.ClassType.MINECRAFT, "screen") != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
     private void drawFrame() {
         // TEMP-DIAG（定位界面不显示后删除）：界面打开时每秒打一次真实下发次数。
         long diagNow = System.currentTimeMillis();
@@ -575,6 +607,10 @@ public final class GuiOverlay implements FrameListener {
         }
         renderer.beginFrame();
         try {
+            if (renderer.width() <= 0 || renderer.height() <= 0) {
+                // 尺寸尚未解析时不能创建/恢复一个 0×0 裁剪区；那会把游戏自身整帧裁黑。
+                return;
+            }
             // 视口尺寸只有在 beginFrame 之后才是本帧的真值（GlRenderer 在那一步才从 GL 读回视口）。
             // 这里再同步一次：输入处理用上一帧尺寸可以接受，但绘制尺寸必须是当帧的——否则固定
             // 管线后端会按 0 尺寸布局，整个界面等于空框。
@@ -652,6 +688,7 @@ public final class GuiOverlay implements FrameListener {
             }
             return;
         }
+        long beforeDrawCalls = overlayDraw.drawCalls();
         int drawn = 0;
         for (Module module : client.modules().all()) {
             if (!module.isEnabled() || !(module instanceof WorldOverlay)) {
@@ -667,11 +704,13 @@ public final class GuiOverlay implements FrameListener {
                 }
             }
         }
-        // 首次真的画出覆盖层时报一次：这是"覆盖层到底画没画"的唯一正面证据。
-        if (drawn > 0 && !worldOverlayDrawLogged) {
+        // 模块被调用不代表有绘制：空世界、实体都在视口外时不该报告“已画出”。
+        long calls = overlayDraw.drawCalls() - beforeDrawCalls;
+        if (calls > 0 && !worldOverlayDrawLogged) {
             worldOverlayDrawLogged = true;
             logWorldOverlay("drawing (" + renderer.width() + "x" + renderer.height() + "): "
-                    + drawn + " module(s), enabled=[" + enabledOverlayNames(client) + "]");
+                    + calls + " draw call(s) from " + drawn + " module(s), enabled=["
+                    + enabledOverlayNames(client) + "]");
         }
     }
 

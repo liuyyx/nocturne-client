@@ -170,10 +170,7 @@ public final class TracersModule extends Module implements WorldOverlay {
 
     /** 实体面是否存在：LivingEntity 类可解析即认为可用。 */
     private static boolean hasEntityFace(GameBridge bridge) {
-        Object player = bridge.player();
-        ClassLoader loader = player != null && player.getClass().getClassLoader() != null
-                ? player.getClass().getClassLoader()
-                : TracersModule.class.getClassLoader();
+        ClassLoader loader = bridge.gameLoader();
         // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
         for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
             try {
@@ -377,9 +374,7 @@ public final class TracersModule extends Module implements WorldOverlay {
 
     /** 按映射表候选名判定实体是否为某规范类的实例（候选名逐个试，第一个能加载的胜出）。 */
     private static boolean isInstanceOf(GameBridge bridge, Object entity, ClassType type) {
-        ClassLoader loader = entity.getClass().getClassLoader() != null
-                ? entity.getClass().getClassLoader()
-                : TracersModule.class.getClassLoader();
+        ClassLoader loader = bridge.gameLoader();
         for (String mapped : bridge.mapping().classNameCandidates(type)) {
             try {
                 return Class.forName(mapped, false, loader).isInstance(entity);
@@ -440,9 +435,7 @@ public final class TracersModule extends Module implements WorldOverlay {
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */
     private static boolean isLiving(GameBridge bridge, Object entity) {
-        ClassLoader loader = entity.getClass().getClassLoader() != null
-                ? entity.getClass().getClassLoader()
-                : TracersModule.class.getClassLoader();
+        ClassLoader loader = bridge.gameLoader();
         // 候选名逐个试，第一个加载成功者即该环境下的 LivingEntity。
         for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
             try {

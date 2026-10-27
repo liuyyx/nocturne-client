@@ -5,7 +5,10 @@
   "compatibilityLevel": "JAVA_8",
   "plugin": "dev.nocturne.agent.mixin.NocturneMixinPlugin",
   "client": [
-    "ScreenRenderMixin"
+    "ScreenRenderMixin",
+    "HudRenderMixin",
+    "MouseInputMixin",
+    "KeyboardInputMixin"
   ],
   "injectors": {
     "defaultRequire": 0

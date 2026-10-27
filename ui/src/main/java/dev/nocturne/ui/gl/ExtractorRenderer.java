@@ -34,7 +34,7 @@ import java.util.function.Supplier;
  * 签名才是稳定的），缺项按可选处理：{@code outline} 缺失就用四条 {@code fill} 自己拼，
  * {@code enableScissor} 缺失就不裁剪（界面照画，只是溢出内容不被裁掉）。
  */
-public final class ExtractorRenderer implements UiBackend {
+public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
 
     /** 后端短名，出现在 overlay diag 日志里。 */
     private static final String NAME = "gui-extractor";
@@ -69,6 +69,10 @@ public final class ExtractorRenderer implements UiBackend {
     private Object guiTexturedPipeline;
     /** {@code GuiGraphicsExtractor.blit(RenderPipeline, Identifier, int x, int y, float u, float v, int w, int h, int uWidth, int vHeight, int texW, int texH, int color)}。 */
     private Method blit;
+    /** 1.20–1.21：{@code blit(Identifier,int,int,float,float,int,int,int,int)}，UV 为纹素。 */
+    private Method blitColored;
+    /** {@code GuiGraphics.setColor(float,float,float,float)}；配合无颜色重载做着色。 */
+    private Method setColorMethod;
     /** {@code TextureManager.register(Identifier, AbstractTexture)}。 */
     private Method registerTexture;
     /** {@code TextureManager.release(Identifier)}。 */
@@ -81,12 +85,21 @@ public final class ExtractorRenderer implements UiBackend {
     private Method getPixels;
     /** {@code DynamicTexture.upload()}。 */
     private Method uploadTexture;
+    /** {@code NativeImage.setFilter(boolean blur, boolean mipmap)}；1.20–1.21 可选。 */
+    private Method textureFilter;
+    /** 1.20–1.21 的 RenderSystem.enableBlend/defaultBlendFunc。 */
+    private Method enableBlend;
+    private Method defaultBlendFunc;
     /** {@code AbstractTexture.close()}；删除纹理时释放 GpuTexture。 */
     private Method closeTexture;
-    /** {@code NativeImage.setPixel(int, int, int)}（入参为 ARGB，内部转 ABGR）。 */
+    /** {@code NativeImage.setPixel(int, int, int)}（原生 ABGR 布局）。 */
     private Method setPixel;
-    /** {@code NativeImage.getPointer()}；批量写像素用的原生地址。 */
+    /** {@code DynamicTexture.setPixels(NativeImage)}；函数式写入返回新图时的替换入口。 */
+    private Method setPixels;
+    /** {@code NativeImage.getPointer()}；有公开入口时直接取原生地址。 */
     private Method getPointer;
+    /** 无公开 getPointer 时的原生地址字段（非 final long；final long 是 size）。 */
+    private Field pointerField;
     /** {@code MemoryUtil.memByteBuffer(long, int)}；把原生地址包成可写的直接缓冲。 */
     private Method memByteBuffer;
     /** {@code Identifier.fromNamespaceAndPath(String, String)}。 */
@@ -104,10 +117,8 @@ public final class ExtractorRenderer implements UiBackend {
     private Method blitSimple;
     /** 旧版无颜色 blit：{@code (Identifier,int,int,int,int,int,int,int,int)}（x,y,u,v,w,h,texW,texH）。 */
     private Method blitPixel;
-    /** {@code NativeImage.applyToPixels(IntUnaryOperator)}；写像素的批量入口。 */
+    /** {@code NativeImage.applyToPixels(IntUnaryOperator)}；返回新图，必须配合 setPixels。 */
     private Method applyPixels;
-    /** {@code NativeImage.getPixels()} 返回 {@code int[]}（1.21.6+ 的数组访问器）。 */
-    private Method getPixelsArray;
     /** 注册入口本身就会上传（1.21.11 的 TextureManager.register(Identifier, TextureContents)）。 */
     private boolean registerUploads;
     /** 旧版 {@code new ResourceLocation(ns, path)}。 */
@@ -161,6 +172,10 @@ public final class ExtractorRenderer implements UiBackend {
 
     /** 本帧的绘制上下文；由钩子在 {@code extractRenderState} 期间设置。 */
     private volatile Object frame;
+    /** 原生库存模型绘制入口；成功绑定后跨帧复用，帧对象本身绝不缓存。 */
+    private InventoryPlayerPreview playerPreview;
+    /** 方法在当前游戏映射下不存在时不再逐帧扫描方法表。 */
+    private boolean previewAttempted;
     /** {@code GuiGraphics.pose()}（1.20+ 的 2D 矩阵栈）。 */
     private final Method poseMethod;
     /** {@code Matrix3x2fStack.pushMatrix()}。 */
@@ -315,7 +330,48 @@ public final class ExtractorRenderer implements UiBackend {
     }
 
     /**
-     * 绑定 {@code blit}。
+     * 1.20–1.21 的浮点 UV blit。优先选择能分别表达「屏幕尺寸 / UV 区域尺寸」的 11 参重载：
+     * {@code (id,x,y,w,h,u,v,regionW,regionH,texW,texH)}。9 参重载会让 w/h 同时决定
+     * UV 区域，只能在两者相等时使用；高密度图集按一半尺寸绘制时会只采到字形的左上区域。
+     */
+    static Method blitWithFloatUv(Class<?> type, Class<?> identifier) {
+        for (Method candidate : type.getMethods()) {
+            Class<?>[] p = candidate.getParameterTypes();
+            if (p.length == 11 && p[0] == identifier
+                    && p[1] == int.class && p[2] == int.class && p[3] == int.class && p[4] == int.class
+                    && p[5] == float.class && p[6] == float.class
+                    && p[7] == int.class && p[8] == int.class && p[9] == int.class && p[10] == int.class
+                    && candidate.getReturnType() == void.class) {
+                return candidate;
+            }
+        }
+        for (Method candidate : type.getMethods()) {
+            Class<?>[] p = candidate.getParameterTypes();
+            if (p.length == 9 && p[0] == identifier && p[1] == int.class && p[2] == int.class
+                    && p[3] == float.class && p[4] == float.class && p[5] == int.class
+                    && p[6] == int.class && p[7] == int.class && p[8] == int.class
+                    && candidate.getReturnType() == void.class) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /** {@code setColor(float,float,float,float)}；混淆环境下名字会变，按签名取。 */
+    private static Method colorMethod(Class<?> type) {
+        for (Method candidate : type.getMethods()) {
+            Class<?>[] p = candidate.getParameterTypes();
+            if (p.length == 4 && p[0] == float.class && p[1] == float.class
+                    && p[2] == float.class && p[3] == float.class
+                    && candidate.getReturnType() == void.class) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 绑定 26.x 的 13 参 {@code blit}。
      *
      * <p>按「名字 + 参数个数 + 首参是 RenderPipeline、次参是 Identifier、其余为 int/float」匹配，
      * 而不是写死参数类型：26.3 把 RenderPipeline 的包名从 {@code com.mojang.blaze3d.pipeline}
@@ -355,6 +411,13 @@ public final class ExtractorRenderer implements UiBackend {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /** 26.x 是 {@code (String,int,int,boolean)}；1.20–1.21 是 {@code (int,int,boolean)}。 */
+    static java.lang.reflect.Constructor<?> dynamicTextureConstructor(Class<?> owner) {
+        java.lang.reflect.Constructor<?> found = constructor(owner, String.class, int.class,
+                int.class, boolean.class);
+        return found != null ? found : constructor(owner, int.class, int.class, boolean.class);
     }
 
     /**
@@ -409,6 +472,7 @@ public final class ExtractorRenderer implements UiBackend {
                 null, String.class, int.class, int.class, int.class);
         Method enableScissor = byCandidates(type, mapping, "enableScissor",
                 int.class, int.class, int.class, int.class);
+        Method disableScissor = byCandidates(type, mapping, "disableScissor");
         if (fill == null || text == null) {
             System.out.println("[nocturne] gui-graphics bind failed: fill=" + (fill != null)
                     + " text=" + (text != null) + " scissor=" + (enableScissor != null));
@@ -432,7 +496,7 @@ public final class ExtractorRenderer implements UiBackend {
         Method physicalHeight = windowType == null ? null
                 : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
                         "getHeight");
-        ExtractorRenderer renderer = new ExtractorRenderer(type, fill, null, enableScissor, null,
+        ExtractorRenderer renderer = new ExtractorRenderer(type, fill, null, enableScissor, disableScissor,
                 text, null, null, minecraft, windowGetter, scaledWidth, scaledHeight,
                 physicalWidth, physicalHeight, fontSource, mapping, pose, pushMatrix, popMatrix,
                 scaleMatrix);
@@ -471,6 +535,9 @@ public final class ExtractorRenderer implements UiBackend {
         Class<?> dynamicTexture = loadAny(loader,
                 "net.minecraft.client.renderer.texture.DynamicTexture", "net.minecraft.class_1043");
         Class<?> minecraft = loadAny(loader, "net.minecraft.client.Minecraft", "net.minecraft.class_310");
+        Class<?> renderSystem = loadAny(loader, "com.mojang.blaze3d.systems.RenderSystem");
+        enableBlend = methodAny(renderSystem, new String[]{"enableBlend"});
+        defaultBlendFunc = methodAny(renderSystem, new String[]{"defaultBlendFunc"});
         // Fabric 1.21.x 连 blaze3d 包一起重映射：NativeImage 运行期是 class_1011。
         Class<?> nativeImage = loadAny(loader, "com.mojang.blaze3d.platform.NativeImage",
                 "net.minecraft.class_1011");
@@ -479,6 +546,8 @@ public final class ExtractorRenderer implements UiBackend {
             reportTextureSupport();
             return;
         }
+        blitColored = blitWithFloatUv(extractorType, identifier);
+        setColorMethod = colorMethod(extractorType);
         if (newIdentifier == null && identifierCtor == null) {
             newIdentifier = methodAny(identifier, new String[]{"fromNamespaceAndPath", "method_60655"},
                     String.class, String.class);
@@ -518,14 +587,28 @@ public final class ExtractorRenderer implements UiBackend {
                     new String[]{"getTextureManager", "method_1531"});
         }
         if (newDynamicTexture == null) {
-            newDynamicTexture = constructor(dynamicTexture, String.class, int.class, int.class,
-                    boolean.class);
+            newDynamicTexture = dynamicTextureConstructor(dynamicTexture);
         }
         if (getPixels == null) {
             getPixels = methodAny(dynamicTexture, new String[]{"getPixels", "method_4525"});
         }
+        if (setPixels == null) {
+            setPixels = methodAny(dynamicTexture, new String[]{"setPixels", "method_4526"}, nativeImage);
+        }
         if (uploadTexture == null) {
             uploadTexture = methodAny(dynamicTexture, new String[]{"upload", "method_4524"});
+        }
+        if (textureFilter == null) {
+            for (String name : new String[]{"setFilter", "method_4308"}) {
+                try {
+                    Method candidate = nativeImage.getDeclaredMethod(name, boolean.class, boolean.class);
+                    candidate.setAccessible(true);
+                    textureFilter = candidate;
+                    break;
+                } catch (Throwable ignored) {
+                    // 没有该入口时保持 DynamicTexture 的默认最近邻过滤。
+                }
+            }
         }
         if (closeTexture == null) {
             closeTexture = methodAny(abstractTexture, new String[]{"close"});
@@ -537,17 +620,26 @@ public final class ExtractorRenderer implements UiBackend {
         if (getPointer == null) {
             getPointer = methodAny(nativeImage, new String[]{"getPointer"});
         }
+        if (getPointer == null && pointerField == null) {
+            // 1.21.1 没有公开 getPointer。NativeImage 里有两个 long：final 的是 size，
+            // 非 final 的才是像素地址。按这一结构取值，避免把 Forge SRG 字段名写死。
+            for (Field candidate : nativeImage.getDeclaredFields()) {
+                if (candidate.getType() != long.class
+                        || java.lang.reflect.Modifier.isFinal(candidate.getModifiers())) {
+                    continue;
+                }
+                try {
+                    candidate.setAccessible(true);
+                    pointerField = candidate;
+                    break;
+                } catch (Throwable ignored) {
+                    // 模块限制下退回 applyToPixels + setPixels；不能伪装成写入成功。
+                }
+            }
+        }
         if (applyPixels == null) {
             applyPixels = methodAny(nativeImage, new String[]{"applyToPixels", "method_48462"},
                     java.util.function.IntUnaryOperator.class);
-        }
-        if (getPixelsArray == null) {
-            for (Method candidate : nativeImage.getMethods()) {
-                if (candidate.getParameterCount() == 0 && candidate.getReturnType() == int[].class) {
-                    getPixelsArray = candidate;
-                    break;
-                }
-            }
         }
         // 无 pipeline 的绘制重载：按参数形状匹配（名字在 intermediary 下是 method_xxxxx）。
         for (Method candidate : extractorType.getMethods()) {
@@ -580,11 +672,13 @@ public final class ExtractorRenderer implements UiBackend {
                 }
             }
         }
-        boolean drawable = blit != null || blitSimple != null || blitPixel != null;
+        boolean drawable = blit != null || blitSimple != null || blitPixel != null
+                || blitColored != null;
+        boolean directWrite = memByteBuffer != null && (getPointer != null || pointerField != null);
         textureSupport = !modernTextureApi && drawable && (newIdentifier != null || identifierCtor != null)
                 && registerTexture != null && getTextureManager != null && newDynamicTexture != null
                 && getPixels != null && uploadTexture != null
-                && (setPixel != null || applyPixels != null || getPixelsArray != null);
+                && (directWrite || setPixel != null || (applyPixels != null && setPixels != null));
         reportTextureSupport();
     }
 
@@ -667,19 +761,22 @@ public final class ExtractorRenderer implements UiBackend {
                                        dev.nocturne.client.mapping.Mapping mapping,
                                        dev.nocturne.client.mapping.ClassType type,
                                        String canonicalName, Class<?>... parameterTypes) {
-        java.util.List<String> names;
-        if (mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping) {
-            names = ((dev.nocturne.client.mapping.ObfuscatedMapping) mapping)
-                    .methodNameCandidates(type, canonicalName, null);
-        } else {
-            names = java.util.Collections.singletonList(
-                    mapping.methodName(type, canonicalName, null));
-        }
-        for (String name : names) {
-            Method found = method(owner, name, parameterTypes);
-            if (found != null) {
-                return found;
+        for (dev.nocturne.client.mapping.MethodCandidate candidate
+                : mapping.methodCandidates(type, canonicalName)) {
+            Method found = method(owner, candidate.name(), parameterTypes);
+            if (found == null) {
+                continue;
             }
+            // 混淆环境大量无参方法共用 a/b/c；只匹配参数会拿到同名但返回类型无关的方法。
+            // 名字与描述符必须来自同一命名空间，并用描述符核对返回值。
+            if (candidate.descriptor() != null) {
+                Class<?> expected = dev.nocturne.client.game.JniTypes.returnType(
+                        candidate.descriptor(), owner.getClassLoader());
+                if (expected == null || found.getReturnType() != expected) {
+                    continue;
+                }
+            }
+            return found;
         }
         return null;
     }
@@ -788,6 +885,30 @@ public final class ExtractorRenderer implements UiBackend {
     }
 
     @Override
+    public boolean drawPlayer(Object player, float left, float top, float right, float bottom,
+                              float mouseX, float mouseY) {
+        Object graphics = frame;
+        if (graphics == null || player == null || right <= left || bottom <= top) {
+            return false;
+        }
+        if (!previewAttempted) {
+            dev.nocturne.client.NocturneClient client = dev.nocturne.client.NocturneClient.get();
+            dev.nocturne.client.game.GameBridge bridge = client == null ? null : client.gameBridge();
+            if (bridge != null) {
+                playerPreview = InventoryPlayerPreview.bind(bridge.mapping(),
+                        bridge.gameLoader(), graphics.getClass());
+                previewAttempted = true;
+                if (playerPreview == null) {
+                    System.out.println("[nocturne] native inventory player preview unavailable for "
+                            + graphics.getClass().getName());
+                }
+            }
+        }
+        InventoryPlayerPreview preview = playerPreview;
+        return preview != null && preview.draw(graphics, player, left, top, right, bottom, mouseX, mouseY);
+    }
+
+    @Override
     public void beginFrame() {
         Object graphics = frame;
         if (graphics == null) {
@@ -848,6 +969,13 @@ public final class ExtractorRenderer implements UiBackend {
         return guiScale;
     }
 
+    @Override
+    public int rasterScale() {
+        // 1.20–1.21 的 11 参 blit 能独立表达屏幕尺寸和 UV 区域，且上传后使用线性滤波。
+        // 仅这条路径做 2× 超采样；26.x 与其他后端保持原密度，避免未验收的行为变化。
+        return blitColored == null ? scale() : Math.max(1, guiScale * 2);
+    }
+
     /**
      * 用「帧缓冲物理宽 / GUI 逻辑宽」算出真实设备倍率。
      *
@@ -858,16 +986,21 @@ public final class ExtractorRenderer implements UiBackend {
             windowProbeResolved = true;
             Object mc = minecraft == null ? null : minecraft.get();
             if (mc != null) {
-                windowGetter = method(mc.getClass(), "getWindow");
+                windowGetter = mappedMethod(mc.getClass(),
+                        dev.nocturne.client.mapping.ClassType.MINECRAFT, "getWindow");
                 Object window = null;
                 if (windowGetter != null) {
                     window = Reflect.call(windowGetter, mc);
                 }
                 if (window != null) {
-                    windowWidth = method(window.getClass(), "getWidth");
-                    windowHeight = method(window.getClass(), "getHeight");
-                    guiScaledWidth = method(window.getClass(), "getGuiScaledWidth");
-                    guiScaledHeight = method(window.getClass(), "getGuiScaledHeight");
+                    windowWidth = mappedMethod(window.getClass(),
+                            dev.nocturne.client.mapping.ClassType.WINDOW, "getWidth");
+                    windowHeight = mappedMethod(window.getClass(),
+                            dev.nocturne.client.mapping.ClassType.WINDOW, "getHeight");
+                    guiScaledWidth = mappedMethod(window.getClass(),
+                            dev.nocturne.client.mapping.ClassType.WINDOW, "getGuiScaledWidth");
+                    guiScaledHeight = mappedMethod(window.getClass(),
+                            dev.nocturne.client.mapping.ClassType.WINDOW, "getGuiScaledHeight");
                 }
             }
         }
@@ -928,6 +1061,15 @@ public final class ExtractorRenderer implements UiBackend {
             }
         }
         return scaledWidth > 0 && scaledHeight > 0 ? new int[]{scaledWidth, scaledHeight} : null;
+    }
+
+    /** 延迟解析也必须走映射；直接写 Mojmap 名在 Fabric 上只会得到 null。 */
+    private Method mappedMethod(Class<?> owner, dev.nocturne.client.mapping.ClassType ownerType,
+                                String canonicalName) {
+        if (mapping != null) {
+            return byCandidates(owner, mapping, ownerType, canonicalName);
+        }
+        return method(owner, canonicalName);
     }
 
     /**
@@ -1155,14 +1297,18 @@ public final class ExtractorRenderer implements UiBackend {
             textures.add(target);
             id = index;
             if (!registerUploads && !writePixels(target, argb)) {
-                diag("writePixels failed (pointer=" + (getPointer != null)
-                        + " apply=" + (applyPixels != null) + " array=" + (getPixelsArray != null)
+                diag("writePixels failed (pointer=" + (getPointer != null || pointerField != null)
+                        + " apply=" + (applyPixels != null) + " setPixels=" + (setPixels != null)
                         + " setPixel=" + (setPixel != null) + ")");
                 return id;
             }
             // 旧路径：注册必须在写入像素之前（blit 通过注册名解析纹理）。
             // 新路径（registerUploads）：注册动作自己取当前像素上传，因此必须排在写像素之后。
             Reflect.call(registerTexture, manager, identifier, texture);
+            if (!registerUploads) {
+                // 新纹理第一次只写了 NativeImage，GPU 端仍是空的；旧路径必须显式上传一次。
+                upload(target);
+            }
             diag("ok id=" + id + " " + target.width + "x" + target.height
                     + " registerUploads=" + registerUploads);
             return id;
@@ -1171,14 +1317,23 @@ public final class ExtractorRenderer implements UiBackend {
             return id;
         }
         if (!writePixels(target, argb)) {
-            diag("writePixels failed (pointer=" + (getPointer != null)
-                    + " apply=" + (applyPixels != null) + " array=" + (getPixelsArray != null)
+            diag("writePixels failed (pointer=" + (getPointer != null || pointerField != null)
+                    + " apply=" + (applyPixels != null) + " setPixels=" + (setPixels != null)
                     + " setPixel=" + (setPixel != null) + ")");
             return id;
         }
-        Reflect.call(uploadTexture, target.texture);
+        upload(target);
         diag("ok id=" + id + " " + target.width + "x" + target.height);
         return id;
+    }
+
+    /** 上传当前 NativeImage，并恢复该纹理使用的滤波参数。 */
+    private void upload(RegisteredTexture target) {
+        Reflect.call(uploadTexture, target.texture);
+        if (textureFilter != null) {
+            // DynamicTexture.upload 固定 blur=false；这里仅对 1.20–1.21 的图集启用线性采样。
+            Reflect.call(textureFilter, null, true, false);
+        }
     }
 
     @Override
@@ -1215,7 +1370,8 @@ public final class ExtractorRenderer implements UiBackend {
             return;
         }
         quadDiag("tex=" + texture + " " + bx0(x) + "," + by0(y) + " " + width + "x" + height
-                + " uv=" + u0 + "," + v0 + ".." + u1 + "," + v1);
+                + " uv=" + u0 + "," + v0 + ".." + u1 + "," + v1
+                + " color=" + Integer.toHexString(argb));
         // blit 的位置与 UV 都是整数：位置取整（26.x 没有浮点变体），UV 由归一化坐标换算回纹素。
         int bx = Math.round(x);
         int by = Math.round(y);
@@ -1230,16 +1386,46 @@ public final class ExtractorRenderer implements UiBackend {
                     bx, by, uStart, vStart, bw, bh, uSpan, vSpan, target.width, target.height, argb);
             return;
         }
+        // 1.20–1.21：使用浮点 UV 的 blit + setColor；先前的 10-int 形状会误中 blitSprite，
+        // 纹理虽然上传成功，字形区域却按精灵图解释，屏幕上不出现文字。
+        if (blitColored != null) {
+            prepareTextureBlend();
+            if (setColorMethod != null) {
+                // 图集是白化字形（RGB=白、A=覆盖度），颜色由 setColor 调制。
+                call(setColorMethod, graphics,
+                        ((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f,
+                        (argb & 0xFF) / 255f, ((argb >>> 24) & 0xFF) / 255f);
+            }
+            if (blitColored.getParameterCount() == 11) {
+                call(blitColored, graphics, target.identifier, bx, by, bw, bh, uStart, vStart,
+                        uSpan, vSpan, target.width, target.height);
+            } else {
+                call(blitColored, graphics, target.identifier, bx, by, uStart, vStart,
+                        bw, bh, target.width, target.height);
+            }
+            if (setColorMethod != null) {
+                call(setColorMethod, graphics, 1f, 1f, 1f, 1f);
+            }
+            return;
+        }
         // 1.21.6+：UV 归一化、无调制色（我们的图集是白化字形，白色即所需颜色）。
         if (blitSimple != null) {
+            prepareTextureBlend();
             call(blitSimple, graphics, target.identifier, bx, by, bw, bh, u0, v0, u1, v1);
             return;
         }
         // 1.20–1.21.5：(Identifier, x, y, u, v, w, h, texW, texH, color)，UV 为纹素。
         if (blitPixel != null) {
+            prepareTextureBlend();
             call(blitPixel, graphics, target.identifier, bx, by,
                     Math.round(uStart), Math.round(vStart), bw, bh, target.width, target.height, argb);
         }
+    }
+
+    /** 旧 GuiGraphics.blit 不管混合状态；白化图集必须按非预乘 alpha 混合。 */
+    private void prepareTextureBlend() {
+        Reflect.call(enableBlend, null);
+        Reflect.call(defaultBlendFunc, null);
     }
 
     /** 造一个 {@code ResourceLocation}/{@code Identifier}；两种构造方式都失败时返回 {@code null}。 */
@@ -1289,7 +1475,10 @@ public final class ExtractorRenderer implements UiBackend {
     private Object createTexture(String name, int width, int height) {
         try {
             // useCalloc=true：像素从零开始，没被写到的格子是透明而不是垃圾值。
-            return newDynamicTexture.newInstance(name, width, height, Boolean.TRUE);
+            // 26.x 构造带名字；1.20–1.21 只有 (int,int,boolean)。
+            return newDynamicTexture.getParameterCount() == 4
+                    ? newDynamicTexture.newInstance(name, width, height, Boolean.TRUE)
+                    : newDynamicTexture.newInstance(width, height, Boolean.TRUE);
         } catch (Throwable t) {
             if (!textureFailureLogged) {
                 textureFailureLogged = true;
@@ -1322,10 +1511,21 @@ public final class ExtractorRenderer implements UiBackend {
             // 与 NativeImage.setPixel 内部一致：ABGR 布局（A<<24|B<<16|G<<8|R）。
             pixelScratch[i] = (value & 0xFF00FF00) | ((value >>> 16) & 0xFF) | ((value & 0xFF) << 16);
         }
-        if (getPointer != null && memByteBuffer != null) {
-            Object pointer = Reflect.call(getPointer, pixels);
-            if (pointer instanceof Number) {
-                long address = ((Number) pointer).longValue();
+        if (memByteBuffer != null) {
+            long address = 0L;
+            if (getPointer != null) {
+                Object pointer = Reflect.call(getPointer, pixels);
+                if (pointer instanceof Number) {
+                    address = ((Number) pointer).longValue();
+                }
+            } else if (pointerField != null) {
+                try {
+                    address = pointerField.getLong(pixels);
+                } catch (Throwable ignored) {
+                    // 继续走会替换 NativeImage 的回退，不碰无效地址。
+                }
+            }
+            if (address != 0L) {
                 Object buffer = Reflect.call(memByteBuffer, null, address, count * 4);
                 if (buffer instanceof java.nio.ByteBuffer) {
                     java.nio.ByteBuffer view = ((java.nio.ByteBuffer) buffer)
@@ -1335,22 +1535,18 @@ public final class ExtractorRenderer implements UiBackend {
                 }
             }
         }
-        // 1.21.6+ 去掉了 getPointer：用 applyToPixels 逐像素写（lambda 调用无反射开销）。
-        if (applyPixels != null) {
+        // applyToPixels 在 1.21.1 会创建新 NativeImage；必须替换进 DynamicTexture。
+        // 直接修改返回数组同样是错的：getPixelsArray/makePixelArray 返回的也是副本。
+        if (applyPixels != null && setPixels != null) {
             final int[] source = pixelScratch;
             final int[] cursor = {0};
             java.util.function.IntUnaryOperator writer = value ->
                     cursor[0] < count ? source[cursor[0]++] : value;
             Object result = Reflect.call(applyPixels, pixels, writer);
-            if (result != null || cursor[0] > 0) {
-                return true;
-            }
-        }
-        // 再退一步：数组访问器（若是内部数组引用，直接写即可）。
-        if (getPixelsArray != null) {
-            Object raw = Reflect.call(getPixelsArray, pixels);
-            if (raw instanceof int[] && ((int[]) raw).length >= count) {
-                System.arraycopy(pixelScratch, 0, raw, 0, count);
+            if (result != null && cursor[0] == count) {
+                if (result != pixels) {
+                    Reflect.call(setPixels, target.texture, result);
+                }
                 return true;
             }
         }
@@ -1404,6 +1600,9 @@ public final class ExtractorRenderer implements UiBackend {
             if (disableScissor != null) {
                 call(disableScissor, graphics);
             } else if (enableScissor != null) {
+                if (width <= 0 || height <= 0) {
+                    return;
+                }
                 // 1.20–1.21 只有 enableScissor：用整个绘制区复位裁剪，
                 // 否则裁剪状态会残留到游戏自己的绘制上（表现为整片黑）。
                 call(enableScissor, graphics, 0, 0, width, height);
@@ -1477,7 +1676,8 @@ public final class ExtractorRenderer implements UiBackend {
             if (!drawFailureLogged) {
                 drawFailureLogged = true;
                 System.out.println("[nocturne] extractor backend draw call failed (" + method.getName()
-                        + "): " + t);
+                        + "): " + t + "; declaring=" + method.getDeclaringClass().getName()
+                        + "; target=" + (target == null ? "null" : target.getClass().getName()));
             }
         }
     }

@@ -146,10 +146,10 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
 | 映射表生成器（66 release × 4 命名空间） | **已完成**：`--check` 全绿；`--javap` 对每版本真实 client jar 逐成员校验；Forge 1.20.1 / NeoForge 1.21.11 另用运行产物核对 166/166 |
 | 界面：Fatality 风格 ClickGUI | 离屏光栅验证（`docs/research/fatality-ui-*.png`）+ **1.8.9 真机复验**；`ui` 模块单测覆盖字形图集、纹理上传字节序、批次顺序、Value→控件映射与布局 |
 | 旧 UI 库（Skija / Setsuna 移植件 / 组件树 / HUD / HUD 编辑器） | **已整体删除**；HUD 不再存在（`client` 侧 `HudSink` 接口保留，暂无实现） |
-| 3D 玩家预览（Render 分类 Preview 卡片） | **未实现，降级为占位**：映射表缺实体渲染面，26.x 又不能自建离屏 framebuffer |
+| 3D 玩家预览（Render 分类 Player 卡片） | 已接游戏原生库存人物入口：固定管线 6 参、PoseStack 7 参、GuiGraphics 7/10 参；不在 SDL 上自建 FBO。异常时恢复玩家朝向及 GL 状态；真机逐版本状态以 `docs/VERSION-MATRIX.md` 为准 |
 | 世界覆盖层（ESP / Tracers / NameTags / ItemEsp / StorageEsp / Search / Trajectories） | **已接上并画出来**；`WorldProjection` 自己算投影，跨代通用 |
 | 自销毁（Panic） | **已实现并有测试**：停用全部模块、关闭驱动闸门、清空分发器；**不可逆**（agent 无法卸载自己） |
-| 模组形态 | 已移除 |
+| 1.21.1 Fabric 验收通道 | Mixin 绘制/键盘/鼠标/滚轮钩子；`gui-extractor` 渲染，原生 Screen 出现时释放输入占用 |
 
 ### 已知问题
 

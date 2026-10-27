@@ -1,12 +1,7 @@
 package dev.nocturne.client.render;
 
 import dev.nocturne.client.game.GameBridge;
-import dev.nocturne.client.game.Reflect;
 import dev.nocturne.client.mapping.ClassType;
-
-import java.lang.reflect.Method;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 相机状态读取：把游戏里的眼位 / 朝向 / FOV 反射出来，喂给 {@link WorldProjection}。
@@ -78,9 +73,10 @@ public final class CameraState {
         Object options = minecraft == null
                 ? null
                 : bridge.readField(minecraft, ClassType.MINECRAFT, "options");
-        Double fov = options == null ? null : fovOf(bridge.readField(options, ClassType.OPTIONS, "fov"));
+        Double fov = options == null ? null
+                : fovOf(bridge, bridge.readField(options, ClassType.OPTIONS, "fov"));
         if (fov == null) {
-            return missing(bridge, "Options#fov");
+            return missing(bridge, "Options#fov / OptionInstance#get");
         }
         projection.update(eyeX, eyeY, eyeZ, yaw.floatValue(), pitch.floatValue(), fov.floatValue(),
                 width, height);
@@ -105,18 +101,14 @@ public final class CameraState {
      * @param raw {@code Options#fov} 的原始读数（可能是数字，也可能是 {@code OptionInstance}）
      * @return 视场角；两种形态都取不到时返回 {@code null}
      */
-    static Double fovOf(Object raw) {
+    static Double fovOf(GameBridge bridge, Object raw) {
         Double direct = number(raw);
         if (direct != null || raw == null) {
             return direct;
         }
-        Method getter = getters.computeIfAbsent(raw.getClass(),
-                type -> Optional.ofNullable(Reflect.method(type, "get"))).orElse(null);
-        return getter == null ? null : number(Reflect.call(getter, raw));
+        // Fabric/Forge 的运行期方法名不是 get，必须由映射表翻译。
+        return number(bridge.callMapped(raw, ClassType.OPTION_INSTANCE, "get"));
     }
-
-    /** {@code OptionInstance.get()} 按运行期类缓存（{@code Optional.empty()} = 该类没有 get()）。 */
-    private static final ConcurrentHashMap<Class<?>, Optional<Method>> getters = new ConcurrentHashMap<>();
 
     /**
      * 缺成员时的统一处理：打一次诊断并返回 {@code false}。

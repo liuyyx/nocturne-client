@@ -104,6 +104,16 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/KeyboardHandler": {
+            "names": {
+                "vanilla": "net.minecraft.client.KeyboardHandler",
+                "fabric": "net.minecraft.client.KeyboardHandler",
+                "forge": "net.minecraft.client.KeyboardHandler",
+                "neoforge": "net.minecraft.client.KeyboardHandler"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/Minecraft": {
             "names": {
                 "vanilla": "net.minecraft.client.Minecraft",
@@ -295,6 +305,25 @@
                         "fabric": "ypos",
                         "forge": "ypos",
                         "neoforge": "ypos"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/OptionInstance": {
+            "names": {
+                "vanilla": "net.minecraft.client.OptionInstance",
+                "fabric": "net.minecraft.client.OptionInstance",
+                "forge": "net.minecraft.client.OptionInstance",
+                "neoforge": "net.minecraft.client.OptionInstance"
+            },
+            "methods": {
+                "get": {
+                    "names": {
+                        "vanilla": "get",
+                        "fabric": "get",
+                        "forge": "get",
+                        "neoforge": "get"
                     }
                 }
             },
@@ -527,7 +556,25 @@
                 "forge": "net.minecraft.client.gui.screens.inventory.InventoryScreen",
                 "neoforge": "net.minecraft.client.gui.screens.inventory.InventoryScreen"
             },
-            "methods": {},
+            "methods": {
+                "drawEntityOnScreen": {
+                    "absent": true
+                },
+                "extractEntityInInventoryFollowsMouse": {
+                    "names": {
+                        "vanilla": "extractEntityInInventoryFollowsMouse",
+                        "fabric": "extractEntityInInventoryFollowsMouse",
+                        "forge": "extractEntityInInventoryFollowsMouse",
+                        "neoforge": "extractEntityInInventoryFollowsMouse"
+                    }
+                },
+                "renderEntityInInventory": {
+                    "absent": true
+                },
+                "renderEntityInInventoryFollowsMouse": {
+                    "absent": true
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
@@ -1508,6 +1555,30 @@
                         "fabric": "xxa",
                         "forge": "xxa",
                         "neoforge": "xxa"
+                    }
+                },
+                "yBodyRot": {
+                    "names": {
+                        "vanilla": "yBodyRot",
+                        "fabric": "yBodyRot",
+                        "forge": "yBodyRot",
+                        "neoforge": "yBodyRot"
+                    }
+                },
+                "yHeadRot": {
+                    "names": {
+                        "vanilla": "yHeadRot",
+                        "fabric": "yHeadRot",
+                        "forge": "yHeadRot",
+                        "neoforge": "yHeadRot"
+                    }
+                },
+                "yHeadRotO": {
+                    "names": {
+                        "vanilla": "yHeadRotO",
+                        "fabric": "yHeadRotO",
+                        "forge": "yHeadRotO",
+                        "neoforge": "yHeadRotO"
                     }
                 },
                 "yRotO": {

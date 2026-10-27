@@ -1,5 +1,8 @@
 package dev.nocturne.client.render;
 
+import dev.nocturne.client.game.GameBridge;
+import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.mapping.Mapping;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class CameraStateTest {
 
-    /** 模拟 {@code OptionInstance<Integer>}：取值的入口是 {@code get()}。 */
+    /** 模拟运行期重映射：规范 get 是 mappedGet，get 本身是诱饵。 */
     public static final class FakeOption {
         private final Object value;
 
@@ -23,11 +26,44 @@ class CameraStateTest {
             this.value = value;
         }
 
-        /** 与真实 {@code OptionInstance#get()} 同名同形（无参、返回泛型值）。 */
         public Object get() {
+            return Integer.valueOf(5);
+        }
+
+        public Object mappedGet() {
             return value;
         }
     }
+
+    private static final Mapping OPTION_MAPPING = new Mapping() {
+        @Override
+        public String describe() {
+            return "test remapping";
+        }
+
+        @Override
+        public String className(ClassType type) {
+            return type.canonicalName();
+        }
+
+        @Override
+        public String methodName(ClassType owner, String canonicalName, String descriptor) {
+            return owner == ClassType.OPTION_INSTANCE && "get".equals(canonicalName)
+                    ? "mappedGet" : canonicalName;
+        }
+
+        @Override
+        public String fieldName(ClassType owner, String canonicalName) {
+            return canonicalName;
+        }
+
+        @Override
+        public boolean isIdentity() {
+            return false;
+        }
+    };
+
+    private static final GameBridge BRIDGE = new GameBridge(null, OPTION_MAPPING);
 
     /** 没有 {@code get()} 的对象：必须判为读不到，而不是抛异常或当成 0。 */
     public static final class NoGetter {
@@ -37,22 +73,22 @@ class CameraStateTest {
     void readsPlainNumbers() {
         assertEquals(70d, CameraState.number(Integer.valueOf(70)), 0.001);
         assertEquals(70.5d, CameraState.number(Double.valueOf(70.5)), 0.001);
+        assertEquals(70d, CameraState.fovOf(BRIDGE, Integer.valueOf(70)), 0.001);
         assertNull(CameraState.number(null));
         assertNull(CameraState.number("70"));
     }
 
     @Test
-    void readsOptionInstanceThroughGet() {
-        assertEquals(95d, CameraState.fovOf(new FakeOption(Integer.valueOf(95))), 0.001);
-        // 1.16.5 起 fov 的泛型参数是 Integer，但表里也可能是其它数字类型
-        assertEquals(80d, CameraState.fovOf(new FakeOption(Double.valueOf(80d))), 0.001);
+    void readsOptionInstanceThroughMappedGet() {
+        assertEquals(95d, CameraState.fovOf(BRIDGE, new FakeOption(Integer.valueOf(95))), 0.001);
+        assertEquals(80d, CameraState.fovOf(BRIDGE, new FakeOption(Double.valueOf(80d))), 0.001);
     }
 
     @Test
     void returnsNullWhenTheValueIsNotUsable() {
-        assertNull(CameraState.fovOf(null));
-        assertNull(CameraState.fovOf(new NoGetter()));
-        assertNull(CameraState.fovOf(new FakeOption(null)), "OptionInstance without a value");
-        assertNull(CameraState.fovOf(new FakeOption("70")), "non-numeric value");
+        assertNull(CameraState.fovOf(BRIDGE, null));
+        assertNull(CameraState.fovOf(BRIDGE, new NoGetter()));
+        assertNull(CameraState.fovOf(BRIDGE, new FakeOption(null)), "OptionInstance without a value");
+        assertNull(CameraState.fovOf(BRIDGE, new FakeOption("70")), "non-numeric value");
     }
 }

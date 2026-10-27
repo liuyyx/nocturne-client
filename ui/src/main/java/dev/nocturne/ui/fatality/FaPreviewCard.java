@@ -6,14 +6,10 @@ import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Module;
 
 /**
- * Render 分类里的 "Player" 卡片：显示本地玩家的实时状态，并把视觉模块的开关放在同一处。
+ * Render 分类的本地玩家模型预览。原生库存渲染入口不可用时明确说明，不画假的人形/头像。
  *
- * <p>为什么不是 3D 模型预览：把玩家模型画进界面需要离屏渲染 + 纹理中转（旧 Skija 直写帧缓冲会盖黑
- * 游戏，见 docs/VERSION-MATRIX.md），这条路径还没落地。做一个"看起来像预览、实际点了没反应"的
- * 装饰（旧实现里的拖拽旋转就是这种）比不做更糟，所以这里改成显示真实数据：有玩家就显示名字与血量，
- * 没有玩家就明确说明。
- *
- * <p>底部两个开关（ESP / Nametags）直接切换真实模块，不是装饰。
+ * <p>在抽取式绘制帧内委托游戏的库存界面提交人物模型，不接管 GL，也不暂存过期的帧上下文；
+ * ESP / Nametags 药丸仍切换真实模块。
  */
 final class FaPreviewCard extends FaBox {
 
@@ -126,35 +122,39 @@ final class FaPreviewCard extends FaBox {
         ctx.draw.textMid("Player", gx + 9.5f, gy + TITLE_RISE, FaTheme.title(),
                 FaTheme.alpha(FaTheme.TITLE, alpha));
 
-        drawInfo(ctx, gx, gy, width, alpha);
-        drawFooter(ctx, gx, gy + HEIGHT - FOOTER, width, effects(), alpha);
-    }
-
-    /**
-     * 画玩家实时状态。
-     *
-     * <p>数据经映射表反射读取：任一字段在目标版本上解析不到时就少显示那一行，不会让整张卡片空掉。
-     */
-    private void drawInfo(FaContext ctx, float gx, float gy, float width, float alpha) {
-        FaFont font = FaTheme.small();
-        float left = gx + 10.0f;
-        float y = gy + 26.0f;
-        float lineHeight = 14.0f;
-        float areaH = HEIGHT - 26.0f - FOOTER - 8.0f;
-
         NocturneClient client = NocturneClient.get();
         GameBridge bridge = client == null ? null : client.gameBridge();
         Object player = bridge == null ? null : bridge.player();
         if (player == null) {
-            ctx.draw.textMid("Enter a world first", gx + width * 0.5f, gy + 26.0f + areaH * 0.5f,
-                    font, FaTheme.alpha(FaTheme.MUTED, alpha));
-            return;
+            ctx.draw.textCenter("Enter a world first", gx + width * 0.5f, gy + 105.0f,
+                    FaTheme.small(), FaTheme.alpha(FaTheme.MUTED, alpha));
+        } else {
+            float modelX = gx + 18.0f, modelY = gy + 23.0f;
+            float modelW = Math.max(0.0f, width - 36.0f), modelH = 141.0f;
+            if (!ctx.draw.player(player, modelX, modelY, modelW, modelH, ctx.mouseX, ctx.mouseY)) {
+                ctx.draw.textCenter("Model preview unavailable", gx + width * 0.5f, gy + 105.0f,
+                        FaTheme.small(), FaTheme.alpha(FaTheme.MUTED, alpha));
+            }
+            drawInfo(ctx, gx, gy, width, alpha, bridge, player);
         }
+        drawFooter(ctx, gx, gy + HEIGHT - FOOTER, width, effects(), alpha);
+    }
+
+    /** 模型下沿保留玩家的实时状态；失败字段少画一行，不使预览消失。 */
+    private void drawInfo(FaContext ctx, float gx, float gy, float width, float alpha,
+                          GameBridge bridge, Object player) {
+        FaFont font = FaTheme.small();
+        float left = gx + 10.0f;
+        float y = gy + 168.0f;
+        float lineHeight = 14.0f;
 
         Object name = bridge.callMapped(player, ClassType.ENTITY, "getName");
         if (name != null) {
-            row(ctx, font, left, y, width - 20.0f, "Name", String.valueOf(name), alpha);
-            y += lineHeight;
+            Object text = name instanceof String ? name : bridge.callMapped(name, ClassType.CHAT_COMPONENT, "getString");
+            if (text instanceof String) {
+                row(ctx, font, left, y, width - 20.0f, "Name", (String) text, alpha);
+                y += lineHeight;
+            }
         }
         Object health = bridge.callMapped(player, ClassType.LIVING_ENTITY, "getHealth");
         if (health instanceof Number) {

@@ -83,21 +83,27 @@ public final class NocturneAgent {
      * {@code ScreenRenderMixin} 因此能在 {@code Screen} 首次定义时织入
      * {@code GuiDrawHook.onScreenDraw}。
      *
-     * <p>这里只负责启动客户端并让叠加层可用；映射表按运行期实际版本选择。
+     * <p>版本由 Fabric loader 的 Minecraft 元数据传入，不通过游戏类推断。
      */
-    public static void startAsMod() {
+    public static void startAsMod(String version) {
+        String selectedVersion = parseVersion("mcVersion=" + version);
+        if ("unknown".equals(selectedVersion)) {
+            throw new IllegalArgumentException("Unsupported Minecraft version: " + version);
+        }
         if (!STARTED.compareAndSet(false, true)) {
             return;
         }
-        log("agent loaded via fabric mod");
+        mcVersion = selectedVersion;
+        log("agent loaded via fabric mod; mcVersion=" + mcVersion);
         // mod 形态没有 agent 参数通道，用系统属性提供同样的验收开关。
-        if (Boolean.getBoolean("nocturne.openGui")) {
+        String openGui = System.getProperty("nocturne.openGui");
+        if (openGui != null && !"false".equalsIgnoreCase(openGui) && !"0".equals(openGui)) {
             openGuiOnInstall = true;
         }
         try {
             // mod 形态下游戏类加载器就是本类的加载器。
             cachedGameLoader = NocturneAgent.class.getClassLoader();
-            selectMapping(null);
+            selectMapping();
             NocturneClient.boot(null);
             installOverlay(null);
         } catch (Throwable error) {
@@ -149,7 +155,7 @@ public final class NocturneAgent {
             }
             if ("unknown".equals(mcVersion) && !"unknown".equals(newMcVersion)) {
                 mcVersion = newMcVersion;
-                selectMapping(instrumentation);   // 用新版本重选映射（selectMapping 内部已记住）
+                selectMapping();   // 用新版本重选映射（selectMapping 内部已记住）
                 upgraded = true;
             }
             if (upgraded) {
@@ -183,7 +189,7 @@ public final class NocturneAgent {
                 try {
                     // 映射表先选再 boot：下游（boot 内部、叠加层、游戏桥、模块）不应拿到
                     // 兜底的恒等映射再被永久缓存（M-84 注释原意）。
-                    selectMapping(instrumentation);
+                    selectMapping();
                     // premain 阶段游戏类加载器尚未建立，而帧钩子与绘制钩子注入的调用都由**游戏的**
                     // 类加载器解析（它看不到 agent jar）。不等它就注册钩子，钩子一触发就是
                     // NoClassDefFoundError 崩游戏（实测 FrameDispatcher 加载失败）。
@@ -1775,17 +1781,16 @@ public final class NocturneAgent {
     /**
      * 为当前运行的构建挑选映射表，并记为本次会话唯一的映射（{@link #currentMapping()}）。
      *
-     * <p>版本由注入器随选项传入（{@code mcVersion=<版本族>}），运行时**不做版本探测**：
-     * 表名就是 {@code /mappings-<版本族>.json}。未混淆的版本（26.1+）其规范名即运行期名，
-     * 表中也这么写并附带 {@code absent} 标记；版本未知或表缺失时退化为恒等映射，但会打印一次说明。
+     * <p>版本由注入器的 {@code mcVersion=} 参数或 Fabric 的 Minecraft 元数据传入，
+     * 运行时不靠游戏类猜版本。表名就是 {@code /mappings-<版本>.json}。
+     * 版本未知或表缺失时退化为恒等映射，并打印原因。
      *
      * <p>单一来源：叠加层等下游**不得**再自己猜版本——那会让 1.16.5~1.21.x 这类混淆版本误用
      * 1.8.9 的表（名字全错，界面一片空白）。
      *
-     * @param instrumentation 插桩句柄，为 null 时直接走恒等映射
      * @return Minecraft 类名/字段名映射，永不为 null
      */
-    private static dev.nocturne.client.mapping.Mapping selectMapping(Instrumentation instrumentation) {
+    private static dev.nocturne.client.mapping.Mapping selectMapping() {
         String version = mcVersion;
         if (version == null || version.isEmpty() || "unknown".equals(version)) {
             // 注入器没给出可用版本：只能退化为恒等映射，并留日志说明后果。

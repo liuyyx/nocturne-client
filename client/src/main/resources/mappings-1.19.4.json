@@ -123,6 +123,15 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/KeyboardHandler": {
+            "names": {
+                "vanilla": "emg",
+                "fabric": "net.minecraft.class_309",
+                "forge": "net.minecraft.client.KeyboardHandler"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/Minecraft": {
             "names": {
                 "vanilla": "emh",
@@ -384,6 +393,28 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/OptionInstance": {
+            "names": {
+                "vanilla": "emk",
+                "fabric": "net.minecraft.class_7172",
+                "forge": "net.minecraft.client.OptionInstance"
+            },
+            "methods": {
+                "get": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_41753",
+                        "forge": "m_231551_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/Object;",
+                        "fabric": "()Ljava/lang/Object;",
+                        "forge": "()Ljava/lang/Object;"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/client/Options": {
             "names": {
                 "vanilla": "eml",
@@ -597,7 +628,38 @@
                 "fabric": "net.minecraft.class_490",
                 "forge": "net.minecraft.client.gui.screens.inventory.InventoryScreen"
             },
-            "methods": {},
+            "methods": {
+                "drawEntityOnScreen": {
+                    "absent": true
+                },
+                "extractEntityInInventoryFollowsMouse": {
+                    "absent": true
+                },
+                "renderEntityInInventory": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_48472",
+                        "forge": "m_274383_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lehe;IIILorg/joml/Quaternionf;Lorg/joml/Quaternionf;Lbfx;)V",
+                        "fabric": "(Lnet/minecraft/class_4587;IIILorg/joml/Quaternionf;Lorg/joml/Quaternionf;Lnet/minecraft/class_1309;)V",
+                        "forge": "(Lcom/mojang/blaze3d/vertex/PoseStack;IIILorg/joml/Quaternionf;Lorg/joml/Quaternionf;Lnet/minecraft/world/entity/LivingEntity;)V"
+                    }
+                },
+                "renderEntityInInventoryFollowsMouse": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2486",
+                        "forge": "m_274545_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lehe;IIIFFLbfx;)V",
+                        "fabric": "(Lnet/minecraft/class_4587;IIIFFLnet/minecraft/class_1309;)V",
+                        "forge": "(Lcom/mojang/blaze3d/vertex/PoseStack;IIIFFLnet/minecraft/world/entity/LivingEntity;)V"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
@@ -1894,6 +1956,42 @@
                         "vanilla": "bj",
                         "fabric": "field_6212",
                         "forge": "f_20900_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "yBodyRot": {
+                    "names": {
+                        "vanilla": "aT",
+                        "fabric": "field_6283",
+                        "forge": "f_20883_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "yHeadRot": {
+                    "names": {
+                        "vanilla": "aV",
+                        "fabric": "field_6241",
+                        "forge": "f_20885_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "yHeadRotO": {
+                    "names": {
+                        "vanilla": "aW",
+                        "fabric": "field_6259",
+                        "forge": "f_20886_"
                     },
                     "descriptors": {
                         "vanilla": "F",

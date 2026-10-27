@@ -168,10 +168,7 @@ public final class NameTagsModule extends Module implements WorldOverlay {
 
     /** 实体面是否存在：LivingEntity 类可解析即认为可用。 */
     private static boolean hasEntityFace(GameBridge bridge) {
-        Object player = bridge.player();
-        ClassLoader loader = player != null && player.getClass().getClassLoader() != null
-                ? player.getClass().getClassLoader()
-                : NameTagsModule.class.getClassLoader();
+        ClassLoader loader = bridge.gameLoader();
         // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
         for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
             try {
@@ -338,9 +335,7 @@ public final class NameTagsModule extends Module implements WorldOverlay {
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */
     private static boolean isLiving(GameBridge bridge, Object entity) {
-        ClassLoader loader = entity.getClass().getClassLoader() != null
-                ? entity.getClass().getClassLoader()
-                : NameTagsModule.class.getClassLoader();
+        ClassLoader loader = bridge.gameLoader();
         // 候选名逐个试，第一个加载成功者即该环境下的 LivingEntity。
         for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
             try {

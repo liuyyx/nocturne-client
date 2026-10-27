@@ -1,6 +1,7 @@
 package dev.nocturne.ui.fatality;
 
 import dev.nocturne.ui.render.Color;
+import dev.nocturne.ui.gl.PlayerModelPreview;
 import dev.nocturne.ui.render.Renderer;
 import dev.nocturne.ui.text.RasterTextures;
 
@@ -74,6 +75,18 @@ final class BackendFaDraw extends FaDraw {
     /** @return 设计单位到设备像素的缩放 */
     float scale() {
         return s;
+    }
+
+    @Override
+    boolean player(Object player, float x, float y, float width, float height,
+                   float mouseX, float mouseY) {
+        if (!(renderer instanceof PlayerModelPreview) || player == null || width <= 0.0f
+                || height <= 0.0f || alpha() == 0) {
+            return false;
+        }
+        // 原生入口直接向游戏当前绘制队列提交：坐标须同一帧、同一逻辑像素空间。
+        return ((PlayerModelPreview) renderer).drawPlayer(player, gx(x), gy(y),
+                gx(x + width), gy(y + height), gx(mouseX), gy(mouseY));
     }
 
     @Override

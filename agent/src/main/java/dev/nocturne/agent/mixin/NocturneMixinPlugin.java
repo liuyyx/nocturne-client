@@ -1,5 +1,6 @@
 package dev.nocturne.agent.mixin;
 
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -80,11 +81,9 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        // 无条件的理由是：{@code @Mixin(targets = ...)} 已经限定了目标类，本方法只需回答
-        // 「这个 mixin 要不要参与」。而 {@code targetClass} 静态字段只在 agent 形态下由
-        // {@code installMixinChannel} 注入——mod 形态下没有人调用它（配置由 fabric.mod.json
-        // 交给 Mixin），若在这里依赖它就永远是 null → mixin 静默不生效（实测）。
-        return true;
+        // agent 形态只为 Screen 显式配置一次；HUD 由已有的转换器注册。
+        // mod 形态没有配置，由两个独立 Mixin 分别驱动菜单与游戏内画面。
+        return targetClass == null || !mixinClassName.endsWith(".HudRenderMixin");
     }
 
     @Override
@@ -116,14 +115,25 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
     @Override
     public void postApply(String targetClassName, ClassNode node, String mixinClassName,
                           IMixinInfo mixinInfo) {
+        if (mixinClassName.endsWith(".MouseInputMixin")) {
+            blockInput(node, MOUSE_INPUT_METHODS);
+            return;
+        }
+        if (mixinClassName.endsWith(".KeyboardInputMixin")) {
+            blockInput(node, KEYBOARD_INPUT_METHODS);
+            return;
+        }
         String cls = targetClass;
         String method = targetMethod;
         String descriptor = targetDescriptor;
         String owner = hookOwner == null ? "dev/nocturne/agent/GuiDrawHook" : hookOwner;
         String hook = hookMethod == null ? "onScreenDraw" : hookMethod;
         if (cls == null || method == null || descriptor == null) {
-            // mod 形态：没有 agent 侧配置，按「形如 (GuiGraphics-like, ...)V 的绘制方法」自动挑选。
-            autoApply(node, owner, hook);
+            if (mixinClassName.endsWith(".HudRenderMixin")) {
+                autoApplyHud(node, owner);
+            } else {
+                autoApply(node, owner, hook);
+            }
             return;
         }
         if (node == null || !cls.equals(node.name)) {
@@ -160,8 +170,75 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
      */
     /** 已知的绘制入口方法名，按优先级排列（intermediary / 官方名）。 */
     private static final String[] DRAW_METHODS = {
-        "method_25394", "render", "method_47413"
+        "method_25394", "method_37058", "render", "method_47413"
     };
+
+    /** MouseHandler：onPress、grabMouse、turnPlayer、onScroll。onMove 必须保留。 */
+    private static final String[] MOUSE_INPUT_METHODS = {
+        "method_1601", "method_1612", "method_1606", "method_1598",
+        "onPress", "grabMouse", "turnPlayer", "onScroll"
+    };
+
+    /** KeyboardHandler：界面打开时不再把按键/字符派发给游戏。 */
+    private static final String[] KEYBOARD_INPUT_METHODS = {
+        "method_1466", "method_1472", "keyPress", "charTyped"
+    };
+
+    /**
+     * 在输入入口开头插入「界面占用输入时直接返回」。
+     *
+     * <p>与 agent 形态的 {@code InputBlockTransformer} 等价；Fabric mod 没有 Instrumentation，
+     * 这是阻止游戏在界面打开时重新捕获鼠标、并把同一次点击打进原生界面的唯一路径。
+     */
+    private static void blockInput(ClassNode node, String[] methods) {
+        if (node == null) {
+            return;
+        }
+        int patched = 0;
+        for (MethodNode candidate : node.methods) {
+            if ((candidate.access & Opcodes.ACC_STATIC) != 0
+                    || !"V".equals(returnType(candidate.desc))) {
+                continue;
+            }
+            boolean targetMethod = false;
+            for (String name : methods) {
+                if (name.equals(candidate.name)) {
+                    targetMethod = true;
+                    break;
+                }
+            }
+            if (!targetMethod) {
+                continue;
+            }
+            InsnList entry = new InsnList();
+            if ("(JDD)V".equals(candidate.desc)
+                    && ("method_1598".equals(candidate.name) || "onScroll".equals(candidate.name))) {
+                // 先取原始 yoffset，再按占用短路：自绘 GUI 收到同一次滚动，物品栏不再收到。
+                entry.add(new org.objectweb.asm.tree.VarInsnNode(Opcodes.DLOAD, 5));
+                entry.add(new MethodInsnNode(Opcodes.INVOKESTATIC,
+                        "dev/nocturne/client/runtime/ScrollState", "accumulate", "(D)V", false));
+            }
+            if ("(JIIII)V".equals(candidate.desc)
+                    && ("method_1466".equals(candidate.name) || "keyPress".equals(candidate.name))) {
+                // mod 形态没有 bootstrap bridge：Knot 中的游戏类与 GuiOverlay 共用这份 InputBlock。
+                // 记录必须排在短路前面，否则界面打开后 Esc / 开关键无法再通过事件关闭界面。
+                entry.add(new org.objectweb.asm.tree.VarInsnNode(Opcodes.ILOAD, 3));
+                entry.add(new org.objectweb.asm.tree.VarInsnNode(Opcodes.ILOAD, 5));
+                entry.add(new MethodInsnNode(Opcodes.INVOKESTATIC,
+                        "dev/nocturne/client/runtime/InputBlock", "recordKey", "(II)V", false));
+            }
+            org.objectweb.asm.tree.LabelNode allow = new org.objectweb.asm.tree.LabelNode();
+            entry.add(new MethodInsnNode(Opcodes.INVOKESTATIC,
+                    "dev/nocturne/client/runtime/InputBlock", "shouldBlock", "()Z", false));
+            entry.add(new org.objectweb.asm.tree.JumpInsnNode(Opcodes.IFEQ, allow));
+            entry.add(new org.objectweb.asm.tree.InsnNode(Opcodes.RETURN));
+            entry.add(allow);
+            candidate.instructions.insert(entry);
+            candidate.maxStack = Math.max(candidate.maxStack, 2);
+            patched++;
+        }
+        System.out.println("[nocturne] mixin input guard: " + node.name + " methods=" + patched);
+    }
 
     private static void autoApply(ClassNode node, String owner, String hook) {
         if (node == null) {
@@ -205,6 +282,49 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
             woven = true;
             System.out.println("[nocturne] mixin: no draw entry found in " + node.name);
         }
+    }
+
+    /** 只对真正的 HUD 主绘制入口织入：1.20+ Gui.render(GuiGraphics, *)。 */
+    private static void autoApplyHud(ClassNode node, String owner) {
+        if (node == null || !"net/minecraft/class_329".equals(node.name)) {
+            return;
+        }
+        for (MethodNode candidate : node.methods) {
+            if (!"method_1753".equals(candidate.name) && !"render".equals(candidate.name)) {
+                continue;
+            }
+            org.objectweb.asm.Type[] args = org.objectweb.asm.Type.getArgumentTypes(candidate.desc);
+            if (args.length != 2 || !"V".equals(returnType(candidate.desc))
+                    || args[0].getSort() != org.objectweb.asm.Type.OBJECT
+                    || (!"net/minecraft/class_332".equals(args[0].getInternalName())
+                        && !"net/minecraft/client/gui/GuiGraphics".equals(args[0].getInternalName()))) {
+                continue;
+            }
+            int slot = firstReferenceSlot(candidate.access, candidate.desc);
+            if (slot < 0) {
+                return;
+            }
+            int inserted = 0;
+            for (AbstractInsnNode instruction = candidate.instructions.getFirst(); instruction != null;
+                    instruction = instruction.getNext()) {
+                if (instruction.getOpcode() != Opcodes.RETURN) {
+                    continue;
+                }
+                InsnList hook = new InsnList();
+                hook.add(new VarInsnNode(Opcodes.ALOAD, slot));
+                hook.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, "onHudDraw",
+                        "(Ljava/lang/Object;)V", false));
+                candidate.instructions.insertBefore(instruction, hook);
+                inserted++;
+            }
+            if (inserted > 0) {
+                candidate.maxStack = Math.max(candidate.maxStack, 2);
+                System.out.println("[nocturne] mixin woven (hud): " + node.name + "."
+                        + candidate.name + candidate.desc + " -> " + owner + ".onHudDraw");
+            }
+            return;
+        }
+        System.out.println("[nocturne] mixin: no Gui.render(GuiGraphics, *) in " + node.name);
     }
 
     /**

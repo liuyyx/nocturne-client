@@ -1,6 +1,7 @@
 package dev.nocturne.agent;
 
-
+import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.mapping.Mapping;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
@@ -39,8 +40,7 @@ public final class GuiDrawHook {
 
     /** 判定"当前是否有界面"用的句柄；解析一次后复用（每帧都要问，不能每帧解析）。 */
     private static volatile Method minecraftGetInstance;
-    private static volatile Field minecraftGuiField;
-    private static volatile Method guiScreenMethod;
+    private static volatile Field minecraftScreenField;
     /** 是否已尝试过解析上述句柄（失败也只试一次，避免每帧刷日志）。 */
     private static volatile boolean screenProbeResolved;
 
@@ -125,6 +125,10 @@ public final class GuiDrawHook {
      */
     public static void onHudDraw(Object graphics) {
         if (hasScreen()) {
+            // HUD 钩子让位给原生 Screen 时，也必须解除 MouseHandler/KeyboardHandler 的短路。
+            // 否则 onFrame 根本不执行，InputBlock 会一直保持 true，连“回到游戏”都点不到。
+            dev.nocturne.client.runtime.InputBlock.setBlocked(false);
+            dev.nocturne.client.runtime.ScrollState.take(); // 原生 Screen 期间的滚轮不得留到 GUI 补发。
             return;
         }
         drive(graphics);
@@ -151,7 +155,7 @@ public final class GuiDrawHook {
                 runtime("onFrame");
             } finally {
                 // 绘制上下文只在这次调用期间有效：用完立刻释放，避免后端持有已失效的对象。
-                runtime("setDrawContext", null);
+                runtime("setDrawContext", (Object) null);
             }
         } catch (Throwable t) {
             // 绝不把异常带回游戏的绘制路径。
@@ -172,18 +176,13 @@ public final class GuiDrawHook {
             resolveScreenProbe();
         }
         Method getInstance = minecraftGetInstance;
-        Field guiField = minecraftGuiField;
-        Method screenMethod = guiScreenMethod;
-        if (getInstance == null || guiField == null || screenMethod == null) {
+        Field screenField = minecraftScreenField;
+        if (getInstance == null || screenField == null) {
             return false;
         }
         try {
             Object minecraft = getInstance.invoke(null);
-            if (minecraft == null) {
-                return false;
-            }
-            Object gui = guiField.get(minecraft);
-            return gui != null && screenMethod.invoke(gui) != null;
+            return minecraft != null && screenField.get(minecraft) != null;
         } catch (Throwable t) {
             return false;
         }
@@ -202,14 +201,52 @@ public final class GuiDrawHook {
         screenProbeResolved = true;
         try {
             ClassLoader loader = GuiDrawHook.class.getClassLoader();
-            Class<?> minecraftType = Class.forName("net.minecraft.client.Minecraft", false, loader);
-            Class<?> guiType = Class.forName("net.minecraft.client.gui.Gui", false, loader);
-            minecraftGetInstance = minecraftType.getMethod("getInstance");
-            minecraftGuiField = minecraftType.getField("gui");
-            guiScreenMethod = guiType.getMethod("screen");
+            Mapping mapping = NocturneAgent.currentMapping();
+            Class<?> minecraftType = loadCandidate(loader, mapping.classNameCandidates(ClassType.MINECRAFT));
+            Class<?> screenType = loadCandidate(loader, mapping.classNameCandidates(ClassType.SCREEN));
+            if (minecraftType == null || screenType == null) {
+                throw new ClassNotFoundException("Minecraft/Screen mapping unavailable");
+            }
+            for (String name : mapping.methodNameCandidates(ClassType.MINECRAFT, "getInstance", null)) {
+                try {
+                    Method candidate = minecraftType.getMethod(name);
+                    if (candidate.getReturnType() == minecraftType) {
+                        minecraftGetInstance = candidate;
+                        break;
+                    }
+                } catch (NoSuchMethodException ignored) {
+                    // 下一个命名空间候选。
+                }
+            }
+            for (String name : mapping.fieldNameCandidates(ClassType.MINECRAFT, "screen")) {
+                try {
+                    Field candidate = minecraftType.getField(name);
+                    if (screenType.isAssignableFrom(candidate.getType())) {
+                        minecraftScreenField = candidate;
+                        break;
+                    }
+                } catch (NoSuchFieldException ignored) {
+                    // 下一个命名空间候选。
+                }
+            }
+            if (minecraftGetInstance == null || minecraftScreenField == null) {
+                throw new NoSuchFieldException("Minecraft.getInstance()/screen");
+            }
         } catch (Throwable t) {
             System.out.println("[nocturne] gui draw hook: screen probe unavailable (" + t + ");"
                     + " the HUD hook will drive every frame");
         }
+    }
+
+    /** 只从本游戏加载器解析映射候选，不触发目标类静态初始化。 */
+    private static Class<?> loadCandidate(ClassLoader loader, java.util.List<String> names) {
+        for (String name : names) {
+            try {
+                return Class.forName(name.replace('/', '.'), false, loader);
+            } catch (Throwable ignored) {
+                // 不是当前命名空间，继续下一个候选。
+            }
+        }
+        return null;
     }
 }

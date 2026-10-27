@@ -164,10 +164,7 @@ public final class TrajectoriesModule extends Module implements WorldOverlay {
      * 按物品种类细分弹道参数待物品 kind 面落地后补齐。
      */
     private static boolean hasProjectileFace(GameBridge bridge) {
-        Object player = bridge.player();
-        ClassLoader loader = player != null && player.getClass().getClassLoader() != null
-                ? player.getClass().getClassLoader()
-                : TrajectoriesModule.class.getClassLoader();
+        ClassLoader loader = bridge.gameLoader();
         // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
         for (String mapped : bridge.mapping().classNameCandidates(ClassType.ITEM_STACK)) {
             try {

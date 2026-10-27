@@ -15,7 +15,7 @@ import dev.nocturne.ui.render.Renderer;
  * <p>它是三个可互换后端之一（另见 {@link GlRenderer} 与 {@link ExtractorRenderer}，
  * 由 {@code OverlayBootstrap} 按运行环境选择）。
  */
-public final class ModernRenderer implements UiBackend {
+public final class ModernRenderer implements UiBackend, PlayerModelPreview {
 
     /** 顶点着色器：把二维屏幕坐标乘以正交投影矩阵后输出裁剪空间坐标，纹理坐标直接透传。 */
     private static final String VERTEX_SHADER =
@@ -128,6 +128,18 @@ public final class ModernRenderer implements UiBackend {
     private boolean blendWasEnabled;
     private boolean cullWasEnabled;
 
+    /** 当前帧的 GuiGraphics / PoseStack；clearDrawContext 后绝不保留到下一帧。 */
+    private Object drawContext;
+    /** 1.20+ 入口按上下文实际类型缓存方法，不缓存上下文本身。 */
+    private InventoryPlayerPreview inventoryPlayerPreview;
+    private Class<?> inventoryPlayerPreviewType;
+    /** 1.15–1.19.3 的 PoseStack 入口。 */
+    private LegacyInventoryPlayerPreview legacyPlayerPreview;
+    private boolean legacyPreviewAttempted;
+    /** 1.13–1.14.4 无上下文时的固定管线入口。 */
+    private NativeInventoryPlayerPreview nativePlayerPreview;
+    private boolean nativePreviewAttempted;
+
     /** 供每次绘制复用的暂存顶点缓冲，使整个渲染过程不产生逐帧分配。 */
     private float[] scratch = new float[256];
 
@@ -158,6 +170,16 @@ public final class ModernRenderer implements UiBackend {
     /** @return 底层 GL 绑定，供调用方做低层设置或诊断 */
     public ModernGlApi gl() {
         return gl;
+    }
+
+    /** 设置本帧的 GuiGraphics（1.20+）或 PoseStack（1.15–1.19.3）。 */
+    public void setDrawContext(Object context) {
+        this.drawContext = context;
+    }
+
+    /** 帧结束立即释放游戏上下文，后续绘制不得继续使用上一帧对象。 */
+    public void clearDrawContext() {
+        this.drawContext = null;
     }
 
     /**
@@ -379,6 +401,113 @@ public final class ModernRenderer implements UiBackend {
     @Override
     public boolean ready() {
         return ready || (canRetry() && initialise());
+    }
+
+    /**
+     * 使用游戏自己的 InventoryScreen 入口绘制真实玩家模型。只有 beginFrame 已保存状态、
+     * 区域可见且当帧上下文符合版本要求时才提交；任何失败都明确返回 false。
+     */
+    @Override
+    public boolean drawPlayer(Object player, float left, float top, float right, float bottom,
+                              float mouseX, float mouseY) {
+        if (!ready || !stateSaved || bridge == null || player == null
+                || right - left < 16.0f || bottom - top < 24.0f) {
+            return false;
+        }
+        Object context = drawContext;
+        if (context != null) {
+            InventoryPlayerPreview modern = inventoryPreview(context.getClass());
+            if (modern != null) {
+                try {
+                    return modern.draw(context, player, left, top, right, bottom, mouseX, mouseY);
+                } finally {
+                    restoreAfterNativePreview();
+                }
+            }
+            LegacyInventoryPlayerPreview legacy = legacyPreview();
+            if (legacy == null) {
+                return false;
+            }
+            int center = Math.round((left + right) * 0.5f);
+            int feet = Math.round(bottom - 3.0f);
+            int size = Math.max(1, Math.round(Math.min((right - left) * 0.52f,
+                    (bottom - top) * 0.43f)));
+            try {
+                return legacy.draw(bridge, context, player, center, feet, size,
+                        center - mouseX, (feet - size) - mouseY);
+            } finally {
+                restoreAfterNativePreview();
+            }
+        }
+
+        // 1.15+ 的七参 helper 会在 poseStack=null 时拒绝调用；绝不会退化成伪造模型。
+        NativeInventoryPlayerPreview nativePreview = nativePreview();
+        if (nativePreview == null) {
+            return false;
+        }
+        // 固定管线 helper 不能继承 UI 的 GLSL program/VAO；否则顶点走现代属性路径，
+        // 游戏写入的固定管线坐标/矩阵不会按库存界面的语义生效。
+        gl.useProgram(0);
+        gl.bindVertexArray(0);
+        gl.bindArrayBuffer(0);
+        try {
+            return nativePreview.draw(bridge, player, left, top, right, bottom, mouseX, mouseY,
+                    screenWidth, screenHeight);
+        } finally {
+            restoreAfterNativePreview();
+        }
+    }
+
+    private InventoryPlayerPreview inventoryPreview(Class<?> contextType) {
+        if (inventoryPlayerPreviewType != contextType) {
+            inventoryPlayerPreviewType = contextType;
+            inventoryPlayerPreview = InventoryPlayerPreview.bind(bridge.mapping(), bridge.gameLoader(),
+                    contextType);
+        }
+        return inventoryPlayerPreview;
+    }
+
+    private LegacyInventoryPlayerPreview legacyPreview() {
+        if (!legacyPreviewAttempted) {
+            legacyPreviewAttempted = true;
+            legacyPlayerPreview = LegacyInventoryPlayerPreview.bind(bridge.mapping(), bridge.gameLoader());
+        }
+        return legacyPlayerPreview;
+    }
+
+    private NativeInventoryPlayerPreview nativePreview() {
+        if (!nativePreviewAttempted) {
+            nativePreviewAttempted = true;
+            nativePlayerPreview = NativeInventoryPlayerPreview.bind(bridge);
+            if (nativePlayerPreview == null) {
+                System.out.println("[nocturne] fixed-function native inventory player preview unavailable");
+            }
+        }
+        return nativePlayerPreview;
+    }
+
+    /** 原生实体绘制可改 program/VAO、深度与纹理；后续 UI 必须回到本后端的帧内状态。 */
+    private void restoreAfterNativePreview() {
+        if (!ready) {
+            return;
+        }
+        gl.useProgram(program);
+        gl.bindVertexArray(vertexArray);
+        gl.bindArrayBuffer(vertexBuffer);
+        gl.activeTexture(ModernGlApi.GL_TEXTURE0);
+        gl.bindTexture2D(whiteTexture);
+        gl.uniform1i(samplerLocation, 0);
+        gl.uniform1i(textureFlagLocation, 0);
+        gl.enableBlendAndReadPrevious();
+        gl.disableDepthTest();
+        gl.disableCullFace();
+        if (clipDepth > 0 && gl.hasScissor()) {
+            int[] box = clipStack[Math.min(clipDepth, MAX_CLIP_DEPTH) - 1];
+            if (box != null) {
+                gl.scissor(box[0], box[1], box[2], box[3]);
+            }
+            gl.enableScissorTest();
+        }
     }
 
     /** @return 尚未达到重试上限且当前已过退避时间 */

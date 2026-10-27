@@ -145,14 +145,14 @@ public final class GameInput implements InputSource {
         if (bridge == null || bridge.minecraft() == null) {
             return null;
         }
-        // 只在 SDL 世代接管：GLFW/LWJGL2 的轮询本来可用，而且不受"开着 screen 时游戏不更新按下标志"
-        // 的限制；用本类替换它们只会把能用的场景换坏（点得中变点不中）。
+        // SDL 栈用游戏自己的输入态；GLFW 轮询在指针被正确释放后可用，继续沿用它，
+        // 避免把已验证能点的路径换坏。Fabric 模组形态的指针重捕获由输入 Mixin 拦掉。
         if (fallback == null || !"sdl".equals(fallback.describe())) {
             return null;
         }
         Object handler = bridge.readField(bridge.minecraft(), ClassType.MINECRAFT, "mouseHandler");
         if (handler == null) {
-            return null;   // 老版本的鼠标在别处（LWJGL2/GLFW 那条路由 fallback 负责，实测可用）
+            return null;   // 老版本的鼠标在别处（LWJGL2 那条路由 fallback 负责）
         }
         // InputConstants 只在**游戏类加载器**里可见：用传进来的加载器（可能是系统加载器）按类名
         // 加载会静默拿到 null，键就永远读不到。鼠标处理器的类加载器一定是游戏那一个。

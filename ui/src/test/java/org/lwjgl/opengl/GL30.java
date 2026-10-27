@@ -27,6 +27,12 @@ public final class GL30 {
     public static int deletedBuffer = -1;
     /** {@code glDeleteVertexArrays} 收到的 id */
     public static int deletedVertexArray = -1;
+    /** 最近一次 UI program / VAO / array buffer 绑定。 */
+    public static int lastUseProgram = -1;
+    public static int lastBindVertexArray = -1;
+    public static int lastBindArrayBuffer = -1;
+    /** 模拟真实能力位，供原生模型绘制后的 UI 状态恢复断言使用。 */
+    public static final java.util.Set<Integer> enabledCaps = new java.util.HashSet<Integer>();
 
     /** 重置全部观察状态 */
     public static void reset() {
@@ -44,6 +50,10 @@ public final class GL30 {
         lastTexParameter = null;
         lastActiveTexture = -1;
         lastUniform1i = null;
+        lastUseProgram = -1;
+        lastBindVertexArray = -1;
+        lastBindArrayBuffer = -1;
+        enabledCaps.clear();
     }
 
     private GL30() {
@@ -65,6 +75,9 @@ public final class GL30 {
     }
 
     public static void glBindBuffer(int target, int id) {
+        if (target == 0x8892) {
+            lastBindArrayBuffer = id;
+        }
     }
 
     public static void glBufferData(int target, FloatBuffer data, int usage) {
@@ -128,6 +141,7 @@ public final class GL30 {
     }
 
     public static void glUseProgram(int program) {
+        lastUseProgram = program;
     }
 
     public static int glGetUniformLocation(int program, CharSequence name) {
@@ -141,6 +155,7 @@ public final class GL30 {
     }
 
     public static void glBindVertexArray(int id) {
+        lastBindVertexArray = id;
     }
 
     public static void glEnableVertexAttribArray(int index) {
@@ -154,13 +169,15 @@ public final class GL30 {
     }
 
     public static void glEnable(int cap) {
+        enabledCaps.add(cap);
     }
 
     public static void glDisable(int cap) {
+        enabledCaps.remove(cap);
     }
 
     public static boolean glIsEnabled(int cap) {
-        return false;
+        return enabledCaps.contains(cap);
     }
 
     public static void glBlendFunc(int src, int dst) {

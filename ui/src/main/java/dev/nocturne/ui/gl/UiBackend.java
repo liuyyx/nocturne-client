@@ -63,6 +63,16 @@ public interface UiBackend extends Renderer {
     }
 
     /**
+     * 字形、圆角和阴影的栅格密度；默认与逻辑缩放一致。
+     *
+     * <p>只在后端能把高密度纹理正确缩回逻辑尺寸时覆盖为更高值。布局、鼠标和玩家预览仍使用
+     * {@link #scale()}，因此提高该值不会改变窗口尺寸或控件位置。
+     */
+    default int rasterScale() {
+        return scale();
+    }
+
+    /**
      * 覆盖 UI 缩放系数；{@code 0} 或负数表示恢复"按屏幕高度自动"。
      *
      * <p>给"用 {@code =} / {@code -} 手动调整界面大小"用：自动值只能按屏幕高度取整，用户在高 DPI

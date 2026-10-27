@@ -24,6 +24,9 @@ public final class BackendOverlayDraw implements OverlayDraw {
     /** 尺寸与就绪状态来自后端（Renderer 本身不暴露视口）。 */
     private final UiBackend backend;
 
+    /** 已向后端下发的覆盖层图元数（仅供首帧有效绘制诊断）。 */
+    private long drawCalls;
+
     /**
      * @param backend 当帧绘制后端；同时用作 Renderer 与尺寸来源
      */
@@ -32,19 +35,27 @@ public final class BackendOverlayDraw implements OverlayDraw {
         this.renderer = backend;
     }
 
+    /** @return 已向绘制后端下发的图元总数；调用前后取差可判断本帧是否真有图元。 */
+    long drawCalls() {
+        return drawCalls;
+    }
+
     @Override
     public void rect(float x, float y, float width, float height, int argb) {
         renderer.rect(x, y, width, height, Color.of(argb));
+        drawCalls++;
     }
 
     @Override
     public void outline(float x, float y, float width, float height, float thickness, int argb) {
         renderer.outline(x, y, width, height, thickness, Color.of(argb));
+        drawCalls++;
     }
 
     @Override
     public void text(String text, float x, float y, int argb) {
         renderer.text(text, x, y, TEXT_SIZE, Color.of(argb));
+        drawCalls++;
     }
 
     @Override

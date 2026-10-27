@@ -77,6 +77,9 @@ public final class OverlayBootstrap implements FrameListener {
      */
     private static volatile ExtractorRenderer extractorBackend;
 
+    /** gl-core 在同一帧的 PoseStack 上提交旧代原生人物；帧末立即清空。 */
+    private static volatile ModernRenderer modernBackend;
+
     /** 后端尚未装好时收到的绘制上下文；装好后立刻补喂，避免白丢第一帧。 */
     private static volatile Object pendingGraphics;
 
@@ -184,12 +187,13 @@ public final class OverlayBootstrap implements FrameListener {
         // 诊断开关：-Dnocturne.ui.backend=gl 强制走 GL 后端（1.20-1.21 用来对比
         // 「游戏绘制 API（无自定义纹理）」与「自带 GL 管线（有纹理/字形图集）」两条路的差异）。
         boolean forceGl = "gl".equalsIgnoreCase(System.getProperty("nocturne.ui.backend", ""));
-        // 1.21.1 的 GuiGraphics 路径实测整屏被填成纯红（fill 的调用序列与该版本不符），
-        // 而 gl-core 在同一版本上完整可用（真图标 + 图集 + 744x540）。这里按版本走白名单。
-        if (!forceGl && currentMapping() != null
+        // 1.21.1 的注入式 GuiGraphics 路径曾实测整屏纯红；该路径保留已验的
+        // gl-core。Fabric mod 没有 Instrumentation 帧钩子，绘制只在游戏交来的
+        // GuiGraphics 内有效，而且现场 LWJGL native 无法从 mod 加载，不能强制 GL。
+        if (!forceGl && instrumentation != null && currentMapping() != null
                 && currentMapping().describe().contains("1.21.1 ")) {
             forceGl = true;
-            log("1.21.1: GuiGraphics path is unusable, forcing gl-core");
+            log("1.21.1 attach: forcing previously verified gl-core backend");
         }
         Class<?> extractorType = forceGl ? null : resolveLoaded(EXTRACTOR_CLASS);
         boolean sdl = extractorType != null;
@@ -298,6 +302,10 @@ public final class OverlayBootstrap implements FrameListener {
         } else {
             backend = selectBackend(gl, gl11, font, bridge);
         }
+        modernBackend = backend instanceof ModernRenderer ? (ModernRenderer) backend : null;
+        if (modernBackend != null && pendingGraphics != null) {
+            modernBackend.setDrawContext(pendingGraphics);
+        }
         // 输入：鼠标优先取游戏自己的状态（映射后的 MouseHandler）。SDL 的 SDL_GetMouseState 只在
         // 有鼠标焦点的窗口上给坐标，否则静默返回 0,0——26.3 实测的"点不中"就是它。键与滚轮仍由
         // 逐代输入源（SDL/GLFW/LWJGL2）提供，game 源只接管鼠标。
@@ -367,6 +375,17 @@ public final class OverlayBootstrap implements FrameListener {
      */
     private Class<?> resolveGuiGraphics() {
         Mapping mapping = currentMapping();
+        // Fabric 会同时保留 vanilla 与 intermediary 两份类副本。真实钩子对象才是权威类型；
+        // 先扫 Screen 候选可能选中另一份 fhz，随后把 class_332 传给 fhz 的方法而全部绘制失败。
+        Object current = pendingGraphics;
+        if (current != null && hasFill(current.getClass())) {
+            if (!guiGraphicsReported) {
+                guiGraphicsReported = true;
+                System.out.println("[nocturne] gui-graphics: context=" + current.getClass().getName()
+                        + " via current draw hook");
+            }
+            return current.getClass();
+        }
         if (mapping == null) {
             return null;
         }
@@ -393,12 +412,17 @@ public final class OverlayBootstrap implements FrameListener {
         } else {
             renderNames.add(mapping.methodName(ClassType.SCREEN, "render", null));
         }
+        java.util.Set<String> graphicsNames = new java.util.HashSet<String>();
+        for (String name : mapping.classNameCandidates(ClassType.GUI_GRAPHICS)) {
+            graphicsNames.add(name.replace('/', '.'));
+        }
         for (java.lang.reflect.Method candidate : screen.getMethods()) {
             if (!renderNames.contains(candidate.getName()) || candidate.getParameterCount() != 4) {
                 continue;
             }
             Class<?> first = candidate.getParameterTypes()[0];
-            if (!first.isPrimitive() && first != Object.class && hasFill(first)) {
+            if (!first.isPrimitive() && first != Object.class
+                    && (graphicsNames.contains(first.getName()) || hasFill(first))) {
                 if (!guiGraphicsReported) {
                     guiGraphicsReported = true;
                     System.out.println("[nocturne] gui-graphics: context=" + first.getName()
@@ -496,20 +520,30 @@ public final class OverlayBootstrap implements FrameListener {
      * @param graphics 本帧的 {@code GuiGraphicsExtractor} 实例
      */
     public static void setDrawContext(Object graphics) {
-        ExtractorRenderer backend = extractorBackend;
-        if (backend == null) {
+        ExtractorRenderer extractor = extractorBackend;
+        ModernRenderer modern = modernBackend;
+        if (extractor == null && modern == null) {
             pendingGraphics = graphics;
             return;
         }
-        backend.setFrame(graphics);
+        if (extractor != null) {
+            extractor.setFrame(graphics);
+        }
+        if (modern != null) {
+            modern.setDrawContext(graphics);
+        }
     }
 
     /** 释放本帧的绘制上下文；钩子在驱动完 {@code onFrame()} 之后调用。 */
     public static void clearDrawContext() {
         pendingGraphics = null;
-        ExtractorRenderer backend = extractorBackend;
-        if (backend != null) {
-            backend.clearFrame();
+        ExtractorRenderer extractor = extractorBackend;
+        if (extractor != null) {
+            extractor.clearFrame();
+        }
+        ModernRenderer modern = modernBackend;
+        if (modern != null) {
+            modern.clearDrawContext();
         }
     }
 

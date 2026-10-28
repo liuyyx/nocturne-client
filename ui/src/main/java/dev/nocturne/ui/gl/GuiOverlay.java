@@ -87,6 +87,8 @@ public final class GuiOverlay implements FrameListener {
     private boolean leftWasDown;
     /** 上一帧右键是否按下。 */
     private boolean rightWasDown;
+    /** 原生 Screen 关闭后的按压交接：松开前不得把它派发给自绘 GUI。 */
+    private boolean nativeMouseHandoff;
     /** 上一帧指针 x（GUI 坐标），用于计算拖拽增量。 */
     private double lastX;
     /** 上一帧指针 y（GUI 坐标）。 */
@@ -329,6 +331,7 @@ public final class GuiOverlay implements FrameListener {
         boolean nativeScreen = hasNativeScreen();
         InputBlock.setBlocked(gui.isOpen() && !nativeScreen);
         if (nativeScreen && gui.isOpen()) {
+            nativeMouseHandoff = true;
             input.setPointerGrabbed(false);
             input.scrollDelta(); // 丢弃原生界面期间的滚轮，返回后不得补发。
             leftWasDown = input.mouseDown(BUTTON_LEFT);
@@ -406,6 +409,7 @@ public final class GuiOverlay implements FrameListener {
         double scroll = input.scrollDelta();
 
         if (!gui.isOpen()) {
+            nativeMouseHandoff = false;
             // 关闭状态保持输入基准同步，避免重开首帧把陈旧按下态误判为新事件
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
@@ -438,6 +442,7 @@ public final class GuiOverlay implements FrameListener {
         escapeWasDown = escapeDown;
         dispatchKeys(modifiers);
         if (!gui.isOpen()) {
+            nativeMouseHandoff = false;
             // Esc 在本帧关闭了界面：同步输入基准后只画覆盖层。
             // 指针不在这一帧硬性恢复：下一帧的交接沿会把它还原成打开前的状态。
             leftWasDown = input.mouseDown(BUTTON_LEFT);
@@ -468,6 +473,17 @@ public final class GuiOverlay implements FrameListener {
 
         boolean left = input.mouseDown(BUTTON_LEFT);
         boolean right = input.mouseDown(BUTTON_RIGHT);
+        // 原生按钮的按下/释放可能跨越 Screen 关闭边界。整段交接都只同步基准：
+        // 不把返回游戏的那次按压补成自绘 GUI 的点击，也不发送无对应按下的释放。
+        if (nativeMouseHandoff) {
+            nativeMouseHandoff = left || right;
+            lastX = mx;
+            lastY = my;
+            leftWasDown = left;
+            rightWasDown = right;
+            drawFrame();
+            return;
+        }
         if (!loggedFirstClick && (left || right)) {
             loggedFirstClick = true;
             // 「点了没反应」必须能定位到这一层的哪一半：指针坐标（由原始坐标换算）

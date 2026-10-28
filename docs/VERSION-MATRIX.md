@@ -247,7 +247,7 @@
 | 1.12.2 | Forge | `gl-fixed` | ⏳ 待真机 |
 | 1.16.5 | Forge | `gl-core` | ⏳ 待真机 |
 | 1.20.1 | Forge / Fabric | `gl-core` | ⏳ 待真机 |
-| 1.21.1 | Fabric mod | `gui-extractor` | ✅ **已实测**（Mixin 绘制/输入钩子织入；修复 `NativeImage` 原图写入、独立 UV 区域的 11 参 `blit`、2× 栅格密度与 alpha 混合后，文字和柔和阴影正常；滚轮走 `ScrollState`，日志确认 `view.scroll` 从 34 连续变化到 404 且物品栏不滚动。隔离实例诊断构建验证 Esc 关闭自绘 GUI、原生暂停菜单返回游戏及右 Shift 重开；原生 Screen 与自绘 GUI 同时打开时鼠标拦截为 `false`，暂停菜单上重开自绘 GUI 后，Back to Game 已实机点击返回，原生输入未被拦截。颜色选择器二维渐变已复验无横条；Fabric HUD 改为 Gui.render 捕获 + GameRenderer 深度清理后绘制，准星与快捷栏不再覆盖 GUI，颜色弹窗和滚轮均已复验） |
+| 1.21.1 | Fabric mod | `gui-extractor` | ✅ **已实测**（Mixin 绘制/输入钩子织入；修复 `NativeImage` 原图写入、独立 UV 区域的 11 参 `blit`、2× 栅格密度与 alpha 混合后，文字和柔和阴影正常；滚轮走 `ScrollState`，日志确认 `view.scroll` 从 34 连续变化到 404 且物品栏不滚动。隔离实例诊断构建验证 Esc 关闭自绘 GUI、原生暂停菜单返回游戏及右 Shift 重开；原生 Screen 与自绘 GUI 同时打开时鼠标拦截为 `false`，暂停菜单上重开自绘 GUI 后，Back to Game 已实机点击返回，原生输入未被拦截；返回按压在松开前不再穿透到自绘 GUI，后续新点击正常。颜色选择器二维渐变已复验无横条；Fabric HUD 改为 Gui.render 捕获 + GameRenderer 深度清理后绘制，准星与快捷栏不再覆盖 GUI，颜色弹窗和滚轮均已复验） |
 | 1.21.8 | Fabric / NeoForge | `gl-core` | ⏳ 待真机 |
 | 1.21.11 | Fabric | `gl-core` | ✅ **已实测**（Fabric 0.19.5 + LWJGL 3.3.3 + NVIDIA 610.74：注入 → `backend=gl-core; input=glfw` → `overlay active; screen=FaClickGui`，新界面三列渲染正常、颜色 chip/滑条/图集文字都在；截图 `docs/research/fatality-1.21.11-glcore.png`。**首轮注入直接 `nvoglv64` ACCESS_VIOLATION 崩 JVM**，根因与修复见下方 P4-E） |
 | 26.1 | Fabric / NeoForge | `gui-extractor` | ⏳ 待真机 |

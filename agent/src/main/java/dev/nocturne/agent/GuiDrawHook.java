@@ -28,9 +28,10 @@ import java.lang.reflect.Method;
  * 直接 {@code FATAL ERROR} 终止整个 JVM**，且是 native abort，Java 侧捕获不到。实测就是那样崩的：
  * {@code SDL_GL_SwapWindow → 帧钩子 → ExtractorRenderer.beginFrame → glGetIntegerv → JVM abort}。
  *
- * <p><b>本类不持有任何静态状态</b>：它由游戏的隔离类加载器加载（注入的字节码在游戏方法里），而叠加层
+ * <p><b>本类不持有任何跨加载器共享的配置状态</b>：它由游戏的隔离类加载器加载（注入的字节码在游戏方法里），而叠加层
  * 后端由 agent 的加载器持有——同一个类在两处各有一份，静态字段互不可见。因此绘制上下文与帧回调一律
- * 走 {@link NocturneRuntime}，它内部强制从 **bootstrap 层**取分发器（见 {@code FrameDispatcher}）。
+ * 走 {@link NocturneRuntime}。唯一的 ThreadLocal 只用于 Fabric 同一游戏加载器内、同一渲染线程上的
+ * Gui.render → GameRenderer 当帧传递，不承担跨加载器共享。
  * 实测教训：早先直接调 {@code OverlayBootstrap.setDrawContext}，钩子写进的是空副本，界面"已打开"
  * 却一个像素都不画。
  *
@@ -48,6 +49,9 @@ public final class GuiDrawHook {
     private static volatile Class<?> runtimeType;
     private static volatile Method runtimeSetDrawContext;
     private static volatile Method runtimeOnFrame;
+
+    /** Fabric：Gui.render 捕获、GameRenderer 后置清理之间传递的当帧上下文。 */
+    private static final ThreadLocal<Object> PENDING_HUD_GRAPHICS = new ThreadLocal<Object>();
 
     /**
      * 调用 {@code NocturneRuntime} 的静态方法。
@@ -116,6 +120,22 @@ public final class GuiDrawHook {
     }
 
     /**
+     * Fabric 前置捕获：只保存参数槽稳定的 GuiGraphics，不在 ImmediatelyFast 的 HUD 批次里绘制。
+     */
+    public static void onHudDrawCapture(Object graphics) {
+        PENDING_HUD_GRAPHICS.set(graphics);
+    }
+
+    /** Fabric 后置绘制：在 GameRenderer 清理 HUD 深度后消费当帧上下文。 */
+    public static void onHudDrawDeferred() {
+        Object graphics = PENDING_HUD_GRAPHICS.get();
+        PENDING_HUD_GRAPHICS.remove();
+        if (graphics != null) {
+            onHudDraw(graphics);
+        }
+    }
+
+    /**
      * HUD 绘制入口（游戏内每帧一次）。
      *
      * <p>当前有界面时**不驱动**：{@code Gui.extractRenderState} 里 HUD 先提取、界面后提取，界面在上层，
@@ -140,6 +160,7 @@ public final class GuiDrawHook {
      * @param graphics 本帧的 {@code GuiGraphicsExtractor}
      */
     public static void onScreenDraw(Object graphics) {
+        PENDING_HUD_GRAPHICS.remove();
         drive(graphics);
     }
 

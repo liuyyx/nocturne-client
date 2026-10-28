@@ -5,6 +5,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
@@ -284,11 +285,63 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
         }
     }
 
-    /** 只对真正的 HUD 主绘制入口织入：1.20+ Gui.render(GuiGraphics, *)。 */
+    /**
+     * 在 GameRenderer 完成原生 HUD 绘制及深度清理后织入。
+     *
+     * <p>不能直接挂在 Gui.render 返回点：ImmediatelyFast 会把整个 Gui.render 包进 HUD 合批，
+     * 游戏又会在它返回后清理世界深度。Fabric 在 Gui.render 捕获参数，在这里延迟绘制；
+     * 不读取 GameRenderer 的局部槽号（其他 Mixin 会改变槽位布局）。
+     */
     private static void autoApplyHud(ClassNode node, String owner) {
-        if (node == null || !"net/minecraft/class_329".equals(node.name)) {
+        if (node == null) {
             return;
         }
+        if ("net/minecraft/class_329".equals(node.name)) {
+            autoApplyHudCapture(node, owner);
+            return;
+        }
+        if (!"net/minecraft/class_757".equals(node.name)) {
+            return;
+        }
+        for (MethodNode candidate : node.methods) {
+            if (!"method_3192".equals(candidate.name) && !"render".equals(candidate.name)) {
+                continue;
+            }
+            org.objectweb.asm.Type[] args = org.objectweb.asm.Type.getArgumentTypes(candidate.desc);
+            if (args.length != 2 || args[0].getSort() != org.objectweb.asm.Type.OBJECT
+                    || args[1].getSort() != org.objectweb.asm.Type.BOOLEAN
+                    || !"V".equals(returnType(candidate.desc))) {
+                continue;
+            }
+            boolean graphicsAllocated = false;
+            for (AbstractInsnNode instruction = candidate.instructions.getFirst(); instruction != null;
+                    instruction = instruction.getNext()) {
+                if (instruction.getOpcode() == Opcodes.NEW
+                        && isGuiGraphics(((TypeInsnNode) instruction).desc)) {
+                    graphicsAllocated = true;
+                    continue;
+                }
+                if (!graphicsAllocated || instruction.getOpcode() != Opcodes.INVOKESTATIC) {
+                    continue;
+                }
+                MethodInsnNode call = (MethodInsnNode) instruction;
+                if (!"com/mojang/blaze3d/systems/RenderSystem".equals(call.owner)
+                        || !"clear".equals(call.name) || !"(IZ)V".equals(call.desc)) {
+                    continue;
+                }
+                candidate.instructions.insert(instruction, new MethodInsnNode(Opcodes.INVOKESTATIC,
+                        owner, "onHudDrawDeferred", "()V", false));
+                candidate.maxStack = Math.max(candidate.maxStack, 1);
+                System.out.println("[nocturne] mixin woven (post-hud): " + node.name + "."
+                        + candidate.name + candidate.desc + " -> " + owner + ".onHudDrawDeferred");
+                return;
+            }
+        }
+        System.out.println("[nocturne] mixin: no post-HUD depth clear in " + node.name);
+    }
+
+    /** 在 Gui.render 返回前捕获首个引用参数；方法参数槽不会被调用方 Mixin 重排。 */
+    private static void autoApplyHudCapture(ClassNode node, String owner) {
         for (MethodNode candidate : node.methods) {
             if (!"method_1753".equals(candidate.name) && !"render".equals(candidate.name)) {
                 continue;
@@ -296,15 +349,13 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
             org.objectweb.asm.Type[] args = org.objectweb.asm.Type.getArgumentTypes(candidate.desc);
             if (args.length != 2 || !"V".equals(returnType(candidate.desc))
                     || args[0].getSort() != org.objectweb.asm.Type.OBJECT
-                    || (!"net/minecraft/class_332".equals(args[0].getInternalName())
-                        && !"net/minecraft/client/gui/GuiGraphics".equals(args[0].getInternalName()))) {
+                    || !isGuiGraphics(args[0].getInternalName())) {
                 continue;
             }
             int slot = firstReferenceSlot(candidate.access, candidate.desc);
             if (slot < 0) {
                 return;
             }
-            int inserted = 0;
             for (AbstractInsnNode instruction = candidate.instructions.getFirst(); instruction != null;
                     instruction = instruction.getNext()) {
                 if (instruction.getOpcode() != Opcodes.RETURN) {
@@ -312,19 +363,21 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
                 }
                 InsnList hook = new InsnList();
                 hook.add(new VarInsnNode(Opcodes.ALOAD, slot));
-                hook.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, "onHudDraw",
+                hook.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, "onHudDrawCapture",
                         "(Ljava/lang/Object;)V", false));
                 candidate.instructions.insertBefore(instruction, hook);
-                inserted++;
             }
-            if (inserted > 0) {
-                candidate.maxStack = Math.max(candidate.maxStack, 2);
-                System.out.println("[nocturne] mixin woven (hud): " + node.name + "."
-                        + candidate.name + candidate.desc + " -> " + owner + ".onHudDraw");
-            }
+            candidate.maxStack = Math.max(candidate.maxStack, 2);
+            System.out.println("[nocturne] mixin woven (hud-capture): " + node.name + "."
+                    + candidate.name + candidate.desc + " -> " + owner + ".onHudDrawCapture");
             return;
         }
         System.out.println("[nocturne] mixin: no Gui.render(GuiGraphics, *) in " + node.name);
+    }
+
+    private static boolean isGuiGraphics(String internalName) {
+        return "net/minecraft/class_332".equals(internalName)
+                || "net/minecraft/client/gui/GuiGraphics".equals(internalName);
     }
 
     /**

@@ -49,6 +49,7 @@ dependencies {
     // Minecraft intermediary jar：mixin 类要引用目标类型（class_437/class_332），编译期必须有。
     compileOnly(files(mcJar))
     // JUnit 5：单元测试编译期依赖。
+    testImplementation(files(mixinJar, asmTreeJar))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     // JUnit Platform 启动器：测试运行时依赖。
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")

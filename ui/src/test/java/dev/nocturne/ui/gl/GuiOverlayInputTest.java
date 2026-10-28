@@ -21,6 +21,7 @@ class GuiOverlayInputTest {
     void clearInputBlock() {
         InputBlock.setBlocked(false);
         InputBlock.consumePressed(344, Long.MAX_VALUE);
+        InputBlock.consumePressed(340, Long.MAX_VALUE);
         InputBlock.consumePressed(256, Long.MAX_VALUE);
     }
 
@@ -36,6 +37,21 @@ class GuiOverlayInputTest {
         InputBlock.recordKey(344, 1);
         overlay.onFrame();
         assertTrue(overlay.isOpen(), "bootstrap 不可用后，本地按键事件仍应打开界面");
+    }
+
+    @Test
+    void recordedLeftShiftNeverOpensGui() {
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                new FakeBackend(0, 0), new FakeInput(), GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.onFrame();
+
+        InputBlock.recordKey(340, 1); // GLFW_KEY_LEFT_SHIFT
+        overlay.onFrame();
+        assertFalse(overlay.isOpen(), "左 Shift 不得触发右 Shift 快捷键");
+
+        InputBlock.recordKey(344, 1); // GLFW_KEY_RIGHT_SHIFT
+        overlay.onFrame();
+        assertTrue(overlay.isOpen(), "右 Shift 仍能正常打开界面");
     }
 
     @Test

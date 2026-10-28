@@ -239,11 +239,6 @@ public final class GuiOverlay implements FrameListener {
         if (glfw >= 0 && consumeKey(glfw)) {
             return true;
         }
-        // Windows 的 keybd_event(0xA1) 在 GLFW 里落到 340（LEFT_SHIFT），与映射表的 344 不同；
-        // 开关键两者都接受（右 Shift 是哨兵，不会和普通键冲突）。
-        if (vk == dev.nocturne.client.input.KeyMap.VK_RIGHT_SHIFT && consumeKey(340)) {
-            return true;
-        }
         return input.keyDown(vk);
     }
 

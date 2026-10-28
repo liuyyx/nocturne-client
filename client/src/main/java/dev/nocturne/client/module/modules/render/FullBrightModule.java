@@ -1,4 +1,4 @@
-package dev.nocturne.client.module.modules;
+package dev.nocturne.client.module.modules.render;
 
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.game.GameBridge;
@@ -167,7 +167,7 @@ public final class FullBrightModule extends Module {
         if (player == null) {
             return;
         }
-        Object effectType = readStaticField(bridge, ClassType.MOB_EFFECT, "NIGHT_VISION");
+        Object effectType = readStaticField(bridge, ClassType.MOB_EFFECTS, "NIGHT_VISION");
         if (effectType == null) {
             logGateOnce("夜视药水类型缺失（版本无该成员），Night Vision 模式已禁用");
             return;
@@ -191,7 +191,7 @@ public final class FullBrightModule extends Module {
      * 但会把玩家自己吃的其它药水一起清掉，不能用。
      */
     private void removeNightVision(GameBridge bridge, Object player) {
-        Object effectType = readStaticField(bridge, ClassType.MOB_EFFECT, "NIGHT_VISION");
+        Object effectType = readStaticField(bridge, ClassType.MOB_EFFECTS, "NIGHT_VISION");
         if (effectType == null) {
             return;
         }
@@ -217,7 +217,7 @@ public final class FullBrightModule extends Module {
     }
 
     /**
-     * 读映射类的静态字段（如 MobEffect.NIGHT_VISION）。
+     * 读映射类的静态字段（如 MobEffects.NIGHT_VISION）。
      *
      * <p>表驱动门的第一道：类或字段 absent 时返回 null，调用方打一次日志并跳过。
      */

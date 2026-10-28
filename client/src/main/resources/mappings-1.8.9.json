@@ -1111,15 +1111,7 @@
                 "forge": "net.minecraft.potion.Potion"
             },
             "methods": {},
-            "fields": {
-                "NIGHT_VISION": {
-                    "names": {
-                        "vanilla": "r",
-                        "fabric": "field_0_7291",
-                        "forge": "field_76439_r"
-                    }
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/world/effect/MobEffectInstance": {
             "names": {
@@ -1129,6 +1121,23 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffects": {
+            "names": {
+                "vanilla": "pe",
+                "fabric": "net.minecraft.class_1291",
+                "forge": "net.minecraft.potion.Potion"
+            },
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "names": {
+                        "vanilla": "r",
+                        "fabric": "field_0_7291",
+                        "forge": "field_76439_r"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/Entity": {
             "names": {

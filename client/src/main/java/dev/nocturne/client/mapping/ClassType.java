@@ -51,6 +51,8 @@ public enum ClassType {
     ITEM_STACK("net.minecraft.world.item.ItemStack"),
     /** 药水效果类型（夜视等）；1.8.9 名 Potion。 */
     MOB_EFFECT("net.minecraft.world.effect.MobEffect"),
+    /** 效果常量持有类；旧映射可与效果类型共用同一个运行时类。 */
+    MOB_EFFECTS("net.minecraft.world.effect.MobEffects"),
     /** 药水效果实例；1.8.9 名 PotionEffect。 */
     MOB_EFFECT_INSTANCE("net.minecraft.world.effect.MobEffectInstance"),
     /** 窗口句柄（来自 Blaze3D 平台层，非 Minecraft 命名空间）。 */

@@ -1,4 +1,4 @@
-package dev.nocturne.client.module.modules;
+package dev.nocturne.client.module.modules.render;
 
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.event.EventBus;

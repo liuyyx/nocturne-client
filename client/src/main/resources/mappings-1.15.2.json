@@ -74,6 +74,30 @@
                 "forge": "net.minecraft.client.MainWindow"
             },
             "methods": {
+                "getGuiScaledHeight": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "method_4502",
+                        "forge": "func_198087_p"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                },
+                "getGuiScaledWidth": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_4486",
+                        "forge": "func_198107_o"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                },
                 "getHeight": {
                     "names": {
                         "vanilla": "l",
@@ -1414,11 +1438,7 @@
                 "forge": "net.minecraft.potion.Effect"
             },
             "methods": {},
-            "fields": {
-                "NIGHT_VISION": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/world/effect/MobEffectInstance": {
             "names": {
@@ -1428,6 +1448,28 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffects": {
+            "names": {
+                "vanilla": "akm",
+                "fabric": "net.minecraft.class_1294",
+                "forge": "net.minecraft.potion.Effects"
+            },
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "field_5925",
+                        "forge": "field_76439_r"
+                    },
+                    "descriptors": {
+                        "vanilla": "Laki;",
+                        "fabric": "Lnet/minecraft/class_1291;",
+                        "forge": "Lnet/minecraft/potion/Effect;"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/Entity": {
             "names": {

@@ -3,7 +3,7 @@ package dev.nocturne.client.module;
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.TestSupport;
 import dev.nocturne.client.hud.HudSink;
-import dev.nocturne.client.module.modules.WatermarkModule;
+import dev.nocturne.client.module.modules.render.WatermarkModule;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

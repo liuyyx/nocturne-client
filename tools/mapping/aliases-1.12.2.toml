@@ -56,6 +56,7 @@ version = "1.8.9"
 # 掉落物还是 EntityItem。缺这几行时，1.12.2 表里药水效果与掉落物的成员会全部写成 absent，
 # 对应模块在该版本静默空转（不报错、也没有任何输出）。
 "net/minecraft/world/effect/MobEffect" = "net/minecraft/potion/Potion"
+"net/minecraft/world/effect/MobEffects" = "net/minecraft/init/MobEffects"
 "net/minecraft/world/effect/MobEffectInstance" = "net/minecraft/potion/PotionEffect"
 "net/minecraft/world/entity/item/ItemEntity" = "net/minecraft/entity/item/EntityItem"
 "net/minecraft/world/level/LevelReader" = "net/minecraft/world/IBlockAccess"

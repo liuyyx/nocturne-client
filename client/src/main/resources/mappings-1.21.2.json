@@ -84,6 +84,34 @@
                 "neoforge": "com.mojang.blaze3d.platform.Window"
             },
             "methods": {
+                "getGuiScaledHeight": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "method_4502",
+                        "forge": "m_85446_",
+                        "neoforge": "getGuiScaledHeight"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                },
+                "getGuiScaledWidth": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_4486",
+                        "forge": "m_85445_",
+                        "neoforge": "getGuiScaledWidth"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                },
                 "getHeight": {
                     "names": {
                         "vanilla": "l",
@@ -1707,11 +1735,7 @@
                 "neoforge": "net.minecraft.world.effect.MobEffect"
             },
             "methods": {},
-            "fields": {
-                "NIGHT_VISION": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/world/effect/MobEffectInstance": {
             "names": {
@@ -1722,6 +1746,31 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffects": {
+            "names": {
+                "vanilla": "buq",
+                "fabric": "net.minecraft.class_1294",
+                "forge": "net.minecraft.world.effect.MobEffects",
+                "neoforge": "net.minecraft.world.effect.MobEffects"
+            },
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "field_5925",
+                        "forge": "f_19611_",
+                        "neoforge": "NIGHT_VISION"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ljq;",
+                        "fabric": "Lnet/minecraft/class_6880;",
+                        "forge": "Lnet/minecraft/core/Holder;",
+                        "neoforge": "Lnet/minecraft/core/Holder;"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/Entity": {
             "names": {

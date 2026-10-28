@@ -74,6 +74,30 @@
                 "forge": "com.mojang.blaze3d.platform.Window"
             },
             "methods": {
+                "getGuiScaledHeight": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "method_4502",
+                        "forge": "m_85446_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                },
+                "getGuiScaledWidth": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_4486",
+                        "forge": "m_85445_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                },
                 "getHeight": {
                     "names": {
                         "vanilla": "l",
@@ -1417,11 +1441,7 @@
                 "forge": "net.minecraft.world.effect.MobEffect"
             },
             "methods": {},
-            "fields": {
-                "NIGHT_VISION": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/world/effect/MobEffectInstance": {
             "names": {
@@ -1431,6 +1451,28 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffects": {
+            "names": {
+                "vanilla": "atc",
+                "fabric": "net.minecraft.class_1294",
+                "forge": "net.minecraft.world.effect.MobEffects"
+            },
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "field_5925",
+                        "forge": "f_19611_"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lasy;",
+                        "fabric": "Lnet/minecraft/class_1291;",
+                        "forge": "Lnet/minecraft/world/effect/MobEffect;"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/Entity": {
             "names": {

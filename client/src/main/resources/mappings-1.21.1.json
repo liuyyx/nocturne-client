@@ -1735,11 +1735,7 @@
                 "neoforge": "net.minecraft.world.effect.MobEffect"
             },
             "methods": {},
-            "fields": {
-                "NIGHT_VISION": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/world/effect/MobEffectInstance": {
             "names": {
@@ -1750,6 +1746,31 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffects": {
+            "names": {
+                "vanilla": "bsb",
+                "fabric": "net.minecraft.class_1294",
+                "forge": "net.minecraft.world.effect.MobEffects",
+                "neoforge": "net.minecraft.world.effect.MobEffects"
+            },
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "field_5925",
+                        "forge": "f_19611_",
+                        "neoforge": "NIGHT_VISION"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ljm;",
+                        "fabric": "Lnet/minecraft/class_6880;",
+                        "forge": "Lnet/minecraft/core/Holder;",
+                        "neoforge": "Lnet/minecraft/core/Holder;"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/Entity": {
             "names": {

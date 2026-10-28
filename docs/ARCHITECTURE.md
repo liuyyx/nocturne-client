@@ -91,7 +91,8 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 
 - **模块框架**：`Module` 基类 + `ModuleRegistry`（按名唯一、分类查询、驱动闸门）
   + 值体系（`BooleanValue` / `NumberValue` / `ColorValue` / `ModeValue`）。
-  分类只有 4 个：`MOVEMENT` / `RENDER` / `PLAYER` / `MISC`。
+  分类为 `COMBAT` / `MOVEMENT` / `RENDER` / `WORLD` / `INVENTORY` / `PLAYER` / `MISC`；
+  模块实现在 `module.modules.<分类小写>` 下分包，注册顺序按分类连续。GUI 只为非空分类建立 Tab。
 - **事件总线**：`EventBus`，同步、按订阅顺序、逐订阅者异常隔离。
   已有 Tick / Packet / Render / Input 四类事件并接生产（Tick 广播 + 直调、Render 每帧广播）。
 - **跨版本适配**：

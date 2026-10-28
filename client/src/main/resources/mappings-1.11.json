@@ -1203,6 +1203,24 @@
                 "forge": "net.minecraft.potion.Potion"
             },
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffectInstance": {
+            "names": {
+                "vanilla": "sg",
+                "fabric": "net.minecraft.class_1293",
+                "forge": "net.minecraft.potion.PotionEffect"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffects": {
+            "names": {
+                "vanilla": "sh",
+                "fabric": "net.minecraft.class_1294",
+                "forge": "net.minecraft.init.MobEffects"
+            },
+            "methods": {},
             "fields": {
                 "NIGHT_VISION": {
                     "names": {
@@ -1216,15 +1234,6 @@
                     }
                 }
             }
-        },
-        "net/minecraft/world/effect/MobEffectInstance": {
-            "names": {
-                "vanilla": "sg",
-                "fabric": "net.minecraft.class_1293",
-                "forge": "net.minecraft.potion.PotionEffect"
-            },
-            "methods": {},
-            "fields": {}
         },
         "net/minecraft/world/entity/Entity": {
             "names": {

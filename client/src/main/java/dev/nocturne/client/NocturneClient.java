@@ -157,22 +157,22 @@ public final class NocturneClient {
 
     /** 客户端开箱即带的模块。 */
     private void registerModules() {
-        modules.register(new dev.nocturne.client.module.modules.WatermarkModule());
-        modules.register(new dev.nocturne.client.module.modules.FullBrightModule());
-        modules.register(new dev.nocturne.client.module.modules.SprintModule());
-        modules.register(new dev.nocturne.client.module.modules.AutoRespawnModule());
-        modules.register(new dev.nocturne.client.module.modules.StorageEspModule());
-        modules.register(new dev.nocturne.client.module.modules.EspModule());
-        modules.register(new dev.nocturne.client.module.modules.TracersModule());
-        modules.register(new dev.nocturne.client.module.modules.NameTagsModule());
-        modules.register(new dev.nocturne.client.module.modules.ItemEspModule());
-        modules.register(new dev.nocturne.client.module.modules.TrajectoriesModule());
-        modules.register(new dev.nocturne.client.module.modules.ChamsModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.SprintModule());
+        modules.register(new dev.nocturne.client.module.modules.render.WatermarkModule());
+        modules.register(new dev.nocturne.client.module.modules.render.FullBrightModule());
+        modules.register(new dev.nocturne.client.module.modules.render.StorageEspModule());
+        modules.register(new dev.nocturne.client.module.modules.render.EspModule());
+        modules.register(new dev.nocturne.client.module.modules.render.TracersModule());
+        modules.register(new dev.nocturne.client.module.modules.render.NameTagsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ItemEspModule());
+        modules.register(new dev.nocturne.client.module.modules.render.TrajectoriesModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ChamsModule());
         // Xray 暂不注册：它尚未接入方块渲染管线（没有区块重绘拦截，Opacity / Cave Mode 两个设置
         // 也没有任何读取点），注册出去只会是个"开了没反应"的开关——比不提供更糟。
         // 接入渲染管线后在这里重新注册（类与门逻辑保留在 XrayModule）。
-        modules.register(new dev.nocturne.client.module.modules.SearchModule());
-        modules.register(new dev.nocturne.client.module.modules.PanicModule());
+        modules.register(new dev.nocturne.client.module.modules.render.SearchModule());
+        modules.register(new dev.nocturne.client.module.modules.player.AutoRespawnModule());
+        modules.register(new dev.nocturne.client.module.modules.misc.PanicModule());
     }
 
     /** 全局事件总线。 */

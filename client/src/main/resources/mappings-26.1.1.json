@@ -66,6 +66,22 @@
                 "neoforge": "com.mojang.blaze3d.platform.Window"
             },
             "methods": {
+                "getGuiScaledHeight": {
+                    "names": {
+                        "vanilla": "getGuiScaledHeight",
+                        "fabric": "getGuiScaledHeight",
+                        "forge": "getGuiScaledHeight",
+                        "neoforge": "getGuiScaledHeight"
+                    }
+                },
+                "getGuiScaledWidth": {
+                    "names": {
+                        "vanilla": "getGuiScaledWidth",
+                        "fabric": "getGuiScaledWidth",
+                        "forge": "getGuiScaledWidth",
+                        "neoforge": "getGuiScaledWidth"
+                    }
+                },
                 "getHeight": {
                     "names": {
                         "vanilla": "getHeight",
@@ -1196,11 +1212,7 @@
                 "neoforge": "net.minecraft.world.effect.MobEffect"
             },
             "methods": {},
-            "fields": {
-                "NIGHT_VISION": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/world/effect/MobEffectInstance": {
             "names": {
@@ -1211,6 +1223,25 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffects": {
+            "names": {
+                "vanilla": "net.minecraft.world.effect.MobEffects",
+                "fabric": "net.minecraft.world.effect.MobEffects",
+                "forge": "net.minecraft.world.effect.MobEffects",
+                "neoforge": "net.minecraft.world.effect.MobEffects"
+            },
+            "methods": {},
+            "fields": {
+                "NIGHT_VISION": {
+                    "names": {
+                        "vanilla": "NIGHT_VISION",
+                        "fabric": "NIGHT_VISION",
+                        "forge": "NIGHT_VISION",
+                        "neoforge": "NIGHT_VISION"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/Entity": {
             "names": {

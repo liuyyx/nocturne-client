@@ -144,12 +144,12 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 
 ### 5.1 新增模块
 
-1. 在 `client/src/main/java/dev/nocturne/client/module/modules/` 建类，继承 `Module`（HUD 行继承 `HudModule`）。
-2. 实现 `name()` + `category()`；分类只有 `MOVEMENT / RENDER / PLAYER / MISC` 四个。
+1. 在 `client/src/main/java/dev/nocturne/client/module/modules/<分类小写>/` 建类，继承 `Module`（HUD 行继承 `HudModule`）。
+2. 实现 `name()` + `category()`；分类为 `COMBAT / MOVEMENT / RENDER / WORLD / INVENTORY / PLAYER / MISC`。
 3. 值用字段初始化器 `private final BooleanValue x = add(new BooleanValue("X", true));`
    （`BooleanValue`/`NumberValue`/`ModeValue`/`ColorValue`）；子类构造器末尾必须 `normaliseDefault()`。
 4. 实现 `onTick()` 与/或 `onEnable()`/`onDisable()`；需要跨模块协作时订阅 `TickEvent`。
-5. 在 `NocturneClient.registerModules()` 里注册。
+5. 在 `NocturneClient.registerModules()` 里按分类连续注册。
 6. GUI 卡片自动生成：`BooleanValue→FaCheckRow`、`NumberValue→FaSliderRow`、`ModeValue→FaComboRow`、
    `ColorValue→FaColorRow`，其它 Value 类型会被跳过。
    空分类的 Tab 会被隐藏；`XrayModule` 目前**故意未注册**（渲染 pass 未接，别顺手打开）。
@@ -164,7 +164,7 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 
 1. 直接把规范名用在调用点（`scan.py` 会扫到），或写进 `tools/mapping/requirements.txt`。
    **`scan.py` 只认得直接传进桥的字符串字面量**（`readField`/`writeField`/`fieldName`/`callMapped` 那类）；
-   一旦成员名经过自己的包装方法（例：`FullBrightModule.readStaticField(bridge, ClassType.MOB_EFFECT, "NIGHT_VISION")`）
+   一旦成员名经过自己的包装方法（例：`FullBrightModule.readStaticField(bridge, ClassType.MOB_EFFECTS, "NIGHT_VISION")`）
    就扫不到，必须手工补 `requirements.txt`——漏了的表现是表里**根本没有那条**（注意不是 `absent`），
    运行期读不到、模块按「缺成员」降级（只打一次日志）。
 2. `python tools/mapping/generate.py --report` 看 absent 清单。
@@ -172,6 +172,8 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
    modern 版本以官方映射为准——真改名就保持 absent，只有**移动了命名空间**才改 `namespaces.py`。
 4. 重跑 `--check` / `--javap`，并确认 `--report` 里你关心的成员干净。
    **`--check` 只保证表的字节稳定，不保证名字真的存在**——改过别名或需求后必须 `--javap` 双绿再提交。
+5. 静态常量必须映射到真实持有类：效果常量使用 `MOB_EFFECTS`，不能挂到 `MOB_EFFECT` 上；
+   旧映射可以把两种规范类映射到同一运行时类，但不能把别的类的字段名写进效果类型。
 
 ### 5.4 新增/修改注入点
 
@@ -213,17 +215,6 @@ SDL 世代**鼠标取游戏自己的事件态**（`MouseHandler.xpos/ypos` + `ac
 
 ## 8. 当前缺口（不要假装已实现）
 
-- **`generate.py --javap` 当前红：21 个版本各 1 个问题**（1.9、1.9.1–1.9.4、1.10–1.10.2、1.11–1.11.2、
-  1.12–1.12.2、1.13–1.13.2、1.14–1.14.3）：
-  `net/minecraft/world/effect/MobEffect.NIGHT_VISION -> <name> not found on <obf class>`。
-  表里给它写的 `vanilla` 名是 `p`，但实测 1.9 的 `rk`（fabric `class_1291` = `MobEffect`）只有 8 个字段、没有 `p`；
-  `git show HEAD:client/src/main/resources/mappings-1.9.json` 里该类的 `fields` 是**空的**——
-  这条是工作区未提交的 `tools/mapping/aliases-1.12.2.toml` 新增 `[fields.NIGHT_VISION]`（scope
-  `net/minecraft/init/MobEffects`，即常量持有类，**不是** `MobEffect`）后重算表时凭空补进来的。
-  根因是需求面缺口：`scan.py` 只看得到 `readField`/`fieldName` 这类直接调用，
-  而 `FullBrightModule.readStaticField(bridge, ClassType.MOB_EFFECT, "NIGHT_VISION")` 包了一层，扫不到，
-  该成员从未进过 `requirements.txt`。修的方向：给 `net/minecraft/world/effect/MobEffects` 建 `ClassType`、
-  改 `FullBrightModule` 去读它，并把需求补进 `requirements.txt`——而不是在 `MobEffect` 上造别名。
 - Linux/macOS 的 attach 通道（`PosixAttachStrategy` + `attach_unix.c`）只做过编译校验与单测，**未实机**。
 - 3D 玩家预览只有占位卡片（映射表缺实体渲染面，26.x 又不能自建离屏 framebuffer）。
 - 1.14–1.14.3 的 StorageEsp、1.9–1.14.3 的 `ClientLevel#getBlockState` 面缺失（对应功能降级）。

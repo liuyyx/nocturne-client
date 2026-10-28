@@ -1,4 +1,4 @@
-package dev.nocturne.client.module.modules;
+package dev.nocturne.client.module.modules.render;
 
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.HudModule;

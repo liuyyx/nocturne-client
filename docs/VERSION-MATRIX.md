@@ -3,9 +3,21 @@
 映射表现已覆盖 **1.8.9 – 26.3 的全部 66 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
 >下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
+## 模块框架扩展验收
+
+- 基线有 14 个模块类、13 个已注册模块；`XrayModule` 仍未注册，没有因分包而启用未接通的渲染功能。
+- `Category` 增至七项，模块按分类分包并连续注册。Java 8 进程实际启动后，
+  `FaClickGui` 分类摘要为 `MOVEMENT, RENDER, PLAYER, MISC (4/7)`，空分类不占 Tab。
+- `gradle build test` 通过；修正效果常量的持有类为 `MobEffects` 并重建映射后，
+  66 张表的 `generate.py --check` 与 `generate.py --javap` 均通过。
+- 1.8.9 / 1.16.5 实机主菜单上确认原有四个 Tab 可见；截图为
+  `tmp/phase0-1.8.9.png`、`tmp/phase0-1.16.5.png`。本轮不据此声明模块游戏行为已验收。
+- 26.3 Fabric 的本轮 `premain` 诊断只确认启动与模块装配；日志出现 Mixin 注册，
+  但未出现绘制回调、GUI 不可见，因此不记为通过。证据：`tmp/phase0-26.3-retry.log`。
+
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
-表的规模固定为 **61 个类**（客户端实际解析的规范面）。每个类/成员带
+表的规模为 **74 个类**（客户端实际解析的规范面）。每个类/成员带
 `vanilla` / `fabric` / `forge` / `neoforge` 四套运行期名 + **配套的 JNI 描述符**；
 运行时按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试，因此
 **同一份表同时服务原版、Fabric、Forge、NeoForge 四种安装**（不做加载器探测）。

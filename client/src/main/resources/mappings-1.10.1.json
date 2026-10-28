@@ -1073,6 +1073,22 @@
                 "fabric": "net.minecraft.class_1291"
             },
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffectInstance": {
+            "names": {
+                "vanilla": "rq",
+                "fabric": "net.minecraft.class_1293"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/effect/MobEffects": {
+            "names": {
+                "vanilla": "rr",
+                "fabric": "net.minecraft.class_1294"
+            },
+            "methods": {},
             "fields": {
                 "NIGHT_VISION": {
                     "names": {
@@ -1085,14 +1101,6 @@
                     }
                 }
             }
-        },
-        "net/minecraft/world/effect/MobEffectInstance": {
-            "names": {
-                "vanilla": "rq",
-                "fabric": "net.minecraft.class_1293"
-            },
-            "methods": {},
-            "fields": {}
         },
         "net/minecraft/world/entity/Entity": {
             "names": {

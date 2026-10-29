@@ -11,7 +11,7 @@ import java.util.function.Consumer;
  * 极简的按类型索引的发布/订阅事件总线。
  *
  * <p>事件就是普通对象；订阅 {@code type} 的订阅者会收到所有运行时类恰好匹配 {@code type} 的事件。
- * 分发是同步的，且严格按订阅顺序执行，从而使游戏 tick 内的处理顺序保持确定。
+ * 分发是同步的，且严格按优先级、同优先级按订阅顺序执行，从而使游戏 tick 内的处理顺序保持确定。
  *
  * <p>线程约束：{@link #post(Object)} 可从任意线程调用，并会在调用线程上同步执行订阅者，
  * 因此订阅者若触碰游戏状态需自行保证时序。
@@ -25,19 +25,79 @@ public final class EventBus {
     private static final long ERROR_LOG_INTERVAL_MS = 5000L;
 
     /** 类型键 → 订阅者列表；列表为写时复制，故分发期间可安全地并发增删订阅。 */
-    private final Map<Class<?>, List<Consumer<?>>> listeners =
-            new ConcurrentHashMap<Class<?>, List<Consumer<?>>>();
+    private final Map<Class<?>, ListenerList> listeners =
+            new ConcurrentHashMap<Class<?>, ListenerList>();
     /** 各订阅者上次打印异常的时间戳；值为单元素数组充当可变槽位，键为订阅者实例（身份语义）。 */
     private final Map<Consumer<?>, long[]> errorLogTimes = new ConcurrentHashMap<Consumer<?>, long[]>();
 
+    /** 分发优先级；按声明顺序执行，同级保持注册顺序。 */
+    public enum Priority {
+        HIGHEST,
+        HIGH,
+        NORMAL,
+        LOW,
+        LOWEST
+    }
+
+    /** 避免每次重建快照都调用会复制数组的 {@code values()}。 */
+    private static final Priority[] PRIORITIES = Priority.values();
+
+    /** 一条不可变订阅记录。 */
+    private static final class Entry {
+        private final Consumer<?> listener;
+        private final int priority;
+        private final boolean skipCancelled;
+
+        private Entry(Consumer<?> listener, int priority, boolean skipCancelled) {
+            this.listener = listener;
+            this.priority = priority;
+            this.skipCancelled = skipCancelled;
+        }
+    }
+
+    /** 同一事件类型的订阅集；增删时同步重建快照，读取与分发无需加锁。 */
+    private static final class ListenerList {
+        private final List<Entry> entries = new CopyOnWriteArrayList<Entry>();
+        private volatile Entry[][] byPriority = new Entry[PRIORITIES.length][0];
+
+        private synchronized void add(Consumer<?> listener, Priority priority, boolean skipCancelled) {
+            entries.add(new Entry(listener, priority.ordinal(), skipCancelled));
+            rebuild();
+        }
+
+        private synchronized void remove(Consumer<?> listener) {
+            if (entries.removeAll(Collections.singleton(listener))) {
+                rebuild();
+            }
+        }
+
+        /** 两次遍历保留同级注册顺序；数组不再暴露给写入方，post 可稳定读取。 */
+        private void rebuild() {
+            int[] counts = new int[PRIORITIES.length];
+            for (Entry entry : entries) {
+                counts[entry.priority]++;
+            }
+            Entry[][] snapshot = new Entry[PRIORITIES.length][];
+            for (int i = 0; i < PRIORITIES.length; i++) {
+                snapshot[i] = new Entry[counts[i]];
+            }
+            int[] offsets = new int[PRIORITIES.length];
+            for (Entry entry : entries) {
+                int priority = entry.priority;
+                snapshot[priority][offsets[priority]++] = entry;
+            }
+            byPriority = snapshot;
+        }
+    }
+
     /**
-     * 可取消事件：{@link #post} 在每个订阅者返回后检查一次，已取消则停止向后续订阅者投递。
+     * 可取消事件：默认订阅者在事件取消后跳过；显式选择接收取消事件的订阅者仍会继续执行。
      *
      * <p>为什么要总线级支持：字段本身只是数据。声明了"取消"却没有任何人检查它，等于给订阅者
      * 一个永远不生效的旋钮——调用方以为改了标志就能拦下这次收发，实际什么都没发生。
      */
     public interface Cancellable {
-        /** @return 为 true 时总线不再把本事件投给后续订阅者 */
+        /** @return 为 true 时默认订阅者不再接收；显式接收取消事件的订阅者除外 */
         boolean isCancelled();
     }
 
@@ -69,19 +129,49 @@ public final class EventBus {
      * <p>并发约束：多个线程订阅同一类型时，仅首个线程创建的列表会被后续线程复用（putIfAbsent）。
      */
     public <T> Subscription subscribe(Class<T> type, Consumer<T> listener) {
+        return subscribe(type, Priority.NORMAL, false, listener);
+    }
+
+    /**
+     * 以指定优先级注册；该订阅者在事件取消后不再接收。
+     *
+     * @param type     订阅的事件类型（按精确运行时类匹配，不含父类匹配），不可为 {@code null}
+     * @param priority 分发优先级，不可为 {@code null}
+     * @param listener 订阅回调，不可为 {@code null}
+     * @return 订阅句柄，供精确退订
+     */
+    public <T> Subscription subscribe(Class<T> type, Priority priority, Consumer<T> listener) {
+        return subscribe(type, priority, false, listener);
+    }
+
+    /**
+     * 注册订阅者，并指定事件取消后是否仍接收。
+     *
+     * @param type          订阅的事件类型，不可为 {@code null}
+     * @param priority      分发优先级，不可为 {@code null}
+     * @param skipCancelled 为 {@code true} 时，即使事件已取消也继续接收；默认订阅为 {@code false}
+     * @param listener      订阅回调，不可为 {@code null}
+     * @return 订阅句柄，供 {@link #unsubscribe(Subscription)} 精确退订
+     * @throws IllegalArgumentException 任一必要参数为 {@code null} 时抛出
+     */
+    public <T> Subscription subscribe(Class<T> type, Priority priority, boolean skipCancelled,
+                                      Consumer<T> listener) {
         if (type == null) {
             throw new IllegalArgumentException("event type must not be null");
+        }
+        if (priority == null) {
+            throw new IllegalArgumentException("priority must not be null");
         }
         if (listener == null) {
             throw new IllegalArgumentException("listener must not be null");
         }
-        List<Consumer<?>> list = listeners.get(type);
+        ListenerList list = listeners.get(type);
         if (list == null) {
-            List<Consumer<?>> created = new CopyOnWriteArrayList<Consumer<?>>();
-            List<Consumer<?>> existing = listeners.putIfAbsent(type, created);
+            ListenerList created = new ListenerList();
+            ListenerList existing = listeners.putIfAbsent(type, created);
             list = existing != null ? existing : created;
         }
-        list.add(listener);
+        list.add(listener, priority, skipCancelled);
         return new Subscription(type, listener);
     }
 
@@ -116,7 +206,7 @@ public final class EventBus {
      * @param event 要分发的事件，不可为 {@code null}（会取其运行时类）
      * @return 传入的 {@code event} 本身
      * @throws IllegalArgumentException {@code event} 为 {@code null} 时抛出
-     * <p>同步执行：返回时所有订阅者已跑完。订阅顺序即注册顺序；遍历使用快照，
+     * <p>同步执行：返回时所有订阅者已跑完。先按优先级、同级按注册顺序；遍历使用不可变快照，
      * 订阅者在回调中取消自身不会影响本次分发。订阅者抛出的异常被隔离并记入限流日志。
      */
     @SuppressWarnings("unchecked")
@@ -124,20 +214,27 @@ public final class EventBus {
         if (event == null) {
             throw new IllegalArgumentException("event must not be null");
         }
-        List<Consumer<?>> list = listeners.get(event.getClass());
+        ListenerList list = listeners.get(event.getClass());
         if (list == null) {
             return event;
         }
-        for (Consumer<?> listener : list) {
-            try {
-                ((Consumer<T>) listener).accept(event);
-            } catch (Throwable error) {
-                // 逐订阅者隔离：一个订阅者出错不得中止其余订阅者，也不得把异常抛回游戏帧循环
-                logListenerFailure(event.getClass(), listener, error);
-            }
-            if (event instanceof Cancellable && ((Cancellable) event).isCancelled()) {
-                // 被取消：不再投给后续订阅者（见 Cancellable 的说明）
-                break;
+        Cancellable cancellable = event instanceof Cancellable ? (Cancellable) event : null;
+        boolean cancelled = cancellable != null && cancellable.isCancelled();
+        Entry[][] snapshot = list.byPriority;
+        for (Entry[] priority : snapshot) {
+            for (Entry entry : priority) {
+                if (cancelled && !entry.skipCancelled) {
+                    continue;
+                }
+                try {
+                    ((Consumer<T>) entry.listener).accept(event);
+                } catch (Throwable error) {
+                    // 逐订阅者隔离：一个订阅者出错不得中止其余订阅者，也不得把异常抛回游戏帧循环
+                    logListenerFailure(event.getClass(), entry.listener, error);
+                }
+                if (cancellable != null) {
+                    cancelled = cancellable.isCancelled();
+                }
             }
         }
         return event;
@@ -148,9 +245,9 @@ public final class EventBus {
         if (type == null || listener == null) {
             return;
         }
-        List<Consumer<?>> list = listeners.get(type);
+        ListenerList list = listeners.get(type);
         if (list != null) {
-            list.removeAll(Collections.singleton(listener));
+            list.remove(listener);
             // 限流表按订阅者身份键控，退订时必须一并清掉：否则每个用过的订阅者实例都被它永久
             // 强引用（模块每次启停都会新建 lambda），长时间运行就是一条稳定增长的泄漏。
             errorLogTimes.remove(listener);

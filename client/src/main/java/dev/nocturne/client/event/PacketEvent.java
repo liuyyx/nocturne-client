@@ -7,8 +7,8 @@ package dev.nocturne.client.event;
  * Velocity 的包修改都挂在这里）。投递点接入前，订阅者收不到任何事件——这是预期的，
  * 不是静默失败。
  *
- * <p>{@link #cancelled} 由总线执行（实现 {@link EventBus.Cancellable}）：置位后总线不再把本事件
- * 投给后续订阅者。接入真正的包钩子之后，投递方据此决定是否放行这次收发。
+ * <p>{@link #cancelled} 由总线执行（实现 {@link EventBus.Cancellable}）：置位后默认订阅者不再接收，
+ * 显式选择接收取消事件的订阅者除外。接入真正的包钩子之后，投递方据此决定是否放行这次收发。
  */
 public final class PacketEvent implements EventBus.Cancellable {
 

@@ -128,8 +128,8 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 ### 4.5 每帧执行的东西
 
 - 零分配是硬要求：投影用 `project(..., out)` 重载，`ScreenPoint` 实例复用，别在 `onTick`/`onFrame` 里 new。
-- `EventBus.post` 同步、按注册顺序、逐订阅者 `catch(Throwable)`（5s 节流日志）；
-  `Cancellable` 会中止后续投递。`FrameListener` 不得阻塞。
+- `EventBus.post` 同步、先按优先级再按注册顺序、逐订阅者 `catch(Throwable)`（5s 节流日志）；
+  `Cancellable` 默认跳过后续投递，`skipCancelled=true` 的订阅者仍接收。`FrameListener` 不得阻塞。
 - 订阅必须留 handle：`Subscription s = eventBus.subscribe(RenderEvent.class, this::onRender);`——
   lambda 是不同对象，只能靠这个 handle `unsubscribe`。
 - 渲染模块**不走 EventBus 画图**：在 `GuiOverlay.drawFrame` 的 `beginFrame()`/`endFrame()` 之间调用

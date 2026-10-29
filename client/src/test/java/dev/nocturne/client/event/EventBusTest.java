@@ -114,6 +114,67 @@ class EventBusTest {
                 "unsubscribed listeners must not stay referenced by the throttle map");
     }
 
+    /** 高优先级先执行，与注册先后无关。 */
+    @Test
+    void dispatchesHigherPriorityBeforeNormal() {
+        EventBus bus = new EventBus();
+        List<String> order = new ArrayList<String>();
+        bus.subscribe(PlainEvent.class, EventBus.Priority.NORMAL, e -> order.add("normal"));
+        bus.subscribe(PlainEvent.class, EventBus.Priority.HIGHEST, e -> order.add("highest"));
+
+        bus.post(new PlainEvent());
+
+        assertEquals(java.util.Arrays.asList("highest", "normal"), order);
+    }
+
+    /** 同优先级不能因快照重排而颠倒注册顺序。 */
+    @Test
+    void keepsRegistrationOrderWithinSamePriority() {
+        EventBus bus = new EventBus();
+        List<String> order = new ArrayList<String>();
+        bus.subscribe(PlainEvent.class, EventBus.Priority.NORMAL, e -> order.add("first"));
+        bus.subscribe(PlainEvent.class, EventBus.Priority.NORMAL, e -> order.add("second"));
+
+        bus.post(new PlainEvent());
+
+        assertEquals(java.util.Arrays.asList("first", "second"), order);
+    }
+
+    /** 中途取消只跳过默认订阅者；显式接收取消事件的低优先级订阅者仍执行。 */
+    @Test
+    void cancelledEventStillReachesOptInListeners() {
+        EventBus bus = new EventBus();
+        CancellableEvent event = new CancellableEvent();
+        List<String> order = new ArrayList<String>();
+        bus.subscribe(CancellableEvent.class, e -> {
+            order.add("cancel");
+            e.cancelled = true;
+        });
+        bus.subscribe(CancellableEvent.class, e -> order.add("skipped"));
+        bus.subscribe(CancellableEvent.class, EventBus.Priority.LOWEST, true,
+                e -> order.add("observer"));
+
+        bus.post(event);
+
+        assertEquals(java.util.Arrays.asList("cancel", "observer"), order);
+    }
+
+    /** 发布前已经取消的事件同样遵守订阅者的取消接收选择。 */
+    @Test
+    void preCancelledEventSkipsDefaultListeners() {
+        EventBus bus = new EventBus();
+        CancellableEvent event = new CancellableEvent();
+        event.cancelled = true;
+        List<String> order = new ArrayList<String>();
+        bus.subscribe(CancellableEvent.class, e -> order.add("skipped"));
+        bus.subscribe(CancellableEvent.class, EventBus.Priority.HIGHEST, true,
+                e -> order.add("observer"));
+
+        bus.post(event);
+
+        assertEquals(java.util.Collections.singletonList("observer"), order);
+    }
+
     /** 读私有的限流表；测试用它钉住"退订即释放"。 */
     private static Map<?, ?> throttleEntries(EventBus bus) throws Exception {
         Field field = EventBus.class.getDeclaredField("errorLogTimes");

@@ -93,7 +93,8 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   + 值体系（`BooleanValue` / `NumberValue` / `ColorValue` / `ModeValue`）。
   分类为 `COMBAT` / `MOVEMENT` / `RENDER` / `WORLD` / `INVENTORY` / `PLAYER` / `MISC`；
   模块实现在 `module.modules.<分类小写>` 下分包，注册顺序按分类连续。GUI 只为非空分类建立 Tab。
-- **事件总线**：`EventBus`，同步、按订阅顺序、逐订阅者异常隔离。
+- **事件总线**：`EventBus`，同步、先按优先级再按同级注册顺序、逐订阅者异常隔离。
+  可取消事件默认跳过后续订阅者，`skipCancelled=true` 的订阅者仍接收；分发使用增删时重建的不可变快照。
   已有 Tick / Packet / Render / Input 四类事件并接生产（Tick 广播 + 直调、Render 每帧广播）。
 - **跨版本适配**：
   - `Mapping` 抽象：把"规范名"翻译成运行时真实名。

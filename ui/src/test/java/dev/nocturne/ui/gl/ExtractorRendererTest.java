@@ -306,4 +306,110 @@ class ExtractorRendererTest {
         assertNull(ExtractorRenderer.bind(IncompleteExtractor.class, () -> new FakeMinecraft()));
         assertNull(ExtractorRenderer.bind(null, () -> new FakeMinecraft()));
     }
+
+    /** 26.x 的矩阵栈替身；记录纹理四边形应使用的浮点变换。 */
+    public static final class FakePose {
+        private final List<String> calls;
+
+        FakePose(List<String> calls) {
+            this.calls = calls;
+        }
+
+        public FakePose pushMatrix() {
+            calls.add("push");
+            return this;
+        }
+
+        public FakePose popMatrix() {
+            calls.add("pop");
+            return this;
+        }
+
+        public FakePose translate(float x, float y) {
+            calls.add("translate " + x + "," + y);
+            return this;
+        }
+
+        public FakePose scale(float x, float y) {
+            calls.add("scale " + x + "," + y);
+            return this;
+        }
+    }
+
+    /** blit 签名匹配使用的前两个参数类型。 */
+    public static final class RenderPipeline {
+    }
+
+    public static final class Identifier {
+    }
+
+    /** 带 26.x pose/blit 的绘制上下文。 */
+    public static final class MatrixExtractor {
+        final List<String> calls = new ArrayList<>();
+        private final FakePose pose = new FakePose(calls);
+
+        public int guiWidth() {
+            return 320;
+        }
+
+        public int guiHeight() {
+            return 240;
+        }
+
+        public void fill(int x1, int y1, int x2, int y2, int argb) {
+        }
+
+        public void text(Object font, String value, int x, int y, int argb) {
+        }
+
+        public FakePose pose() {
+            return pose;
+        }
+
+        public void blit(RenderPipeline pipeline, Identifier identifier, int x, int y, float u, float v,
+                         int width, int height, int regionWidth, int regionHeight,
+                         int textureWidth, int textureHeight, int color) {
+            calls.add("blit " + x + "," + y + " " + width + "x" + height
+                    + " uv=" + u + "," + v + " region=" + regionWidth + "x" + regionHeight);
+        }
+    }
+
+    /** 高 GUI 倍率会放大逐字形取整误差；26.x 必须用 pose 保留浮点几何。 */
+    @Test
+    void texturedQuadPreservesFractionalGeometryWithPose() throws Exception {
+        ExtractorRenderer renderer = ExtractorRenderer.bind(MatrixExtractor.class,
+                () -> new FakeMinecraft());
+        assertNotNull(renderer);
+        MatrixExtractor extractor = new MatrixExtractor();
+        renderer.setFrame(extractor);
+
+        setField(renderer, "textureSupport", true);
+        setField(renderer, "guiTexturedPipeline", new RenderPipeline());
+        Class<?> registeredClass = Class.forName(
+                "dev.nocturne.ui.gl.ExtractorRenderer$RegisteredTexture");
+        java.lang.reflect.Constructor<?> constructor = registeredClass.getDeclaredConstructor(
+                Object.class, Object.class, int.class, int.class);
+        constructor.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<Object> textures = (List<Object>) getField(renderer, "textures");
+        textures.add(constructor.newInstance(new Identifier(), new Object(), 1024, 1024));
+
+        renderer.texturedQuad(1, 10.25f, 20.5f, 6.75f, 8.25f,
+                0.125f, 0.25f, 0.5f, 0.75f, 0xFFFFFFFF);
+
+        assertEquals(Arrays.asList("push", "translate 10.25,20.5", "scale 6.75,8.25",
+                "blit 0,0 1x1 uv=128.0,256.0 region=384x512", "pop"), extractor.calls);
+    }
+
+    private static void setField(Object target, String name, Object value) throws Exception {
+        java.lang.reflect.Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private static Object getField(Object target, String name) throws Exception {
+        java.lang.reflect.Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(target);
+    }
 }

@@ -95,7 +95,7 @@
 | 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3，`backend=gl-core`、`FaClickGui` 三列 + 中文标签完整，无截断/重叠；`Screen.render(PoseStack,…)` 不会被误判成 GuiGraphics） | ✅ | ✅ 已产出 | ✅ 可见（`tmp/mc1165-final.png`） |
 | 26.2 | ✅ **真机已实测**（修复后） | ✅ 帧钩子按设计不注册（GLFW 交换点只驱动输入轮询） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor; input=glfw`；`GuiDrawHook` 织入成功；截图 `docs/research/fatality-26.2-fixed.png`） |
 | 26.2（Vulkan） | ⏳ | 未验 | ✅ 已产出 | ⏳ 待真机（26.2 的图形 API 需在游戏设置里手动切换，本次实测的是 OpenGL 路径） |
-| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转） |
+| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转；2026-10-29 原版 26.3 复验浮点字形矩阵与线性采样生效） |
 
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
 

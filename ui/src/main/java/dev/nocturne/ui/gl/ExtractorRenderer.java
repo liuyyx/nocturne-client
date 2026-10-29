@@ -125,6 +125,12 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     private java.lang.reflect.Constructor<?> identifierCtor;
     /** 纹理支路首次失败的诊断是否已打印（只报一次）。 */
     private boolean textureFailureLogged;
+    /** 26.x 的线性采样器；同一后端创建的图集共用。 */
+    private Object linearSampler;
+    /** {@code AbstractTexture.sampler}；游戏未暴露该能力时为 {@code null}。 */
+    private Field samplerField;
+    /** 是否已解析过线性采样能力，避免每张图集重复扫描。 */
+    private boolean samplerResolved;
     /** 上传诊断计数。 */
     private int uploadDiag;
     /** 绘制诊断计数。 */
@@ -184,6 +190,8 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     private final Method popMatrix;
     /** {@code Matrix3x2fStack.scale(float, float)}。 */
     private final Method scaleMatrix;
+    /** {@code Matrix3x2fStack.translate(float, float)}；26.x 纹理几何保留小数时使用。 */
+    private final Method translateMatrix;
     /** 字体的原生像素高度（MC 字体 9px）；缩放基准。 */
     private static final float NATIVE_FONT_PX = 9f;
 
@@ -236,20 +244,13 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
 
     private ExtractorRenderer(Class<?> extractorType, Method fill, Method outline, Method enableScissor,
                               Method disableScissor, Method text, Method guiWidth, Method guiHeight,
-                              Supplier<Object> minecraft) {
-        this(extractorType, fill, outline, enableScissor, disableScissor, text, guiWidth, guiHeight,
-                minecraft, null, null, null, null, null, null, null, null, null, null, null);
-    }
-
-    private ExtractorRenderer(Class<?> extractorType, Method fill, Method outline, Method enableScissor,
-                              Method disableScissor, Method text, Method guiWidth, Method guiHeight,
                               Supplier<Object> minecraft, Method windowGetter,
                               Method guiScaledWidth, Method guiScaledHeight,
                               Method physicalWidth, Method physicalHeight,
                               Supplier<Object> fontSource,
                               dev.nocturne.client.mapping.Mapping mapping,
                               Method poseMethod, Method pushMatrix, Method popMatrix,
-                              Method scaleMatrix) {
+                              Method scaleMatrix, Method translateMatrix) {
         this.fill = fill;
         this.outline = outline;
         this.enableScissor = enableScissor;
@@ -272,6 +273,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         this.pushMatrix = pushMatrix;
         this.popMatrix = popMatrix;
         this.scaleMatrix = scaleMatrix;
+        this.translateMatrix = translateMatrix;
         // 句柄 0 保留为"无效"（Renderer 契约：id<=0 表示新建），因此先占一个空槽。
         textures.add(null);
         // 纹理支路：一次把 26.1–26.3 上签名一致的入口全部绑定；缺任何一项就整条支路关掉，
@@ -499,7 +501,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         ExtractorRenderer renderer = new ExtractorRenderer(type, fill, null, enableScissor, disableScissor,
                 text, null, null, minecraft, windowGetter, scaledWidth, scaledHeight,
                 physicalWidth, physicalHeight, fontSource, mapping, pose, pushMatrix, popMatrix,
-                scaleMatrix);
+                scaleMatrix, null);
         // 1.20–1.21 的自定义纹理：类名在 Fabric 运行期是 intermediary（class_XXXX），
         // 方法名也是 method_XXXXX，因此按候选名解析，而不是沿用 26.x 的 Mojang 名。
         renderer.bindTextures(type.getClassLoader(), type);
@@ -860,8 +862,21 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             enableScissor = methodByTypes(extractorType, int.class, int.class, int.class, int.class);
         }
         Method disableScissor = method(extractorType, "disableScissor");
+        Method pose = method(extractorType, "pose");
+        Method pushMatrix = null;
+        Method popMatrix = null;
+        Method scaleMatrix = null;
+        Method translateMatrix = null;
+        if (pose != null) {
+            Class<?> matrix = pose.getReturnType();
+            pushMatrix = methodInHierarchy(matrix, "pushMatrix");
+            popMatrix = methodInHierarchy(matrix, "popMatrix");
+            scaleMatrix = methodInHierarchy(matrix, "scale", float.class, float.class);
+            translateMatrix = methodInHierarchy(matrix, "translate", float.class, float.class);
+        }
         return new ExtractorRenderer(extractorType, fill, outline, enableScissor, disableScissor, text,
-                guiWidth, guiHeight, minecraft);
+                guiWidth, guiHeight, minecraft, null, null, null, null, null,
+                null, null, pose, pushMatrix, popMatrix, scaleMatrix, translateMatrix);
     }
 
     /**
@@ -1384,7 +1399,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         quadDiag("tex=" + texture + " " + bx0(x) + "," + by0(y) + " " + width + "x" + height
                 + " uv=" + u0 + "," + v0 + ".." + u1 + "," + v1
                 + " color=" + Integer.toHexString(argb));
-        // blit 的位置与 UV 都是整数：位置取整（26.x 没有浮点变体），UV 由归一化坐标换算回纹素。
+        // UV 由归一化坐标换算回纹素；整数位置与尺寸仅供没有矩阵能力的后端回退使用。
         int bx = Math.round(x);
         int by = Math.round(y);
         int bw = Math.max(1, Math.round(width));
@@ -1394,6 +1409,25 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         int uSpan = Math.round((u1 - u0) * target.width);
         int vSpan = Math.round((v1 - v0) * target.height);
         if (blit != null && guiTexturedPipeline != null) {
+            // 26.x 的 blit 只收整数坐标；逐字形取整在高 GUI 倍率下会放大成不均匀字距。
+            // 用单位四边形 + 2D 矩阵保留原始浮点几何；innerBlit 会复制当前矩阵，因此随后弹栈安全。
+            if (poseMethod != null && pushMatrix != null && popMatrix != null
+                    && translateMatrix != null && scaleMatrix != null) {
+                Object pose = Reflect.call(poseMethod, graphics);
+                if (pose != null) {
+                    Reflect.call(pushMatrix, pose);
+                    try {
+                        Reflect.call(translateMatrix, pose, x, y);
+                        Reflect.call(scaleMatrix, pose, width, height);
+                        call(blit, graphics, guiTexturedPipeline, target.identifier,
+                                0, 0, uStart, vStart, 1, 1, uSpan, vSpan,
+                                target.width, target.height, argb);
+                    } finally {
+                        Reflect.call(popMatrix, pose);
+                    }
+                    return;
+                }
+            }
             call(blit, graphics, guiTexturedPipeline, target.identifier,
                     bx, by, uStart, vStart, bw, bh, uSpan, vSpan, target.width, target.height, argb);
             return;
@@ -1488,15 +1522,70 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         try {
             // useCalloc=true：像素从零开始，没被写到的格子是透明而不是垃圾值。
             // 26.x 构造带名字；1.20–1.21 只有 (int,int,boolean)。
-            return newDynamicTexture.getParameterCount() == 4
+            Object texture = newDynamicTexture.getParameterCount() == 4
                     ? newDynamicTexture.newInstance(name, width, height, Boolean.TRUE)
                     : newDynamicTexture.newInstance(width, height, Boolean.TRUE);
+            installLinearSampler(texture);
+            return texture;
         } catch (Throwable t) {
             if (!textureFailureLogged) {
                 textureFailureLogged = true;
                 System.out.println("[nocturne] extractor backend: DynamicTexture creation failed: " + t);
             }
             return null;
+        }
+    }
+
+    /**
+     * 26.x 的 {@code DynamicTexture} 默认使用最近邻采样；高密度字形经过 GUI 矩阵绘制时会产生锯齿。
+     * 游戏没有公开的滤波 setter，但纹理的采样器字段可替换为同一个缓存里的线性实例。
+     * 旧版本缺少这些类时保持原有 {@code NativeImage#setFilter} 路径，不影响其既有行为。
+     */
+    private void installLinearSampler(Object texture) {
+        if (texture == null) {
+            return;
+        }
+        if (!samplerResolved) {
+            samplerResolved = true;
+            ClassLoader loader = texture.getClass().getClassLoader();
+            Class<?> filterMode = Reflect.loadWithoutInit(
+                    "com.mojang.renderpearl.api.textures.FilterMode", loader);
+            if (filterMode == null) {
+                filterMode = Reflect.loadWithoutInit("com.mojang.blaze3d.textures.FilterMode", loader);
+            }
+            Class<?> renderSystem = Reflect.loadWithoutInit("com.mojang.blaze3d.systems.RenderSystem", loader);
+            Class<?> samplerCache = Reflect.loadWithoutInit("com.mojang.blaze3d.systems.SamplerCache", loader);
+            Method cacheMethod = Reflect.method(renderSystem, "getSamplerCache");
+            Method clampMethod = Reflect.method(samplerCache, "getClampToEdge", filterMode);
+            Object linear = Reflect.staticField(filterMode, "LINEAR");
+            Object cache = Reflect.call(cacheMethod, null);
+            linearSampler = Reflect.call(clampMethod, cache, linear);
+            try {
+                Class<?> abstractTexture = Reflect.loadWithoutInit(
+                        "net.minecraft.client.renderer.texture.AbstractTexture", loader);
+                samplerField = abstractTexture == null ? null : abstractTexture.getDeclaredField("sampler");
+                if (samplerField != null) {
+                    samplerField.setAccessible(true);
+                }
+            } catch (Throwable ignored) {
+                samplerField = null;
+            }
+            if (linearSampler == null) {
+                samplerField = null;
+            }
+            if (System.getProperty("nocturne.ui.debug") != null) {
+                System.out.println("[nocturne] extractor sampler: linear=" + (linearSampler != null)
+                        + " writable=" + (samplerField != null));
+            }
+        }
+        if (linearSampler == null || samplerField == null) {
+            return;
+        }
+        try {
+            // ClampToEdge：图集边缘不能按默认 REPEAT 绕到另一端，否则线性采样会串色。
+            samplerField.set(texture, linearSampler);
+        } catch (Throwable ignored) {
+            // 能力不可写时保留游戏默认采样器，不影响纹理上传和绘制。
         }
     }
 

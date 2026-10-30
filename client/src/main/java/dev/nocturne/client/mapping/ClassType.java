@@ -35,6 +35,14 @@ public enum ClassType {
     ITEM_ENTITY("net.minecraft.world.entity.item.ItemEntity"),
     /** 多人游戏模式。 */
     MULTI_PLAYER_GAME_MODE("net.minecraft.client.multiplayer.MultiPlayerGameMode"),
+    /** 交互手；动作层固定使用 MAIN_HAND。 */
+    INTERACTION_HAND("net.minecraft.world.InteractionHand"),
+    /** 方块命中结果；place 动作在语义层组装。 */
+    BLOCK_HIT_RESULT("net.minecraft.world.phys.BlockHitResult"),
+    /** 方块朝向；place 动作的实参类型。 */
+    DIRECTION("net.minecraft.core.Direction"),
+    /** 客户端逻辑包监听器；ActionApi 的高级发包入口。 */
+    CLIENT_PACKET_LISTENER("net.minecraft.client.multiplayer.ClientPacketListener"),
     /** 客户端网络连接；发包与收包入口。 */
     CONNECTION("net.minecraft.network.Connection"),
     /** 键盘输入入口（{@code KeyboardHandler.keyPress}）。 */

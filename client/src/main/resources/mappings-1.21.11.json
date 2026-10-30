@@ -1054,6 +1054,16 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/multiplayer/ClientPacketListener": {
+            "names": {
+                "vanilla": "hig",
+                "fabric": "net.minecraft.class_634",
+                "forge": "net.minecraft.client.multiplayer.ClientPacketListener",
+                "neoforge": "net.minecraft.client.multiplayer.ClientPacketListener"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
             "names": {
                 "vanilla": "hio",
@@ -1383,6 +1393,20 @@
                 }
             },
             "fields": {
+                "connection": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_3944",
+                        "forge": "f_108617_",
+                        "neoforge": "connection"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lhig;",
+                        "fabric": "Lnet/minecraft/class_634;",
+                        "forge": "Lnet/minecraft/client/multiplayer/ClientPacketListener;",
+                        "neoforge": "Lnet/minecraft/client/multiplayer/ClientPacketListener;"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "an",
@@ -1889,6 +1913,16 @@
                 "fabric": "net.minecraft.class_2828$class_5911",
                 "forge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly",
                 "neoforge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/InteractionHand": {
+            "names": {
+                "vanilla": "cdb",
+                "fabric": "net.minecraft.class_1268",
+                "forge": "net.minecraft.world.InteractionHand",
+                "neoforge": "net.minecraft.world.InteractionHand"
             },
             "methods": {},
             "fields": {}

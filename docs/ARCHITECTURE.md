@@ -97,6 +97,11 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   可取消事件默认跳过后续订阅者，`skipCancelled=true` 的订阅者仍接收；分发使用增删时重建的不可变快照。
   已有 PlayerTick / Motion / Packet / Render / Key / MouseButton / Attack / UseItem / WorldChange
   九类事件并接生产；`GameplayEvents` 把 bootstrap 钩子装配成事件，WorldChange 由运行时跨世界检测投递。
+- **动作层**：`ActionApi` 提供 `attack / place / useItem / setRotation / sendPacket / readState`
+  六个语义动作，`PlayerState` 是不可变玩家快照。`ActionBinder` 启动时读取打进 jar 的
+  `contract/actions.yaml`，按 `Mapping` 候选绑定真实 `Method`；全部未命中或调用失败时禁用该动作并只报一次。
+  契约采用 YAML 1.2 的 JSON flow 语法，直接复用 Gson，不向游戏进程引入第二套 YAML 解析器。
+  `place` 的 `BlockHitResult` 组装与 `InteractionHand.MAIN_HAND` 解析都在动作层，模块不直接反射游戏类。
 - **跨版本适配**：
   - `Mapping` 抽象：把"规范名"翻译成运行时真实名。
   - `IdentityMapping`（26.1+，无混淆，原样返回）。

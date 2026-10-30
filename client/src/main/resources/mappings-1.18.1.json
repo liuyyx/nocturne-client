@@ -827,6 +827,15 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/multiplayer/ClientPacketListener": {
+            "names": {
+                "vanilla": "elm",
+                "fabric": "net.minecraft.class_634",
+                "forge": "net.minecraft.client.multiplayer.ClientPacketListener"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
             "names": {
                 "vanilla": "elo",
@@ -1111,6 +1120,18 @@
                 }
             },
             "fields": {
+                "connection": {
+                    "names": {
+                        "vanilla": "cy",
+                        "fabric": "field_3944",
+                        "forge": "f_108617_"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lelm;",
+                        "fabric": "Lnet/minecraft/class_634;",
+                        "forge": "Lnet/minecraft/client/multiplayer/ClientPacketListener;"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "L",
@@ -1552,6 +1573,15 @@
                 "vanilla": "vp$d",
                 "fabric": "net.minecraft.class_2828$class_5911",
                 "forge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/InteractionHand": {
+            "names": {
+                "vanilla": "avp",
+                "fabric": "net.minecraft.class_1268",
+                "forge": "net.minecraft.world.InteractionHand"
             },
             "methods": {},
             "fields": {}

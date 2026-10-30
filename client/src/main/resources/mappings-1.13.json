@@ -519,6 +519,12 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/multiplayer/ClientPacketListener": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
             "names": {
                 "vanilla": "cqu",
@@ -784,6 +790,9 @@
                 }
             },
             "fields": {
+                "connection": {
+                    "absent": true
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "M",
@@ -1214,6 +1223,12 @@
                 "fabric": "net.minecraft.class_2828",
                 "forge": "net.minecraft.network.play.client.CPacketPlayer"
             },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/InteractionHand": {
+            "absent": true,
+            "names": {},
             "methods": {},
             "fields": {}
         },

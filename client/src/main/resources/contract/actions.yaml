@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "syntax": "YAML 1.2 JSON flow; parsed with Gson to avoid a second runtime parser",
+  "actions": [
+    {
+      "id": "attack",
+      "signature": "boolean attack(Object target)",
+      "receiver": "gameMode",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "attack",
+          "parameters": [
+            "net.minecraft.world.entity.player.Player",
+            "net.minecraft.world.entity.Entity"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "place",
+      "signature": "boolean place(Object blockPos, Object direction)",
+      "receiver": "gameMode",
+      "operation": "place",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "useItemOn",
+          "parameters": [
+            "net.minecraft.client.player.LocalPlayer",
+            "net.minecraft.world.InteractionHand",
+            "net.minecraft.world.phys.BlockHitResult"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "useItem",
+      "signature": "boolean useItem()",
+      "receiver": "gameMode",
+      "operation": "useItem",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "useItem",
+          "parameters": [
+            "net.minecraft.world.entity.player.Player",
+            "net.minecraft.world.InteractionHand"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "setRotation",
+      "signature": "boolean setRotation(float yaw, float pitch)",
+      "receiver": "player",
+      "operation": "rotation",
+      "degrade": "disable",
+      "candidates": []
+    },
+    {
+      "id": "sendPacket",
+      "signature": "boolean sendPacket(Object packet)",
+      "receiver": "connection",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "CLIENT_PACKET_LISTENER",
+          "method": "send",
+          "parameters": [
+            "net.minecraft.network.protocol.Packet"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "readState",
+      "signature": "PlayerState readState()",
+      "receiver": "player",
+      "operation": "snapshot",
+      "degrade": "empty",
+      "candidates": []
+    }
+  ]
+}

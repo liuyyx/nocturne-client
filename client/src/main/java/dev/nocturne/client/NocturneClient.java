@@ -29,6 +29,8 @@ public final class NocturneClient {
     private volatile HudSink hudSink;
     /** 指向运行中游戏的反射桥；非游戏 JVM 中为 {@code null}。 */
     private volatile dev.nocturne.client.game.GameBridge gameBridge;
+    /** 模块共享的语义动作面；游戏桥安装后绑定。 */
+    private volatile dev.nocturne.client.action.ActionApi actions;
     /** 是否已自销毁（panic）：置位后不再接受任何驱动，见 {@link #panic()}。 */
     private volatile boolean panicked;
 
@@ -77,6 +79,11 @@ public final class NocturneClient {
         return gameBridge;
     }
 
+    /** 模块共享的语义动作面；游戏桥安装前为 {@code null}。 */
+    public dev.nocturne.client.action.ActionApi actions() {
+        return actions;
+    }
+
     /**
      * 安装指向运行中游戏的反射桥。
      *
@@ -84,6 +91,16 @@ public final class NocturneClient {
      */
     public void setGameBridge(dev.nocturne.client.game.GameBridge bridge) {
         this.gameBridge = bridge;
+        if (bridge == null) {
+            actions = null;
+            return;
+        }
+        try {
+            actions = dev.nocturne.client.action.ActionBinder.create(bridge).api(bridge);
+        } catch (Throwable t) {
+            actions = null;
+            log("action contract binding failed: " + t);
+        }
     }
 
     /**

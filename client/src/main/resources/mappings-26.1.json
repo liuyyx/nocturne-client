@@ -748,6 +748,16 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/multiplayer/ClientPacketListener": {
+            "names": {
+                "vanilla": "net.minecraft.client.multiplayer.ClientPacketListener",
+                "fabric": "net.minecraft.client.multiplayer.ClientPacketListener",
+                "forge": "net.minecraft.client.multiplayer.ClientPacketListener",
+                "neoforge": "net.minecraft.client.multiplayer.ClientPacketListener"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
             "names": {
                 "vanilla": "net.minecraft.client.multiplayer.MultiPlayerGameMode",
@@ -951,6 +961,14 @@
                 }
             },
             "fields": {
+                "connection": {
+                    "names": {
+                        "vanilla": "connection",
+                        "fabric": "connection",
+                        "forge": "connection",
+                        "neoforge": "connection"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "fallDistance",
@@ -1317,6 +1335,16 @@
                 "fabric": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly",
                 "forge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly",
                 "neoforge": "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/InteractionHand": {
+            "names": {
+                "vanilla": "net.minecraft.world.InteractionHand",
+                "fabric": "net.minecraft.world.InteractionHand",
+                "forge": "net.minecraft.world.InteractionHand",
+                "neoforge": "net.minecraft.world.InteractionHand"
             },
             "methods": {},
             "fields": {}

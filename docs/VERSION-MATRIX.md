@@ -25,6 +25,18 @@
 - `sh C:/Users/liuyyx/Desktop/nocturne-client/tmp/gw.sh test dist` 全绿；
   本轮只验收 26.3，不把该结论外推到其余 65 个映射版本。
 
+## 动作翻译层验收
+
+- `contract/actions.yaml` 已打入交付 jar，声明 `attack / place / useItem / setRotation / sendPacket /
+  readState` 六个动作。契约测试覆盖内容与重复 id 拒绝；绑定测试覆盖候选回退、真实 `Method`
+  调用、全部未命中和调用失败后的一次性禁用。
+- 2026-10-30 在 26.3 真机上六个动作均 `available=true`；`readState` 返回真实坐标、朝向与地面状态，
+  `setRotation`、`place`、`useItem`、`sendPacket` 均实际调用返回 `true`。`attack` 的候选绑定与真实
+  方法调用由单元测试覆盖，26.3 上绑定成功。
+- 真机曾发现 `sendPacket` 错绑 Netty `Connection`：`LocalPlayer.connection` 的实际类型是
+  `ClientPacketListener`，调用因此被 `IllegalArgumentException` 拒绝。契约已改为
+  `ClientPacketListener.send(Packet)`，并在新实例复测 `sendPacket=true`；契约测试固定该宿主。
+
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
 表的规模为 **74 个类**（客户端实际解析的规范面）。每个类/成员带

@@ -88,6 +88,26 @@
                         "vanilla": "()V",
                         "fabric": "()V"
                     }
+                },
+                "startAttack": {
+                    "names": {
+                        "vanilla": "aw",
+                        "fabric": "method_1536"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V"
+                    }
+                },
+                "startUseItem": {
+                    "names": {
+                        "vanilla": "ax",
+                        "fabric": "method_1583"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V"
+                    }
                 }
             },
             "fields": {
@@ -438,6 +458,18 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/input/KeyEvent": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/input/MouseButtonInfo": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
             "names": {
                 "vanilla": "bkn",
@@ -685,6 +717,16 @@
                 "respawnPlayer": {
                     "absent": true
                 },
+                "sendPosition": {
+                    "names": {
+                        "vanilla": "A",
+                        "fabric": "method_3136"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V"
+                    }
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "b",
@@ -707,6 +749,16 @@
                 },
                 "swing": {
                     "absent": true
+                },
+                "tick": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_3147"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)V",
+                        "fabric": "(I)V"
+                    }
                 }
             },
             "fields": {
@@ -992,6 +1044,35 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/network/Connection": {
+            "names": {
+                "vanilla": "ek",
+                "fabric": "net.minecraft.class_2535"
+            },
+            "methods": {
+                "channelRead0": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_10770"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lio/netty/channel/ChannelHandlerContext;Lff;)V",
+                        "fabric": "(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/class_2596;)V"
+                    }
+                },
+                "send": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_10743"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lff;)V",
+                        "fabric": "(Lnet/minecraft/class_2596;)V"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/network/chat/Component": {
             "names": {
                 "vanilla": "eu",
@@ -1238,6 +1319,9 @@
                         "vanilla": "Z",
                         "fabric": "Z"
                     }
+                },
+                "onGround": {
+                    "absent": true
                 },
                 "tickCount": {
                     "names": {

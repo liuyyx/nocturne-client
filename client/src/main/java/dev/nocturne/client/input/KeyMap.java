@@ -226,6 +226,26 @@ public final class KeyMap {
         return NONE;
     }
 
+    /** 把 GLFW 键码还原为 AWT VK 空间；未收录时返回 {@link #NONE}。 */
+    public static int fromGlfw(int key) {
+        for (int i = 0; i < GLFW.length; i++) {
+            if (GLFW[i] == key) {
+                return CANONICAL[i];
+            }
+        }
+        return NONE;
+    }
+
+    /** 把 SDL scancode 还原为 AWT VK 空间；未收录时返回 {@link #NONE}。 */
+    public static int fromSdl(int scancode) {
+        for (int vk : CANONICAL) {
+            if (sdl(vk) == scancode) {
+                return vk;
+            }
+        }
+        return NONE;
+    }
+
     /** 在升序规范键码表中定位 {@code vk}，命中则返回对应后端表中的值。 */
     private static int lookup(int vk, int[] backend) {
         int index = java.util.Arrays.binarySearch(CANONICAL, vk);

@@ -175,7 +175,22 @@
                 "forge": "net.minecraft.client.KeyboardHandler",
                 "neoforge": "net.minecraft.client.KeyboardHandler"
             },
-            "methods": {},
+            "methods": {
+                "keyPress": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1466",
+                        "forge": "m_90893_",
+                        "neoforge": "keyPress"
+                    },
+                    "signatures": {
+                        "vanilla": "(JILgth;)V",
+                        "fabric": "(JILnet/minecraft/class_11908;)V",
+                        "forge": "(JILnet/minecraft/client/input/KeyEvent;)V",
+                        "neoforge": "(JILnet/minecraft/client/input/KeyEvent;)V"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/Minecraft": {
@@ -235,6 +250,34 @@
                         "fabric": "(Z)V",
                         "forge": "(Z)V",
                         "neoforge": "(Z)V"
+                    }
+                },
+                "startAttack": {
+                    "names": {
+                        "vanilla": "bs",
+                        "fabric": "method_1536",
+                        "forge": "m_202354_",
+                        "neoforge": "startAttack"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
+                    }
+                },
+                "startUseItem": {
+                    "names": {
+                        "vanilla": "bt",
+                        "fabric": "method_1583",
+                        "forge": "m_91277_",
+                        "neoforge": "startUseItem"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V",
+                        "neoforge": "()V"
                     }
                 }
             },
@@ -431,6 +474,23 @@
                         "forge": "()Z",
                         "neoforge": "()Z"
                     }
+                },
+                "onButton": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1601",
+                        "forge": "m_416902_",
+                        "neoforge": "onButton"
+                    },
+                    "signatures": {
+                        "vanilla": "(JLgtj;I)V",
+                        "fabric": "(JLnet/minecraft/class_11910;I)V",
+                        "forge": "(JLnet/minecraft/client/input/MouseButtonInfo;I)V",
+                        "neoforge": "(JLnet/minecraft/client/input/MouseButtonInfo;I)V"
+                    }
+                },
+                "onPress": {
+                    "absent": true
                 },
                 "releaseMouse": {
                     "names": {
@@ -838,6 +898,56 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/input/KeyEvent": {
+            "names": {
+                "vanilla": "gth",
+                "fabric": "net.minecraft.class_11908",
+                "forge": "net.minecraft.client.input.KeyEvent",
+                "neoforge": "net.minecraft.client.input.KeyEvent"
+            },
+            "methods": {
+                "key": {
+                    "names": {
+                        "vanilla": "s",
+                        "fabric": "comp_4795",
+                        "forge": "f_412394_",
+                        "neoforge": "key"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/input/MouseButtonInfo": {
+            "names": {
+                "vanilla": "gtj",
+                "fabric": "net.minecraft.class_11910",
+                "forge": "net.minecraft.client.input.MouseButtonInfo",
+                "neoforge": "net.minecraft.client.input.MouseButtonInfo"
+            },
+            "methods": {
+                "button": {
+                    "names": {
+                        "vanilla": "s",
+                        "fabric": "comp_4801",
+                        "forge": "f_413151_",
+                        "neoforge": "button"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
             "names": {
                 "vanilla": "gzh",
@@ -1212,6 +1322,20 @@
                 "respawnPlayer": {
                     "absent": true
                 },
+                "sendPosition": {
+                    "names": {
+                        "vanilla": "P",
+                        "fabric": "method_3136",
+                        "forge": "m_108640_",
+                        "neoforge": "sendPosition"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V",
+                        "neoforge": "()V"
+                    }
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "a_",
@@ -1252,6 +1376,20 @@
                         "fabric": "(Lnet/minecraft/class_1268;)V",
                         "forge": "(Lnet/minecraft/world/InteractionHand;)V",
                         "neoforge": "(Lnet/minecraft/world/InteractionHand;)V"
+                    }
+                },
+                "tick": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "tick",
+                        "forge": "m_8119_",
+                        "neoforge": "tick"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V",
+                        "neoforge": "()V"
                     }
                 }
             },
@@ -1632,6 +1770,45 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/network/Connection": {
+            "names": {
+                "vanilla": "wk",
+                "fabric": "net.minecraft.class_2535",
+                "forge": "net.minecraft.network.Connection",
+                "neoforge": "net.minecraft.network.Connection"
+            },
+            "methods": {
+                "channelRead0": {
+                    "names": {
+                        "vanilla": "channelRead0",
+                        "fabric": "channelRead0",
+                        "forge": "channelRead0",
+                        "neoforge": "channelRead0"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lio/netty/channel/ChannelHandlerContext;Ljava/lang/Object;)V",
+                        "fabric": "(Lio/netty/channel/ChannelHandlerContext;Ljava/lang/Object;)V",
+                        "forge": "(Lio/netty/channel/ChannelHandlerContext;Ljava/lang/Object;)V",
+                        "neoforge": "(Lio/netty/channel/ChannelHandlerContext;Ljava/lang/Object;)V"
+                    }
+                },
+                "send": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_10743",
+                        "forge": "m_129512_",
+                        "neoforge": "send"
+                    },
+                    "signatures": {
+                        "vanilla": "(Laao;)V",
+                        "fabric": "(Lnet/minecraft/class_2596;)V",
+                        "forge": "(Lnet/minecraft/network/protocol/Packet;)V",
+                        "neoforge": "(Lnet/minecraft/network/protocol/Packet;)V"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/network/chat/Component": {
             "names": {
                 "vanilla": "xx",
@@ -1973,6 +2150,20 @@
                         "fabric": "field_5960",
                         "forge": "f_19794_",
                         "neoforge": "noPhysics"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z",
+                        "forge": "Z",
+                        "neoforge": "Z"
+                    }
+                },
+                "onGround": {
+                    "names": {
+                        "vanilla": "bc",
+                        "fabric": "field_5952",
+                        "forge": "f_19861_",
+                        "neoforge": "onGround"
                     },
                     "descriptors": {
                         "vanilla": "Z",

@@ -153,7 +153,20 @@
                 "fabric": "net.minecraft.class_309",
                 "forge": "net.minecraft.client.KeyboardListener"
             },
-            "methods": {},
+            "methods": {
+                "keyPress": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1466",
+                        "forge": "func_197961_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(JIIII)V",
+                        "fabric": "(JIIII)V",
+                        "forge": "(JIIII)V"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/Minecraft": {
@@ -206,6 +219,30 @@
                         "vanilla": "(Z)V",
                         "fabric": "(Z)V",
                         "forge": "(Z)V"
+                    }
+                },
+                "startAttack": {
+                    "names": {
+                        "vanilla": "aG",
+                        "fabric": "method_1536",
+                        "forge": "func_147116_af"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
+                "startUseItem": {
+                    "names": {
+                        "vanilla": "aH",
+                        "fabric": "method_1583",
+                        "forge": "func_147121_ag"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
                     }
                 }
             },
@@ -376,6 +413,21 @@
                         "vanilla": "()Z",
                         "fabric": "()Z",
                         "forge": "()Z"
+                    }
+                },
+                "onButton": {
+                    "absent": true
+                },
+                "onPress": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1601",
+                        "forge": "func_198023_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(JIII)V",
+                        "fabric": "(JIII)V",
+                        "forge": "(JIII)V"
                     }
                 },
                 "releaseMouse": {
@@ -659,6 +711,18 @@
                     "absent": true
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/client/input/KeyEvent": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/input/MouseButtonInfo": {
+            "absent": true,
+            "names": {},
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
@@ -985,6 +1049,18 @@
                 "respawnPlayer": {
                     "absent": true
                 },
+                "sendPosition": {
+                    "names": {
+                        "vanilla": "eE",
+                        "fabric": "method_3136",
+                        "forge": "func_175161_p"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "d",
@@ -1019,6 +1095,18 @@
                         "vanilla": "(Lajk;)V",
                         "fabric": "(Lnet/minecraft/class_1268;)V",
                         "forge": "(Lnet/minecraft/util/Hand;)V"
+                    }
+                },
+                "tick": {
+                    "names": {
+                        "vanilla": "h",
+                        "fabric": "tick",
+                        "forge": "func_70071_h_"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
                     }
                 }
             },
@@ -1352,6 +1440,40 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/network/Connection": {
+            "names": {
+                "vanilla": "kt",
+                "fabric": "net.minecraft.class_2535",
+                "forge": "net.minecraft.network.NetworkManager"
+            },
+            "methods": {
+                "channelRead0": {
+                    "names": {
+                        "vanilla": "channelRead0",
+                        "fabric": "channelRead0",
+                        "forge": "channelRead0"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lio/netty/channel/ChannelHandlerContext;Ljava/lang/Object;)V",
+                        "fabric": "(Lio/netty/channel/ChannelHandlerContext;Ljava/lang/Object;)V",
+                        "forge": "(Lio/netty/channel/ChannelHandlerContext;Ljava/lang/Object;)V"
+                    }
+                },
+                "send": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_10743",
+                        "forge": "func_179290_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Llt;)V",
+                        "fabric": "(Lnet/minecraft/class_2596;)V",
+                        "forge": "(Lnet/minecraft/network/IPacket;)V"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/network/chat/Component": {
             "names": {
                 "vanilla": "lf",
@@ -1635,6 +1757,18 @@
                         "vanilla": "I",
                         "fabric": "field_5960",
                         "forge": "field_70145_X"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z",
+                        "forge": "Z"
+                    }
+                },
+                "onGround": {
+                    "names": {
+                        "vanilla": "t",
+                        "fabric": "field_5952",
+                        "forge": "field_70122_E"
                     },
                     "descriptors": {
                         "vanilla": "Z",

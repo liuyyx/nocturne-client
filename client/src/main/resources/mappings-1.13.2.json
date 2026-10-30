@@ -88,6 +88,30 @@
                         "fabric": "()V",
                         "forge": "()V"
                     }
+                },
+                "startAttack": {
+                    "names": {
+                        "vanilla": "at",
+                        "fabric": "method_1536",
+                        "forge": "func_147116_af"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
+                "startUseItem": {
+                    "names": {
+                        "vanilla": "au",
+                        "fabric": "method_1583",
+                        "forge": "func_147121_ag"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
                 }
             },
             "fields": {
@@ -407,6 +431,18 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/input/KeyEvent": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/input/MouseButtonInfo": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
             "names": {
                 "vanilla": "crb",
@@ -686,6 +722,18 @@
                 "respawnPlayer": {
                     "absent": true
                 },
+                "sendPosition": {
+                    "names": {
+                        "vanilla": "I",
+                        "fabric": "method_3136",
+                        "forge": "func_175161_p"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "b",
@@ -712,6 +760,18 @@
                 },
                 "swing": {
                     "absent": true
+                },
+                "tick": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_3147",
+                        "forge": "func_184839_n"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)V",
+                        "fabric": "(I)V",
+                        "forge": "(I)V"
+                    }
                 }
             },
             "fields": {
@@ -1029,6 +1089,40 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/network/Connection": {
+            "names": {
+                "vanilla": "hw",
+                "fabric": "net.minecraft.class_2535",
+                "forge": "net.minecraft.network.NetworkManager"
+            },
+            "methods": {
+                "channelRead0": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_10770",
+                        "forge": "channelRead0"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lio/netty/channel/ChannelHandlerContext;Liv;)V",
+                        "fabric": "(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/class_2596;)V",
+                        "forge": "(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/Packet;)V"
+                    }
+                },
+                "send": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_10743",
+                        "forge": "func_179290_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Liv;)V",
+                        "fabric": "(Lnet/minecraft/class_2596;)V",
+                        "forge": "(Lnet/minecraft/network/Packet;)V"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/network/chat/Component": {
             "names": {
                 "vanilla": "ij",
@@ -1311,6 +1405,9 @@
                         "vanilla": "Z",
                         "fabric": "Z"
                     }
+                },
+                "onGround": {
+                    "absent": true
                 },
                 "tickCount": {
                     "names": {

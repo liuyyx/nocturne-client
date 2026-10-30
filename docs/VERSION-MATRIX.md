@@ -15,6 +15,16 @@
 - 26.3 Fabric 的本轮 `premain` 诊断只确认启动与模块装配；日志出现 Mixin 注册，
   但未出现绘制回调、GUI 不可见，因此不记为通过。证据：`tmp/phase0-26.3-retry.log`。
 
+## 游戏事件投递验收
+
+- 2026-10-30 在 26.3 原版主类运行、注入当前构建后，H1–H8 均在真机日志命中：玩家 tick 前后、
+  `sendPosition` 前后、双向网络包、实体攻击前置/后置、左键与使用物品、SDL 键盘和鼠标输入。
+- 抓取运行中的 `MultiPlayerGameMode` 字节码确认：`attack` 先调用 `GameplayHook.attack`，取消时直接返回；
+  正常路径末尾调用 `GameplayHook.attackPost`。同类多转换器链保留前置与后置钩子，且后置先织、门控后织，
+  避免门控新增的 `RETURN` 被误当作正常返回。单元测试覆盖这两条顺序约束。
+- `sh C:/Users/liuyyx/Desktop/nocturne-client/tmp/gw.sh test dist` 全绿；
+  本轮只验收 26.3，不把该结论外推到其余 65 个映射版本。
+
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
 表的规模为 **74 个类**（客户端实际解析的规范面）。每个类/成员带

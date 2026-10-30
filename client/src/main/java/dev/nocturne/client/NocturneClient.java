@@ -151,6 +151,7 @@ public final class NocturneClient {
     /** 执行实际安装：注册内置模块并打日志。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */
     private void install() {
         registerModules();
+        dev.nocturne.client.event.GameplayEvents.install(this);
         log("client installed (modules=" + modules.size() + ")");
         // 后续阶段：映射初始化、渲染/输入钩子、HUD。
     }

@@ -46,6 +46,7 @@ version = "1.8.9"
 "net/minecraft/world/entity/Entity" = "net/minecraft/entity/Entity"
 "net/minecraft/world/phys/Vec3" = "net/minecraft/util/math/Vec3d"
 "net/minecraft/client/multiplayer/MultiPlayerGameMode" = "net/minecraft/client/multiplayer/PlayerControllerMP"
+"net/minecraft/network/Connection" = "net/minecraft/network/NetworkManager"
 "net/minecraft/world/entity/Mob" = "net/minecraft/entity/monster/EntityMob"
 "net/minecraft/client/gui/screens/Screen" = "net/minecraft/client/gui/GuiScreen"
 "net/minecraft/client/renderer/GameRenderer" = "net/minecraft/client/renderer/EntityRenderer"
@@ -151,6 +152,14 @@ note = "返回 java.util.List（1.21 是 NonNullList）"
 [methods.attack]
 mcp = "attackEntity"
 scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
+[methods.send]
+mcp = "sendPacket"
+scope = "net/minecraft/network/NetworkManager"
+
+[methods.channelRead0]
+mcp = "channelRead0"
+scope = "net/minecraft/network/NetworkManager"
 
 [methods.stopDestroyBlock]
 mcp = "resetBlockRemoving"
@@ -552,6 +561,8 @@ unsupported = "不死图腾是 1.11 加入的；1.8.9 Items 无该字段（且 1
 
 [overrides."net/minecraft/client/Minecraft"]
 gameMode = { mcp = "playerController", scope = "net/minecraft/client/Minecraft" }
+startAttack = { mcp = "clickMouse", scope = "net/minecraft/client/Minecraft" }
+startUseItem = { mcp = "rightClickMouse", scope = "net/minecraft/client/Minecraft" }
 getWindow = { unsupported = "1.8.9 Minecraft 没有 getWindow()（窗口是 LWJGL Display）" }
 
 [overrides."net/minecraft/client/multiplayer/PlayerInfo"]
@@ -590,6 +601,8 @@ getIndex = { unsupported = "EquipmentSlot 不存在于 1.8.9" }
 # only extra ones are handled here.
 [overrides."net/minecraft/client/player/LocalPlayer"]
 playerInfo = { mcp = "playerInfo", scope = "net/minecraft/client/entity/AbstractClientPlayer" }
+tick = { mcp = "onLivingUpdate", scope = "net/minecraft/client/entity/EntityPlayerSP" }
+sendPosition = { mcp = "onUpdateWalkingPlayer", scope = "net/minecraft/client/entity/EntityPlayerSP" }
 
 # --------------------------------------------------------------------------
 # Indirect references: members the extractor cannot see as a literal call

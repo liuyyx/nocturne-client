@@ -35,8 +35,14 @@ public enum ClassType {
     ITEM_ENTITY("net.minecraft.world.entity.item.ItemEntity"),
     /** 多人游戏模式。 */
     MULTI_PLAYER_GAME_MODE("net.minecraft.client.multiplayer.MultiPlayerGameMode"),
+    /** 客户端网络连接；发包与收包入口。 */
+    CONNECTION("net.minecraft.network.Connection"),
     /** 键盘输入入口（{@code KeyboardHandler.keyPress}）。 */
     KEYBOARD_HANDLER("net.minecraft.client.KeyboardHandler"),
+    /** 26.x 的键盘事件记录；key() 返回 SDL scancode。 */
+    KEY_EVENT("net.minecraft.client.input.KeyEvent"),
+    /** 26.x 的鼠标按钮事件记录。 */
+    MOUSE_BUTTON_INFO("net.minecraft.client.input.MouseButtonInfo"),
     /** 界面基类。 */
     SCREEN("net.minecraft.client.gui.screens.Screen"),
     /** 物品栏界面：调用游戏原生玩家模型绘制方法。 */

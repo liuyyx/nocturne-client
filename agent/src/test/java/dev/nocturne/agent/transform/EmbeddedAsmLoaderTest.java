@@ -39,5 +39,15 @@ class EmbeddedAsmLoaderTest {
         // child-first：转换器由内嵌加载器定义，而不是父加载器上的同名类。
         assertFalse(transformer.getClass().getClassLoader() == FrameHookTransformer.class.getClassLoader(),
                 "transformer must be defined by the embedded child loader, not the parent");
+
+        ClassFileTransformer gate = loader.createGateTransformer("example/Subject", "hit", "()V",
+                "example/Hook", "allow", "Z", false, false);
+        assertNotNull(gate, "gate creator must preserve its full constructor contract");
+        assertNull(gate.transform(null, "other/Thing", null, null, new byte[]{1, 2, 3}));
+
+        ClassFileTransformer packet = loader.createPacketTransformer("example/Subject", "send",
+                "(Ljava/lang/String;)V", "example/Hook", "filter", 0);
+        assertNotNull(packet, "packet creator must preserve its full constructor contract");
+        assertNull(packet.transform(null, "other/Thing", null, null, new byte[]{1, 2, 3}));
     }
 }

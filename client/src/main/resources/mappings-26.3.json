@@ -127,7 +127,16 @@
                 "forge": "net.minecraft.client.KeyboardHandler",
                 "neoforge": "net.minecraft.client.KeyboardHandler"
             },
-            "methods": {},
+            "methods": {
+                "keyPress": {
+                    "names": {
+                        "vanilla": "keyPress",
+                        "fabric": "keyPress",
+                        "forge": "keyPress",
+                        "neoforge": "keyPress"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/Minecraft": {
@@ -174,6 +183,22 @@
                         "fabric": "runTick",
                         "forge": "runTick",
                         "neoforge": "runTick"
+                    }
+                },
+                "startAttack": {
+                    "names": {
+                        "vanilla": "startAttack",
+                        "fabric": "startAttack",
+                        "forge": "startAttack",
+                        "neoforge": "startAttack"
+                    }
+                },
+                "startUseItem": {
+                    "names": {
+                        "vanilla": "startUseItem",
+                        "fabric": "startUseItem",
+                        "forge": "startUseItem",
+                        "neoforge": "startUseItem"
                     }
                 }
             },
@@ -293,6 +318,17 @@
                         "forge": "isMouseGrabbed",
                         "neoforge": "isMouseGrabbed"
                     }
+                },
+                "onButton": {
+                    "names": {
+                        "vanilla": "onButton",
+                        "fabric": "onButton",
+                        "forge": "onButton",
+                        "neoforge": "onButton"
+                    }
+                },
+                "onPress": {
+                    "absent": true
                 },
                 "releaseMouse": {
                     "names": {
@@ -606,6 +642,44 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/input/KeyEvent": {
+            "names": {
+                "vanilla": "net.minecraft.client.input.KeyEvent",
+                "fabric": "net.minecraft.client.input.KeyEvent",
+                "forge": "net.minecraft.client.input.KeyEvent",
+                "neoforge": "net.minecraft.client.input.KeyEvent"
+            },
+            "methods": {
+                "key": {
+                    "names": {
+                        "vanilla": "key",
+                        "fabric": "key",
+                        "forge": "key",
+                        "neoforge": "key"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/input/MouseButtonInfo": {
+            "names": {
+                "vanilla": "net.minecraft.client.input.MouseButtonInfo",
+                "fabric": "net.minecraft.client.input.MouseButtonInfo",
+                "forge": "net.minecraft.client.input.MouseButtonInfo",
+                "neoforge": "net.minecraft.client.input.MouseButtonInfo"
+            },
+            "methods": {
+                "button": {
+                    "names": {
+                        "vanilla": "button",
+                        "fabric": "button",
+                        "forge": "button",
+                        "neoforge": "button"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
             "names": {
                 "vanilla": "net.minecraft.client.multiplayer.ClientChunkCache",
@@ -848,6 +922,14 @@
                 "respawnPlayer": {
                     "absent": true
                 },
+                "sendPosition": {
+                    "names": {
+                        "vanilla": "sendPosition",
+                        "fabric": "sendPosition",
+                        "forge": "sendPosition",
+                        "neoforge": "sendPosition"
+                    }
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "setPos",
@@ -870,6 +952,14 @@
                         "fabric": "swing",
                         "forge": "swing",
                         "neoforge": "swing"
+                    }
+                },
+                "tick": {
+                    "names": {
+                        "vanilla": "tick",
+                        "fabric": "tick",
+                        "forge": "tick",
+                        "neoforge": "tick"
                     }
                 }
             },
@@ -1128,6 +1218,33 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/network/Connection": {
+            "names": {
+                "vanilla": "net.minecraft.network.Connection",
+                "fabric": "net.minecraft.network.Connection",
+                "forge": "net.minecraft.network.Connection",
+                "neoforge": "net.minecraft.network.Connection"
+            },
+            "methods": {
+                "channelRead0": {
+                    "names": {
+                        "vanilla": "channelRead0",
+                        "fabric": "channelRead0",
+                        "forge": "channelRead0",
+                        "neoforge": "channelRead0"
+                    }
+                },
+                "send": {
+                    "names": {
+                        "vanilla": "send",
+                        "fabric": "send",
+                        "forge": "send",
+                        "neoforge": "send"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/network/chat/Component": {
             "names": {
                 "vanilla": "net.minecraft.network.chat.Component",
@@ -1379,6 +1496,14 @@
                         "fabric": "noPhysics",
                         "forge": "noPhysics",
                         "neoforge": "noPhysics"
+                    }
+                },
+                "onGround": {
+                    "names": {
+                        "vanilla": "onGround",
+                        "fabric": "onGround",
+                        "forge": "onGround",
+                        "neoforge": "onGround"
                     }
                 },
                 "tickCount": {

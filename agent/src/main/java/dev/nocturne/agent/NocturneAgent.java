@@ -313,6 +313,8 @@ public final class NocturneAgent {
                 "dev/nocturne/client/runtime/FrameListener.class",
                 "dev/nocturne/client/runtime/InputBlock.class",
                 "dev/nocturne/client/runtime/ScrollState.class",
+                "dev/nocturne/client/bootstrap/GameplayHook.class",
+                "dev/nocturne/client/bootstrap/GameplayHook$Sink.class",
         };
         java.nio.file.Path jar = null;
         try {
@@ -491,8 +493,11 @@ public final class NocturneAgent {
         }
         // GUI 绘制钩子先注册（26.x 的 GUI 入口；其时机未必有有效 GL，但成本很低）。
         installGuiDrawHook(instrumentation);
-        installInputBlocks(instrumentation);
         EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
+        if (asmLoader != null) {
+            installGameplayHooks(instrumentation, asmLoader);
+        }
+        installInputBlocks(instrumentation);
         if (isSdlStack(instrumentation, gameClassLoader(instrumentation))) {
             // SDL 栈（26.x）：**LWJGL 的 GL 绑定在整个进程里都不可用**——实测三处时机（帧回调的缓冲
             // 交换点、GUI 绘制路径 Hud.extractRenderState、游戏自己的呈现入口 GlSurface.present）
@@ -798,6 +803,246 @@ public final class NocturneAgent {
      * @param method          目标方法名
      * @param descriptor      目标方法描述符
      */
+    private static final String GAMEPLAY_HOOK_OWNER = "dev/nocturne/client/bootstrap/GameplayHook";
+    /** 目标类 → 已注册转换器；重定义时必须重放完整链，避免后一个钩子覆盖前一个。 */
+    private static final java.util.Map<String, java.util.List<ClassFileTransformer>> GAMEPLAY_TRANSFORMERS =
+            new java.util.HashMap<String, java.util.List<ClassFileTransformer>>();
+
+    /** 安装全部游戏事件入口；单个目标缺失不影响其它入口。 */
+    private static void installGameplayHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
+        // H1：本地玩家 tick 前后。传 this 供事件汇过滤，避免父类钩子把其它实体当成本地玩家。
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
+                "tick", "()V", "playerTickPre", "V", false, true);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
+                "tick", "()V", "playerTickPost", "V", true, true);
+        // H2：位置状态提交前后；pre 的修改由事件汇写回玩家。
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
+                "sendPosition", "()V", "motionPre", "V", false, true);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
+                "sendPosition", "()V", "motionPost", "V", true, true);
+        // H3/H4：事件返回替换包，null 取消原发送/接收。
+        registerPacket(instrumentation, asmLoader, "send",
+                "(Lnet/minecraft/network/protocol/Packet;)V", "packetSend", 0);
+        registerPacket(instrumentation, asmLoader, "channelRead0",
+                "(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/protocol/Packet;)V",
+                "packetReceive", 1);
+        // H5：先织尾部再织门控，取消产生的新 RETURN 不会误触发 attackPost。
+        registerGate(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "attack",
+                "(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;)V",
+                "attackPost", "V", true, false);
+        registerGate(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "attack",
+                "(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;)V",
+                "attack", "Z", false, false);
+        // H6：26.x 的 startAttack 返回 boolean，旧版两者均返回 void。
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MINECRAFT,
+                "startAttack", "()V|()Z", "leftClick", "Z", false, false);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MINECRAFT,
+                "startUseItem", "()V", "useItem", "Z", false, false);
+        // H7/H8：旧签名直接转发基本类型，新签名把游戏事件记录擦成 Object。
+        registerGate(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.KEYBOARD_HANDLER, "keyPress",
+                "(JIIII)V|(JILnet/minecraft/client/input/KeyEvent;)V",
+                "key", "Z", false, false);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
+                "onPress", "(JIII)V", "mouse", "Z", false, false);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
+                "onButton", "(JLnet/minecraft/client/input/MouseButtonInfo;I)V",
+                "mouse", "Z", false, false);
+    }
+
+    /** 按映射候选注册通知/门控转换器。 */
+    private static void registerGate(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
+                                     dev.nocturne.client.mapping.ClassType owner, String canonicalMethod,
+                                     String fallbackDescriptors, String hookMethod, String hookReturn,
+                                     boolean atMethodEnd, boolean passThis) {
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        java.util.Set<String> classNames = new java.util.LinkedHashSet<String>(
+                mapping.classNameCandidates(owner));
+        classNames.add(owner.canonicalName());
+        boolean patched = false;
+        for (String className : classNames) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, canonicalMethod)) {
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
+                            fallbackDescriptors);
+                }
+                if (descriptor != null) {
+                    ClassFileTransformer transformer = asmLoader.createGateTransformer(className,
+                            candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, hookMethod,
+                            hookReturn, atMethodEnd, passThis);
+                    patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                            candidate.name(), descriptor, hookMethod);
+                } else {
+                    for (String fallback : fallbackDescriptors.split("\\|")) {
+                        ClassFileTransformer transformer = asmLoader.createGateTransformer(className,
+                                candidate.name(), fallback, GAMEPLAY_HOOK_OWNER, hookMethod,
+                                hookReturn, atMethodEnd, passThis);
+                        patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                                candidate.name(), fallback, hookMethod);
+                    }
+                }
+            }
+        }
+        if (!patched) {
+            log("gameplay hook pending or unavailable: " + owner.canonicalName() + "#"
+                    + canonicalMethod + " -> " + hookMethod);
+        }
+    }
+
+    /** 按映射候选注册包转换器。 */
+    private static void registerPacket(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
+                                       String canonicalMethod, String fallbackDescriptor,
+                                       String hookMethod, int packetArgument) {
+        dev.nocturne.client.mapping.ClassType owner = dev.nocturne.client.mapping.ClassType.CONNECTION;
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        java.util.Set<String> classNames = new java.util.LinkedHashSet<String>(
+                mapping.classNameCandidates(owner));
+        classNames.add(owner.canonicalName());
+        boolean patched = false;
+        for (String className : classNames) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, canonicalMethod)) {
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
+                            fallbackDescriptor);
+                }
+                if (descriptor == null) {
+                    descriptor = fallbackDescriptor;
+                }
+                ClassFileTransformer transformer = asmLoader.createPacketTransformer(className,
+                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, hookMethod, packetArgument);
+                patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                        candidate.name(), descriptor, hookMethod);
+            }
+        }
+        if (!patched) {
+            log("gameplay packet hook pending or unavailable: " + canonicalMethod);
+        }
+    }
+
+    /** 注册转换器并立即改写已加载目标。 */
+    private static boolean registerGameplayTransformer(Instrumentation instrumentation,
+                                                       ClassFileTransformer transformer,
+                                                       String targetClass, String method,
+                                                       String descriptor, String hookMethod) {
+        if (transformer == null) {
+            return false;
+        }
+        try {
+            instrumentation.addTransformer(transformer, true);
+        } catch (Throwable t) {
+            log("could not register gameplay hook on " + targetClass + "." + method + ": " + t);
+            return false;
+        }
+        java.util.List<ClassFileTransformer> chain = GAMEPLAY_TRANSFORMERS.get(targetClass);
+        if (chain == null) {
+            chain = new java.util.ArrayList<ClassFileTransformer>();
+            GAMEPLAY_TRANSFORMERS.put(targetClass, chain);
+        }
+        chain.add(transformer);
+        final java.util.List<ClassFileTransformer> registered =
+                new java.util.ArrayList<ClassFileTransformer>(chain);
+        ClassFileTransformer composite = new ClassFileTransformer() {
+            @Override
+            public byte[] transform(ClassLoader loader, String className, Class<?> beingRedefined,
+                                    java.security.ProtectionDomain domain, byte[] classfileBuffer)
+                    throws java.lang.instrument.IllegalClassFormatException {
+                byte[] current = classfileBuffer;
+                for (ClassFileTransformer item : registered) {
+                    byte[] next = item.transform(loader, className, beingRedefined, domain, current);
+                    if (next != null) {
+                        current = next;
+                    }
+                }
+                return current;
+            }
+        };
+        boolean patched = false;
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            if (!targetClass.equals(loaded.getName())) {
+                continue;
+            }
+            try {
+                byte[] bytes = patchBytes(loaded, composite, targetClass, method);
+                if (bytes != null) {
+                    instrumentation.redefineClasses(new java.lang.instrument.ClassDefinition(loaded, bytes));
+                    patched = true;
+                    log("gameplay hook woven: " + targetClass + "." + method + descriptor
+                            + " -> " + hookMethod);
+                }
+            } catch (Throwable t) {
+                log("gameplay hook redefine failed: " + targetClass + "." + method + descriptor
+                        + " -> " + t);
+            }
+            break;
+        }
+        return patched;
+    }
+
+    /** 26.x 表不带描述符时，从已加载方法读取真实签名。 */
+    private static String resolveDescriptor(Instrumentation instrumentation, String className,
+                                            String methodName, String fallbackDescriptors) {
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            if (!className.equals(loaded.getName())) {
+                continue;
+            }
+            java.lang.reflect.Method single = null;
+            for (String fallback : fallbackDescriptors.split("\\|")) {
+                Class<?>[] expected = dev.nocturne.client.game.JniTypes.parameterTypes(
+                        fallback, loaded.getClassLoader());
+                for (java.lang.reflect.Method method : loaded.getDeclaredMethods()) {
+                    if (!method.getName().equals(methodName)) {
+                        continue;
+                    }
+                    if (expected != null && java.util.Arrays.equals(method.getParameterTypes(), expected)) {
+                        return methodDescriptor(method);
+                    }
+                    if (expected != null && method.getParameterTypes().length == expected.length) {
+                        if (single != null) {
+                            single = null;
+                        } else {
+                            single = method;
+                        }
+                    }
+                }
+            }
+            return single == null ? null : methodDescriptor(single);
+        }
+        return null;
+    }
+
+    private static String methodDescriptor(java.lang.reflect.Method method) {
+        StringBuilder out = new StringBuilder("(");
+        for (Class<?> parameter : method.getParameterTypes()) {
+            out.append(typeDescriptor(parameter));
+        }
+        return out.append(')').append(typeDescriptor(method.getReturnType())).toString();
+    }
+
+    private static String typeDescriptor(Class<?> type) {
+        if (type.isArray()) {
+            return type.getName().replace('.', '/');
+        }
+        if (!type.isPrimitive()) {
+            return "L" + type.getName().replace('.', '/') + ";";
+        }
+        if (type == void.class) return "V";
+        if (type == boolean.class) return "Z";
+        if (type == byte.class) return "B";
+        if (type == char.class) return "C";
+        if (type == short.class) return "S";
+        if (type == int.class) return "I";
+        if (type == long.class) return "J";
+        if (type == float.class) return "F";
+        if (type == double.class) return "D";
+        throw new IllegalArgumentException("unknown primitive type: " + type);
+    }
+
     /** @return 映射表里该方法的运行期名；映射不可用时退回规范名。 */
     private static String mappedMethodName(dev.nocturne.client.mapping.ClassType type,
                                            String canonical, String fallback) {

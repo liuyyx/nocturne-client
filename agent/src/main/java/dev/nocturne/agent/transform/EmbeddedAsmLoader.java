@@ -57,6 +57,12 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     /** 首参回调转换器类名（与 {@link CallbackHookTransformer} 的契约一致）。 */
     private static final String CALLBACK_TRANSFORMER_CLASS =
             "dev.nocturne.agent.transform.CallbackHookTransformer";
+    /** 通用事件通知/取消转换器。 */
+    private static final String GATE_TRANSFORMER_CLASS =
+            "dev.nocturne.agent.transform.GateHookTransformer";
+    /** 支持包替换与取消的转换器。 */
+    private static final String PACKET_TRANSFORMER_CLASS =
+            "dev.nocturne.agent.transform.PacketHookTransformer";
     /** 钩子所在类内部名（斜杠形式）。 */
     // 必须指向 bootstrap 层的中立类：Forge 的模块化 classloader 看不到 agent jar，
     // 直接调 NocturneRuntime.onFrame 会 NoClassDefFoundError（1.20.1 Forge 实测）。
@@ -168,6 +174,44 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         } catch (Throwable t) {
             log("could not create input block transformer for " + targetInternalName + "." + method
                     + ": " + t + "; input block disabled");
+            return null;
+        }
+    }
+
+    /** 创建事件通知/取消转换器；参数转发与钩子返回类型由目标描述符派生。 */
+    public ClassFileTransformer createGateTransformer(String targetInternalName, String method,
+                                                       String descriptor, String hookOwner,
+                                                       String hookMethod, String hookReturn,
+                                                       boolean atMethodEnd, boolean passThis) {
+        try {
+            Class<?> transformerClass = loadClass(GATE_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, String.class,
+                    String.class, boolean.class, boolean.class);
+            Object instance = constructor.newInstance(targetInternalName, method, descriptor,
+                    hookOwner, hookMethod, hookReturn, atMethodEnd, passThis);
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create gate hook transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; gameplay hook disabled");
+            return null;
+        }
+    }
+
+    /** 创建包入口转换器；钩子返回替换包，null 表示取消。 */
+    public ClassFileTransformer createPacketTransformer(String targetInternalName, String method,
+                                                         String descriptor, String hookOwner,
+                                                         String hookMethod, int packetArgument) {
+        try {
+            Class<?> transformerClass = loadClass(PACKET_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, String.class, int.class);
+            Object instance = constructor.newInstance(targetInternalName, method, descriptor,
+                    hookOwner, hookMethod, packetArgument);
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create packet hook transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; packet hook disabled");
             return null;
         }
     }

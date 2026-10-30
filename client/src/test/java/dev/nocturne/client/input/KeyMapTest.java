@@ -86,6 +86,16 @@ class KeyMapTest {
         assertEquals(69, KeyMap.sdl(123), "AWT 123 = F12 → SDL_SCANCODE_F12");
     }
 
+    /** 事件入口把后端键码还原到同一 AWT VK 空间。 */
+    @Test
+    void backendCodesResolveBackToAwt() {
+        assertEquals(65, KeyMap.fromGlfw(65));
+        assertEquals(65, KeyMap.fromSdl(4));
+        assertEquals(KeyMap.VK_RIGHT_SHIFT, KeyMap.fromSdl(229));
+        assertEquals(KeyMap.NONE, KeyMap.fromGlfw(-999));
+        assertEquals(KeyMap.NONE, KeyMap.fromSdl(-999));
+    }
+
     /**
      * 表外键返回 {@link KeyMap#NONE}，调用方据此视为"永不按下"。
      *

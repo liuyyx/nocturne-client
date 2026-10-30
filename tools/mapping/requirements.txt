@@ -32,6 +32,8 @@ net/minecraft/client/Minecraft#getInstance()
 net/minecraft/client/Minecraft#getWindow()
 net/minecraft/client/Minecraft#runGameLoop()
 net/minecraft/client/Minecraft#runTick()
+net/minecraft/client/Minecraft#startAttack()
+net/minecraft/client/Minecraft#startUseItem()
 
 net/minecraft/client/Options
 net/minecraft/client/Options#fov
@@ -106,6 +108,8 @@ net/minecraft/client/player/LocalPlayer#respawnPlayer()
 net/minecraft/client/player/LocalPlayer#setPos()
 net/minecraft/client/player/LocalPlayer#setSprinting()
 net/minecraft/client/player/LocalPlayer#swing()
+net/minecraft/client/player/LocalPlayer#tick()
+net/minecraft/client/player/LocalPlayer#sendPosition()
 
 net/minecraft/client/player/RemotePlayer
 
@@ -133,6 +137,10 @@ net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket
 
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket
 
+net/minecraft/network/Connection
+net/minecraft/network/Connection#send()
+net/minecraft/network/Connection#channelRead0()
+
 net/minecraft/network/protocol/game/ServerboundMovePlayerPacket
 
 net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Pos
@@ -147,6 +155,7 @@ net/minecraft/world/entity/Entity
 net/minecraft/world/entity/Entity#fallDistance
 net/minecraft/world/entity/Entity#isDead
 net/minecraft/world/entity/Entity#noPhysics
+net/minecraft/world/entity/Entity#onGround
 net/minecraft/world/entity/Entity#tickCount
 net/minecraft/world/entity/Entity#xRotO
 net/minecraft/world/entity/Entity#yRotO
@@ -353,7 +362,14 @@ net/minecraft/client/gui/Gui#hud
 net/minecraft/client/renderer/state/gui/GuiRenderState
 
 # 鼠标位置/按键：现代代际（26.x 与 1.16+ 同名）
+net/minecraft/client/KeyboardHandler#keyPress()
 net/minecraft/client/MouseHandler
+net/minecraft/client/MouseHandler#onPress()
+net/minecraft/client/MouseHandler#onButton()
+net/minecraft/client/input/KeyEvent
+net/minecraft/client/input/KeyEvent#key()
+net/minecraft/client/input/MouseButtonInfo
+net/minecraft/client/input/MouseButtonInfo#button()
 net/minecraft/client/MouseHandler#xpos()
 net/minecraft/client/MouseHandler#ypos()
 net/minecraft/client/MouseHandler#isLeftPressed()

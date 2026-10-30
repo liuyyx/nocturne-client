@@ -3,6 +3,7 @@ package dev.nocturne.client.runtime;
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.module.ModuleRegistry;
+import dev.nocturne.client.mapping.ClassType;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -34,6 +35,10 @@ public final class NocturneRuntime {
     private static final long TICK_INTERVAL_NANOS = 50_000_000L;
     /** 上次驱动模块 tick 的时间戳（纳秒）；0 表示尚未驱动过。 */
     private static volatile long lastTickNanos;
+    /** 上一 tick 的世界对象；只比较身份，不调用游戏方法。 */
+    private static Object lastWorld;
+    /** 是否已建立世界身份基线，避免启动后的首次读取误报切换。 */
+    private static boolean worldBaselineInitialized;
 
     /** 监听器 → 注册到 bootstrap 的包装动作：注销时需要同一个对象，故按身份缓存。 */
     private static final Map<FrameListener, Runnable> WRAPPERS = new HashMap<FrameListener, Runnable>();
@@ -319,6 +324,27 @@ public final class NocturneRuntime {
         }
     }
 
+    /** 比较世界对象身份；首次读取只建立基线，之后的进入、离开与换图各投递一次。 */
+    private static void postWorldChangeEvent(NocturneClient client, GameBridge bridge) {
+        if (bridge == null) {
+            return;
+        }
+        Object minecraft = bridge.minecraft();
+        if (minecraft == null) {
+            return;
+        }
+        Object world = bridge.readField(minecraft, ClassType.MINECRAFT, "level");
+        if (!worldBaselineInitialized) {
+            lastWorld = world;
+            worldBaselineInitialized = true;
+            return;
+        }
+        if (world != lastWorld) {
+            lastWorld = world;
+            client.events().post(dev.nocturne.client.event.WorldChangeEvent.INSTANCE);
+        }
+    }
+
     /**
      * 按游戏逻辑频率（约 20Hz）驱动模块 tick。
      *
@@ -347,6 +373,8 @@ public final class NocturneRuntime {
         if (inWorld != wasInWorld) {
             registry.setActive(inWorld);
         }
+        // 世界身份变化独立于模块启停闸门广播；随后才是本 tick 的常规事件与直调。
+        postWorldChangeEvent(client, bridge);
         // P6-1：tick 先走总线广播（跨模块协作挂这里），再走直调（存量模块的 onTick）。
         // 广播异常由 EventBus 限流隔离，不会打断直调。
         client.events().post(dev.nocturne.client.event.TickEvent.INSTANCE);

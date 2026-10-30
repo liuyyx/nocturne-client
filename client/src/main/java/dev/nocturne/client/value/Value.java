@@ -23,6 +23,14 @@ public abstract class Value<T> {
      * 故声明为 {@code volatile}，与 {@link dev.nocturne.client.module.Module#isEnabled()} 的跨线程约定一致。
      */
     private volatile T value;
+    /** GUI 可见性条件；默认恒显示。 */
+    private volatile java.util.function.BooleanSupplier visibleWhen =
+            new java.util.function.BooleanSupplier() {
+                @Override
+                public boolean getAsBoolean() {
+                    return true;
+                }
+            };
 
     /**
      * 构造一个值，初始状态即为默认值。
@@ -40,6 +48,26 @@ public abstract class Value<T> {
     /** @return 设置项名称 */
     public String name() {
         return name;
+    }
+
+    /** @return 当前是否应在 GUI 中显示；条件只影响展示，不改变模块读取该值的行为 */
+    public boolean visible() {
+        return visibleWhen.getAsBoolean();
+    }
+
+    /**
+     * 设置 GUI 可见性条件；{@code null} 恢复恒显示。
+     *
+     * @return 当前设置项，便于声明式链式配置
+     */
+    public Value<T> visibleWhen(java.util.function.BooleanSupplier condition) {
+        visibleWhen = condition == null ? new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return true;
+            }
+        } : condition;
+        return this;
     }
 
     /** @return 当前值；构造完成后不会为 {@code null}（构造期即为默认值或归一化结果） */

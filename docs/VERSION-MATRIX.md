@@ -37,6 +37,18 @@
   `ClientPacketListener`，调用因此被 `IllegalArgumentException` 拒绝。契约已改为
   `ClientPacketListener.send(Packet)`，并在新实例复测 `sendPacket=true`；契约测试固定该宿主。
 
+## 设置值与 GUI 可见性验收
+
+- 新增 `TextValue / BoundsNumberValue / SlotValue / KeyValue / GroupValue / MultiBoolValue`，
+  覆盖文本截断、区间钳制与排序、槽位/按键哨兵、子组、固定选项多选。`Value.visibleWhen`
+  是动态条件，只影响 GUI，不改变模块读值。
+- Fatality 已提供文本编辑、双滑轨、九槽、按键捕获、多选弹层和分组行；隐藏行高度归零，
+  子行同时受父组展开状态、父组条件和自身条件约束。单元测试覆盖全部行映射和这些组合规则。
+- 离屏运行真实 `FaClickGui` 的 `docs/research/LabFatalityGui.java`，`Controls` 卡片显示六类新控件
+  与展开子项，`LAB distinctColors=650 / PASS`，证据 `tmp/fatality-controls.png`。首轮发现文本行
+  未把当前值同步到编辑缓冲、只显示占位符，已修复并重新渲染确认。此项是离屏表面验收，
+  不冒充 26.3 或其他版本的真机交互结论。
+
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
 表的规模为 **74 个类**（客户端实际解析的规范面）。每个类/成员带
@@ -308,5 +320,6 @@
 | 项 | 现状 | 缺什么 |
 |---|---|---|
 | 3D 玩家预览（Render 分类 Player 卡片） | 已接游戏原生库存人物入口：1.8.9–1.14.4 固定管线 6 参、1.15–1.19.3 PoseStack 7 参、1.20–26.3 GuiGraphics 7/10 参；旋转字段在 `finally` 中恢复。仅声明实现覆盖，未逐版本真机验收 | 不需要自建 `EntityRenderDispatcher` 或 FBO；`INVENTORY_SCREEN` 的方法与玩家朝向字段已进映射表。SDL 仍只走游戏绘制队列 |
-| 物品图标（预览卡的装备行）、原版槽位选择器、按键绑定行、子设置抽屉、文本/区间/槽位设置行 | 未移植 | 本项目没有对应的 `Value` 类型（无 TextValue / BoundsNumberValue / SlotValue / KeyValue / GroupValue / MultiBoolValue），也没有物品渲染通路 |
+| 原版槽位选择器、按键绑定行、子设置展开、文本/区间/多选设置行 | 已移植并完成离屏验收 | 对应 `TextValue / BoundsNumberValue / SlotValue / KeyValue / GroupValue / MultiBoolValue` 与实际 Fatality 控件已落地；动态条件与父组共同控制可见性 |
+| 物品图标（预览卡的装备行） | 未移植 | 物品渲染通路仍未实现，与设置值/GUI 可见性无关 |
 | HUD / HUD 编辑器 | 已随旧 UI 库删除 | 用户确认删除；需要时按新绘制层重写 |

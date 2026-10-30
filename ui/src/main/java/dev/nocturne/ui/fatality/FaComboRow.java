@@ -1,6 +1,7 @@
 package dev.nocturne.ui.fatality;
 
 import dev.nocturne.client.value.ModeValue;
+import dev.nocturne.client.value.MultiBoolValue;
 import dev.nocturne.client.value.Value;
 
 import java.util.function.Supplier;
@@ -52,6 +53,42 @@ final class FaComboRow extends FaRow {
             @Override
             public String get() {
                 return mode.get();
+            }
+        });
+    }
+
+    /** 由多选设置构造列表；切换后保持弹层打开。 */
+    static FaComboRow multi(final MultiBoolValue multi) {
+        FaListPopup.Model model = new FaListPopup.Model() {
+            @Override
+            public int size() {
+                return multi.options().size();
+            }
+
+            @Override
+            public String label(int index) {
+                return multi.options().get(index);
+            }
+
+            @Override
+            public boolean selected(int index) {
+                return multi.selected(multi.options().get(index));
+            }
+
+            @Override
+            public void click(int index) {
+                multi.toggle(multi.options().get(index));
+            }
+
+            @Override
+            public boolean multi() {
+                return true;
+            }
+        };
+        return new FaComboRow(multi, model, new Supplier<String>() {
+            @Override
+            public String get() {
+                return multi.display();
             }
         });
     }

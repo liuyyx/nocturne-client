@@ -2,9 +2,16 @@ import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.Module;
 import dev.nocturne.client.module.ModuleRegistry;
 import dev.nocturne.client.value.BooleanValue;
+import dev.nocturne.client.value.BoundsNumberValue;
 import dev.nocturne.client.value.ColorValue;
+import dev.nocturne.client.value.GroupValue;
+import dev.nocturne.client.value.KeyValue;
 import dev.nocturne.client.value.ModeValue;
+import dev.nocturne.client.value.MultiBoolValue;
+import dev.nocturne.client.value.NumberBounds;
 import dev.nocturne.client.value.NumberValue;
+import dev.nocturne.client.value.SlotValue;
+import dev.nocturne.client.value.TextValue;
 import dev.nocturne.ui.fatality.FaClickGui;
 import dev.nocturne.ui.render.Color;
 import dev.nocturne.ui.render.Renderer;
@@ -213,6 +220,7 @@ public final class LabFatalityGui {
 
     /** 造一批带真实设置项的模块，让卡片里出现每类控件。 */
     private static void registerModules(ModuleRegistry registry) {
+        registry.register(controlsModule());
         registry.register(module("FullBright", Category.RENDER, true));
         registry.register(module("ESP", Category.RENDER, true));
         registry.register(module("NameTags", Category.RENDER, false));
@@ -220,6 +228,32 @@ public final class LabFatalityGui {
         registry.register(module("Sprint", Category.MOVEMENT, false));
         registry.register(module("AutoRespawn", Category.PLAYER, false));
         registry.register(module("Panic", Category.MISC, false));
+    }
+
+    /** 扩展控件验收卡：六类新设置与展开的子设置同时出现。 */
+    private static Module controlsModule() {
+        return new Module() {
+            final TextValue text = add(new TextValue("Text", "Nocturne", 24));
+            final BoundsNumberValue bounds = add(new BoundsNumberValue("Bounds",
+                    new NumberBounds(2.0, 8.0), 0.0, 12.0, 0.5));
+            final SlotValue slot = add(new SlotValue("Slot", 2));
+            final KeyValue key = add(new KeyValue("Key", java.awt.event.KeyEvent.VK_R));
+            final MultiBoolValue multi = add(new MultiBoolValue("Targets",
+                    java.util.Arrays.asList("Players", "Mobs", "Items"),
+                    java.util.Arrays.asList("Players", "Mobs")));
+            final GroupValue group = add(new GroupValue("Advanced",
+                    java.util.Collections.singletonList(new BooleanValue("Nested", true)), true));
+
+            @Override
+            public String name() {
+                return "Controls";
+            }
+
+            @Override
+            public Category category() {
+                return Category.RENDER;
+            }
+        };
     }
 
     /** 造一个模块：带布尔、数值、枚举、颜色四类设置项。 */

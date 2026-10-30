@@ -2,9 +2,15 @@ package dev.nocturne.ui.fatality;
 
 import dev.nocturne.client.module.Module;
 import dev.nocturne.client.value.BooleanValue;
+import dev.nocturne.client.value.BoundsNumberValue;
 import dev.nocturne.client.value.ColorValue;
+import dev.nocturne.client.value.GroupValue;
+import dev.nocturne.client.value.KeyValue;
 import dev.nocturne.client.value.ModeValue;
+import dev.nocturne.client.value.MultiBoolValue;
 import dev.nocturne.client.value.NumberValue;
+import dev.nocturne.client.value.SlotValue;
+import dev.nocturne.client.value.TextValue;
 import dev.nocturne.client.value.Value;
 
 import java.util.ArrayList;
@@ -50,20 +56,40 @@ final class FaGroup extends FaBox {
         this.module = module;
         rows.add(new FaEnableRow(module));
         for (Value<?> value : module.values()) {
-            FaRow row = create(value);
-            if (row != null) {
-                rows.add(row);
-            }
+            appendRows(value, null);
         }
         matched = new boolean[rows.size()];
         java.util.Arrays.fill(matched, true);
     }
 
+    /** 添加一行；GroupValue 的子行继承父组与其自身两层可见性条件。 */
+    private void appendRows(final Value<?> value, final java.util.function.BooleanSupplier parent) {
+        FaRow row = create(value);
+        if (row == null) {
+            return;
+        }
+        row.parentVisibility(parent);
+        rows.add(row);
+        if (!(value instanceof GroupValue)) {
+            return;
+        }
+        final GroupValue group = (GroupValue) value;
+        java.util.function.BooleanSupplier children = new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return (parent == null || parent.getAsBoolean()) && group.get() && group.visible();
+            }
+        };
+        for (Value<?> child : group.children()) {
+            appendRows(child, children);
+        }
+    }
+
     /**
      * 把一个设置项映射成界面行。
      *
-     * <p>本项目只有四类设置项（{@link BooleanValue}/{@link NumberValue}/{@link ModeValue}/
-     * {@link ColorValue}），其余类型跳过——画不出来的行不如不画。
+     * <p>支持基础四类与 Text/Bounds/Slot/Key/MultiBool/Group 扩展设置；未知类型跳过并保留
+     * 显式扩展点，不再让已支持的模型类型静默丢行。
      *
      * @return 对应的行；无法映射时返回 {@code null}
      */
@@ -84,6 +110,35 @@ final class FaGroup extends FaBox {
         }
         if (value instanceof NumberValue) {
             return new FaSliderRow((NumberValue) value);
+        }
+        if (value instanceof TextValue) {
+            return new FaTextRow((TextValue) value);
+        }
+        if (value instanceof BoundsNumberValue) {
+            return new FaBoundsRow((BoundsNumberValue) value);
+        }
+        if (value instanceof SlotValue) {
+            return new FaSlotRow((SlotValue) value);
+        }
+        if (value instanceof KeyValue) {
+            return new FaKeyRow((KeyValue) value);
+        }
+        if (value instanceof MultiBoolValue) {
+            return FaComboRow.multi((MultiBoolValue) value);
+        }
+        if (value instanceof GroupValue) {
+            final GroupValue group = (GroupValue) value;
+            return new FaCheckRow(group, group.name(), new java.util.function.BooleanSupplier() {
+                @Override
+                public boolean getAsBoolean() {
+                    return group.get();
+                }
+            }, new java.util.function.Consumer<Boolean>() {
+                @Override
+                public void accept(Boolean next) {
+                    group.set(next);
+                }
+            });
         }
         if (value instanceof ModeValue) {
             return FaComboRow.single((ModeValue) value);

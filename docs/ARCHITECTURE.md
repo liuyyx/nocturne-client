@@ -90,7 +90,10 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 ### 3.3 client（客户端核心）
 
 - **模块框架**：`Module` 基类 + `ModuleRegistry`（按名唯一、分类查询、驱动闸门）
-  + 值体系（`BooleanValue` / `NumberValue` / `ColorValue` / `ModeValue`）。
+  + 值体系（`BooleanValue` / `NumberValue` / `ColorValue` / `ModeValue` / `TextValue` /
+  `BoundsNumberValue` / `SlotValue` / `KeyValue` / `MultiBoolValue` / `GroupValue`）。
+  每个 `Value` 都可用 `visibleWhen` 声明动态 GUI 条件；隐藏行高度归零。`GroupValue` 的展开状态与
+  父组、子项自身条件共同决定子行可见性，六类扩展设置均有实际 Fatality 控件。
   分类为 `COMBAT` / `MOVEMENT` / `RENDER` / `WORLD` / `INVENTORY` / `PLAYER` / `MISC`；
   模块实现在 `module.modules.<分类小写>` 下分包，注册顺序按分类连续。GUI 只为非空分类建立 Tab。
 - **事件总线**：`EventBus`，同步、先按优先级再按同级注册顺序、逐订阅者异常隔离。

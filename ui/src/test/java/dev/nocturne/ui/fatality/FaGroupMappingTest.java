@@ -3,9 +3,16 @@ package dev.nocturne.ui.fatality;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.Module;
 import dev.nocturne.client.value.BooleanValue;
+import dev.nocturne.client.value.BoundsNumberValue;
 import dev.nocturne.client.value.ColorValue;
+import dev.nocturne.client.value.GroupValue;
+import dev.nocturne.client.value.KeyValue;
 import dev.nocturne.client.value.ModeValue;
+import dev.nocturne.client.value.MultiBoolValue;
+import dev.nocturne.client.value.NumberBounds;
 import dev.nocturne.client.value.NumberValue;
+import dev.nocturne.client.value.SlotValue;
+import dev.nocturne.client.value.TextValue;
 import dev.nocturne.client.value.Value;
 
 import dev.nocturne.ui.RecordingRenderer;
@@ -15,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,6 +48,23 @@ class FaGroupMappingTest {
         final ModeValue mode = add(new ModeValue("Mode", "A", "A", "B"));
         /** 颜色设置。 */
         final ColorValue tint = add(new ColorValue("Tint", 0xFF112233));
+        /** 文本设置。 */
+        final TextValue text = add(new TextValue("Text", "abc", 16));
+        /** 区间设置。 */
+        final BoundsNumberValue range = add(new BoundsNumberValue("Range",
+                new NumberBounds(2.0, 8.0), 0.0, 10.0, 0.5));
+        /** 槽位设置。 */
+        final SlotValue slot = add(new SlotValue("Slot", 0));
+        /** 按键设置。 */
+        final KeyValue key = add(new KeyValue("Key", 0));
+        /** 多选设置。 */
+        final MultiBoolValue multi = add(new MultiBoolValue("Multi",
+                Arrays.asList("A", "B"), Arrays.asList("A")));
+        /** 分组子项；只通过父组加入 GUI。 */
+        final BooleanValue nested = new BooleanValue("Nested", true);
+        /** 分组设置。 */
+        final GroupValue grouped = add(new GroupValue("Grouped",
+                java.util.Collections.singletonList(nested), false));
         /** 不受支持的类型：必须被跳过。 */
         final Value<Integer> opaque = add(new Value<Integer>("Opaque", 1) {
             @Override
@@ -80,12 +105,19 @@ class FaGroupMappingTest {
         FaGroup group = new FaGroup(new LabModule());
         List<FaRow> rows = group.rows();
 
-        assertEquals(5, rows.size(), "Enabled + four supported values; the unknown type is skipped");
+        assertEquals(12, rows.size(), "Enabled + ten values + one nested child; unknown is skipped");
         assertTrue(rows.get(0) instanceof FaEnableRow, "the first row is the module switch");
         assertTrue(rows.get(1) instanceof FaCheckRow, "BooleanValue maps to a checkbox");
         assertTrue(rows.get(2) instanceof FaSliderRow, "NumberValue maps to a slider");
         assertTrue(rows.get(3) instanceof FaComboRow, "ModeValue maps to a combo");
         assertTrue(rows.get(4) instanceof FaColorRow, "ColorValue maps to a colour chip");
+        assertTrue(rows.get(5) instanceof FaTextRow);
+        assertTrue(rows.get(6) instanceof FaBoundsRow);
+        assertTrue(rows.get(7) instanceof FaSlotRow);
+        assertTrue(rows.get(8) instanceof FaKeyRow);
+        assertTrue(rows.get(9) instanceof FaComboRow);
+        assertTrue(rows.get(10) instanceof FaCheckRow);
+        assertTrue(rows.get(11) instanceof FaCheckRow);
     }
 
     /** 未知类型必须被丢弃（返回 {@code null}）而不是抛异常。 */
@@ -123,6 +155,55 @@ class FaGroupMappingTest {
 
         assertTrue(narrowed < full, "hidden rows must not contribute height");
         assertTrue(narrowed > 0f);
+    }
+
+    /** 条件隐藏的行高度归零，不再占据卡片布局。 */
+    @Test
+    void conditionalRowHasZeroTargetHeight() {
+        LabModule module = new LabModule();
+        FaGroup group = new FaGroup(module);
+        float full = group.targetHeight();
+
+        module.amount.visibleWhen(new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return false;
+            }
+        });
+
+        assertFalse(group.rows().get(2).visible());
+        assertEquals(0.0f, group.rows().get(2).targetHeight());
+        assertTrue(group.targetHeight() < full);
+    }
+
+    /** 子行同时受父组展开状态、父组自身条件和子项条件约束。 */
+    @Test
+    void groupedChildrenCombineParentAndOwnVisibility() {
+        LabModule module = new LabModule();
+        FaGroup group = new FaGroup(module);
+        FaRow parent = group.rows().get(10);
+        FaRow child = group.rows().get(11);
+
+        assertTrue(parent.visible());
+        assertFalse(child.visible());
+        module.grouped.set(true);
+        assertTrue(child.visible());
+        module.nested.visibleWhen(new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return false;
+            }
+        });
+        assertFalse(child.visible());
+        module.nested.visibleWhen(null);
+        module.grouped.visibleWhen(new java.util.function.BooleanSupplier() {
+            @Override
+            public boolean getAsBoolean() {
+                return false;
+            }
+        });
+        assertFalse(parent.visible());
+        assertFalse(child.visible());
     }
 
     /** 图标字形在退化模式下换成 ASCII 别名：Lucide 的私用区码点在游戏字体里是个方框。 */

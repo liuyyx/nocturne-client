@@ -25,6 +25,8 @@ abstract class FaRow {
     protected float w;
     /** 上一帧是否真的画出来（被滚动裁掉时为 false），命中测试据此短路。 */
     protected boolean shown;
+    /** 父组附加的可见性条件；顶层行为 {@code null}。 */
+    private java.util.function.BooleanSupplier parentVisibility;
 
     protected FaRow(Value<?> value, String label) {
         this.value = value;
@@ -32,9 +34,16 @@ abstract class FaRow {
         this.visibility = new FaMotion(visible() ? 1.0f : 0.0f);
     }
 
-    /** @return 本行当前是否应显示；设置项不存在时恒为 true */
+    /** @return 本行当前是否应显示；设置项不存在时只看父组条件 */
     boolean visible() {
-        return true;
+        return (value == null || value.visible())
+                && (parentVisibility == null || parentVisibility.getAsBoolean());
+    }
+
+    /** 绑定父组条件，供 GroupValue 的子行使用。 */
+    void parentVisibility(java.util.function.BooleanSupplier condition) {
+        parentVisibility = condition;
+        visibility.snap(visible() ? 1.0f : 0.0f);
     }
 
     /** @return 稳定高度（设计单位），用于列高平衡 */

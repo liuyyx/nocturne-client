@@ -423,6 +423,20 @@
                         "neoforge": "Lnet/minecraft/client/player/LocalPlayer;"
                     }
                 },
+                "rightClickDelay": {
+                    "names": {
+                        "vanilla": "aR",
+                        "fabric": "field_1752",
+                        "forge": "f_91011_",
+                        "neoforge": "rightClickDelay"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I",
+                        "neoforge": "I"
+                    }
+                },
                 "screen": {
                     "names": {
                         "vanilla": "x",
@@ -2182,6 +2196,20 @@
                         "neoforge": "()Lnet/minecraft/world/phys/Vec3;"
                     }
                 },
+                "setDeltaMovement": {
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "method_18799",
+                        "forge": "m_20256_",
+                        "neoforge": "setDeltaMovement"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lftm;)V",
+                        "fabric": "(Lnet/minecraft/class_243;)V",
+                        "forge": "(Lnet/minecraft/world/phys/Vec3;)V",
+                        "neoforge": "(Lnet/minecraft/world/phys/Vec3;)V"
+                    }
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "a_",
@@ -2227,6 +2255,12 @@
                     }
                 },
                 "isDead": {
+                    "absent": true
+                },
+                "motionX": {
+                    "absent": true
+                },
+                "motionZ": {
                     "absent": true
                 },
                 "noPhysics": {
@@ -2449,6 +2483,20 @@
                         "neoforge": "()Lnet/minecraft/network/chat/Component;"
                     }
                 },
+                "getOffhandItem": {
+                    "names": {
+                        "vanilla": "fy",
+                        "fabric": "method_6079",
+                        "forge": "m_21206_",
+                        "neoforge": "getOffhandItem"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ldlt;",
+                        "fabric": "()Lnet/minecraft/class_1799;",
+                        "forge": "()Lnet/minecraft/world/item/ItemStack;",
+                        "neoforge": "()Lnet/minecraft/world/item/ItemStack;"
+                    }
+                },
                 "getSpeed": {
                     "names": {
                         "vanilla": "fM",
@@ -2561,6 +2609,20 @@
                         "fabric": "D",
                         "forge": "D",
                         "neoforge": "D"
+                    }
+                },
+                "hurtTime": {
+                    "names": {
+                        "vanilla": "bu",
+                        "fabric": "field_6235",
+                        "forge": "f_20916_",
+                        "neoforge": "hurtTime"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I",
+                        "neoforge": "I"
                     }
                 },
                 "jumping": {
@@ -3420,6 +3482,26 @@
                 }
             }
         },
+        "net/minecraft/world/item/BlockItem": {
+            "names": {
+                "vanilla": "dkb",
+                "fabric": "net.minecraft.class_1747",
+                "forge": "net.minecraft.world.item.BlockItem",
+                "neoforge": "net.minecraft.world.item.BlockItem"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/EggItem": {
+            "names": {
+                "vanilla": "dkt",
+                "fabric": "net.minecraft.class_1771",
+                "forge": "net.minecraft.world.item.EggItem",
+                "neoforge": "net.minecraft.world.item.EggItem"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/item/Item": {
             "names": {
                 "vanilla": "dlp",
@@ -3461,6 +3543,16 @@
                 "fabric": "net.minecraft.class_1802",
                 "forge": "net.minecraft.world.item.Items",
                 "neoforge": "net.minecraft.world.item.Items"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/SnowballItem": {
+            "names": {
+                "vanilla": "dmy",
+                "fabric": "net.minecraft.class_1823",
+                "forge": "net.minecraft.world.item.SnowballItem",
+                "neoforge": "net.minecraft.world.item.SnowballItem"
             },
             "methods": {},
             "fields": {}

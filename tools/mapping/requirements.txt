@@ -27,6 +27,7 @@ net/minecraft/client/Minecraft#hitResult
 net/minecraft/client/Minecraft#level
 net/minecraft/client/Minecraft#options
 net/minecraft/client/Minecraft#player
+net/minecraft/client/Minecraft#rightClickDelay
 net/minecraft/client/Minecraft#screen
 net/minecraft/client/Minecraft#displayGuiScreen()
 net/minecraft/client/Minecraft#getInstance()
@@ -166,6 +167,11 @@ net/minecraft/world/entity/Entity#onGround
 net/minecraft/world/entity/Entity#tickCount
 net/minecraft/world/entity/Entity#xRotO
 net/minecraft/world/entity/Entity#yRotO
+# 运动状态：现代走方法，1.8.9/1.12.2 走 motionX/motionZ 字段（KeepSprint 两条路径）。
+net/minecraft/world/entity/Entity#getDeltaMovement()
+net/minecraft/world/entity/Entity#setDeltaMovement()
+net/minecraft/world/entity/Entity#motionX
+net/minecraft/world/entity/Entity#motionZ
 net/minecraft/world/entity/Entity#distanceToSqr()
 net/minecraft/world/entity/Entity#getEyePosition()
 net/minecraft/world/entity/Entity#getId()
@@ -194,6 +200,7 @@ net/minecraft/world/entity/LivingEntity#yBodyRot
 net/minecraft/world/entity/LivingEntity#yHeadRot
 net/minecraft/world/entity/LivingEntity#yHeadRotO
 net/minecraft/world/entity/LivingEntity#distanceToSqr()
+net/minecraft/world/entity/LivingEntity#hurtTime
 net/minecraft/world/entity/LivingEntity#getEyePosition()
 net/minecraft/world/entity/LivingEntity#getHealth()
 net/minecraft/world/entity/LivingEntity#getId()
@@ -208,6 +215,7 @@ net/minecraft/world/entity/LivingEntity#setSprinting()
 net/minecraft/world/entity/LivingEntity#swing()
 # 主手物品（Trajectories 判"是否持有可投掷物"）：1.8.9 走别名桥 → EntityLivingBase.getHeldItem
 net/minecraft/world/entity/LivingEntity#getMainHandItem()
+net/minecraft/world/entity/LivingEntity#getOffhandItem()
 
 net/minecraft/world/entity/Mob
 net/minecraft/world/entity/Mob#fallDistance
@@ -272,6 +280,10 @@ net/minecraft/world/item/Item
 
 net/minecraft/world/item/ItemStack
 net/minecraft/world/item/ItemStack#getItem()
+net/minecraft/world/item/Item
+net/minecraft/world/item/BlockItem
+net/minecraft/world/item/SnowballItem
+net/minecraft/world/item/EggItem
 
 net/minecraft/world/item/Items
 

@@ -49,6 +49,9 @@ public final class GameBridge {
     private final ConcurrentHashMap<FieldKey, Field> fieldCache = new ConcurrentHashMap<FieldKey, Field>();
     /** 已成功定位的方法句柄，键为（宿主类，方法名，形参签名）。 */
     private final ConcurrentHashMap<MethodKey, Method> methodCache = new ConcurrentHashMap<MethodKey, Method>();
+    /** 已成功解析的映射类；只缓存成功结果，类晚加载时仍可重试。 */
+    private final ConcurrentHashMap<ClassType, Class<?>> typeCache =
+            new ConcurrentHashMap<ClassType, Class<?>>();
     /** 日志限流计数器，避免热路径上的失败信息刷屏。 */
     private final AtomicLong logCount = new AtomicLong();
 
@@ -210,6 +213,34 @@ public final class GameBridge {
             return player.getClass().getClassLoader();
         }
         return GameBridge.class.getClassLoader();
+    }
+
+    /** @return 映射类；尚未加载或该版本没有此类时返回 {@code null}，失败不缓存 */
+    public Class<?> type(ClassType wanted) {
+        if (wanted == null) {
+            return null;
+        }
+        Class<?> cached = typeCache.get(wanted);
+        if (cached != null) {
+            return cached;
+        }
+        ClassLoader loader = gameLoader();
+        for (String name : mapping.classNameCandidates(wanted)) {
+            try {
+                Class<?> resolved = Class.forName(name.replace('/', '.'), false, loader);
+                typeCache.put(wanted, resolved);
+                return resolved;
+            } catch (Throwable ignored) {
+                // 按候选顺序继续；全部失败由调用方按能力缺失处理。
+            }
+        }
+        return null;
+    }
+
+    /** @return {@code value} 是否为映射类 {@code type} 的实例；类缺失时返回 false */
+    public boolean isInstance(Object value, ClassType type) {
+        Class<?> resolved = type(type);
+        return resolved != null && resolved.isInstance(value);
     }
 
     /** @return 当前是否处于世界中（本地玩家已可用） */

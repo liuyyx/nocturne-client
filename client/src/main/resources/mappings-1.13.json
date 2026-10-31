@@ -221,6 +221,17 @@
                         "fabric": "Lnet/minecraft/class_746;"
                     }
                 },
+                "rightClickDelay": {
+                    "names": {
+                        "vanilla": "ak",
+                        "fabric": "field_1752",
+                        "forge": "field_71467_ac"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I"
+                    }
+                },
                 "screen": {
                     "names": {
                         "vanilla": "m",
@@ -1372,6 +1383,9 @@
                         "forge": "(DDD)D"
                     }
                 },
+                "setDeltaMovement": {
+                    "absent": true
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "b",
@@ -1418,6 +1432,28 @@
                     "descriptors": {
                         "vanilla": "Z",
                         "fabric": "Z"
+                    }
+                },
+                "motionX": {
+                    "names": {
+                        "vanilla": "t",
+                        "fabric": "field_5967",
+                        "forge": "field_70159_w"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D"
+                    }
+                },
+                "motionZ": {
+                    "names": {
+                        "vanilla": "v",
+                        "fabric": "field_6006",
+                        "forge": "field_70179_y"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D"
                     }
                 },
                 "noPhysics": {
@@ -1576,6 +1612,9 @@
                 "getName": {
                     "absent": true
                 },
+                "getOffhandItem": {
+                    "absent": true
+                },
                 "getSpeed": {
                     "names": {
                         "vanilla": "cK",
@@ -1662,6 +1701,17 @@
                     "descriptors": {
                         "vanilla": "F",
                         "fabric": "F"
+                    }
+                },
+                "hurtTime": {
+                    "names": {
+                        "vanilla": "aB",
+                        "fabric": "field_6235",
+                        "forge": "field_70737_aN"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I"
                     }
                 },
                 "jumping": {
@@ -2338,6 +2388,24 @@
                 }
             }
         },
+        "net/minecraft/world/item/BlockItem": {
+            "names": {
+                "vanilla": "arf",
+                "fabric": "net.minecraft.class_1747",
+                "forge": "net.minecraft.item.ItemBlock"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/EggItem": {
+            "names": {
+                "vanilla": "asb",
+                "fabric": "net.minecraft.class_1771",
+                "forge": "net.minecraft.item.ItemEgg"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/item/Item": {
             "names": {
                 "vanilla": "asw",
@@ -2374,6 +2442,15 @@
                 "vanilla": "atb",
                 "fabric": "net.minecraft.class_1802",
                 "forge": "net.minecraft.init.Items"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/SnowballItem": {
+            "names": {
+                "vanilla": "atx",
+                "fabric": "net.minecraft.class_1823",
+                "forge": "net.minecraft.item.ItemSnowball"
             },
             "methods": {},
             "fields": {}

@@ -230,6 +230,16 @@
                         "fabric": "Lnet/minecraft/class_746;"
                     }
                 },
+                "rightClickDelay": {
+                    "names": {
+                        "vanilla": "aq",
+                        "fabric": "field_1752"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I"
+                    }
+                },
                 "screen": {
                     "names": {
                         "vanilla": "m",
@@ -1286,6 +1296,9 @@
                         "fabric": "(DDD)D"
                     }
                 },
+                "setDeltaMovement": {
+                    "absent": true
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "b",
@@ -1326,6 +1339,26 @@
                     "descriptors": {
                         "vanilla": "Z",
                         "fabric": "Z"
+                    }
+                },
+                "motionX": {
+                    "names": {
+                        "vanilla": "s",
+                        "fabric": "field_5967"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D"
+                    }
+                },
+                "motionZ": {
+                    "names": {
+                        "vanilla": "u",
+                        "fabric": "field_6006"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D"
                     }
                 },
                 "noPhysics": {
@@ -1465,6 +1498,9 @@
                 "getName": {
                     "absent": true
                 },
+                "getOffhandItem": {
+                    "absent": true
+                },
                 "getSpeed": {
                     "names": {
                         "vanilla": "cp",
@@ -1538,6 +1574,16 @@
                     "descriptors": {
                         "vanilla": "F",
                         "fabric": "F"
+                    }
+                },
+                "hurtTime": {
+                    "names": {
+                        "vanilla": "az",
+                        "fabric": "field_6235"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I"
                     }
                 },
                 "jumping": {
@@ -2131,6 +2177,22 @@
                 }
             }
         },
+        "net/minecraft/world/item/BlockItem": {
+            "names": {
+                "vanilla": "acl",
+                "fabric": "net.minecraft.class_1747"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/EggItem": {
+            "names": {
+                "vanilla": "adf",
+                "fabric": "net.minecraft.class_1771"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/item/Item": {
             "names": {
                 "vanilla": "adx",
@@ -2155,6 +2217,14 @@
             "names": {
                 "vanilla": "aeb",
                 "fabric": "net.minecraft.class_1802"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/SnowballItem": {
+            "names": {
+                "vanilla": "afc",
+                "fabric": "net.minecraft.class_1823"
             },
             "methods": {},
             "fields": {}

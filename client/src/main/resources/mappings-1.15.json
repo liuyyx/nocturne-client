@@ -370,6 +370,18 @@
                         "forge": "Lnet/minecraft/client/entity/player/ClientPlayerEntity;"
                     }
                 },
+                "rightClickDelay": {
+                    "names": {
+                        "vanilla": "aC",
+                        "fabric": "field_1752",
+                        "forge": "field_71467_ac"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I"
+                    }
+                },
                 "screen": {
                     "names": {
                         "vanilla": "x",
@@ -1795,6 +1807,18 @@
                         "forge": "()Lnet/minecraft/util/math/Vec3d;"
                     }
                 },
+                "setDeltaMovement": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_18799",
+                        "forge": "func_213317_d"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcvi;)V",
+                        "fabric": "(Lnet/minecraft/class_243;)V",
+                        "forge": "(Lnet/minecraft/util/math/Vec3d;)V"
+                    }
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "d",
@@ -1834,6 +1858,12 @@
                     }
                 },
                 "isDead": {
+                    "absent": true
+                },
+                "motionX": {
+                    "absent": true
+                },
+                "motionZ": {
                     "absent": true
                 },
                 "noPhysics": {
@@ -2025,6 +2055,18 @@
                         "forge": "()Lnet/minecraft/util/text/ITextComponent;"
                     }
                 },
+                "getOffhandItem": {
+                    "names": {
+                        "vanilla": "dk",
+                        "fabric": "method_6079",
+                        "forge": "func_184592_cb"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbek;",
+                        "fabric": "()Lnet/minecraft/class_1799;",
+                        "forge": "()Lnet/minecraft/item/ItemStack;"
+                    }
+                },
                 "getSpeed": {
                     "names": {
                         "vanilla": "dt",
@@ -2121,6 +2163,18 @@
                         "vanilla": "F",
                         "fabric": "F",
                         "forge": "F"
+                    }
+                },
+                "hurtTime": {
+                    "names": {
+                        "vanilla": "av",
+                        "fabric": "field_6235",
+                        "forge": "field_70737_aN"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I"
                     }
                 },
                 "jumping": {
@@ -2861,6 +2915,24 @@
                 }
             }
         },
+        "net/minecraft/world/item/BlockItem": {
+            "names": {
+                "vanilla": "bcm",
+                "fabric": "net.minecraft.class_1747",
+                "forge": "net.minecraft.item.BlockItem"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/EggItem": {
+            "names": {
+                "vanilla": "bdl",
+                "fabric": "net.minecraft.class_1771",
+                "forge": "net.minecraft.item.EggItem"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/item/Item": {
             "names": {
                 "vanilla": "bef",
@@ -2897,6 +2969,15 @@
                 "vanilla": "bel",
                 "fabric": "net.minecraft.class_1802",
                 "forge": "net.minecraft.item.Items"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/item/SnowballItem": {
+            "names": {
+                "vanilla": "bfh",
+                "fabric": "net.minecraft.class_1823",
+                "forge": "net.minecraft.item.SnowballItem"
             },
             "methods": {},
             "fields": {}

@@ -73,6 +73,9 @@ version = "1.8.9"
 "net/minecraft/world/entity/player/Inventory" = "net/minecraft/entity/player/InventoryPlayer"
 "net/minecraft/world/item/ItemStack" = "net/minecraft/item/ItemStack"
 "net/minecraft/world/item/Item" = "net/minecraft/item/Item"
+"net/minecraft/world/item/BlockItem" = "net/minecraft/item/ItemBlock"
+"net/minecraft/world/item/SnowballItem" = "net/minecraft/item/ItemSnowball"
+"net/minecraft/world/item/EggItem" = "net/minecraft/item/ItemEgg"
 "net/minecraft/world/item/Items" = "net/minecraft/init/Items"
 "net/minecraft/world/inventory/AbstractContainerMenu" = "net/minecraft/inventory/Container"
 "net/minecraft/world/level/block/state/BlockState" = "net/minecraft/block/state/IBlockState"
@@ -447,6 +450,10 @@ mcp = "fovSetting"
 scope = "net/minecraft/client/settings/GameSettings"
 note = "类型差：1.8.9 是 float，不是 OptionInstance"
 
+[fields.rightClickDelay]
+mcp = "rightClickDelayTimer"
+scope = "net/minecraft/client/Minecraft"
+
 [fields.gamma]
 mcp = "gammaSetting"
 scope = "net/minecraft/client/settings/GameSettings"
@@ -468,6 +475,19 @@ scope = "net/minecraft/entity/Entity"
 [fields.xRotO]
 mcp = "prevRotationPitch"
 scope = "net/minecraft/entity/Entity"
+
+[fields.motionX]
+mcp = "motionX"
+scope = "net/minecraft/entity/Entity"
+note = "1.8.9/1.12.2 的水平动量字段；现代没有该字段，动作层改用 getDeltaMovement"
+
+[fields.motionZ]
+mcp = "motionZ"
+scope = "net/minecraft/entity/Entity"
+
+[fields.hurtTime]
+mcp = "hurtTime"
+scope = "net/minecraft/entity/EntityLivingBase"
 
 [fields.fallDistance]
 mcp = "fallDistance"

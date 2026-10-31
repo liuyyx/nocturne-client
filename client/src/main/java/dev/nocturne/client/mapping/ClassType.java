@@ -63,6 +63,14 @@ public enum ClassType {
     FONT("net.minecraft.client.gui.Font"),
     /** 物品栈。 */
     ITEM_STACK("net.minecraft.world.item.ItemStack"),
+    /** 物品基类；FastPlace 的方块/投掷物分类判定。 */
+    ITEM("net.minecraft.world.item.Item"),
+    /** 方块物品。 */
+    BLOCK_ITEM("net.minecraft.world.item.BlockItem"),
+    /** 雪球物品。 */
+    SNOWBALL_ITEM("net.minecraft.world.item.SnowballItem"),
+    /** 鸡蛋物品。 */
+    EGG_ITEM("net.minecraft.world.item.EggItem"),
     /** 药水效果类型（夜视等）；1.8.9 名 Potion。 */
     MOB_EFFECT("net.minecraft.world.effect.MobEffect"),
     /** 效果常量持有类；旧映射可与效果类型共用同一个运行时类。 */

@@ -176,6 +176,7 @@ public final class NocturneClient {
     /** 客户端开箱即带的模块。 */
     private void registerModules() {
         modules.register(new dev.nocturne.client.module.modules.movement.SprintModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.KeepSprintModule());
         modules.register(new dev.nocturne.client.module.modules.render.WatermarkModule());
         modules.register(new dev.nocturne.client.module.modules.render.FullBrightModule());
         modules.register(new dev.nocturne.client.module.modules.render.StorageEspModule());
@@ -190,6 +191,7 @@ public final class NocturneClient {
         // 接入渲染管线后在这里重新注册（类与门逻辑保留在 XrayModule）。
         modules.register(new dev.nocturne.client.module.modules.render.SearchModule());
         modules.register(new dev.nocturne.client.module.modules.player.AutoRespawnModule());
+        modules.register(new dev.nocturne.client.module.modules.player.FastPlaceModule());
         modules.register(new dev.nocturne.client.module.modules.misc.PanicModule());
     }
 

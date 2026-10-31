@@ -97,8 +97,11 @@
   `hook transform`、`gui draw hook active`、`frame hook is live`、`GUI overlay attached`，
   桌面截图可见三列 FatClickGui。`premain` 还提前注册 `LocalPlayer` 事件钩子，避免同样的
   Mixin 结构变化。
-- 26.3 attach（非启动期）仍无法改写已加载的 `Screen/Hud`；这是 JVM 结构校验限制，需要
-  `-javaagent` 启动期注入。启动期路径已在本轮真机验证。
+- **26.3 运行中 attach 已恢复 GUI**：先 `retransformClasses` 捕获包含 Fabric Mixin 接口的**当前字节**，
+  再在其上注入并 redefine，`Hud/Screen` 不再因接口集合变化被拒。真机日志出现
+  `hook transform`、`gui draw hook active`、`GUI overlay attached`，主菜单截图可见完整三栏。
+  游戏事件钩子（`LocalPlayer`/`Minecraft`）仍因 Mixin 结构无法 redefine，运行中 attach 下
+  NoFall 的 Motion 改写不可用；需要它时仍用启动期 `-javaagent`。
 - 开关键除配置键外额外接受 **INSERT**（AWT `VK_INSERT`）：第三方客户端常占用右 Shift，
   两个入口都能开关，避免“按了只开别人的面板”。1.8.9 已用真实按键注入分别验证右 Shift 与 INSERT。
 - 用户指正刷怪笼白天不刷怪；已把世界设为夜晚后验证，测试环境正确。
@@ -133,8 +136,10 @@
 - 26.3 真机：请求 yaw=90/pitch=20 后 `PlayerState` 立即读到 `yaw=90.0 pitch=20.0`；
   支撑方块非空气、上方目标为空气，`placeAt=true` 后目标 `targetAirAfter=false`（方块真实落下）。
 - 1.8.9 绑定面：`action.place=true`、`action.attack=true`、`action.click=true`、
-  `action.setRotation=true`；旧版放置候选 `onPlayerRightClick` 已进映射。1.8.9 未进入世界，
-  因此不声明 1.8.9 放置真机通过。
+  `action.setRotation=true`；旧版放置候选 `onPlayerRightClick` 已进映射。
+- 1.8.9 真机补齐：打开 GUI 时每帧把 `Minecraft.inGameHasFocus` 压为 false，实测 `true → false`
+  且移动鼠标后 yaw 不变；`Entity#onGround` 补 `onGround` 别名后 `PlayerState` 不再返回空快照，
+  Scaffold/AimAssist 能读到真实坐标。
 
 ## B7 大型状态机模块验收
 
@@ -142,6 +147,9 @@
   APS 与目标过滤执行真实 `MultiPlayerGameMode#attack`。
 - 26.3 真机：召唤僵尸后 `targets=1 distance≈3.0`，1–3 秒内血量由 20 → 18.12 → 14.06，
   证明攻击动作确实到达服务端。
+- 1.8.9 真机：帧钩子原先直接调 `FrameDispatcher.dispatch`，模块 tick 根本未执行；新增
+  `ModuleTicker` 挂到同一分发器后，`ticks` 正常增长，客户端测试僵尸 `targets=1 attacks=9`。
+- 1.8.9 的 `melee` 目标用客户端实体验证攻击调用；服务端血量变化未测量（测试实体非服务端生成）。
 
 ## B8 目标选择与视角模块验收
 
@@ -200,8 +208,8 @@
 
 | 版本 | 混淆 | 映射表来源 | 绘制代际 | 帧钩子目标 | 表状态 |
 |---|---|---|---|---|---|
-| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（192 具名成员；`--javap` 通过） |
-| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（188，`--javap` 通过） |
+| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（193 具名成员；`--javap` 通过） |
+| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（189，`--javap` 通过） |
 | 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（212，`--javap` 通过） |
 | 1.21.4 | ✅ **真机已实测**（BMWClient 整合包 + Fabric：`backend=gui-extractor`、`Screen.render` 钩子织入；我方 UI 渲染正常，被整合包自带 LiquidBounce 菜单覆盖） | ✅ | ✅ 已产出 | ✅ 可见（三列面板 + 中文标签） |
 | 1.21.10 | ✅ **真机已实测**（`1.21.10-opal` + Fabric：`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`overlay active`） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 文字） |

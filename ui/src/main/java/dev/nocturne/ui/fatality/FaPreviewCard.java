@@ -180,7 +180,7 @@ final class FaPreviewCard extends FaBox {
     private static void row(FaContext ctx, FaFont font, float x, float y, float width,
                             String label, String value, float alpha) {
         ctx.draw.textMid(label, x, y, font, FaTheme.alpha(FaTheme.MUTED, alpha));
-        String shown = FaTheme.fit(value, font, width * 0.55f);
+        String shown = FaTheme.fit(FaStrings.t(value), font, width * 0.55f);
         ctx.draw.textRightMid(shown, x + width, y, font, FaTheme.alpha(FaTheme.LABEL, alpha));
     }
 

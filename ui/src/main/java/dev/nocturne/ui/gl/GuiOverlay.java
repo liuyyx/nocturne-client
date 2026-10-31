@@ -1,7 +1,9 @@
 package dev.nocturne.ui.gl;
 
 import dev.nocturne.client.NocturneClient;
+import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.input.KeyMap;
+import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Module;
 import dev.nocturne.client.module.ModuleRegistry;
 import dev.nocturne.client.render.CameraState;
@@ -91,6 +93,8 @@ public final class GuiOverlay implements FrameListener {
     private boolean rightWasDown;
     /** 原生 Screen 关闭后的按压交接：松开前不得把它派发给自绘 GUI。 */
     private boolean nativeMouseHandoff;
+    /** 打开 GUI 前的 {@code Minecraft.inGameHasFocus}；关闭时恢复。 */
+    private Boolean focusBeforeGui;
     /** 上一帧指针 x（GUI 坐标），用于计算拖拽增量。 */
     private double lastX;
     /** 上一帧指针 y（GUI 坐标）。 */
@@ -153,6 +157,29 @@ public final class GuiOverlay implements FrameListener {
     /** @return 实际生效的输入后端名称，用于日志诊断；按键「没反应」时先看这里是不是 {@code "none"} */
     public String keyBackend() {
         return input.describe();
+    }
+
+    /**
+     * 1.8.9 的相机旋转由 {@code Minecraft.inGameHasFocus} 门控；仅释放指针不足以停止视角。
+     * 打开时每帧压为 false，关闭时恢复打开前的值。现代版本字段 absent，调用无副作用。
+     */
+    private void applyGameFocus(boolean open) {
+        NocturneClient client = NocturneClient.get();
+        GameBridge bridge = client == null ? null : client.gameBridge();
+        Object minecraft = bridge == null ? null : bridge.minecraft();
+        if (minecraft == null) {
+            return;
+        }
+        if (open) {
+            if (focusBeforeGui == null) {
+                Object current = bridge.readField(minecraft, ClassType.MINECRAFT, "inGameHasFocus");
+                focusBeforeGui = current instanceof Boolean ? (Boolean) current : Boolean.TRUE;
+            }
+            bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus", Boolean.FALSE);
+        } else if (focusBeforeGui != null) {
+            bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus", focusBeforeGui);
+            focusBeforeGui = null;
+        }
     }
 
     /** @return 配置键或 INSERT 任一按下；INSERT 用于规避第三方客户端占用右 Shift。 */
@@ -374,6 +401,7 @@ public final class GuiOverlay implements FrameListener {
         // 界面关闭期间完全不碰这个状态：主菜单/聊天/原生界面本来就需要可见光标，
         // 无条件捕获会把光标锁死——真机上「鼠标被锁」就是这里来的。
         boolean open = gui.isOpen();
+        applyGameFocus(open);
         // 用 = / - 手动调界面大小：与开关、指针捕获一样每帧轮询（按键只在这一层读）。
         handleScaleKeys(open);
         if (open) {

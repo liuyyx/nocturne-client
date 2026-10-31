@@ -902,8 +902,8 @@ public final class FaClickGui implements OverlayGui {
                 int color = group.module == active ? FaTheme.SIDE_TEXT_ACTIVE
                         : hovered ? FaTheme.LABEL
                         : group.module.isEnabled() ? FaTheme.SIDE_TEXT_ENABLED : FaTheme.SIDE_TEXT;
-                draw.textMid(FaTheme.fit(group.title(), font, FaTheme.SIDEBAR_W - 22.0f), wx + 16.0f,
-                        iy + SIDE_ITEM_H * 0.5f, font, color);
+                draw.textMid(FaTheme.fit(FaStrings.t(group.title()), font, FaTheme.SIDEBAR_W - 22.0f),
+                        wx + 16.0f, iy + SIDE_ITEM_H * 0.5f, font, color);
             }
             if (activeIndex >= 0) {
                 float target = activeIndex * SIDE_ITEM_H - offset;

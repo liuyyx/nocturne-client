@@ -193,6 +193,8 @@ public final class NocturneClient {
         registerModules();
         gameplayEvents = dev.nocturne.client.event.GameplayEvents.install(this);
         rotations.install(this);
+        dev.nocturne.client.runtime.NocturneRuntime.addListener(
+                new dev.nocturne.client.runtime.ModuleTicker(this));
         log("client installed (modules=" + modules.size() + ")");
         // 后续阶段：映射初始化、渲染/输入钩子、HUD。
     }

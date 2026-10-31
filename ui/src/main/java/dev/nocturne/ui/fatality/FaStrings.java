@@ -32,6 +32,9 @@ final class FaStrings {
         put("RENDER", "渲染");
         put("PLAYER", "玩家");
         put("MISC", "杂项");
+        put("COMBAT", "战斗");
+        put("WORLD", "世界");
+        put("INVENTORY", "背包");
         // 模块
         put("Sprint", "疾跑");
         put("FullBright", "夜视");
@@ -42,11 +45,20 @@ final class FaStrings {
         put("Trajectories", "弹道");
         put("Chams", "穿墙高亮");
         put("StorageESP", "容器透视");
+        put("SpawnerFinder", "刷怪笼查找");
         put("ItemESP", "物品透视");
         put("Search", "方块搜索");
         put("AutoRespawn", "自动重生");
         put("Xray", "矿物透视");
         put("Panic", "紧急关闭");
+        put("AutoClicker", "自动点击");
+        put("KeepSprint", "保持疾跑");
+        put("AimAssist", "瞄准辅助");
+        put("KillAura", "击杀光环");
+        put("Scaffold", "自动搭路");
+        put("FastPlace", "快速放置");
+        put("AutoTool", "自动选工具");
+        put("NoFall", "无摔落伤害");
         // 参数
         put("Enabled", "启用");
         put("Gamma", "亮度");
@@ -100,6 +112,51 @@ final class FaStrings {
         put("Hide Bots", "隐藏机器人");
         put("Highlight if focusing", "锁定高亮");
         put("Ghost Bow Charge", "拉弓残影");
+        // 新移植模块的参数
+        put("CPS", "每秒点击");
+        put("Randomization", "随机化");
+        put("Normal", "普通");
+        put("Extra", "额外");
+        put("Extra+", "额外+");
+        put("Jitter", "抖动");
+        put("Hold to click", "按住点击");
+        put("Trigger mode", "触发模式");
+        put("Cancel Invis", "隐身时取消");
+        put("Require mouse down", "需按住鼠标");
+        put("Aim vertically", "垂直瞄准");
+        put("Players", "玩家");
+        put("Mobs", "生物");
+        put("Horizontal speed", "水平速度");
+        put("Vertical speed", "垂直速度");
+        put("Max angle", "最大角度");
+        put("Target mode", "目标模式");
+        put("Yaw", "偏航角");
+        put("Swing range", "挥击距离");
+        put("Attack range", "攻击距离");
+        put("Attacks per Second", "每秒攻击次数");
+        put("Max targets", "最大目标数");
+        put("Rotate", "自动转向");
+        put("Delay", "延迟");
+        put("Held Item", "手持物品");
+        put("ALL", "全部");
+        put("BLOCKS", "方块");
+        put("PROJECTILES", "投掷物");
+        put("Instant swap", "立即切换");
+        put("Swap to delay", "切换延迟");
+        put("Swap back", "切回原槽");
+        put("Swap back delay", "切回延迟");
+        put("Only while sneaking", "仅潜行时");
+        put("Show distance", "显示距离");
+        put("Spawner names-whitelist", "刷怪笼名称白名单");
+        put("Player", "玩家");
+        put("Hit Slow Down During Velocity", "受击减速（击退时）");
+        put("Hit Slow Down Normal", "受击减速（普通）");
+        put("Buffer Decrease", "缓冲衰减");
+        put("Max Buffer", "最大缓冲");
+        put("Velocity Hit Sprint", "击退命中疾跑");
+        put("Normal Hit Sprint", "普通命中疾跑");
+        put("Buffer Abuse", "缓冲滥用");
+        put("Only In Air", "仅空中");
         // 界面文案
         put("Preview", "预览");
         put("Preview unavailable", "预览不可用");
@@ -120,6 +177,7 @@ final class FaStrings {
         put("Visible Color", "可见颜色");
         put("Render Trapped Chests", "渲染陷阱箱");
         put("No modules", "无模块");
+        put("Enter a world first", "请先进入世界");
         put("Search modules and settings", "搜索模块与设置");
     }
 

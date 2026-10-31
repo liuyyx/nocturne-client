@@ -49,6 +49,12 @@ public final class KillAuraModule extends Module {
     private volatile EventBus.Subscription mouseSubscription;
     private volatile boolean leftHeld;
     private long nextAttackNanos;
+    /** 最近一次 tick 的目标数，供真机诊断。 */
+    private volatile int lastTargetCount;
+    /** 已成功调用的攻击次数，供真机诊断。 */
+    private volatile int attackCount;
+    /** 注册表实际调用 onTick 的次数，供真机诊断。 */
+    private volatile int tickCount;
 
     @Override
     public String name() {
@@ -76,6 +82,7 @@ public final class KillAuraModule extends Module {
 
     @Override
     public void onTick() {
+        tickCount++;
         if (requireMouseDown.get() && !leftHeld) {
             return;
         }
@@ -90,6 +97,7 @@ public final class KillAuraModule extends Module {
         }
         configureOptions();
         List<TargetManager.Target> targets = client.targets().list(client, options);
+        lastTargetCount = targets.size();
         int limit = Math.max(1, maxTargets.get().intValue());
         boolean attacked = false;
         int attempts = 0;
@@ -103,6 +111,7 @@ public final class KillAuraModule extends Module {
             attempts++;
             if (actions.attack(target.entity())) {
                 attacked = true;
+                attackCount++;
             }
         }
         if (attacked) {
@@ -126,6 +135,21 @@ public final class KillAuraModule extends Module {
         double base = 1_000_000_000.0 / aps;
         // 固定 8 APS 会形成机器节拍；上下 15% 的抖动更接近手动点击。
         return (long) (base * (0.85 + random.nextDouble() * 0.3));
+    }
+
+    /** @return 最近一次 tick 通过过滤的目标数 */
+    public int lastTargetCount() {
+        return lastTargetCount;
+    }
+
+    /** @return 本次启用以来成功调用攻击动作的次数 */
+    public int attackCount() {
+        return attackCount;
+    }
+
+    /** @return 注册表调用 onTick 的次数 */
+    public int tickCount() {
+        return tickCount;
     }
 
     private void subscribe() {

@@ -1462,7 +1462,15 @@
                     }
                 },
                 "onGround": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "w",
+                        "fabric": "field_5952",
+                        "forge": "field_70122_E"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z"
+                    }
                 },
                 "tickCount": {
                     "names": {

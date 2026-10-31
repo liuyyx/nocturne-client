@@ -1114,7 +1114,59 @@ public final class NocturneAgent {
         return patched;
     }
 
-    /** 26.x 表不带描述符时，从已加载方法读取真实签名。 */
+    /**
+     * 读取已加载类的当前字节（包含 Fabric Mixin 追加的接口）。
+     *
+     * <p>直接用原始 jar 字节 redefine 会在 Fabric 目标上失败；retransform 若能回调，就拿当前字节
+     * 再注入，接口集合不变。拿不到时返回 null，调用方回退原路径。
+     */
+    private static byte[] captureCurrentBytes(Instrumentation instrumentation, Class<?> target) {
+        final String internalName = target.getName().replace('.', '/');
+        final byte[][] captured = new byte[1][];
+        ClassFileTransformer capture = new ClassFileTransformer() {
+            @Override
+            public byte[] transform(ClassLoader loader, String className, Class<?> beingRedefined,
+                                    java.security.ProtectionDomain domain, byte[] classfileBuffer) {
+                if (internalName.equals(className) && classfileBuffer != null) {
+                    captured[0] = classfileBuffer.clone();
+                }
+                return null;
+            }
+        };
+        try {
+            instrumentation.addTransformer(capture, true);
+            instrumentation.retransformClasses(target);
+        } catch (Throwable t) {
+            log("current-byte capture failed for " + target.getName() + ": " + t);
+        } finally {
+            try {
+                instrumentation.removeTransformer(capture);
+            } catch (Throwable ignored) {
+                // 移除失败不影响后续回退。
+            }
+        }
+        return captured[0];
+    }
+
+
+    private static boolean containsAscii(byte[] bytes, String text) {
+        if (bytes == null || text == null || text.isEmpty()) {
+            return false;
+        }
+        byte[] needle = text.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        outer:
+        for (int i = 0; i + needle.length <= bytes.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (bytes[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+
     private static String resolveDescriptor(Instrumentation instrumentation, String className,
                                             String methodName, String fallbackDescriptors) {
         for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
@@ -1970,7 +2022,15 @@ public final class NocturneAgent {
                 // （1.21.1 实测：addTransformer 成功、类 modifiable、但 transform 从不执行）。
                 // redefine 是独立通道：我们自己跑一遍 transformer，把结果直接交给 JVM。
                 try {
-                    byte[] patched = patchBytes(loaded, transformer, targetClass, method);
+                    byte[] current = captureCurrentBytes(instrumentation, loaded);
+                    if (current != null && containsAscii(current, GUI_HOOK_OWNER)) {
+                        log("gui draw hook already applied by retransform: " + targetClass);
+                        break;
+                    }
+                    byte[] patched = current != null
+                            ? wrapper.transform(loaded.getClassLoader(), targetInternalName,
+                                    loaded, null, current)
+                            : patchBytes(loaded, transformer, targetClass, method);
                     if (patched == null) {
                         log("redefine skipped (no bytecode change): " + targetClass + "." + method);
                     } else {

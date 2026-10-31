@@ -1,9 +1,6 @@
 package dev.nocturne.client.runtime;
 
 import dev.nocturne.client.NocturneClient;
-import dev.nocturne.client.game.GameBridge;
-import dev.nocturne.client.module.ModuleRegistry;
-import dev.nocturne.client.mapping.ClassType;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -21,24 +18,13 @@ import java.util.Map;
  * 是 null（bootstrap 加载器），绕过游戏加载器的拦截。对外只传 {@link Runnable}（JDK 类型），
  * 避免跨加载器传自定义接口时出现"接口类不同"的类型错误。
  *
- * <p>被注入字节码调用的是 {@link #onFrame()}：先分发一帧，再按 20Hz 折算驱动模块 tick。
+ * <p>被注入字节码调用的是 {@link #onFrame()}：分发一帧并广播渲染事件；模块 tick 由
+ * {@link ModuleTicker} 作为普通监听器挂在同一个分发器上，1.8.9 的帧钩子也能驱动。
  */
 public final class NocturneRuntime {
 
-    /** 上次打印 driveModules 失败的时间（毫秒）；限流用，避免每帧刷屏。 */
-    private static long lastDriveFailureLogAt;
-
     /** bootstrap 层分发器的全限定名。 */
     private static final String DISPATCHER_CLASS = "dev.nocturne.client.runtime.FrameDispatcher";
-
-    /** 模块 tick 的目标周期（纳秒）：游戏逻辑 tick 约 20Hz，帧率远高于此，故按时间累加折算。 */
-    private static final long TICK_INTERVAL_NANOS = 50_000_000L;
-    /** 上次驱动模块 tick 的时间戳（纳秒）；0 表示尚未驱动过。 */
-    private static volatile long lastTickNanos;
-    /** 上一 tick 的世界对象；只比较身份，不调用游戏方法。 */
-    private static Object lastWorld;
-    /** 是否已建立世界身份基线，避免启动后的首次读取误报切换。 */
-    private static boolean worldBaselineInitialized;
 
     /** 监听器 → 注册到 bootstrap 的包装动作：注销时需要同一个对象，故按身份缓存。 */
     private static final Map<FrameListener, Runnable> WRAPPERS = new HashMap<FrameListener, Runnable>();
@@ -302,17 +288,6 @@ public final class NocturneRuntime {
         // P6-2：每帧广播一次渲染事件（ESP/Tracers 这类世界叠加绘制的触发点）。
         // 广播异常由 EventBus 限流隔离，不会打断 tick；客户端尚未 boot 时静默跳过。
         postRenderEvent();
-        try {
-            driveModules();
-        } catch (Throwable t) {
-            // 帧钩子插在 Display.update()/glfwSwapBuffers 的第一条指令前：这里抛出去的异常会
-            // 直接逃进游戏交换点把游戏打崩。每个被调方内部都有隔离，但这一层必须自己兜住。
-            long now = System.currentTimeMillis();
-            if (now - lastDriveFailureLogAt > 5000L) {
-                lastDriveFailureLogAt = now;
-                System.out.println("[nocturne] driveModules failed: " + t);
-            }
-        }
     }
 
     /** 广播 {@link dev.nocturne.client.event.RenderEvent}；客户端未就绪时无副作用。 */
@@ -328,62 +303,6 @@ public final class NocturneRuntime {
         }
     }
 
-    /** 比较世界对象身份；首次读取只建立基线，之后的进入、离开与换图各投递一次。 */
-    private static void postWorldChangeEvent(NocturneClient client, GameBridge bridge) {
-        if (bridge == null) {
-            return;
-        }
-        Object minecraft = bridge.minecraft();
-        if (minecraft == null) {
-            return;
-        }
-        Object world = bridge.readField(minecraft, ClassType.MINECRAFT, "level");
-        if (!worldBaselineInitialized) {
-            lastWorld = world;
-            worldBaselineInitialized = true;
-            return;
-        }
-        if (world != lastWorld) {
-            lastWorld = world;
-            client.events().post(dev.nocturne.client.event.WorldChangeEvent.INSTANCE);
-        }
-    }
-
-    /**
-     * 按游戏逻辑频率（约 20Hz）驱动模块 tick。
-     *
-     * <p>接口契约：模块注册表暴露无参的 {@code tick()}，自身负责激活闸门与逐模块异常隔离
-     * （AutoRespawn 之类需要在死亡界面继续运行的模块由注册表豁免）。客户端尚未 boot 时静默跳过。
-     */
-    private static void driveModules() {
-        long now = System.nanoTime();
-        if (lastTickNanos != 0L && now - lastTickNanos < TICK_INTERVAL_NANOS) {
-            return;
-        }
-        lastTickNanos = now;
-        NocturneClient client = NocturneClient.get();
-        if (client == null) {
-            return;
-        }
-        GameBridge bridge = client.gameBridge();
-        boolean inWorld = bridge != null && bridge.isResolved();
-        boolean wasInWorld = false;
-        ModuleRegistry registry = client.modules();
-        try {
-            wasInWorld = registry.isActive();
-        } catch (Throwable ignored) {
-            // 闸门查询失败不改变行为，维持上一次判断
-        }
-        if (inWorld != wasInWorld) {
-            registry.setActive(inWorld);
-        }
-        // 世界身份变化独立于模块启停闸门广播；随后才是本 tick 的常规事件与直调。
-        postWorldChangeEvent(client, bridge);
-        // P6-1：tick 先走总线广播（跨模块协作挂这里），再走直调（存量模块的 onTick）。
-        // 广播异常由 EventBus 限流隔离，不会打断直调。
-        client.events().post(dev.nocturne.client.event.TickEvent.INSTANCE);
-        client.modules().tick();
-    }
     /** 把监听器适配成 {@link Runnable}：注册与注销必须用同一个对象，故由 {@link #WRAPPERS} 缓存。 */
     private static final class ListenerAction implements Runnable {
 

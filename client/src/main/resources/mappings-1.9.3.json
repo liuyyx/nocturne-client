@@ -1402,7 +1402,14 @@
                     }
                 },
                 "onGround": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "z",
+                        "fabric": "field_5952"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z"
+                    }
                 },
                 "tickCount": {
                     "names": {

@@ -806,3 +806,7 @@ scope = "net/minecraft/client/Minecraft"
 [fields.isDead]
 mcp = "isDead"
 scope = "net/minecraft/entity/Entity"
+
+[fields.onGround]
+mcp = "onGround"
+scope = "net/minecraft/entity/Entity"

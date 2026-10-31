@@ -83,8 +83,8 @@ abstract class FaRow {
     protected void drawLabel(FaContext ctx, float x, float centerY, float maxWidth, float alpha) {
         FaFont font = FaTheme.label();
         int color = FaTheme.mix(FaTheme.LABEL, FaTheme.LABEL_HOVER, hover.value());
-        ctx.draw.textMid(FaTheme.fit(label, font, maxWidth), x + FaTheme.ROW_PAD, centerY, font,
-                FaTheme.alpha(color, alpha));
+        ctx.draw.textMid(FaTheme.fit(FaStrings.t(label), font, maxWidth), x + FaTheme.ROW_PAD,
+                centerY, font, FaTheme.alpha(color, alpha));
     }
 
     /** @return 行右内边距处的 x */

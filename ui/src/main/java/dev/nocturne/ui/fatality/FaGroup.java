@@ -243,7 +243,8 @@ final class FaGroup extends FaBox {
 
         // 与参考实现一致：标题压在卡片顶边上，不占一条独立的标题带。
         FaFont titleFont = FaTheme.title();
-        ctx.draw.textMid(FaTheme.fit(title(), titleFont, width - 20.0f), gx + 9.5f, gy + TITLE_RISE, titleFont,
+        ctx.draw.textMid(FaTheme.fit(FaStrings.t(title()), titleFont, width - 20.0f),
+                gx + 9.5f, gy + TITLE_RISE, titleFont,
                 FaTheme.alpha(FaTheme.mix(FaTheme.TITLE, FaTheme.ACCENT, glow), alpha));
 
         float rowY = gy + FaTheme.GROUP_TITLE_H;

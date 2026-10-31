@@ -114,7 +114,7 @@ final class FaComboRow extends FaRow {
         ctx.draw.rect(fx, fy, fw, fh, FaTheme.FIELD_RADIUS,
                 FaTheme.alpha(hot ? FaTheme.FIELD_HOVER : FaTheme.FIELD, alpha));
         FaFont font = FaTheme.field();
-        String shown = FaTheme.fit(text, font, fw - 24.0f);
+        String shown = FaTheme.fit(FaStrings.t(text), font, fw - 24.0f);
         ctx.draw.textMid(shown, fx + 7.0f, fy + fh * 0.5f, font,
                 FaTheme.alpha(hot ? FaTheme.FIELD_TEXT_HOVER : FaTheme.FIELD_TEXT, alpha));
     }

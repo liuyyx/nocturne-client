@@ -127,6 +127,12 @@
 - **未完成**：本轮真机实例未能稳定进入世界（只到黑屏/主菜单），因此不声明 NoFall 真机通过；
   代码与映射已提交，真机验收待下一实例补做。
 
+## B9 既有模块设置项对齐
+
+- `Sprint` 按上游补 `Cancel Invis`：隐身且勾选时不再强制疾跑，避免疾跑粒子暴露位置；
+  映射补 `Entity#isInvisible`（1.8.9/1.12.2 走别名），纯条件单测覆盖蹲下/隐身/静止。
+- 其余既有模块的上游设置差异尚未全部对齐；B9 保持进行中，不把本项标成“全部完成”。
+
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
 表的规模为 **86 个类**（客户端实际解析的规范面）。每个类/成员带
@@ -157,8 +163,8 @@
 
 | 版本 | 混淆 | 映射表来源 | 绘制代际 | 帧钩子目标 | 表状态 |
 |---|---|---|---|---|---|
-| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（190 具名成员；`--javap` 通过） |
-| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（185，`--javap` 通过） |
+| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（191 具名成员；`--javap` 通过） |
+| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（186，`--javap` 通过） |
 | 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（211，`--javap` 通过） |
 | 1.21.4 | ✅ **真机已实测**（BMWClient 整合包 + Fabric：`backend=gui-extractor`、`Screen.render` 钩子织入；我方 UI 渲染正常，被整合包自带 LiquidBounce 菜单覆盖） | ✅ | ✅ 已产出 | ✅ 可见（三列面板 + 中文标签） |
 | 1.21.10 | ✅ **真机已实测**（`1.21.10-opal` + Fabric：`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`overlay active`） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 文字） |

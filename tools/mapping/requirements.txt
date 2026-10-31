@@ -266,6 +266,7 @@ net/minecraft/world/entity/player/Abilities#flying
 net/minecraft/world/entity/player/Abilities#instabuild
 net/minecraft/world/entity/LivingEntity#isFallFlying()
 net/minecraft/world/entity/Entity#motionY
+net/minecraft/world/entity/Entity#isInvisible()
 net/minecraft/world/entity/player/Player#getHealth()
 net/minecraft/world/entity/player/Player#inventory
 net/minecraft/world/entity/player/Player#getId()

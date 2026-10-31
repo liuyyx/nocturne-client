@@ -500,6 +500,10 @@ note = "1.8.9/1.12.2 的水平动量字段；现代没有该字段，动作层�
 mcp = "motionZ"
 scope = "net/minecraft/entity/Entity"
 
+[methods.isInvisible]
+mcp = "isInvisible"
+scope = "net/minecraft/entity/Entity"
+
 [fields.motionY]
 mcp = "motionY"
 scope = "net/minecraft/entity/Entity"

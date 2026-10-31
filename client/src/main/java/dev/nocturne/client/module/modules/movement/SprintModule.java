@@ -5,6 +5,7 @@ import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.Module;
+import dev.nocturne.client.value.BooleanValue;
 
 /**
  * 启用期间持续让玩家处于疾跑状态。
@@ -29,6 +30,9 @@ public final class SprintModule extends Module {
     /** 水平速度平方的阈值：明显大于 0 才算"在移动"（避开浮点噪声）。 */
     private static final double MOVING_EPSILON = 1.0e-6d;
 
+    /** 隐身时不强制疾跑，避免疾跑粒子暴露位置。 */
+    private final BooleanValue cancelInvis = add(new BooleanValue("Cancel Invis", false));
+
     /**
      * 每 tick 在玩家"想跑"时强制疾跑。
      *
@@ -48,15 +52,19 @@ public final class SprintModule extends Module {
         if (player == null) {
             return;
         }
-        if (Boolean.TRUE.equals(bridge.callMapped(player, ClassType.ENTITY, "isShiftKeyDown"))) {
-            // 蹲着不能跑：这一条游戏自己也会判，但我们在它之后写入，必须自己拦。
-            return;
-        }
-        if (!isMovingHorizontally(bridge, player)) {
-            // 站着不动：不必也不该疾跑。
+        boolean shift = Boolean.TRUE.equals(
+                bridge.callMapped(player, ClassType.ENTITY, "isShiftKeyDown"));
+        boolean invisible = cancelInvis.get()
+                && Boolean.TRUE.equals(bridge.callMapped(player, ClassType.ENTITY, "isInvisible"));
+        if (!shouldForceSprint(shift, invisible, isMovingHorizontally(bridge, player))) {
             return;
         }
         bridge.callMapped(player, ClassType.ENTITY, "setSprinting", Boolean.TRUE);
+    }
+
+    /** 只有未蹲、未因隐身禁用、且确实在水平移动时才补疾跑。 */
+    static boolean shouldForceSprint(boolean shifting, boolean invisible, boolean moving) {
+        return !shifting && !invisible && moving;
     }
 
     /** 水平速度是否明显非零（说明玩家正朝某个方向移动）。 */

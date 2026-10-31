@@ -1328,7 +1328,16 @@
                     "absent": true
                 },
                 "isInvisible": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "bn",
+                        "fabric": "method_5767",
+                        "forge": "func_82150_aj"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
                 },
                 "isShiftKeyDown": {
                     "names": {

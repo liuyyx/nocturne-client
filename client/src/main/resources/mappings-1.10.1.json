@@ -1264,7 +1264,14 @@
                     "absent": true
                 },
                 "isInvisible": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "aP",
+                        "fabric": "method_5767"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z"
+                    }
                 },
                 "isShiftKeyDown": {
                     "names": {

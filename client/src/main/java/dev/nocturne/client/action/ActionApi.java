@@ -12,6 +12,9 @@ public interface ActionApi {
     /** 用本地玩家攻击指定实体。 */
     boolean attack(Object target);
 
+    /** 触发游戏左键入口（自动点击器用；不要求已有目标）。 */
+    boolean click();
+
     /** 用主手对方块的指定面执行放置/使用。 */
     boolean place(Object blockPos, Object direction);
 

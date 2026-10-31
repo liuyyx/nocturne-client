@@ -310,6 +310,7 @@ net/minecraft/world/level/chunk/LevelChunk#getBlockEntities()
 net/minecraft/world/phys/BlockHitResult
 net/minecraft/world/phys/BlockHitResult#getBlockPos()
 net/minecraft/world/phys/BlockHitResult#getDirection()
+net/minecraft/world/phys/EntityHitResult
 
 net/minecraft/world/InteractionHand
 net/minecraft/world/InteractionHand#MAIN_HAND

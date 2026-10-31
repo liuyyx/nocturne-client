@@ -23,6 +23,12 @@ final class BoundActionApi implements ActionApi {
     }
 
     @Override
+    public boolean click() {
+        Object minecraft = bridge.minecraft();
+        return minecraft != null && binder.invoke("click", minecraft);
+    }
+
+    @Override
     public boolean place(Object blockPos, Object direction) {
         if (!binder.isAvailable("place") || blockPos == null || direction == null) {
             return false;

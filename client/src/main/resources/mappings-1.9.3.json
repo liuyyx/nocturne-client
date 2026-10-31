@@ -2479,6 +2479,12 @@
             },
             "fields": {}
         },
+        "net/minecraft/world/phys/EntityHitResult": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/phys/Vec3": {
             "names": {
                 "vanilla": "bbh",

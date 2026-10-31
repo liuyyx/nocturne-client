@@ -104,6 +104,21 @@
       ]
     },
     {
+      "id": "click",
+      "signature": "boolean click()",
+      "receiver": "minecraft",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "MINECRAFT",
+          "method": "startAttack",
+          "parameters": [],
+          "arguments": []
+        }
+      ]
+    },
+    {
       "id": "readState",
       "signature": "PlayerState readState()",
       "receiver": "player",

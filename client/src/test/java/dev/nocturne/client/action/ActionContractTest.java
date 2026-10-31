@@ -22,7 +22,7 @@ class ActionContractTest {
         }
 
         assertEquals(Arrays.asList("attack", "place", "useItem", "setRotation",
-                "sendPacket", "readState"), ids);
+                "sendPacket", "click", "readState"), ids);
         assertEquals("MULTI_PLAYER_GAME_MODE",
                 contract.get("attack").candidates().get(0).owner());
         assertEquals("gameMode", contract.get("attack").receiver());

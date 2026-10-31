@@ -3304,6 +3304,15 @@
             },
             "fields": {}
         },
+        "net/minecraft/world/phys/EntityHitResult": {
+            "names": {
+                "vanilla": "cve",
+                "fabric": "net.minecraft.class_3966",
+                "forge": "net.minecraft.util.math.EntityRayTraceResult"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/phys/Vec3": {
             "names": {
                 "vanilla": "cvi",

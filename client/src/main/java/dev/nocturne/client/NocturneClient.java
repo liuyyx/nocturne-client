@@ -177,6 +177,7 @@ public final class NocturneClient {
     private void registerModules() {
         modules.register(new dev.nocturne.client.module.modules.movement.SprintModule());
         modules.register(new dev.nocturne.client.module.modules.combat.KeepSprintModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.AutoClickerModule());
         modules.register(new dev.nocturne.client.module.modules.render.WatermarkModule());
         modules.register(new dev.nocturne.client.module.modules.render.FullBrightModule());
         modules.register(new dev.nocturne.client.module.modules.render.StorageEspModule());

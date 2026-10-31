@@ -6,8 +6,8 @@
 ## 模块框架扩展验收
 
 - 基线有 14 个模块类、13 个已注册模块；`XrayModule` 仍未注册，没有因分包而启用未接通的渲染功能。
-  本轮新增 `KeepSprintModule`、`FastPlaceModule`、`SpawnerFinderModule`、`AutoToolModule` 后为
-  18 个模块类、17 个已注册模块。
+  本轮新增 `KeepSprintModule`、`FastPlaceModule`、`SpawnerFinderModule`、`AutoToolModule`、
+  `AutoClickerModule` 后为 19 个模块类、18 个已注册模块。
 - `Category` 增至七项，模块按分类分包并连续注册。Java 8 进程实际启动后，
   `FaClickGui` 分类摘要为 `COMBAT, MOVEMENT, RENDER, PLAYER, MISC (5/7)`，空分类不占 Tab。
 - `gradle build test` 通过；修正效果常量的持有类为 `MobEffects` 并重建映射后，
@@ -108,9 +108,19 @@
   模块把选中槽从 1 切到 0；命令语法错误与“打泥土不加速”两个测试假象已排除。
 - 全量 66 版本 `generate.py --javap` 全绿（84 类），`gw.sh test dist` 全绿。
 
+## B4 点击与攻击模块验收
+
+- 动作契约新增 `click`，绑定 `Minecraft#startAttack`（零参），模块不再自行反射点击入口。
+- `AutoClicker` 已移植：CPS、Normal/Extra/Extra+ 随机化、Jitter、Hold to click、Trigger mode
+  （准星为 `EntityHitResult` 才点击）；左键按下状态由 `MouseButtonEvent` 维护。
+- 26.3 真机：`clickAvailable=true`，投递按住事件后 800ms 内 `clicks=5`，日志同时出现 H6 命中，
+  证明点击确实进入游戏左键入口。
+- 物品白名单、破方块保留、HitSelect/BlockHit 互锁尚未移植，因此未提供对应假开关。
+- 全量 66 版本 `--javap` 全绿（85 类），客户端测试与 `dist` 构建通过。
+
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
-表的规模为 **84 个类**（客户端实际解析的规范面）。每个类/成员带
+表的规模为 **85 个类**（客户端实际解析的规范面）。每个类/成员带
 `vanilla` / `fabric` / `forge` / `neoforge` 四套运行期名 + **配套的 JNI 描述符**；
 运行时按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试，因此
 **同一份表同时服务原版、Fabric、Forge、NeoForge 四种安装**（不做加载器探测）。

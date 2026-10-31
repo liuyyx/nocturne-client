@@ -2661,6 +2661,16 @@
             },
             "fields": {}
         },
+        "net/minecraft/world/phys/EntityHitResult": {
+            "names": {
+                "vanilla": "net.minecraft.world.phys.EntityHitResult",
+                "fabric": "net.minecraft.world.phys.EntityHitResult",
+                "forge": "net.minecraft.world.phys.EntityHitResult",
+                "neoforge": "net.minecraft.world.phys.EntityHitResult"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/phys/Vec3": {
             "names": {
                 "vanilla": "net.minecraft.world.phys.Vec3",

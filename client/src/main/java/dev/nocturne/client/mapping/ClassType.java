@@ -41,6 +41,8 @@ public enum ClassType {
     INTERACTION_HAND("net.minecraft.world.InteractionHand"),
     /** 方块命中结果；place 动作在语义层组装。 */
     BLOCK_HIT_RESULT("net.minecraft.world.phys.BlockHitResult"),
+    /** 实体命中结果；自动点击器的触发模式判断。 */
+    ENTITY_HIT_RESULT("net.minecraft.world.phys.EntityHitResult"),
     /** 方块朝向；place 动作的实参类型。 */
     DIRECTION("net.minecraft.core.Direction"),
     /** 客户端逻辑包监听器；ActionApi 的高级发包入口。 */

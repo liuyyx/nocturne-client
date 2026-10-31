@@ -3316,6 +3316,15 @@
             },
             "fields": {}
         },
+        "net/minecraft/world/phys/EntityHitResult": {
+            "names": {
+                "vanilla": "doj",
+                "fabric": "net.minecraft.class_3966",
+                "forge": "net.minecraft.world.phys.EntityHitResult"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/phys/Vec3": {
             "names": {
                 "vanilla": "dom",

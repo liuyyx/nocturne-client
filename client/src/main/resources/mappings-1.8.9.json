@@ -576,6 +576,21 @@
                         "forge": "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/util/EnumFacing;)Z"
                     }
                 },
+                "onPlayerRightClick": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2896",
+                        "forge": "func_178890_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lbew;Lbdb;Lzx;Lcj;Lcq;Laui;)Z",
+                        "fabric": "(Lnet/minecraft/class_746;Lnet/minecraft/class_638;Lnet/minecraft/class_1799;Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;Lnet/minecraft/class_243;)Z",
+                        "forge": "(Lnet/minecraft/client/entity/EntityPlayerSP;Lnet/minecraft/client/multiplayer/WorldClient;Lnet/minecraft/item/ItemStack;Lnet/minecraft/util/BlockPos;Lnet/minecraft/util/EnumFacing;Lnet/minecraft/util/Vec3;)Z"
+                    }
+                },
+                "processRightClickBlock": {
+                    "absent": true
+                },
                 "startDestroyBlock": {
                     "names": {
                         "vanilla": "b",
@@ -2450,6 +2465,15 @@
                 }
             }
         },
+        "net/minecraft/world/level/Level": {
+            "names": {
+                "vanilla": "adm",
+                "fabric": "net.minecraft.class_1937",
+                "forge": "net.minecraft.world.World"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/LevelReader": {
             "names": {
                 "vanilla": "adq",
@@ -2470,6 +2494,15 @@
                     }
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/AirBlock": {
+            "names": {
+                "vanilla": "aey",
+                "fabric": "net.minecraft.class_2189",
+                "forge": "net.minecraft.block.BlockAir"
+            },
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/Block": {
@@ -2625,6 +2658,9 @@
                         "fabric": "()Lnet/minecraft/class_2248;",
                         "forge": "()Lnet/minecraft/block/Block;"
                     }
+                },
+                "isAir": {
+                    "absent": true
                 }
             },
             "fields": {}

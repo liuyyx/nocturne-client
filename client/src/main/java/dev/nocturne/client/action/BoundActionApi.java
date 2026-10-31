@@ -30,6 +30,18 @@ final class BoundActionApi implements ActionApi {
 
     @Override
     public boolean place(Object blockPos, Object direction) {
+        return performPlace(blockPos, direction);
+    }
+
+    @Override
+    public boolean placeAt(int x, int y, int z, String face) {
+        Object blockPos = binder.newBlockPos(x, y, z);
+        Object direction = binder.direction(face);
+        return performPlace(blockPos, direction);
+    }
+
+    /** 点击支持方块的指定面；命中点取该面的面心，而不是方块中心。 */
+    private boolean performPlace(Object blockPos, Object direction) {
         if (!binder.isAvailable("place") || blockPos == null || direction == null) {
             return false;
         }
@@ -44,16 +56,33 @@ final class BoundActionApi implements ActionApi {
         if (x == null || y == null || z == null) {
             return false;
         }
-        try {
-            Object hitVec = binder.vec3Constructor().newInstance(
-                    x.doubleValue() + 0.5, y.doubleValue() + 0.5, z.doubleValue() + 0.5);
-            Object hitResult = binder.blockHitResultConstructor().newInstance(
-                    hitVec, direction, blockPos, false);
-            Object[] arguments = interactionArguments("place", player, hitResult);
-            return arguments != null && binder.invoke("place", gameMode, arguments);
-        } catch (Throwable t) {
+        String face = String.valueOf(direction);
+        Object hitVec = binder.newVec3(
+                x.doubleValue() + 0.5 + faceOffset(face, 'x'),
+                y.doubleValue() + 0.5 + faceOffset(face, 'y'),
+                z.doubleValue() + 0.5 + faceOffset(face, 'z'));
+        Object hitResult = binder.newBlockHitResult(hitVec, direction, blockPos);
+        if (hitResult == null) {
             return false;
         }
+        Object[] arguments = interactionArguments("place", player, hitResult,
+                blockPos, direction, hitVec);
+        return arguments != null && binder.invoke("place", gameMode, arguments);
+    }
+
+    /** 面心相对方块中心的偏移：只在一个轴上取 ±0.5。 */
+    private static double faceOffset(String face, char axis) {
+        if (face == null) {
+            return 0.0;
+        }
+        String normalized = face.toLowerCase(java.util.Locale.ROOT);
+        if (axis == 'x') {
+            return "east".equals(normalized) ? 0.5 : "west".equals(normalized) ? -0.5 : 0.0;
+        }
+        if (axis == 'y') {
+            return "up".equals(normalized) ? 0.5 : "down".equals(normalized) ? -0.5 : 0.0;
+        }
+        return "south".equals(normalized) ? 0.5 : "north".equals(normalized) ? -0.5 : 0.0;
     }
 
     @Override
@@ -63,7 +92,8 @@ final class BoundActionApi implements ActionApi {
         if (player == null) {
             return false;
         }
-        Object[] arguments = interactionArguments("useItem", player, null);
+        Object[] arguments = interactionArguments("useItem", player, null,
+                null, null, null);
         return arguments != null && binder.invoke("useItem", gameMode, arguments);
     }
 
@@ -122,7 +152,8 @@ final class BoundActionApi implements ActionApi {
     }
 
     /** 按候选的 arguments 列表装配参数；缺任何必需对象时不调用游戏方法。 */
-    private Object[] interactionArguments(String actionId, Object player, Object hitResult) {
+    private Object[] interactionArguments(String actionId, Object player, Object hitResult,
+                                           Object blockPos, Object direction, Object hitVec) {
         java.util.List<String> declared = binder.arguments(actionId);
         if (declared.isEmpty()) {
             return "place".equals(actionId)
@@ -140,6 +171,15 @@ final class BoundActionApi implements ActionApi {
                 arguments[i] = binder.mainHand();
             } else if ("hitResult".equals(semantic)) {
                 arguments[i] = hitResult;
+            } else if ("blockPos".equals(semantic)) {
+                arguments[i] = blockPos;
+            } else if ("direction".equals(semantic)) {
+                arguments[i] = direction;
+            } else if ("hitVec".equals(semantic)) {
+                arguments[i] = hitVec;
+            } else if ("heldItem".equals(semantic)) {
+                arguments[i] = bridge.callMapped(player, ClassType.LIVING_ENTITY,
+                        "getMainHandItem");
             } else {
                 return null;
             }

@@ -896,6 +896,12 @@
                         "forge": "(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/Direction;)Z"
                     }
                 },
+                "onPlayerRightClick": {
+                    "absent": true
+                },
+                "processRightClickBlock": {
+                    "absent": true
+                },
                 "startDestroyBlock": {
                     "names": {
                         "vanilla": "a",
@@ -3118,6 +3124,15 @@
                 }
             }
         },
+        "net/minecraft/world/level/Level": {
+            "names": {
+                "vanilla": "bru",
+                "fabric": "net.minecraft.class_1937",
+                "forge": "net.minecraft.world.World"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/LevelReader": {
             "names": {
                 "vanilla": "brw",
@@ -3138,6 +3153,15 @@
                     }
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/AirBlock": {
+            "names": {
+                "vanilla": "bto",
+                "fabric": "net.minecraft.class_2189",
+                "forge": "net.minecraft.block.AirBlock"
+            },
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/Block": {
@@ -3295,6 +3319,18 @@
                         "vanilla": "()Lbul;",
                         "fabric": "()Lnet/minecraft/class_2248;",
                         "forge": "()Lnet/minecraft/block/Block;"
+                    }
+                },
+                "isAir": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_26215",
+                        "forge": "func_196958_f"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
                     }
                 }
             },

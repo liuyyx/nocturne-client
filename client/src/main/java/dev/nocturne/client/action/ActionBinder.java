@@ -34,7 +34,9 @@ public final class ActionBinder {
     private final Set<String> logged = new HashSet<String>();
     private String lastBindFailure;
     private Constructor<?> blockHitResultConstructor;
+    private boolean blockHitResultHasInside;
     private Constructor<?> vec3Constructor;
+    private Constructor<?> blockPosConstructor;
     private Object mainHand;
 
     /** 用当前反射桥的映射与游戏类加载器装配动作。 */
@@ -86,12 +88,59 @@ public final class ActionBinder {
         return binding == null ? java.util.Collections.<String>emptyList() : binding.arguments;
     }
 
-    Constructor<?> blockHitResultConstructor() {
-        return blockHitResultConstructor;
+    /** 构造一个方块坐标；类或构造器缺失时返回 {@code null}。 */
+    Object newBlockPos(int x, int y, int z) {
+        if (blockPosConstructor == null) {
+            return null;
+        }
+        try {
+            return blockPosConstructor.newInstance(x, y, z);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
-    Constructor<?> vec3Constructor() {
-        return vec3Constructor;
+    /** 按六个面名取游戏的静态方向常量；未知面返回 {@code null}。 */
+    Object direction(String face) {
+        if (face == null) {
+            return null;
+        }
+        String canonical = face.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!canonical.equals("UP") && !canonical.equals("DOWN") && !canonical.equals("NORTH")
+                && !canonical.equals("SOUTH") && !canonical.equals("EAST")
+                && !canonical.equals("WEST")) {
+            return null;
+        }
+        try {
+            return resolveStaticField(ClassType.DIRECTION, canonical);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    Object newVec3(double x, double y, double z) {
+        if (vec3Constructor == null) {
+            return null;
+        }
+        try {
+            return vec3Constructor.newInstance(x, y, z);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 按版本形状构造方块命中结果：1.14+ 四参，1.8.9/1.12.2 三参。 */
+    Object newBlockHitResult(Object vec, Object direction, Object blockPos) {
+        if (blockHitResultConstructor == null) {
+            return null;
+        }
+        try {
+            return blockHitResultHasInside
+                    ? blockHitResultConstructor.newInstance(vec, direction, blockPos, false)
+                    : blockHitResultConstructor.newInstance(vec, direction, blockPos);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     Object mainHand() {
@@ -127,20 +176,26 @@ public final class ActionBinder {
                 disable(action.id(), "BlockHitResult support is unavailable");
                 return;
             }
-            blockHitResultConstructor = hitResult.getConstructor(vec3, direction, blockPos,
+            vec3Constructor = findConstructor(vec3, double.class, double.class, double.class);
+            blockPosConstructor = findConstructor(blockPos, int.class, int.class, int.class);
+            blockHitResultConstructor = findConstructor(hitResult, vec3, direction, blockPos,
                     boolean.class);
-            vec3Constructor = vec3.getConstructor(double.class, double.class, double.class);
-        }
-        if ("place".equals(operation) || "useItem".equals(operation)) {
-            Class<?> hand = resolveClass(ClassType.INTERACTION_HAND);
-            if (hand == null) {
-                disable(action.id(), "InteractionHand support is unavailable");
+            blockHitResultHasInside = blockHitResultConstructor != null;
+            if (blockHitResultConstructor == null) {
+                blockHitResultConstructor = findConstructor(hitResult, vec3, direction, blockPos);
+            }
+            if (vec3Constructor == null || blockPosConstructor == null
+                    || blockHitResultConstructor == null) {
+                disable(action.id(), "placement constructors are unavailable");
                 return;
             }
-            mainHand = resolveStaticField(ClassType.INTERACTION_HAND, "MAIN_HAND");
-            if (mainHand == null) {
-                disable(action.id(), "InteractionHand.MAIN_HAND is unavailable");
-                return;
+        }
+        if ("place".equals(operation) || "useItem".equals(operation)) {
+            // 旧版没有 InteractionHand：现代候选才需要 MAIN_HAND，缺它只淘汰带 hand 的候选。
+            try {
+                mainHand = resolveStaticField(ClassType.INTERACTION_HAND, "MAIN_HAND");
+            } catch (Throwable ignored) {
+                mainHand = null;
             }
         }
         lastBindFailure = null;
@@ -263,6 +318,16 @@ public final class ActionBinder {
             }
         }
         return null;
+    }
+
+    private static Constructor<?> findConstructor(Class<?> owner, Class<?>... parameters) {
+        try {
+            Constructor<?> constructor = owner.getDeclaredConstructor(parameters);
+            constructor.setAccessible(true);
+            return constructor;
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static Method findMethod(Class<?> owner, String name, Class<?>[] parameters) {

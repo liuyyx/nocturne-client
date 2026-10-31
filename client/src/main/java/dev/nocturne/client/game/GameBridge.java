@@ -54,6 +54,8 @@ public final class GameBridge {
             new ConcurrentHashMap<ClassType, Class<?>>();
     /** 日志限流计数器，避免热路径上的失败信息刷屏。 */
     private final AtomicLong logCount = new AtomicLong();
+    /** 方块坐标构造器；首次使用时解析，失败不缓存。 */
+    private volatile java.lang.reflect.Constructor<?> blockPosConstructor;
 
     /**
      * 构造反射桥。
@@ -246,6 +248,68 @@ public final class GameBridge {
     /** @return 当前是否处于世界中（本地玩家已可用） */
     public boolean inWorld() {
         return player() != null;
+    }
+
+    /**
+     * 构造方块坐标。
+     *
+     * <p>方块坐标没有可用的静态工厂映射，但 {@code (int,int,int)} 构造器跨版本稳定；
+     * 仅在首次调用时解析，失败后不缓存，以便类晚加载时重试。
+     *
+     * @return 坐标对象；类/构造器缺失时返回 {@code null}
+     */
+    public Object blockPos(int x, int y, int z) {
+        java.lang.reflect.Constructor<?> constructor = blockPosConstructor;
+        if (constructor == null) {
+            Class<?> type = type(ClassType.BLOCK_POS);
+            if (type == null) {
+                return null;
+            }
+            try {
+                constructor = type.getDeclaredConstructor(int.class, int.class, int.class);
+                constructor.setAccessible(true);
+                blockPosConstructor = constructor;
+            } catch (Throwable t) {
+                return null;
+            }
+        }
+        try {
+            return constructor.newInstance(x, y, z);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 读取指定方块坐标的方块状态；世界未就绪时返回 {@code null}。 */
+    public Object blockStateAt(int x, int y, int z) {
+        Object world = world();
+        Object position = blockPos(x, y, z);
+        return world == null || position == null ? null
+                : callMapped(world, ClassType.CLIENT_LEVEL, "getBlockState", position);
+    }
+
+    /** @return 当前客户端世界；未进入世界时为 {@code null} */
+    public Object world() {
+        Object minecraft = minecraft();
+        return minecraft == null ? null : readField(minecraft, ClassType.MINECRAFT, "level");
+    }
+
+    /**
+     * 方块状态是否为空气。
+     *
+     * <p>1.8.9 的 {@code IBlockState} 没有 {@code isAir()}，此时按方块类型判定；两条路都
+     * 不可用时保守返回 {@code false}，绝不把未知状态当成可放置位置。
+     */
+    public boolean isAir(Object blockState) {
+        if (blockState == null) {
+            return false;
+        }
+        Object air = callMapped(blockState, ClassType.BLOCK_STATE, "isAir");
+        if (air instanceof Boolean) {
+            return (Boolean) air;
+        }
+        Object block = callMapped(blockState, ClassType.BLOCK_STATE, "getBlock");
+        return block != null && isInstance(block, ClassType.AIR_BLOCK);
     }
 
     /**

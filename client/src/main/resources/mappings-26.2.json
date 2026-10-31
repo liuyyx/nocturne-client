@@ -816,6 +816,12 @@
                         "neoforge": "continueDestroyBlock"
                     }
                 },
+                "onPlayerRightClick": {
+                    "absent": true
+                },
+                "processRightClickBlock": {
+                    "absent": true
+                },
                 "startDestroyBlock": {
                     "names": {
                         "vanilla": "startDestroyBlock",
@@ -2481,6 +2487,16 @@
                 }
             }
         },
+        "net/minecraft/world/level/Level": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.Level",
+                "fabric": "net.minecraft.world.level.Level",
+                "forge": "net.minecraft.world.level.Level",
+                "neoforge": "net.minecraft.world.level.Level"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/LevelReader": {
             "names": {
                 "vanilla": "net.minecraft.world.level.LevelReader",
@@ -2498,6 +2514,16 @@
                     }
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/AirBlock": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.AirBlock",
+                "fabric": "net.minecraft.world.level.block.AirBlock",
+                "forge": "net.minecraft.world.level.block.AirBlock",
+                "neoforge": "net.minecraft.world.level.block.AirBlock"
+            },
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/Block": {
@@ -2651,6 +2677,14 @@
                         "fabric": "getBlock",
                         "forge": "getBlock",
                         "neoforge": "getBlock"
+                    }
+                },
+                "isAir": {
+                    "names": {
+                        "vanilla": "isAir",
+                        "fabric": "isAir",
+                        "forge": "isAir",
+                        "neoforge": "isAir"
                     }
                 }
             },

@@ -576,6 +576,21 @@
                         "forge": "(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/EnumFacing;)Z"
                     }
                 },
+                "onPlayerRightClick": {
+                    "absent": true
+                },
+                "processRightClickBlock": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2896",
+                        "forge": "func_187099_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lbud;Lbsb;Let;Lfa;Lbhe;Lub;)Lud;",
+                        "fabric": "(Lnet/minecraft/class_746;Lnet/minecraft/class_638;Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;Lnet/minecraft/class_243;Lnet/minecraft/class_1268;)Lnet/minecraft/class_1269;",
+                        "forge": "(Lnet/minecraft/client/entity/EntityPlayerSP;Lnet/minecraft/client/multiplayer/WorldClient;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/EnumFacing;Lnet/minecraft/util/math/Vec3d;Lnet/minecraft/util/EnumHand;)Lnet/minecraft/util/EnumActionResult;"
+                    }
+                },
                 "startDestroyBlock": {
                     "names": {
                         "vanilla": "a",
@@ -1544,7 +1559,16 @@
                     }
                 },
                 "getMainHandItem": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "co",
+                        "fabric": "method_6047",
+                        "forge": "func_184614_ca"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laip;",
+                        "fabric": "()Lnet/minecraft/class_1799;",
+                        "forge": "()Lnet/minecraft/item/ItemStack;"
+                    }
                 },
                 "getMaxHealth": {
                     "names": {
@@ -2405,6 +2429,15 @@
                 }
             }
         },
+        "net/minecraft/world/level/Level": {
+            "names": {
+                "vanilla": "amu",
+                "fabric": "net.minecraft.class_1937",
+                "forge": "net.minecraft.world.World"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/LevelReader": {
             "names": {
                 "vanilla": "amy",
@@ -2425,6 +2458,15 @@
                     }
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/AirBlock": {
+            "names": {
+                "vanilla": "aom",
+                "fabric": "net.minecraft.class_2189",
+                "forge": "net.minecraft.block.BlockAir"
+            },
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/Block": {
@@ -2583,6 +2625,9 @@
                         "fabric": "()Lnet/minecraft/class_2248;",
                         "forge": "()Lnet/minecraft/block/Block;"
                     }
+                },
+                "isAir": {
+                    "absent": true
                 }
             },
             "fields": {}

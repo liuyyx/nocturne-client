@@ -545,6 +545,21 @@
                         "forge": "(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/Direction;)Z"
                     }
                 },
+                "onPlayerRightClick": {
+                    "absent": true
+                },
+                "processRightClickBlock": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2896",
+                        "forge": "func_217292_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ldjv;Ldhl;Lagz;Lcrr;)Laha;",
+                        "fabric": "(Lnet/minecraft/class_746;Lnet/minecraft/class_638;Lnet/minecraft/class_1268;Lnet/minecraft/class_3965;)Lnet/minecraft/class_1269;",
+                        "forge": "(Lnet/minecraft/client/entity/player/ClientPlayerEntity;Lnet/minecraft/client/world/ClientWorld;Lnet/minecraft/util/Hand;Lnet/minecraft/util/math/BlockRayTraceResult;)Lnet/minecraft/util/ActionResultType;"
+                    }
+                },
                 "startDestroyBlock": {
                     "names": {
                         "vanilla": "a",
@@ -1574,7 +1589,16 @@
                     }
                 },
                 "getMainHandItem": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "cQ",
+                        "fabric": "method_6047",
+                        "forge": "func_184614_ca"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbca;",
+                        "fabric": "()Lnet/minecraft/class_1799;",
+                        "forge": "()Lnet/minecraft/item/ItemStack;"
+                    }
                 },
                 "getMaxHealth": {
                     "names": {
@@ -2552,9 +2576,27 @@
                 }
             }
         },
+        "net/minecraft/world/level/Level": {
+            "names": {
+                "vanilla": "bhh",
+                "fabric": "net.minecraft.class_1937",
+                "forge": "net.minecraft.world.World"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/LevelReader": {
             "absent": true,
             "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/AirBlock": {
+            "names": {
+                "vanilla": "blp",
+                "fabric": "net.minecraft.class_2189",
+                "forge": "net.minecraft.block.AirBlock"
+            },
             "methods": {},
             "fields": {}
         },

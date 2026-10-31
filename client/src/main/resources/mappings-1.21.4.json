@@ -1106,6 +1106,12 @@
                         "neoforge": "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Z"
                     }
                 },
+                "onPlayerRightClick": {
+                    "absent": true
+                },
+                "processRightClickBlock": {
+                    "absent": true
+                },
                 "startDestroyBlock": {
                     "names": {
                         "vanilla": "a",
@@ -3685,6 +3691,16 @@
                 }
             }
         },
+        "net/minecraft/world/level/Level": {
+            "names": {
+                "vanilla": "dgj",
+                "fabric": "net.minecraft.class_1937",
+                "forge": "net.minecraft.world.level.Level",
+                "neoforge": "net.minecraft.world.level.Level"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/LevelReader": {
             "names": {
                 "vanilla": "dgm",
@@ -3708,6 +3724,16 @@
                     }
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/AirBlock": {
+            "names": {
+                "vanilla": "dik",
+                "fabric": "net.minecraft.class_2189",
+                "forge": "net.minecraft.world.level.block.AirBlock",
+                "neoforge": "net.minecraft.world.level.block.AirBlock"
+            },
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/Block": {
@@ -3885,6 +3911,20 @@
                         "fabric": "()Lnet/minecraft/class_2248;",
                         "forge": "()Lnet/minecraft/world/level/block/Block;",
                         "neoforge": "()Lnet/minecraft/world/level/block/Block;"
+                    }
+                },
+                "isAir": {
+                    "names": {
+                        "vanilla": "l",
+                        "fabric": "method_26215",
+                        "forge": "m_60795_",
+                        "neoforge": "isAir"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
                     }
                 }
             },

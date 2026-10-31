@@ -4,6 +4,7 @@ import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.mapping.Mapping;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * GUI 绘制钩子：由 {@link dev.nocturne.agent.transform.CallbackHookTransformer} 注入到**两个**绘制
@@ -44,6 +45,9 @@ public final class GuiDrawHook {
     private static volatile Field minecraftScreenField;
     /** 是否已尝试过解析上述句柄（失败也只试一次，避免每帧刷日志）。 */
     private static volatile boolean screenProbeResolved;
+    /** 首次命中日志只打一次，避免每帧刷屏。 */
+    private static final AtomicBoolean HUD_FIRST = new AtomicBoolean();
+    private static final AtomicBoolean SCREEN_FIRST = new AtomicBoolean();
 
     /** {@code dev.nocturne.client.runtime.NocturneRuntime} 的类与缓存方法（经 system 加载器解析）。 */
     private static volatile Class<?> runtimeType;
@@ -144,6 +148,9 @@ public final class GuiDrawHook {
      * @param graphics 本帧的 {@code GuiGraphicsExtractor}
      */
     public static void onHudDraw(Object graphics) {
+        if (HUD_FIRST.compareAndSet(false, true)) {
+            System.out.println("[nocturne] gui draw hook active via Hud.extractRenderState");
+        }
         if (hasScreen()) {
             // HUD 钩子让位给原生 Screen 时，也必须解除 MouseHandler/KeyboardHandler 的短路。
             // 否则 onFrame 根本不执行，InputBlock 会一直保持 true，连“回到游戏”都点不到。
@@ -160,6 +167,9 @@ public final class GuiDrawHook {
      * @param graphics 本帧的 {@code GuiGraphicsExtractor}
      */
     public static void onScreenDraw(Object graphics) {
+        if (SCREEN_FIRST.compareAndSet(false, true)) {
+            System.out.println("[nocturne] gui draw hook active via Screen.extractRenderStateWithTooltipAndSubtitles");
+        }
         PENDING_HUD_GRAPHICS.remove();
         drive(graphics);
     }

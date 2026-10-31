@@ -576,6 +576,19 @@
                         "fabric": "(Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;)Z"
                     }
                 },
+                "onPlayerRightClick": {
+                    "absent": true
+                },
+                "processRightClickBlock": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2896"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lbnn;Lbln;Ladz;Lcm;Lct;Lbcb;Lqr;)Lqt;",
+                        "fabric": "(Lnet/minecraft/class_746;Lnet/minecraft/class_638;Lnet/minecraft/class_1799;Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;Lnet/minecraft/class_243;Lnet/minecraft/class_1268;)Lnet/minecraft/class_1269;"
+                    }
+                },
                 "startDestroyBlock": {
                     "names": {
                         "vanilla": "a",
@@ -1500,7 +1513,14 @@
                     }
                 },
                 "getMainHandItem": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "cf",
+                        "fabric": "method_6047"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ladz;",
+                        "fabric": "()Lnet/minecraft/class_1799;"
+                    }
                 },
                 "getMaxHealth": {
                     "names": {
@@ -2353,6 +2373,14 @@
                 }
             }
         },
+        "net/minecraft/world/level/Level": {
+            "names": {
+                "vanilla": "aid",
+                "fabric": "net.minecraft.class_1937"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/level/LevelReader": {
             "names": {
                 "vanilla": "aih",
@@ -2370,6 +2398,14 @@
                     }
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/AirBlock": {
+            "names": {
+                "vanilla": "ajv",
+                "fabric": "net.minecraft.class_2189"
+            },
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/world/level/block/Block": {
@@ -2506,6 +2542,9 @@
                         "vanilla": "()Lakf;",
                         "fabric": "()Lnet/minecraft/class_2248;"
                     }
+                },
+                "isAir": {
+                    "absent": true
                 }
             },
             "fields": {}

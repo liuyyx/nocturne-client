@@ -18,6 +18,15 @@ public interface ActionApi {
     /** 用主手对方块的指定面执行放置/使用。 */
     boolean place(Object blockPos, Object direction);
 
+    /**
+     * 在方块 {@code (x,y,z)} 的指定面点击一次。
+     *
+     * <p>模块不构造游戏对象；坐标、朝向与命中向量都由动作层装配。
+     *
+     * @param face 六个面之一：{@code up/down/north/south/east/west}
+     */
+    boolean placeAt(int x, int y, int z, String face);
+
     /** 用主手执行空气使用。 */
     boolean useItem();
 

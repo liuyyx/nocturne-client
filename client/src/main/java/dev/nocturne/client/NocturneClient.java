@@ -31,6 +31,12 @@ public final class NocturneClient {
     private volatile dev.nocturne.client.game.GameBridge gameBridge;
     /** 模块共享的语义动作面；游戏桥安装后绑定。 */
     private volatile dev.nocturne.client.action.ActionApi actions;
+    /** 全局旋转仲裁器；所有模块的朝向请求都经过它。 */
+    private final dev.nocturne.client.control.RotationController rotations =
+            new dev.nocturne.client.control.RotationController();
+    /** 全局目标选择器；无状态，仅读当前世界。 */
+    private final dev.nocturne.client.control.TargetManager targets =
+            new dev.nocturne.client.control.TargetManager();
     /** 是否已自销毁（panic）：置位后不再接受任何驱动，见 {@link #panic()}。 */
     private volatile boolean panicked;
 
@@ -82,6 +88,16 @@ public final class NocturneClient {
     /** 模块共享的语义动作面；游戏桥安装前为 {@code null}。 */
     public dev.nocturne.client.action.ActionApi actions() {
         return actions;
+    }
+
+    /** 全局旋转仲裁器。 */
+    public dev.nocturne.client.control.RotationController rotations() {
+        return rotations;
+    }
+
+    /** 全局目标选择器。 */
+    public dev.nocturne.client.control.TargetManager targets() {
+        return targets;
     }
 
     /**
@@ -169,6 +185,7 @@ public final class NocturneClient {
     private void install() {
         registerModules();
         dev.nocturne.client.event.GameplayEvents.install(this);
+        rotations.install(this);
         log("client installed (modules=" + modules.size() + ")");
         // 后续阶段：映射初始化、渲染/输入钩子、HUD。
     }
@@ -178,6 +195,9 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.movement.SprintModule());
         modules.register(new dev.nocturne.client.module.modules.combat.KeepSprintModule());
         modules.register(new dev.nocturne.client.module.modules.combat.AutoClickerModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.AimAssistModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.KillAuraModule());
+        modules.register(new dev.nocturne.client.module.modules.world.ScaffoldModule());
         modules.register(new dev.nocturne.client.module.modules.render.WatermarkModule());
         modules.register(new dev.nocturne.client.module.modules.render.FullBrightModule());
         modules.register(new dev.nocturne.client.module.modules.render.StorageEspModule());

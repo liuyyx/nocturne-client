@@ -597,9 +597,21 @@ public final class NocturneAgent {
         ClassLoader fabricLoader = gameClassLoader(instrumentation);
         if (fabricLoader != null && "net.fabricmc.loader.impl.launch.knot.KnotClassLoader"
                 .equals(fabricLoader.getClass().getName())) {
+            // 1.21.x 走 Mixin（intermediary 名，且类通常尚未加载）。
             installMixinChannel(instrumentation, fabricLoader,
                     SCREEN_MIXIN_CLASS, SCREEN_MIXIN_METHOD, SCREEN_MIXIN_DESCRIPTOR,
                     SCREEN_HOOK_METHOD);
+            // 26.x 是 Mojmap 名，且 attach 时 Hud/Screen 往往已加载：Mixin 只处理首次定义，
+            // 不能再依赖它。这里直接对已加载类走 redefine；1.21.x 的名字不匹配时只会记日志。
+            EmbeddedAsmLoader fabricAsm = EmbeddedAsmLoader.create();
+            if (fabricAsm != null) {
+                registerGuiDrawHook(instrumentation, fabricAsm, HUD_DRAW_CLASS, HUD_DRAW_METHOD,
+                        HUD_DRAW_DESCRIPTOR, HUD_HOOK_METHOD);
+                registerGuiDrawHook(instrumentation, fabricAsm, SCREEN_DRAW_CLASS,
+                        SCREEN_DRAW_METHOD, SCREEN_DRAW_DESCRIPTOR, SCREEN_HOOK_METHOD);
+            } else {
+                log("embedded ASM unavailable; Fabric gui draw hook skipped");
+            }
             return;
         }
         EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();

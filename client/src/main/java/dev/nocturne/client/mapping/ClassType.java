@@ -113,6 +113,8 @@ public enum ClassType {
     SHULKER_BOX_BLOCK_ENTITY("net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity"),
     /** 方块状态：陷阱箱与普通箱共用方块实体类，只能看方块来分。 */
     BLOCK_STATE("net.minecraft.world.level.block.state.BlockState"),
+    /** 空气方块：旧版没有 {@code BlockState#isAir()}，用方块类型兜底。 */
+    AIR_BLOCK("net.minecraft.world.level.block.AirBlock"),
     /** 刷怪笼方块实体。 */
     SPAWNER_BLOCK_ENTITY("net.minecraft.world.level.block.entity.SpawnerBlockEntity"),
     /** 刷怪笼逻辑；实体名从它读取。 */

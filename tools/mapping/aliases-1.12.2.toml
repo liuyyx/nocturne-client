@@ -61,6 +61,8 @@ version = "1.8.9"
 "net/minecraft/world/effect/MobEffectInstance" = "net/minecraft/potion/PotionEffect"
 "net/minecraft/world/entity/item/ItemEntity" = "net/minecraft/entity/item/EntityItem"
 "net/minecraft/world/level/LevelReader" = "net/minecraft/world/IBlockAccess"
+"net/minecraft/world/level/Level" = "net/minecraft/world/World"
+"net/minecraft/world/level/block/AirBlock" = "net/minecraft/block/BlockAir"
 "net/minecraft/world/level/chunk/LevelChunk" = "net/minecraft/world/chunk/Chunk"
 "net/minecraft/world/level/block/entity/BlockEntity" = "net/minecraft/tileentity/TileEntity"
 "net/minecraft/world/level/block/entity/ChestBlockEntity" = "net/minecraft/tileentity/TileEntityChest"
@@ -417,6 +419,14 @@ unsupported = "1.8.9 是 Container.windowClick(int,int,int,int,EntityPlayer)Item
 
 [methods.useItemOn]
 unsupported = "1.8.9 是 PlayerControllerMP.onPlayerRightClick(EntityPlayerSP,WorldClient,ItemStack,BlockPos,EnumFacing,Vec3)Z（6 参，且无 InteractionHand），Rust 调用点需要 1.8.9 分支"
+
+[methods.processRightClickBlock]
+mcp = "processRightClickBlock"
+scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
+[methods.getMainHandItem]
+mcp = "getHeldItemMainhand"
+scope = "net/minecraft/entity/EntityLivingBase"
 
 [methods.mainCamera]
 unsupported = "1.8.9 EntityRenderer 不返回 Camera 对象"

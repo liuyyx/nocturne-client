@@ -86,6 +86,8 @@ net/minecraft/client/multiplayer/MultiPlayerGameMode#startDestroyBlock()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#stopDestroyBlock()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#useItem()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#useItemOn()
+net/minecraft/client/multiplayer/MultiPlayerGameMode#onPlayerRightClick()
+net/minecraft/client/multiplayer/MultiPlayerGameMode#processRightClickBlock()
 
 net/minecraft/client/multiplayer/PlayerInfo
 net/minecraft/client/multiplayer/PlayerInfo#gameMode
@@ -352,6 +354,9 @@ net/minecraft/world/level/BaseSpawner#getEntityNameToSpawn()
 net/minecraft/world/level/BaseSpawner#getOrCreateDisplayEntity()
 # 陷阱箱与普通箱共用方块实体类，只能看方块：ClientLevel#getBlockState(pos) → BlockState#getBlock()
 # 再比类层次（陷阱箱是箱子方块的子类；1.8.9/1.12.2 是 BlockChest / BlockTrappedChest）。
+net/minecraft/world/level/Level
+net/minecraft/world/level/block/AirBlock
+net/minecraft/world/level/block/state/BlockState#isAir()
 net/minecraft/world/level/block/state/BlockState#getBlock()
 net/minecraft/world/level/block/ChestBlock
 

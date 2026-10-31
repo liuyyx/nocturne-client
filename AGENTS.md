@@ -191,6 +191,7 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 
 `KeyMap` 的规范空间是 AWT `KeyEvent.VK_*`（注入器存的就是它），默认 GUI 键是右 Shift 的哨兵
 `VK_RIGHT_SHIFT = 0x1F01`（AWT 无该常量；**不能**借用 `VK_6` 的 54，否则按数字 6 会开关界面）。
+`GuiOverlay` 同时接受 **INSERT**（AWT 155）作为兼容入口，第三方客户端占用右 Shift 时仍可打开。
 SDL 世代**鼠标取游戏自己的事件态**（`MouseHandler.xpos/ypos` + `activeButton`），
 `SDL_GetMouseState` 在无焦点时静默给 `0,0`。
 

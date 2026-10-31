@@ -40,6 +40,8 @@ public final class GuiOverlay implements FrameListener {
     public static final int KEY_RIGHT_SHIFT = 0x1F01;
     /** Esc 的键码（AWT VK_ESCAPE）；用于派发键盘事件使 Esc 关闭可达。 */
     private static final int KEY_ESCAPE = 27;
+    /** 兼容开关键：AWT VK_INSERT。第三方客户端常占用右 Shift，留一个不冲突的入口。 */
+    private static final int KEY_INSERT = 155;
 
     /** 放大界面的键：主键盘 {@code =}（键帽上印的是 {@code +}）。 */
     private static final int KEY_SCALE_UP = 61;
@@ -151,6 +153,11 @@ public final class GuiOverlay implements FrameListener {
     /** @return 实际生效的输入后端名称，用于日志诊断；按键「没反应」时先看这里是不是 {@code "none"} */
     public String keyBackend() {
         return input.describe();
+    }
+
+    /** @return 配置键或 INSERT 任一按下；INSERT 用于规避第三方客户端占用右 Shift。 */
+    private boolean togglePressed() {
+        return keyPressed(toggleKey) || keyPressed(KEY_INSERT);
     }
 
     /** @return 当前使用的开关按键键码 */
@@ -309,7 +316,7 @@ public final class GuiOverlay implements FrameListener {
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
             escapeWasDown = keyPressed(KEY_ESCAPE);
             // 开关键也要取样：否则「用外部方式打开时开关键正按着」会在下一帧被当成新按下而立刻关掉界面。
-            toggleWasDown = keyPressed(toggleKey);
+            toggleWasDown = togglePressed();
             java.util.Arrays.fill(charWasDown, false);
         }
     }
@@ -331,7 +338,7 @@ public final class GuiOverlay implements FrameListener {
             input.scrollDelta(); // 丢弃原生界面期间的滚轮，返回后不得补发。
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
-            toggleWasDown = keyPressed(toggleKey);
+            toggleWasDown = togglePressed();
             escapeWasDown = keyPressed(KEY_ESCAPE);
             lastX = mx;
             lastY = my;
@@ -340,7 +347,7 @@ public final class GuiOverlay implements FrameListener {
             return;
         }
         // 事件驱动优先：1.21.1 的 glfwGetKey 在合成按键下恒为 0（游戏回调却正常）。
-        boolean toggleDown = keyPressed(toggleKey);
+        boolean toggleDown = togglePressed();
         if (toggleDown && !toggleWasDown) {
             gui.toggle();
             if (gui.isOpen()) {

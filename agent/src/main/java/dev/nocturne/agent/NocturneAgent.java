@@ -875,6 +875,13 @@ public final class NocturneAgent {
         // 屏蔽屏幕的点击入口效果相同，且完全不碰我们自己的输入路径。
         registerInputBlock(instrumentation, asmLoader, SCREEN_CLICK_CLASS, SCREEN_CLICK_METHOD,
                 SCREEN_CLICK_DESCRIPTOR);
+        // 26.x：点击自绘界面会走 MouseHandler#onButton → grabMouse（把光标拽回中心）。
+        // onButton 不能整条屏蔽，因为 activeButton 正是界面的按钮来源；改为屏蔽 grabMouse，
+        // 既保留按钮记录，又阻止游戏重新捕获/居中。关闭界面后 shouldBlock=false，正常抓取。
+        String mouseHandler = mappedClassName(dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER);
+        String grabMouse = mappedMethodName(dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
+                "grabMouse", "grabMouse");
+        registerInputBlock(instrumentation, asmLoader, mouseHandler, grabMouse, "()V");
         // 旧世代（1.8.9 / 1.12.2）没有上面那些类名：真正把指针抓走的是 Minecraft#setIngameFocus
         // ——点击游戏窗口时它重新捕获指针并把光标拽到屏幕中心。界面开着时这条必须禁掉，
         // 否则"点一下界面，鼠标就被游戏抢走并跳到正中"。

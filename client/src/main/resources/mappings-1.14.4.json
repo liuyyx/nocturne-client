@@ -2875,6 +2875,31 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/BaseSpawner": {
+            "names": {
+                "vanilla": "bgy",
+                "fabric": "net.minecraft.class_1917",
+                "forge": "net.minecraft.world.spawner.AbstractSpawner"
+            },
+            "methods": {
+                "getEntityNameToSpawn": {
+                    "absent": true
+                },
+                "getOrCreateDisplayEntity": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_8283",
+                        "forge": "func_184994_d"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laio;",
+                        "fabric": "()Lnet/minecraft/class_1297;",
+                        "forge": "()Lnet/minecraft/entity/Entity;"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/level/GameType": {
             "names": {
                 "vanilla": "bho",
@@ -3033,6 +3058,28 @@
                 "forge": "net.minecraft.tileentity.ShulkerBoxTileEntity"
             },
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
+            "names": {
+                "vanilla": "buv",
+                "fabric": "net.minecraft.class_2636",
+                "forge": "net.minecraft.tileentity.MobSpawnerTileEntity"
+            },
+            "methods": {
+                "getSpawner": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_11390",
+                        "forge": "func_145881_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbgy;",
+                        "fabric": "()Lnet/minecraft/class_1917;",
+                        "forge": "()Lnet/minecraft/world/spawner/AbstractSpawner;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {

@@ -2528,6 +2528,22 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/BaseSpawner": {
+            "names": {
+                "vanilla": "amk",
+                "fabric": "net.minecraft.class_1917",
+                "forge": "net.minecraft.tileentity.MobSpawnerBaseLogic"
+            },
+            "methods": {
+                "getEntityNameToSpawn": {
+                    "absent": true
+                },
+                "getOrCreateDisplayEntity": {
+                    "absent": true
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/level/GameType": {
             "names": {
                 "vanilla": "ams",
@@ -2685,6 +2701,28 @@
                 "forge": "net.minecraft.tileentity.TileEntityShulkerBox"
             },
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
+            "names": {
+                "vanilla": "avy",
+                "fabric": "net.minecraft.class_2636",
+                "forge": "net.minecraft.tileentity.TileEntityMobSpawner"
+            },
+            "methods": {
+                "getSpawner": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_11390",
+                        "forge": "func_145881_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lamk;",
+                        "fabric": "()Lnet/minecraft/class_1917;",
+                        "forge": "()Lnet/minecraft/tileentity/MobSpawnerBaseLogic;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {

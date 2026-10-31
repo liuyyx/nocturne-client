@@ -107,6 +107,8 @@ version = "1.8.9"
 "net/minecraft/client/OptionInstance" = { unsupported = "1.8.9 没有 OptionInstance；GameSettings 直接存放原始字段（GameSettings 项见 [overrides]）" }
 "net/minecraft/world/level/block/entity/BarrelBlockEntity" = { unsupported = "木桶是 1.14 加入的" }
 "net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity" = { unsupported = "潜影盒是 1.9 加入的" }
+"net/minecraft/world/level/block/entity/SpawnerBlockEntity" = "net/minecraft/tileentity/TileEntityMobSpawner"
+"net/minecraft/world/level/BaseSpawner" = "net/minecraft/tileentity/MobSpawnerBaseLogic"
 "net/minecraft/world/InteractionHand" = { unsupported = "EnumHand 是 1.9 加入的；1.8.9 交互方法不带手参数（PlayerControllerMP.onPlayerRightClick 无 EnumHand）" }
 "net/minecraft/world/item/component/SwingAnimation" = { unsupported = "SwingAnimation 是 26.3 加入的；1.8.9 是 EntityLivingBase.swingItem()" }
 "net/minecraft/world/inventory/ContainerInput" = { unsupported = "ClickType 是 1.19 加入的；1.8.9 用 Container.windowClick 的 int mode/button（0=PICKUP 1=QUICK_MOVE 2=SWAP）" }
@@ -133,6 +135,14 @@ note = "public boolean；GUI 打开期间置 false、关闭后恢复 true"
 [methods.getBlockPos]
 mcp = "getPos"
 scope = "net/minecraft/tileentity/TileEntity"
+
+[methods.getSpawner]
+mcp = "getSpawnerBaseLogic"
+scope = "net/minecraft/tileentity/TileEntityMobSpawner"
+
+[methods.getEntityNameToSpawn]
+mcp = "getEntityNameToSpawn"
+scope = "net/minecraft/tileentity/MobSpawnerBaseLogic"
 
 [methods.getString]
 mcp = "getFormattedText"

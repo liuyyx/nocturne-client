@@ -3557,6 +3557,34 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/BaseSpawner": {
+            "names": {
+                "vanilla": "dvp",
+                "fabric": "net.minecraft.class_1917",
+                "forge": "net.minecraft.world.level.BaseSpawner",
+                "neoforge": "net.minecraft.world.level.BaseSpawner"
+            },
+            "methods": {
+                "getEntityNameToSpawn": {
+                    "absent": true
+                },
+                "getOrCreateDisplayEntity": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_8283",
+                        "forge": "m_253067_",
+                        "neoforge": "getOrCreateDisplayEntity"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ldwo;Lis;)Lcgk;",
+                        "fabric": "(Lnet/minecraft/class_1937;Lnet/minecraft/class_2338;)Lnet/minecraft/class_1297;",
+                        "forge": "(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/entity/Entity;",
+                        "neoforge": "(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/entity/Entity;"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/level/GameType": {
             "names": {
                 "vanilla": "dwl",
@@ -3735,6 +3763,31 @@
                 "neoforge": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity"
             },
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
+            "names": {
+                "vanilla": "emw",
+                "fabric": "net.minecraft.class_2636",
+                "forge": "net.minecraft.world.level.block.entity.SpawnerBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.SpawnerBlockEntity"
+            },
+            "methods": {
+                "getSpawner": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_11390",
+                        "forge": "m_59801_",
+                        "neoforge": "getSpawner"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ldvp;",
+                        "fabric": "()Lnet/minecraft/class_1917;",
+                        "forge": "()Lnet/minecraft/world/level/BaseSpawner;",
+                        "neoforge": "()Lnet/minecraft/world/level/BaseSpawner;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {

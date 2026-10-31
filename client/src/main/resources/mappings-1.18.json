@@ -2994,6 +2994,31 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/BaseSpawner": {
+            "names": {
+                "vanilla": "bzf",
+                "fabric": "net.minecraft.class_1917",
+                "forge": "net.minecraft.world.level.BaseSpawner"
+            },
+            "methods": {
+                "getEntityNameToSpawn": {
+                    "absent": true
+                },
+                "getOrCreateDisplayEntity": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_8283",
+                        "forge": "m_151314_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcad;)Lawt;",
+                        "fabric": "(Lnet/minecraft/class_1937;)Lnet/minecraft/class_1297;",
+                        "forge": "(Lnet/minecraft/world/level/Level;)Lnet/minecraft/world/entity/Entity;"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/level/GameType": {
             "names": {
                 "vanilla": "caa",
@@ -3152,6 +3177,28 @@
                 "forge": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity"
             },
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
+            "names": {
+                "vanilla": "cnc",
+                "fabric": "net.minecraft.class_2636",
+                "forge": "net.minecraft.world.level.block.entity.SpawnerBlockEntity"
+            },
+            "methods": {
+                "getSpawner": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_11390",
+                        "forge": "m_59801_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbzf;",
+                        "fabric": "()Lnet/minecraft/class_1917;",
+                        "forge": "()Lnet/minecraft/world/level/BaseSpawner;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {

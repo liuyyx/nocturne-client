@@ -2229,6 +2229,21 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/BaseSpawner": {
+            "names": {
+                "vanilla": "aht",
+                "fabric": "net.minecraft.class_1917"
+            },
+            "methods": {
+                "getEntityNameToSpawn": {
+                    "absent": true
+                },
+                "getOrCreateDisplayEntity": {
+                    "absent": true
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/level/GameType": {
             "names": {
                 "vanilla": "aib",
@@ -2365,6 +2380,25 @@
             "absent": true,
             "names": {},
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
+            "names": {
+                "vanilla": "aqz",
+                "fabric": "net.minecraft.class_2636"
+            },
+            "methods": {
+                "getSpawner": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_11390"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laht;",
+                        "fabric": "()Lnet/minecraft/class_1917;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {

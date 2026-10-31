@@ -6,7 +6,8 @@
 ## 模块框架扩展验收
 
 - 基线有 14 个模块类、13 个已注册模块；`XrayModule` 仍未注册，没有因分包而启用未接通的渲染功能。
-  本轮新增 `KeepSprintModule`、`FastPlaceModule` 后为 16 个模块类、15 个已注册模块。
+  本轮新增 `KeepSprintModule`、`FastPlaceModule`、`SpawnerFinderModule` 后为 17 个模块类、
+  16 个已注册模块。
 - `Category` 增至七项，模块按分类分包并连续注册。Java 8 进程实际启动后，
   `FaClickGui` 分类摘要为 `COMBAT, MOVEMENT, RENDER, PLAYER, MISC (5/7)`，空分类不占 Tab。
 - `gradle build test` 通过；修正效果常量的持有类为 `MobEffects` 并重建映射后，
@@ -79,9 +80,26 @@
 - 尚未移植的复杂输入模块（SafeWalk/InvWalk/AntiAFK）依赖移动输入锁或旋转控制，留给对应批次，
   不把它们算进本次“已验收”。
 
+## B2 渲染覆盖层模块验收
+
+- `SpawnerFinder` 已移植：复用新抽出的 `BlockEntityScan` 遍历已加载区块，按
+  `SpawnerBlockEntity#getSpawner` 读刷怪逻辑，优先 `BaseSpawner#getEntityNameToSpawn`，
+  26.3 退回 `getOrCreateDisplayEntity`；白名单按 `minecraft:` 命名空间归一化后匹配。
+  `StorageEsp` 同步改用共享扫描器，三套区块表形态只在 `BlockEntityScan` 维护一份。
+- 已补 `SpawnerBlockEntity/BaseSpawner` 及其方法映射；1.8.9/1.12.2 走
+  `TileEntityMobSpawner.getSpawnerBaseLogic`。全量 66 版本 `generate.py --javap` 全绿（84 类）。
+- 真机 26.3：夜晚放置带 Zombie 的刷怪笼后，扫描到 `spawnerName=Zombie`；
+  独立投影 + 计数型 `OverlayDraw` 直接调用模块得到 `draws=3 text=Zombie [4]`，
+  证明模块收集、匹配、投影与标签绘制链路正确。
+- **阻塞**：同一实例中 `GuiOverlay.setOpen(true)` 在主线程成功，但屏幕上没有 GUI/标签，
+  日志也没有 `world overlay` 的绘制调用记录。该问题位于叠加层帧路径，影响所有
+  `WorldOverlay` 模块而不只 SpawnerFinder，因此本项只记为“模块级验收通过”，
+  不声明真机屏幕可见。
+- 用户指正刷怪笼白天不刷怪；已把世界设为夜晚后验证，测试环境正确。
+
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
-表的规模为 **82 个类**（客户端实际解析的规范面）。每个类/成员带
+表的规模为 **84 个类**（客户端实际解析的规范面）。每个类/成员带
 `vanilla` / `fabric` / `forge` / `neoforge` 四套运行期名 + **配套的 JNI 描述符**；
 运行时按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试，因此
 **同一份表同时服务原版、Fabric、Forge、NeoForge 四种安装**（不做加载器探测）。
@@ -109,18 +127,18 @@
 
 | 版本 | 混淆 | 映射表来源 | 绘制代际 | 帧钩子目标 | 表状态 |
 |---|---|---|---|---|---|
-| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（182 具名成员；`--javap` 通过） |
-| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（177，`--javap` 通过） |
-| 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（204，`--javap` 通过） |
+| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（184 具名成员；`--javap` 通过） |
+| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（178，`--javap` 通过） |
+| 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（206，`--javap` 通过） |
 | 1.21.4 | ✅ **真机已实测**（BMWClient 整合包 + Fabric：`backend=gui-extractor`、`Screen.render` 钩子织入；我方 UI 渲染正常，被整合包自带 LiquidBounce 菜单覆盖） | ✅ | ✅ 已产出 | ✅ 可见（三列面板 + 中文标签） |
 | 1.21.10 | ✅ **真机已实测**（`1.21.10-opal` + Fabric：`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`overlay active`） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 文字） |
 | 1.21.11 | ✅ **真机已实测**（`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`FaClickGui` 完整显示，文字按设计字号缩放） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 中文标签，无截断） |
-| 1.20.1 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（210，`--javap` 通过） |
-| 1.21.4 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（210，`--javap` 通过） |
-| 1.21.10 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（212，`--javap` 通过） |
-| 1.21.11 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（211，`--javap` 通过） |
-| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（212，`--javap` 通过） |
-| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（212，`--javap` 通过） |
+| 1.20.1 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（212，`--javap` 通过） |
+| 1.21.4 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（212，`--javap` 通过） |
+| 1.21.10 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（214，`--javap` 通过） |
+| 1.21.11 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（213，`--javap` 通过） |
+| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（214，`--javap` 通过） |
+| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（214，`--javap` 通过） |
 
 > 各版本行内的成员数差异来自 `absent`：该版本运行时**没有**对应类/成员时显式标注，
 > 由运行期打一次性日志并回退规范名，而不是把规范名当混淆名静默使用。

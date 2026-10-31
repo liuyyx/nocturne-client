@@ -2374,6 +2374,28 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/BaseSpawner": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.BaseSpawner",
+                "fabric": "net.minecraft.world.level.BaseSpawner",
+                "forge": "net.minecraft.world.level.BaseSpawner",
+                "neoforge": "net.minecraft.world.level.BaseSpawner"
+            },
+            "methods": {
+                "getEntityNameToSpawn": {
+                    "absent": true
+                },
+                "getOrCreateDisplayEntity": {
+                    "names": {
+                        "vanilla": "getOrCreateDisplayEntity",
+                        "fabric": "getOrCreateDisplayEntity",
+                        "forge": "getOrCreateDisplayEntity",
+                        "neoforge": "getOrCreateDisplayEntity"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/level/GameType": {
             "names": {
                 "vanilla": "net.minecraft.world.level.GameType",
@@ -2528,6 +2550,25 @@
                 "neoforge": "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity"
             },
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.block.entity.SpawnerBlockEntity",
+                "fabric": "net.minecraft.world.level.block.entity.SpawnerBlockEntity",
+                "forge": "net.minecraft.world.level.block.entity.SpawnerBlockEntity",
+                "neoforge": "net.minecraft.world.level.block.entity.SpawnerBlockEntity"
+            },
+            "methods": {
+                "getSpawner": {
+                    "names": {
+                        "vanilla": "getSpawner",
+                        "fabric": "getSpawner",
+                        "forge": "getSpawner",
+                        "neoforge": "getSpawner"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {

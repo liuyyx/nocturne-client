@@ -180,6 +180,7 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.render.WatermarkModule());
         modules.register(new dev.nocturne.client.module.modules.render.FullBrightModule());
         modules.register(new dev.nocturne.client.module.modules.render.StorageEspModule());
+        modules.register(new dev.nocturne.client.module.modules.render.SpawnerFinderModule());
         modules.register(new dev.nocturne.client.module.modules.render.EspModule());
         modules.register(new dev.nocturne.client.module.modules.render.TracersModule());
         modules.register(new dev.nocturne.client.module.modules.render.NameTagsModule());

@@ -2340,6 +2340,31 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/BaseSpawner": {
+            "names": {
+                "vanilla": "add",
+                "fabric": "net.minecraft.class_1917",
+                "forge": "net.minecraft.tileentity.MobSpawnerBaseLogic"
+            },
+            "methods": {
+                "getEntityNameToSpawn": {
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "method_8281",
+                        "forge": "func_98276_e"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/String;",
+                        "fabric": "()Ljava/lang/String;",
+                        "forge": "()Ljava/lang/String;"
+                    }
+                },
+                "getOrCreateDisplayEntity": {
+                    "absent": true
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/level/GameType": {
             "names": {
                 "vanilla": "adp$a",
@@ -2490,6 +2515,28 @@
             "absent": true,
             "names": {},
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
+            "names": {
+                "vanilla": "all",
+                "fabric": "net.minecraft.class_2636",
+                "forge": "net.minecraft.tileentity.TileEntityMobSpawner"
+            },
+            "methods": {
+                "getSpawner": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_11390",
+                        "forge": "func_145881_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ladd;",
+                        "fabric": "()Lnet/minecraft/class_1917;",
+                        "forge": "()Lnet/minecraft/tileentity/MobSpawnerBaseLogic;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {

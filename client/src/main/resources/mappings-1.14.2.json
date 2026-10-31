@@ -2422,6 +2422,22 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/level/BaseSpawner": {
+            "names": {
+                "vanilla": "bgp",
+                "fabric": "net.minecraft.class_1917",
+                "forge": "net.minecraft.world.spawner.AbstractSpawner"
+            },
+            "methods": {
+                "getEntityNameToSpawn": {
+                    "absent": true
+                },
+                "getOrCreateDisplayEntity": {
+                    "absent": true
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/level/GameType": {
             "names": {
                 "vanilla": "bhf",
@@ -2563,6 +2579,28 @@
                 "forge": "net.minecraft.tileentity.ShulkerBoxTileEntity"
             },
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
+            "names": {
+                "vanilla": "bum",
+                "fabric": "net.minecraft.class_2636",
+                "forge": "net.minecraft.tileentity.MobSpawnerTileEntity"
+            },
+            "methods": {
+                "getSpawner": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_11390",
+                        "forge": "func_145881_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbgp;",
+                        "fabric": "()Lnet/minecraft/class_1917;",
+                        "forge": "()Lnet/minecraft/world/spawner/AbstractSpawner;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/level/block/state/BlockState": {

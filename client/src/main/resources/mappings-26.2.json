@@ -1575,6 +1575,9 @@
                 "motionX": {
                     "absent": true
                 },
+                "motionY": {
+                    "absent": true
+                },
                 "motionZ": {
                     "absent": true
                 },
@@ -1722,6 +1725,14 @@
                         "fabric": "getSpeed",
                         "forge": "getSpeed",
                         "neoforge": "getSpeed"
+                    }
+                },
+                "isFallFlying": {
+                    "names": {
+                        "vanilla": "isFallFlying",
+                        "fabric": "isFallFlying",
+                        "forge": "isFallFlying",
+                        "neoforge": "isFallFlying"
                     }
                 },
                 "isShiftKeyDown": {
@@ -2062,6 +2073,33 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/entity/player/Abilities": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.player.Abilities",
+                "fabric": "net.minecraft.world.entity.player.Abilities",
+                "forge": "net.minecraft.world.entity.player.Abilities",
+                "neoforge": "net.minecraft.world.entity.player.Abilities"
+            },
+            "methods": {},
+            "fields": {
+                "flying": {
+                    "names": {
+                        "vanilla": "flying",
+                        "fabric": "flying",
+                        "forge": "flying",
+                        "neoforge": "flying"
+                    }
+                },
+                "instabuild": {
+                    "names": {
+                        "vanilla": "instabuild",
+                        "fabric": "instabuild",
+                        "forge": "instabuild",
+                        "neoforge": "instabuild"
+                    }
+                }
+            }
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "net.minecraft.world.entity.player.Inventory",
@@ -2106,12 +2144,12 @@
                         "neoforge": "distanceToSqr"
                     }
                 },
-                "getEyePosition": {
+                "getAbilities": {
                     "names": {
-                        "vanilla": "getEyePosition",
-                        "fabric": "getEyePosition",
-                        "forge": "getEyePosition",
-                        "neoforge": "getEyePosition"
+                        "vanilla": "getAbilities",
+                        "fabric": "getAbilities",
+                        "forge": "getAbilities",
+                        "neoforge": "getAbilities"
                     }
                 },
                 "getHealth": {
@@ -2212,6 +2250,9 @@
                 }
             },
             "fields": {
+                "capabilities": {
+                    "absent": true
+                },
                 "containerMenu": {
                     "names": {
                         "vanilla": "containerMenu",

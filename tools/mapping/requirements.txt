@@ -259,7 +259,13 @@ net/minecraft/world/entity/player/Player#xxa
 net/minecraft/world/entity/player/Player#yRotO
 net/minecraft/world/entity/player/Player#zza
 net/minecraft/world/entity/player/Player#distanceToSqr()
-net/minecraft/world/entity/player/Player#getEyePosition()
+net/minecraft/world/entity/player/Player#getAbilities()
+net/minecraft/world/entity/player/Player#capabilities
+net/minecraft/world/entity/player/Abilities
+net/minecraft/world/entity/player/Abilities#flying
+net/minecraft/world/entity/player/Abilities#instabuild
+net/minecraft/world/entity/LivingEntity#isFallFlying()
+net/minecraft/world/entity/Entity#motionY
 net/minecraft/world/entity/player/Player#getHealth()
 net/minecraft/world/entity/player/Player#inventory
 net/minecraft/world/entity/player/Player#getId()

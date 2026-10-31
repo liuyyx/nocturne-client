@@ -2233,6 +2233,9 @@
                 "motionX": {
                     "absent": true
                 },
+                "motionY": {
+                    "absent": true
+                },
                 "motionZ": {
                     "absent": true
                 },
@@ -2482,6 +2485,20 @@
                         "fabric": "()F",
                         "forge": "()F",
                         "neoforge": "()F"
+                    }
+                },
+                "isFallFlying": {
+                    "names": {
+                        "vanilla": "fE",
+                        "fabric": "method_6128",
+                        "forge": "m_21255_",
+                        "neoforge": "isFallFlying"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
                     }
                 },
                 "isShiftKeyDown": {
@@ -3056,6 +3073,45 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/entity/player/Abilities": {
+            "names": {
+                "vanilla": "cmw",
+                "fabric": "net.minecraft.class_1656",
+                "forge": "net.minecraft.world.entity.player.Abilities",
+                "neoforge": "net.minecraft.world.entity.player.Abilities"
+            },
+            "methods": {},
+            "fields": {
+                "flying": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_7479",
+                        "forge": "f_35935_",
+                        "neoforge": "flying"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z",
+                        "forge": "Z",
+                        "neoforge": "Z"
+                    }
+                },
+                "instabuild": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_7477",
+                        "forge": "f_35937_",
+                        "neoforge": "instabuild"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z",
+                        "forge": "Z",
+                        "neoforge": "Z"
+                    }
+                }
+            }
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "cmy",
@@ -3118,18 +3174,18 @@
                         "neoforge": "(DDD)D"
                     }
                 },
-                "getEyePosition": {
+                "getAbilities": {
                     "names": {
-                        "vanilla": "j",
-                        "fabric": "method_5836",
-                        "forge": "m_20299_",
-                        "neoforge": "getEyePosition"
+                        "vanilla": "gd",
+                        "fabric": "method_31549",
+                        "forge": "m_150110_",
+                        "neoforge": "getAbilities"
                     },
                     "signatures": {
-                        "vanilla": "(F)Levt;",
-                        "fabric": "(F)Lnet/minecraft/class_243;",
-                        "forge": "(F)Lnet/minecraft/world/phys/Vec3;",
-                        "neoforge": "(F)Lnet/minecraft/world/phys/Vec3;"
+                        "vanilla": "()Lcmw;",
+                        "fabric": "()Lnet/minecraft/class_1656;",
+                        "forge": "()Lnet/minecraft/world/entity/player/Abilities;",
+                        "neoforge": "()Lnet/minecraft/world/entity/player/Abilities;"
                     }
                 },
                 "getHealth": {
@@ -3302,6 +3358,9 @@
                 }
             },
             "fields": {
+                "capabilities": {
+                    "absent": true
+                },
                 "containerMenu": {
                     "names": {
                         "vanilla": "cb",

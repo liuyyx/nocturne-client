@@ -195,6 +195,7 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.player.AutoRespawnModule());
         modules.register(new dev.nocturne.client.module.modules.player.FastPlaceModule());
         modules.register(new dev.nocturne.client.module.modules.player.AutoToolModule());
+        modules.register(new dev.nocturne.client.module.modules.player.NoFallModule());
         modules.register(new dev.nocturne.client.module.modules.misc.PanicModule());
     }
 

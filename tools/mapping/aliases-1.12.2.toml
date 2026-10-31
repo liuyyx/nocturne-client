@@ -486,6 +486,10 @@ scope = "net/minecraft/entity/Entity"
 mcp = "prevRotationPitch"
 scope = "net/minecraft/entity/Entity"
 
+[methods.isFallFlying]
+mcp = "isElytraFlying"
+scope = "net/minecraft/entity/EntityLivingBase"
+
 [methods.getDestroySpeed]
 mcp = "getDestroySpeed"
 scope = "net/minecraft/item/ItemStack"
@@ -506,6 +510,18 @@ note = "1.8.9/1.12.2 的水平动量字段；现代没有该字段，动作层�
 [fields.motionZ]
 mcp = "motionZ"
 scope = "net/minecraft/entity/Entity"
+
+[fields.motionY]
+mcp = "motionY"
+scope = "net/minecraft/entity/Entity"
+
+[fields.capabilities]
+mcp = "capabilities"
+scope = "net/minecraft/entity/player/EntityPlayer"
+
+[fields.instabuild]
+mcp = "isCreativeMode"
+scope = "net/minecraft/entity/player/PlayerCapabilities"
 
 [fields.hurtTime]
 mcp = "hurtTime"

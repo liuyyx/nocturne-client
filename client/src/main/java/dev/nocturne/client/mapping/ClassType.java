@@ -24,6 +24,8 @@ public enum ClassType {
     PLAYER("net.minecraft.world.entity.player.Player"),
     /** 玩家背包；快捷栏选中槽与物品读取。 */
     INVENTORY("net.minecraft.world.entity.player.Inventory"),
+    /** 玩家能力（飞行、创造模式）。 */
+    ABILITIES("net.minecraft.world.entity.player.Abilities"),
     /** 生物实体基类。 */
     LIVING_ENTITY("net.minecraft.world.entity.LivingEntity"),
     /**

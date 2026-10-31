@@ -7,7 +7,7 @@
 
 - 基线有 14 个模块类、13 个已注册模块；`XrayModule` 仍未注册，没有因分包而启用未接通的渲染功能。
   本轮新增 `KeepSprintModule`、`FastPlaceModule`、`SpawnerFinderModule`、`AutoToolModule`、
-  `AutoClickerModule` 后为 19 个模块类、18 个已注册模块。
+  `AutoClickerModule`、`NoFallModule` 后为 20 个模块类、19 个已注册模块。
 - `Category` 增至七项，模块按分类分包并连续注册。Java 8 进程实际启动后，
   `FaClickGui` 分类摘要为 `COMBAT, MOVEMENT, RENDER, PLAYER, MISC (5/7)`，空分类不占 Tab。
 - `gradle build test` 通过；修正效果常量的持有类为 `MobEffects` 并重建映射后，
@@ -118,9 +118,18 @@
 - 物品白名单、破方块保留、HitSelect/BlockHit 互锁尚未移植，因此未提供对应假开关。
 - 全量 66 版本 `--javap` 全绿（85 类），客户端测试与 `dist` 构建通过。
 
+## B6 网络包模块状态
+
+- `NoFall` 已实现：订阅 `MotionEvent.pre`，仅当未滑翔、非创造/飞行、下落距离 >2.224 且垂直速度为负时，
+  把提交给服务端的 `onGround` 置 true；跳跃/鞘翅 `isFallFlying`、Abilities 字段均走映射并带旧版回退。
+- 补入 `Abilities`、`Player#getAbilities/capabilities`、`isFallFlying`、`motionY` 映射；
+  全量 66 版本 `--javap` 全绿（86 类），纯条件单测覆盖滑翔/创造/速度边界。
+- **未完成**：本轮真机实例未能稳定进入世界（只到黑屏/主菜单），因此不声明 NoFall 真机通过；
+  代码与映射已提交，真机验收待下一实例补做。
+
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
-表的规模为 **85 个类**（客户端实际解析的规范面）。每个类/成员带
+表的规模为 **86 个类**（客户端实际解析的规范面）。每个类/成员带
 `vanilla` / `fabric` / `forge` / `neoforge` 四套运行期名 + **配套的 JNI 描述符**；
 运行时按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试，因此
 **同一份表同时服务原版、Fabric、Forge、NeoForge 四种安装**（不做加载器探测）。
@@ -148,18 +157,18 @@
 
 | 版本 | 混淆 | 映射表来源 | 绘制代际 | 帧钩子目标 | 表状态 |
 |---|---|---|---|---|---|
-| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（187 具名成员；`--javap` 通过） |
-| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（181，`--javap` 通过） |
-| 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（209，`--javap` 通过） |
+| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（190 具名成员；`--javap` 通过） |
+| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（185，`--javap` 通过） |
+| 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（211，`--javap` 通过） |
 | 1.21.4 | ✅ **真机已实测**（BMWClient 整合包 + Fabric：`backend=gui-extractor`、`Screen.render` 钩子织入；我方 UI 渲染正常，被整合包自带 LiquidBounce 菜单覆盖） | ✅ | ✅ 已产出 | ✅ 可见（三列面板 + 中文标签） |
 | 1.21.10 | ✅ **真机已实测**（`1.21.10-opal` + Fabric：`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`overlay active`） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 文字） |
 | 1.21.11 | ✅ **真机已实测**（`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`FaClickGui` 完整显示，文字按设计字号缩放） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 中文标签，无截断） |
-| 1.20.1 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（215，`--javap` 通过） |
-| 1.21.4 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（215，`--javap` 通过） |
-| 1.21.10 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（217，`--javap` 通过） |
-| 1.21.11 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（216，`--javap` 通过） |
-| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（217，`--javap` 通过） |
-| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（217，`--javap` 通过） |
+| 1.20.1 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（218，`--javap` 通过） |
+| 1.21.4 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（218，`--javap` 通过） |
+| 1.21.10 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（220，`--javap` 通过） |
+| 1.21.11 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（219，`--javap` 通过） |
+| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（220，`--javap` 通过） |
+| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（220，`--javap` 通过） |
 
 > 各版本行内的成员数差异来自 `absent`：该版本运行时**没有**对应类/成员时显式标注，
 > 由运行期打一次性日志并回退规范名，而不是把规范名当混淆名静默使用。

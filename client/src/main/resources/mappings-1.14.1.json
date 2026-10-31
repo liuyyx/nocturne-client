@@ -1420,6 +1420,9 @@
                 "motionX": {
                     "absent": true
                 },
+                "motionY": {
+                    "absent": true
+                },
                 "motionZ": {
                     "absent": true
                 },
@@ -1592,6 +1595,18 @@
                         "vanilla": "()F",
                         "fabric": "()F",
                         "forge": "()F"
+                    }
+                },
+                "isFallFlying": {
+                    "names": {
+                        "vanilla": "dr",
+                        "fabric": "method_6128",
+                        "forge": "func_184613_cA"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
                     }
                 },
                 "isShiftKeyDown": {
@@ -2039,6 +2054,38 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/entity/player/Abilities": {
+            "names": {
+                "vanilla": "avv",
+                "fabric": "net.minecraft.class_1656",
+                "forge": "net.minecraft.entity.player.PlayerAbilities"
+            },
+            "methods": {},
+            "fields": {
+                "flying": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_7479",
+                        "forge": "field_75100_b"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z"
+                    }
+                },
+                "instabuild": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_7477",
+                        "forge": "field_75098_d"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z"
+                    }
+                }
+            }
+        },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
                 "vanilla": "avx",
@@ -2092,17 +2139,8 @@
                         "forge": "(DDD)D"
                     }
                 },
-                "getEyePosition": {
-                    "names": {
-                        "vanilla": "j",
-                        "fabric": "method_5836",
-                        "forge": "func_174824_e"
-                    },
-                    "signatures": {
-                        "vanilla": "(F)Lcrx;",
-                        "fabric": "(F)Lnet/minecraft/class_243;",
-                        "forge": "(F)Lnet/minecraft/util/math/Vec3d;"
-                    }
+                "getAbilities": {
+                    "absent": true
                 },
                 "getHealth": {
                     "names": {
@@ -2232,6 +2270,17 @@
                 }
             },
             "fields": {
+                "capabilities": {
+                    "names": {
+                        "vanilla": "bN",
+                        "fabric": "field_7503",
+                        "forge": "field_71075_bZ"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lavv;",
+                        "fabric": "Lnet/minecraft/class_1656;"
+                    }
+                },
                 "containerMenu": {
                     "names": {
                         "vanilla": "bA",

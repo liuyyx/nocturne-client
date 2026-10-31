@@ -37,6 +37,8 @@ public final class NocturneClient {
     /** 全局目标选择器；无状态，仅读当前世界。 */
     private final dev.nocturne.client.control.TargetManager targets =
             new dev.nocturne.client.control.TargetManager();
+    /** 系统加载器上的游戏事件汇；供跨加载器 sink 桥接使用。 */
+    private volatile dev.nocturne.client.event.GameplayEvents gameplayEvents;
     /** 是否已自销毁（panic）：置位后不再接受任何驱动，见 {@link #panic()}。 */
     private volatile boolean panicked;
 
@@ -98,6 +100,11 @@ public final class NocturneClient {
     /** 全局目标选择器。 */
     public dev.nocturne.client.control.TargetManager targets() {
         return targets;
+    }
+
+    /** 系统加载器上的游戏事件汇；未 boot 完成时为 {@code null}。 */
+    public dev.nocturne.client.event.GameplayEvents gameplayEvents() {
+        return gameplayEvents;
     }
 
     /**
@@ -184,7 +191,7 @@ public final class NocturneClient {
     /** 执行实际安装：注册内置模块并打日志。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */
     private void install() {
         registerModules();
-        dev.nocturne.client.event.GameplayEvents.install(this);
+        gameplayEvents = dev.nocturne.client.event.GameplayEvents.install(this);
         rotations.install(this);
         log("client installed (modules=" + modules.size() + ")");
         // 后续阶段：映射初始化、渲染/输入钩子、HUD。

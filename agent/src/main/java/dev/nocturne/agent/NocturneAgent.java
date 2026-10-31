@@ -194,6 +194,10 @@ public final class NocturneAgent {
                     // 类加载器解析（它看不到 agent jar）。不等它就注册钩子，钩子一触发就是
                     // NoClassDefFoundError 崩游戏（实测 FrameDispatcher 加载失败）。
                     if ("premain".equals(via)) {
+                        // 绘制回调必须在 Hud/Screen 首次定义前就挂上；等 awaitGameLoader 返回时
+                        // 26.3 Fabric 早已加载这两个类，redefine 又会因 Mixin 追加接口而失败。
+                        registerEarlyGuiDrawHooks(instrumentation);
+                        registerEarlyGameplayHooks(instrumentation);
                         awaitGameLoader(instrumentation);
                     }
                     // Mixin 配置必须尽早注册：Mixin 只处理**首次加载**的类，而 NocturneClient.boot
@@ -201,6 +205,7 @@ public final class NocturneAgent {
                     // 加载，配置才能在它定义时生效（1.21.1 实测：放在 boot 之后注册成功但不织入）。
                     installMixinChannelEarly(instrumentation, via);
                     NocturneClient.boot(instrumentation);
+                    installGameplaySinkBridge(instrumentation);
                     installFrameHook(instrumentation);
                     installOverlay(instrumentation);
                 } catch (Throwable t) {
@@ -475,6 +480,60 @@ public final class NocturneAgent {
                 SCREEN_HOOK_METHOD);
     }
 
+    /**
+     * 把游戏加载器里的 {@code GameplayHook} 静态汇接到系统加载器的 {@code GameplayEvents}。
+     *
+     * <p>Fabric 的 Knot 会从暴露的 agent jar 再定义一份 bootstrap 类，注入代码调用的是那一份；
+     * 若只安装系统副本的 sink，钩子照常触发但事件永远不投递（sink=false）。这里用该加载器的
+     * Sink 接口生成代理，转发到系统实例，保证两侧看到同一套事件。
+     */
+    private static void installGameplaySinkBridge(Instrumentation instrumentation) {
+        try {
+            ClassLoader loader = gameClassLoader(instrumentation);
+            NocturneClient client = NocturneClient.get();
+            if (loader == null || client == null || client.gameplayEvents() == null) {
+                log("gameplay sink bridge skipped (loader or client unavailable)");
+                return;
+            }
+            Object events = client.gameplayEvents();
+            installSinkFor(null, events, "bootstrap");
+            installSinkFor(loader, events, "game");
+        } catch (Throwable t) {
+            log("gameplay sink bridge failed: " + t);
+        }
+    }
+
+    private static void installSinkFor(ClassLoader loader, Object events, String label) {
+        try {
+            Class<?> hookType = Class.forName(
+                    "dev.nocturne.client.bootstrap.GameplayHook", true, loader);
+            Class<?> sinkType = Class.forName(
+                    "dev.nocturne.client.bootstrap.GameplayHook$Sink", true, loader);
+            Object proxy = java.lang.reflect.Proxy.newProxyInstance(loader,
+                    new Class<?>[]{sinkType}, (object, method, args) -> {
+                        if (method.getDeclaringClass() == Object.class) {
+                            if ("toString".equals(method.getName())) {
+                                return "NocturneGameplaySinkProxy";
+                            }
+                            if ("hashCode".equals(method.getName())) {
+                                return Integer.valueOf(System.identityHashCode(object));
+                            }
+                            if ("equals".equals(method.getName())) {
+                                return Boolean.valueOf(object == (args == null ? null : args[0]));
+                            }
+                        }
+                        java.lang.reflect.Method target = events.getClass()
+                                .getMethod(method.getName(), method.getParameterTypes());
+                        return target.invoke(events, args);
+                    });
+            hookType.getMethod("install", sinkType).invoke(null, proxy);
+            log("gameplay sink bridge installed (" + label + ") loader="
+                    + (loader == null ? "bootstrap" : loader));
+        } catch (Throwable t) {
+            log("gameplay sink bridge (" + label + ") failed: " + t);
+        }
+    }
+
     private static void installFrameHook(Instrumentation instrumentation) {
         if (instrumentation == null) {
             log("no Instrumentation: frame hook skipped");
@@ -578,6 +637,34 @@ public final class NocturneAgent {
     /** 钩子类内部名（斜杠形式）。 */
     private static final String GUI_HOOK_OWNER = "dev/nocturne/agent/GuiDrawHook";
 
+    /** 绘制回调是否已注册；premain 提前注册后，后续安装不得重复挂转换器。 */
+    private static volatile boolean guiDrawCallbacksRegistered;
+
+    /**
+     * 启动期（premain）提前注册绘制回调。
+     *
+     * <p>26.3 Fabric 的 {@code Hud}/{@code Screen} 已被 Fabric Mixin 追加接口，attach 后
+     * {@code redefineClasses} 会因接口集合变化被 JVM 拒绝；唯一可靠时机是类首次定义前。
+     * 此时还不知道游戏类加载器，但转换器只按字符串匹配，注入调用由已暴露的 agent jar 解析。
+     */
+    private static void registerEarlyGuiDrawHooks(Instrumentation instrumentation) {
+        if (guiDrawCallbacksRegistered || instrumentation == null
+                || mcVersion == null || !mcVersion.startsWith("26.")) {
+            return;
+        }
+        EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
+        if (asmLoader == null) {
+            log("embedded ASM unavailable; early gui draw hooks skipped");
+            return;
+        }
+        registerGuiDrawHook(instrumentation, asmLoader, HUD_DRAW_CLASS, HUD_DRAW_METHOD,
+                HUD_DRAW_DESCRIPTOR, HUD_HOOK_METHOD);
+        registerGuiDrawHook(instrumentation, asmLoader, SCREEN_DRAW_CLASS, SCREEN_DRAW_METHOD,
+                SCREEN_DRAW_DESCRIPTOR, SCREEN_HOOK_METHOD);
+        guiDrawCallbacksRegistered = true;
+        log("early gui draw hooks registered before game classes load");
+    }
+
     /**
      * 注册绘制钩子：把 HUD 与界面两个绘制入口的首个引用形参交给 {@link GuiDrawHook}。
      *
@@ -592,6 +679,10 @@ public final class NocturneAgent {
      * 不关心它具体是什么类型（把具体类型写进描述符会让钩子在类加载顺序变化时失配）。
      */
     private static void installGuiDrawHook(Instrumentation instrumentation) {
+        if (guiDrawCallbacksRegistered) {
+            log("gui draw callbacks already registered early; skipping repeat");
+            return;
+        }
         // Fabric 优先：KnotClassLoader 用 defineClass 定义游戏类，Instrumentation 的两条改写路径
         // 对它都不可靠（三条路都实测过，见 installMixinChannel 的说明）。
         ClassLoader fabricLoader = gameClassLoader(instrumentation);
@@ -819,9 +910,36 @@ public final class NocturneAgent {
     /** 目标类 → 已注册转换器；重定义时必须重放完整链，避免后一个钩子覆盖前一个。 */
     private static final java.util.Map<String, java.util.List<ClassFileTransformer>> GAMEPLAY_TRANSFORMERS =
             new java.util.HashMap<String, java.util.List<ClassFileTransformer>>();
+    /** 游戏事件转换器是否已注册；premain 提前注册后不得重复挂链。 */
+    private static volatile boolean gameplayCallbacksRegistered;
+
+    /**
+     * 启动期提前注册游戏事件转换器。
+     *
+     * <p>26.3 Fabric 的 {@code LocalPlayer}/{@code Minecraft} 在 attach 时已被 Mixin 追加接口，
+     * {@code redefineClasses} 无法完成；在类首次定义前注册才是可靠时机。
+     */
+    private static void registerEarlyGameplayHooks(Instrumentation instrumentation) {
+        if (gameplayCallbacksRegistered) {
+            return;
+        }
+        EmbeddedAsmLoader asmLoader = EmbeddedAsmLoader.create();
+        if (asmLoader == null) {
+            log("embedded ASM unavailable; early gameplay hooks skipped");
+            return;
+        }
+        installGameplayHooks(instrumentation, asmLoader);
+        gameplayCallbacksRegistered = true;
+        log("early gameplay hooks registered before game classes load");
+    }
 
     /** 安装全部游戏事件入口；单个目标缺失不影响其它入口。 */
     private static void installGameplayHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
+        if (gameplayCallbacksRegistered) {
+            log("gameplay callbacks already registered early; skipping repeat");
+            return;
+        }
+        gameplayCallbacksRegistered = true;
         // H1：本地玩家 tick 前后。传 this 供事件汇过滤，避免父类钩子把其它实体当成本地玩家。
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
                 "tick", "()V", "playerTickPre", "V", false, true);
@@ -1813,11 +1931,12 @@ public final class NocturneAgent {
         // 诊断包装：确认转换器真的被调用过。Fabric 环境里 retransformClasses 会静默不生效
         // （目标类被 Mixin 改写过、或转换器被后续 transformer 覆盖），只靠 addTransformer
         // 成功无法判断钩子是否落地。
+        final String targetInternalName = targetClass.replace('.', '/');
         ClassFileTransformer wrapper = new ClassFileTransformer() {
             @Override
             public byte[] transform(ClassLoader loader, String className, Class<?> beingRedefined,
                                     java.security.ProtectionDomain domain, byte[] classfileBuffer) {
-                if (className == null || !className.equals(targetClass)) {
+                if (className == null || !className.equals(targetInternalName)) {
                     return null;
                 }
                 try {

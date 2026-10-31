@@ -91,10 +91,14 @@
 - 真机 26.3：夜晚放置带 Zombie 的刷怪笼后，扫描到 `spawnerName=Zombie`；
   独立投影 + 计数型 `OverlayDraw` 直接调用模块得到 `draws=3 text=Zombie [4]`，
   证明模块收集、匹配、投影与标签绘制链路正确。
-- **阻塞**：同一实例中 `GuiOverlay.setOpen(true)` 在主线程成功，但屏幕上没有 GUI/标签，
-  日志也没有 `world overlay` 的绘制调用记录。该问题位于叠加层帧路径，影响所有
-  `WorldOverlay` 模块而不只 SpawnerFinder，因此本项只记为“模块级验收通过”，
-  不声明真机屏幕可见。
+- **26.3 Fabric 已修复并真机可见**：SDL 栈没有帧钩子，唯一入口是 `Screen/Hud.extractRenderState*`。
+  attach 时这两个类已被 Fabric Mixin 追加接口，`redefineClasses` 会报“attempted to change
+  superclass or interfaces”；改为 `premain` 在类首次定义前注册 ASM 回调，26.3 日志出现
+  `hook transform`、`gui draw hook active`、`frame hook is live`、`GUI overlay attached`，
+  桌面截图可见三列 FatClickGui。`premain` 还提前注册 `LocalPlayer` 事件钩子，避免同样的
+  Mixin 结构变化。
+- 26.3 attach（非启动期）仍无法改写已加载的 `Screen/Hud`；这是 JVM 结构校验限制，需要
+  `-javaagent` 启动期注入。启动期路径已在本轮真机验证。
 - 用户指正刷怪笼白天不刷怪；已把世界设为夜晚后验证，测试环境正确。
 
 ## B3 背包与物品模块验收
@@ -118,14 +122,44 @@
 - 物品白名单、破方块保留、HitSelect/BlockHit 互锁尚未移植，因此未提供对应假开关。
 - 全量 66 版本 `--javap` 全绿（85 类），客户端测试与 `dist` 构建通过。
 
+## B5 旋转与放置模块验收
+
+- 新增共享 `RotationController`：优先级 + TTL 仲裁，收到请求立即把 yaw/pitch 写入本地玩家，
+  Motion 事件同向提交；`AimAssist` 与 `Scaffold` 只登记朝向，不各自反射。
+- `Scaffold` 移植可运行子集：扫快捷栏方块、选槽、向下寻找“实心支撑 + 上方空气”的表面、
+  通过动作层对支撑面 UP 执行放置；不做移动接管或 GodBridge。
+- 26.3 真机：请求 yaw=90/pitch=20 后 `PlayerState` 立即读到 `yaw=90.0 pitch=20.0`；
+  支撑方块非空气、上方目标为空气，`placeAt=true` 后目标 `targetAirAfter=false`（方块真实落下）。
+- 1.8.9 绑定面：`action.place=true`、`action.attack=true`、`action.click=true`、
+  `action.setRotation=true`；旧版放置候选 `onPlayerRightClick` 已进映射。1.8.9 未进入世界，
+  因此不声明 1.8.9 放置真机通过。
+
+## B7 大型状态机模块验收
+
+- `KillAura` 移植：目标列表复用 `TargetManager`，按 Swing/Attack range、Max angle、Max targets、
+  APS 与目标过滤执行真实 `MultiPlayerGameMode#attack`。
+- 26.3 真机：召唤僵尸后 `targets=1 distance≈3.0`，1–3 秒内血量由 20 → 18.12 → 14.06，
+  证明攻击动作确实到达服务端。
+
+## B8 目标选择与视角模块验收
+
+- 新增共享 `TargetManager`：活体/玩家/怪物/隐身过滤、距离、水平半角、按距离/角度/血量排序。
+- `AimAssist` 移植：距离、Max angle、水平/垂直速度、Require mouse down、目标模式与目标过滤；
+  26.3 真机在按住目标期间 yaw 由 61.56° 平滑推进到 90°，同时目标仍在 3 格内。
+- 不提供穿墙可见性过滤；模块不把“角度内”宣称成“能看见”。
+
 ## B6 网络包模块状态
 
 - `NoFall` 已实现：订阅 `MotionEvent.pre`，仅当未滑翔、非创造/飞行、下落距离 >2.224 且垂直速度为负时，
   把提交给服务端的 `onGround` 置 true；跳跃/鞘翅 `isFallFlying`、Abilities 字段均走映射并带旧版回退。
 - 补入 `Abilities`、`Player#getAbilities/capabilities`、`isFallFlying`、`motionY` 映射；
   全量 66 版本 `--javap` 全绿（86 类），纯条件单测覆盖滑翔/创造/速度边界。
-- **未完成**：本轮真机实例未能稳定进入世界（只到黑屏/主菜单），因此不声明 NoFall 真机通过；
-  代码与映射已提交，真机验收待下一实例补做。
+- **26.3 真机通过**：`premain` 在类定义期织入 `LocalPlayer.sendPosition` 的 motionPre/Post；
+  桥接 bootstrap 与游戏加载器的 `GameplayHook.Sink` 后，3.5s 内观察到 `motion.events=140`、
+  `forcedGround=56`。把玩家切生存并传送至空中后，56 个提交包被 NoFall 改成 onGround=true，
+  证明 MotionEvent 与 NoFall 的提交改写都在真实游戏路径上生效。
+- 1.8.9 侧 `motionPre/Post` 已由 `--javap` 匹配的旧名（`bew.p()` 等）织入；本轮未进入世界，
+  不额外声明 1.8.9 NoFall 真机通过。
 
 ## B9 既有模块设置项对齐
 
@@ -136,7 +170,7 @@
 
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
-表的规模为 **86 个类**（客户端实际解析的规范面）。每个类/成员带
+表的规模为 **88 个类**（客户端实际解析的规范面）。每个类/成员带
 `vanilla` / `fabric` / `forge` / `neoforge` 四套运行期名 + **配套的 JNI 描述符**；
 运行时按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试，因此
 **同一份表同时服务原版、Fabric、Forge、NeoForge 四种安装**（不做加载器探测）。
@@ -164,18 +198,18 @@
 
 | 版本 | 混淆 | 映射表来源 | 绘制代际 | 帧钩子目标 | 表状态 |
 |---|---|---|---|---|---|
-| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（191 具名成员；`--javap` 通过） |
-| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（186，`--javap` 通过） |
-| 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（211，`--javap` 通过） |
+| 1.8.9 | 混淆 | SRG+MCP CSV+人工别名 → +fabric/forge 命名空间 | A | `Display.update()V` | ✅ 已产出（192 具名成员；`--javap` 通过） |
+| 1.12.2 | 混淆 | 同上（`vanilla1122` / `forge1122`） | A | `Display.update()V` | ✅ 已产出（188，`--javap` 通过） |
+| 1.16.5 | 混淆 | ProGuard + MCPConfig + intermediary | B | `glfwSwapBuffers(J)V` | ✅ 已产出（212，`--javap` 通过） |
 | 1.21.4 | ✅ **真机已实测**（BMWClient 整合包 + Fabric：`backend=gui-extractor`、`Screen.render` 钩子织入；我方 UI 渲染正常，被整合包自带 LiquidBounce 菜单覆盖） | ✅ | ✅ 已产出 | ✅ 可见（三列面板 + 中文标签） |
 | 1.21.10 | ✅ **真机已实测**（`1.21.10-opal` + Fabric：`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`overlay active`） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 文字） |
 | 1.21.11 | ✅ **真机已实测**（`class_437.method_25394` 织入 → `backend=gui-extractor` → `first frame 427x240, font=class_327`；`FaClickGui` 完整显示，文字按设计字号缩放） | ✅ | ✅ 已产出 | ✅ 可见（三列 + 中文标签，无截断） |
-| 1.20.1 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（218，`--javap` 通过） |
-| 1.21.4 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（218，`--javap` 通过） |
-| 1.21.10 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（220，`--javap` 通过） |
-| 1.21.11 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（219，`--javap` 通过） |
-| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（220，`--javap` 通过） |
-| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（220，`--javap` 通过） |
+| 1.20.1 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（219，`--javap` 通过） |
+| 1.21.4 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（219，`--javap` 通过） |
+| 1.21.10 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（221，`--javap` 通过） |
+| 1.21.11 | 混淆 | 同上 | B | `glfwSwapBuffers(J)V` | ✅ 已产出（220，`--javap` 通过） |
+| 26.2 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（221，`--javap` 通过） |
+| 26.3 | 未混淆 | 恒等（+ 逐成员存在性校验） | C | `SDL_GL_SwapWindow(J)Z` | ✅ 已产出（221，`--javap` 通过） |
 
 > 各版本行内的成员数差异来自 `absent`：该版本运行时**没有**对应类/成员时显式标注，
 > 由运行期打一次性日志并回退规范名，而不是把规范名当混淆名静默使用。

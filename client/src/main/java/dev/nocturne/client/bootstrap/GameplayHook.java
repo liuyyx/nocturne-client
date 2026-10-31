@@ -65,6 +65,10 @@ public final class GameplayHook {
     private static volatile Sink sink;
     /** sendPosition 是否已直接织入；false 时由玩家 tick 前沿降级产生 MotionEvent。 */
     private static volatile boolean motionDirect;
+    /** 首个 Motion 事件是否已记录；用于区分"钩子未织入"与"事件未投递"。 */
+    private static volatile boolean motionLogged;
+    /** 首个 tick 事件是否已记录。 */
+    private static volatile boolean tickLogged;
 
     private GameplayHook() {
     }
@@ -83,6 +87,11 @@ public final class GameplayHook {
 
     public static void playerTickPre(Object player) {
         try {
+            if (!tickLogged) {
+                tickLogged = true;
+                System.out.println("[nocturne] gameplay hook first tick event; sink="
+                        + (sink != null));
+            }
             Sink current = sink;
             if (current != null) {
                 current.playerTickPre(player);
@@ -105,6 +114,11 @@ public final class GameplayHook {
 
     public static void motionPre(Object player) {
         try {
+            if (!motionLogged) {
+                motionLogged = true;
+                System.out.println("[nocturne] gameplay hook first motion event; sink="
+                        + (sink != null));
+            }
             Sink current = sink;
             if (current != null) {
                 current.motionPre(player);

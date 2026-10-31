@@ -369,7 +369,9 @@ public final class ActionBinder {
                 method.invoke(receiver, args);
                 return true;
             } catch (Throwable t) {
-                disable(actionId, "invocation failed: " + t);
+                Throwable cause = t instanceof java.lang.reflect.InvocationTargetException
+                        && t.getCause() != null ? t.getCause() : t;
+                disable(actionId, "invocation failed: " + cause);
                 return false;
             }
         }

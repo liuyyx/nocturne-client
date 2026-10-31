@@ -168,10 +168,6 @@ public final class TargetManager {
         if (!isPlayer && !options.mobs) {
             return;
         }
-        Object dead = bridge.readField(entity, ClassType.ENTITY, "isDead");
-        if (Boolean.TRUE.equals(dead)) {
-            return;
-        }
         Object healthValue = bridge.callMapped(entity, ClassType.LIVING_ENTITY, "getHealth");
         if (!(healthValue instanceof Number)) {
             return;

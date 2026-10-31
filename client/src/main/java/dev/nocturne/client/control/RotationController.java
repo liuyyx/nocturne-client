@@ -64,6 +64,17 @@ public final class RotationController {
         }
         request = new Request(wrap(yaw), clampPitch(pitch), priority,
                 System.nanoTime() + ttl);
+        applyToPlayer();
+    }
+
+    /** 把当前请求写到本地玩家；没有动作层时由 Motion 钩子兜底。 */
+    private void applyToPlayer() {
+        Request current = request;
+        NocturneClient client = NocturneClient.get();
+        if (current == null || client == null || client.actions() == null) {
+            return;
+        }
+        client.actions().setRotation(current.yaw, current.pitch);
     }
 
     /** 仅释放自己持有的请求；高优先级请求不会被低优先级模块清掉。 */

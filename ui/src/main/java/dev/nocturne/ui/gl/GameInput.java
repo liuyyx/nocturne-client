@@ -71,62 +71,6 @@ public final class GameInput implements InputSource {
         this.logicalWidth = logicalWidth;
         this.logicalHeight = logicalHeight;
         this.isKeyDown = isKeyDown;
-        startKeyDiag();
-    }
-
-    /**
-     * THROWAWAY-DIAG：每 500ms 对拍一次「映射值 / SDL 原始缓冲 / isKeyDown 读数」，持续 150 秒。
-     *
-     * <p>用来判定"事件到了游戏却读不回来"到底断在哪一段：映射、原始缓冲，还是 isKeyDown 解析。
-     * 验完删除（连同 {@link #startKeyDiag()} 的调用）。
-     */
-    private void startKeyDiag() {
-        Thread thread = new Thread(() -> {
-            long deadline = System.currentTimeMillis() + 150000L;
-            while (System.currentTimeMillis() < deadline) {
-                try {
-                    int scancode = KeyMap.sdl(KeyMap.VK_RIGHT_SHIFT);
-                    Object rawState = null;
-                    try {
-                        Class<?> keyboard = Class.forName("org.lwjgl.sdl.SDLKeyboard");
-                        rawState = keyboard.getMethod("SDL_GetKeyboardState").invoke(null);
-                    } catch (Throwable ignored) {
-                        // 直读不可用时只打印其余两项
-                    }
-                    int raw229 = rawState instanceof java.nio.ByteBuffer
-                            ? ((java.nio.ByteBuffer) rawState).get(229) : -99;
-                    int raw225 = rawState instanceof java.nio.ByteBuffer
-                            ? ((java.nio.ByteBuffer) rawState).get(225) : -99;
-                    System.out.println("[nocturne] key diag: sdl(54)=" + scancode
-                            + " raw[229]=" + raw229 + " raw[225]=" + raw225
-                            + " viaKeyDown(54)=" + queryScancode(229)
-                            + " viaKeyDown(16)=" + queryScancode(225));
-                } catch (Throwable t) {
-                    System.out.println("[nocturne] key diag failed: " + t);
-                }
-                try {
-                    Thread.sleep(500L);
-                } catch (InterruptedException interrupted) {
-                    return;
-                }
-            }
-        }, "nocturne-key-diag");
-        thread.setDaemon(true);
-        thread.start();
-    }
-
-    /**
-     * THROWAWAY-DIAG：按 scancode 直接问 {@code isKeyDown}（与 {@link #keyDown(int)} 同路径）。
-     *
-     * @param scancode SDL scancode
-     * @return 读数；方法缺失时为 false
-     */
-    private boolean queryScancode(int scancode) {
-        if (isKeyDown == null) {
-            return false;
-        }
-        Object down = Reflect.call(isKeyDown, null, Integer.valueOf(scancode));
-        return down instanceof Boolean && ((Boolean) down).booleanValue();
     }
 
     /**

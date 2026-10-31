@@ -75,16 +75,23 @@ public final class GuiDrawHook {
      * @throws ClassNotFoundException 两种加载器都找不到
      */
     private static Class<?> resolveRuntime() throws ClassNotFoundException {
+        // agent 形态：agent jar 在 system 路径上，system 那份 NocturneRuntime 才持有已 boot 的
+        // client；Knot 从暴露的 agent jar 加载的是另一份，client 恒为 null，模块 tick 不驱动。
+        try {
+            return Class.forName("dev.nocturne.client.runtime.NocturneRuntime", false,
+                    ClassLoader.getSystemClassLoader());
+        } catch (ClassNotFoundException ignored) {
+            // mod 形态没有 system 副本，落到本类加载器。
+        }
         ClassLoader own = GuiDrawHook.class.getClassLoader();
         if (own != null) {
             try {
                 return Class.forName("dev.nocturne.client.runtime.NocturneRuntime", false, own);
             } catch (ClassNotFoundException ignored) {
-                // 落到 system 再试。
+                // 让调用方看到最终的 ClassNotFoundException。
             }
         }
-        return Class.forName("dev.nocturne.client.runtime.NocturneRuntime", false,
-                ClassLoader.getSystemClassLoader());
+        throw new ClassNotFoundException("dev.nocturne.client.runtime.NocturneRuntime");
     }
 
     private static void runtime(String name, Object... args) {

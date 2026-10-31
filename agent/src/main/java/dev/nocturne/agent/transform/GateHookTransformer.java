@@ -33,6 +33,7 @@ public final class GateHookTransformer implements ClassFileTransformer {
     private final boolean passThis;
     private final AtomicBoolean patched = new AtomicBoolean(false);
     private final AtomicBoolean errorLogged = new AtomicBoolean(false);
+    private final AtomicBoolean successLogged = new AtomicBoolean(false);
 
     /**
      * @param targetClass 目标类名（点号或斜杠）
@@ -184,7 +185,14 @@ public final class GateHookTransformer implements ClassFileTransformer {
                 }
             };
             reader.accept(visitor, ClassReader.EXPAND_FRAMES);
-            return patched.get() ? writer.toByteArray() : null;
+            if (patched.get()) {
+                if (successLogged.compareAndSet(false, true)) {
+                    System.out.println("[nocturne] gate hook woven: " + targetClassInternalName
+                            + "." + targetMethod + targetDescriptor + " -> " + hookMethod);
+                }
+                return writer.toByteArray();
+            }
+            return null;
         } catch (Throwable t) {
             if (errorLogged.compareAndSet(false, true)) {
                 System.out.println("[nocturne] gate hook transformer failed on "

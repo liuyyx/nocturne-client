@@ -22,8 +22,10 @@ public final class GameplayEvents implements GameplayHook.Sink {
         this.client = client;
     }
 
-    public static void install(NocturneClient client) {
-        GameplayHook.install(new GameplayEvents(client));
+    public static GameplayEvents install(NocturneClient client) {
+        GameplayEvents events = new GameplayEvents(client);
+        GameplayHook.install(events);
+        return events;
     }
 
     @Override

@@ -74,19 +74,23 @@ public final class NocturneRuntime {
      * @throws ClassNotFoundException 三种加载器都找不到
      */
     private static Class<?> loadDispatcher() throws ClassNotFoundException {
+        // 先取 bootstrap：agent 形态下 agent jar 同时挂在 system 搜索路径上，若先看 own
+        // 会加载出 system 私有一份 FrameDispatcher，监听器列表与注入钩子的那份分裂。
+        // mod 形态没有 bootstrap bridge，这里必然 CNFE，再回落到本类加载器。
+        try {
+            return Class.forName(DISPATCHER_CLASS, true, null);
+        } catch (ClassNotFoundException ignored) {
+            // 落到本类加载器。
+        }
         ClassLoader own = NocturneRuntime.class.getClassLoader();
         if (own != null) {
             try {
                 return Class.forName(DISPATCHER_CLASS, true, own);
             } catch (ClassNotFoundException ignored) {
-                // 落到 bootstrap。
+                // 落到 system。
             }
         }
-        try {
-            return Class.forName(DISPATCHER_CLASS, true, null);
-        } catch (ClassNotFoundException ignored) {
-            return Class.forName(DISPATCHER_CLASS, true, ClassLoader.getSystemClassLoader());
-        }
+        return Class.forName(DISPATCHER_CLASS, true, ClassLoader.getSystemClassLoader());
     }
 
     private static synchronized boolean bindDispatcher() {

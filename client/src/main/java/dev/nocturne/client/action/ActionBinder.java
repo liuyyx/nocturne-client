@@ -80,6 +80,12 @@ public final class ActionBinder {
         return binding != null && binding.invoke(receiver, args);
     }
 
+    /** 已绑定候选的语义实参顺序；旧契约未声明时为空。 */
+    java.util.List<String> arguments(String actionId) {
+        MethodBinding binding = bindings.get(actionId);
+        return binding == null ? java.util.Collections.<String>emptyList() : binding.arguments;
+    }
+
     Constructor<?> blockHitResultConstructor() {
         return blockHitResultConstructor;
     }
@@ -131,7 +137,11 @@ public final class ActionBinder {
                 disable(action.id(), "InteractionHand support is unavailable");
                 return;
             }
-            mainHand = hand.getField("MAIN_HAND").get(null);
+            mainHand = resolveStaticField(ClassType.INTERACTION_HAND, "MAIN_HAND");
+            if (mainHand == null) {
+                disable(action.id(), "InteractionHand.MAIN_HAND is unavailable");
+                return;
+            }
         }
         lastBindFailure = null;
         for (CandidateSpec candidate : action.candidates()) {
@@ -173,7 +183,7 @@ public final class ActionBinder {
             }
             Method method = findMethod(owner, mapped.name(), parameters);
             if (method != null) {
-                return new MethodBinding(actionId, method);
+                return new MethodBinding(actionId, method, candidate.arguments());
             }
             lastBindFailure = "method not found " + mapped.name();
         }
@@ -240,6 +250,21 @@ public final class ActionBinder {
         return null;
     }
 
+    private Object resolveStaticField(ClassType type, String canonicalField) throws Exception {
+        Class<?> owner = resolveClass(type);
+        if (owner == null) {
+            return null;
+        }
+        for (String name : mapping.fieldNameCandidates(type, canonicalField)) {
+            try {
+                return owner.getField(name).get(null);
+            } catch (NoSuchFieldException ignored) {
+                // 按字段候选顺序继续。
+            }
+        }
+        return null;
+    }
+
     private static Method findMethod(Class<?> owner, String name, Class<?>[] parameters) {
         for (Class<?> type = owner; type != null; type = type.getSuperclass()) {
             try {
@@ -266,10 +291,12 @@ public final class ActionBinder {
     private final class MethodBinding {
         private final String actionId;
         private final Method method;
+        private final java.util.List<String> arguments;
 
-        private MethodBinding(String actionId, Method method) {
+        private MethodBinding(String actionId, Method method, java.util.List<String> arguments) {
             this.actionId = actionId;
             this.method = method;
+            this.arguments = arguments;
         }
 
         private boolean invoke(Object receiver, Object... args) {

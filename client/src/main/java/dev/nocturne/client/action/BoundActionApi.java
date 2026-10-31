@@ -43,7 +43,8 @@ final class BoundActionApi implements ActionApi {
                     x.doubleValue() + 0.5, y.doubleValue() + 0.5, z.doubleValue() + 0.5);
             Object hitResult = binder.blockHitResultConstructor().newInstance(
                     hitVec, direction, blockPos, false);
-            return binder.invoke("place", gameMode, player, binder.mainHand(), hitResult);
+            Object[] arguments = interactionArguments("place", player, hitResult);
+            return arguments != null && binder.invoke("place", gameMode, arguments);
         } catch (Throwable t) {
             return false;
         }
@@ -53,7 +54,11 @@ final class BoundActionApi implements ActionApi {
     public boolean useItem() {
         Object player = bridge.player();
         Object gameMode = gameMode();
-        return player != null && binder.invoke("useItem", gameMode, player, binder.mainHand());
+        if (player == null) {
+            return false;
+        }
+        Object[] arguments = interactionArguments("useItem", player, null);
+        return arguments != null && binder.invoke("useItem", gameMode, arguments);
     }
 
     @Override
@@ -108,6 +113,40 @@ final class BoundActionApi implements ActionApi {
     @Override
     public boolean isAvailable(String actionId) {
         return binder.isAvailable(actionId);
+    }
+
+    /** 按候选的 arguments 列表装配参数；缺任何必需对象时不调用游戏方法。 */
+    private Object[] interactionArguments(String actionId, Object player, Object hitResult) {
+        java.util.List<String> declared = binder.arguments(actionId);
+        if (declared.isEmpty()) {
+            return "place".equals(actionId)
+                    ? new Object[]{player, binder.mainHand(), hitResult}
+                    : new Object[]{player, binder.mainHand()};
+        }
+        Object[] arguments = new Object[declared.size()];
+        for (int i = 0; i < declared.size(); i++) {
+            String semantic = declared.get(i);
+            if ("player".equals(semantic)) {
+                arguments[i] = player;
+            } else if ("level".equals(semantic)) {
+                arguments[i] = level();
+            } else if ("hand".equals(semantic)) {
+                arguments[i] = binder.mainHand();
+            } else if ("hitResult".equals(semantic)) {
+                arguments[i] = hitResult;
+            } else {
+                return null;
+            }
+            if (arguments[i] == null) {
+                return null;
+            }
+        }
+        return arguments;
+    }
+
+    private Object level() {
+        Object minecraft = bridge.minecraft();
+        return minecraft == null ? null : bridge.readField(minecraft, ClassType.MINECRAFT, "level");
     }
 
     private Object gameMode() {

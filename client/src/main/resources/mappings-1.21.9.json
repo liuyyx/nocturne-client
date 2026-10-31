@@ -350,6 +350,20 @@
                         "neoforge": "Lnet/minecraft/client/gui/Gui;"
                     }
                 },
+                "hitResult": {
+                    "names": {
+                        "vanilla": "u",
+                        "fabric": "field_1765",
+                        "forge": "f_91077_",
+                        "neoforge": "hitResult"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lfof;",
+                        "fabric": "Lnet/minecraft/class_239;",
+                        "forge": "Lnet/minecraft/world/phys/HitResult;",
+                        "neoforge": "Lnet/minecraft/world/phys/HitResult;"
+                    }
+                },
                 "inGameHasFocus": {
                     "absent": true
                 },
@@ -1034,20 +1048,6 @@
                         "neoforge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
                     }
                 },
-                "getChunk": {
-                    "names": {
-                        "vanilla": "a",
-                        "fabric": "method_63020",
-                        "forge": "m_6325_",
-                        "neoforge": "getChunk"
-                    },
-                    "signatures": {
-                        "vanilla": "(II)Lelk;",
-                        "fabric": "(II)Lnet/minecraft/class_2791;",
-                        "forge": "(II)Lnet/minecraft/world/level/chunk/ChunkAccess;",
-                        "neoforge": "(II)Lnet/minecraft/world/level/chunk/ChunkAccess;"
-                    }
-                },
                 "getChunkSource": {
                     "names": {
                         "vanilla": "j",
@@ -1063,7 +1063,11 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "getChunk": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/multiplayer/ClientPacketListener": {
             "names": {
@@ -1072,7 +1076,22 @@
                 "forge": "net.minecraft.client.multiplayer.ClientPacketListener",
                 "neoforge": "net.minecraft.client.multiplayer.ClientPacketListener"
             },
-            "methods": {},
+            "methods": {
+                "send": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_52787",
+                        "forge": "m_295327_",
+                        "neoforge": "send"
+                    },
+                    "signatures": {
+                        "vanilla": "(Laao;)V",
+                        "fabric": "(Lnet/minecraft/class_2596;)V",
+                        "forge": "(Lnet/minecraft/network/protocol/Packet;)V",
+                        "neoforge": "(Lnet/minecraft/network/protocol/Packet;)V"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
@@ -1137,6 +1156,34 @@
                         "fabric": "()V",
                         "forge": "()V",
                         "neoforge": "()V"
+                    }
+                },
+                "useItem": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2919",
+                        "forge": "m_233721_",
+                        "neoforge": "useItem"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lczl;Lcbp;)Lcbq;",
+                        "fabric": "(Lnet/minecraft/class_1657;Lnet/minecraft/class_1268;)Lnet/minecraft/class_1269;",
+                        "forge": "(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;",
+                        "neoforge": "(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;"
+                    }
+                },
+                "useItemOn": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2896",
+                        "forge": "m_233732_",
+                        "neoforge": "useItemOn"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lhep;Lcbp;Lfod;)Lcbq;",
+                        "fabric": "(Lnet/minecraft/class_746;Lnet/minecraft/class_1268;Lnet/minecraft/class_3965;)Lnet/minecraft/class_1269;",
+                        "forge": "(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;",
+                        "neoforge": "(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;"
                     }
                 }
             },
@@ -1936,7 +1983,22 @@
                 "neoforge": "net.minecraft.world.InteractionHand"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "MAIN_HAND": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_5808",
+                        "forge": "MAIN_HAND",
+                        "neoforge": "MAIN_HAND"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lcbp;",
+                        "fabric": "Lnet/minecraft/class_1268;",
+                        "forge": "Lnet/minecraft/world/InteractionHand;",
+                        "neoforge": "Lnet/minecraft/world/InteractionHand;"
+                    }
+                }
+            }
         },
         "net/minecraft/world/effect/MobEffect": {
             "names": {
@@ -3651,7 +3713,36 @@
                 "forge": "net.minecraft.world.phys.BlockHitResult",
                 "neoforge": "net.minecraft.world.phys.BlockHitResult"
             },
-            "methods": {},
+            "methods": {
+                "getBlockPos": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_17777",
+                        "forge": "m_82425_",
+                        "neoforge": "getBlockPos"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lja;",
+                        "fabric": "()Lnet/minecraft/class_2338;",
+                        "forge": "()Lnet/minecraft/core/BlockPos;",
+                        "neoforge": "()Lnet/minecraft/core/BlockPos;"
+                    }
+                },
+                "getDirection": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_17780",
+                        "forge": "m_82434_",
+                        "neoforge": "getDirection"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljg;",
+                        "fabric": "()Lnet/minecraft/class_2350;",
+                        "forge": "()Lnet/minecraft/core/Direction;",
+                        "neoforge": "()Lnet/minecraft/core/Direction;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/phys/Vec3": {

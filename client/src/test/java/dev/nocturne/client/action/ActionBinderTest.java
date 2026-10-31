@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,6 +62,50 @@ class ActionBinderTest {
         assertTrue(messages.get(0).contains("invocation failed"));
     }
 
+    @Test
+    void mainHandUsesMappedStaticFieldName() {
+        String json = "{\"version\":1,\"actions\":[{"
+                + "\"id\":\"useItem\",\"signature\":\"boolean useItem()\","
+                + "\"receiver\":\"gameMode\",\"operation\":\"useItem\",\"degrade\":\"disable\","
+                + "\"candidates\":[{"
+                + "\"owner\":\"MULTI_PLAYER_GAME_MODE\",\"method\":\"useItem\","
+                + "\"parameters\":[\"" + FakePlayer.class.getName() + "\","
+                + "\"" + FakeHand.class.getName() + "\"]}]}]}";
+        ActionBinder binder = new ActionBinder(ActionContract.parse(new StringReader(json)),
+                new FixtureMapping(), ActionBinderTest.class.getClassLoader(),
+                new java.util.ArrayList<String>()::add);
+
+        binder.bind();
+
+        assertTrue(binder.isAvailable("useItem"));
+        assertEquals(FakeHand.PRIMARY, binder.mainHand());
+    }
+
+    @Test
+    void signatureCandidateSkipsMissingArityAndKeepsArgumentOrder() {
+        String first = "{\"owner\":\"MULTI_PLAYER_GAME_MODE\",\"method\":\"useItem\","
+                + "\"parameters\":[\"" + FakePlayer.class.getName() + "\","
+                + "\"" + FakeLevel.class.getName() + "\","
+                + "\"" + FakeHand.class.getName() + "\"],"
+                + "\"arguments\":[\"player\",\"level\",\"hand\"]},";
+        String second = "{\"owner\":\"MULTI_PLAYER_GAME_MODE\",\"method\":\"useItem\","
+                + "\"parameters\":[\"" + FakePlayer.class.getName() + "\","
+                + "\"" + FakeHand.class.getName() + "\"],"
+                + "\"arguments\":[\"player\",\"hand\"]}";
+        String json = "{\"version\":1,\"actions\":[{"
+                + "\"id\":\"useItem\",\"signature\":\"boolean useItem()\","
+                + "\"receiver\":\"gameMode\",\"operation\":\"useItem\",\"degrade\":\"disable\","
+                + "\"candidates\":[" + first + second + "]}]}";
+        ActionBinder binder = new ActionBinder(ActionContract.parse(new StringReader(json)),
+                new FixtureMapping(), ActionBinderTest.class.getClassLoader(),
+                new java.util.ArrayList<String>()::add);
+
+        binder.bind();
+
+        assertTrue(binder.isAvailable("useItem"));
+        assertEquals(Arrays.asList("player", "hand"), binder.arguments("useItem"));
+    }
+
     private static ActionContract contract(boolean includeMissingCandidate) {
         String missing = "{\"owner\":\"CONNECTION\",\"method\":\"send\","
                 + "\"parameters\":[\"net.minecraft.network.protocol.Packet\"]},";
@@ -88,6 +133,20 @@ class ActionBinderTest {
                 throw new IllegalStateException("expected");
             }
         }
+
+        public void useItem(FakePlayer player, FakeHand hand) {
+            calls++;
+            if (fail) {
+                throw new IllegalStateException("expected");
+            }
+        }
+    }
+
+    public static final class FakeHand {
+        public static final FakeHand PRIMARY = new FakeHand();
+    }
+
+    public static final class FakeLevel {
     }
 
     public static final class FakePlayer {
@@ -106,8 +165,13 @@ class ActionBinderTest {
 
         @Override
         public String className(ClassType type) {
-            return type == ClassType.MULTI_PLAYER_GAME_MODE
-                    ? FakeGameMode.class.getName() : delegate.className(type);
+            if (type == ClassType.MULTI_PLAYER_GAME_MODE) {
+                return FakeGameMode.class.getName();
+            }
+            if (type == ClassType.INTERACTION_HAND) {
+                return FakeHand.class.getName();
+            }
+            return delegate.className(type);
         }
 
         @Override
@@ -117,7 +181,8 @@ class ActionBinderTest {
 
         @Override
         public String fieldName(ClassType owner, String canonicalName) {
-            return canonicalName;
+            return owner == ClassType.INTERACTION_HAND && "MAIN_HAND".equals(canonicalName)
+                    ? "PRIMARY" : canonicalName;
         }
 
         @Override

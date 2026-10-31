@@ -184,6 +184,9 @@
                         "fabric": "Lnet/minecraft/class_329;"
                     }
                 },
+                "hitResult": {
+                    "absent": true
+                },
                 "inGameHasFocus": {
                     "names": {
                         "vanilla": "x",
@@ -514,16 +517,6 @@
                 "getBlockState": {
                     "absent": true
                 },
-                "getChunk": {
-                    "names": {
-                        "vanilla": "a",
-                        "fabric": "method_0_271"
-                    },
-                    "signatures": {
-                        "vanilla": "(II)Lase;",
-                        "fabric": "(II)Lnet/minecraft/class_2818;"
-                    }
-                },
                 "getChunkSource": {
                     "names": {
                         "vanilla": "z",
@@ -535,7 +528,11 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "getChunk": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/multiplayer/ClientPacketListener": {
             "absent": true,
@@ -588,6 +585,12 @@
                         "vanilla": "()V",
                         "fabric": "()V"
                     }
+                },
+                "useItem": {
+                    "absent": true
+                },
+                "useItemOn": {
+                    "absent": true
                 }
             },
             "fields": {}
@@ -2324,7 +2327,21 @@
                 "vanilla": "bbf",
                 "fabric": "net.minecraft.class_239"
             },
-            "methods": {},
+            "methods": {
+                "getBlockPos": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1015"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lcj;",
+                        "fabric": "()Lnet/minecraft/class_2338;"
+                    }
+                },
+                "getDirection": {
+                    "absent": true
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/phys/Vec3": {

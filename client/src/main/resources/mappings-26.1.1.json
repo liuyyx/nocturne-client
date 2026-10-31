@@ -247,6 +247,14 @@
                         "neoforge": "gui"
                     }
                 },
+                "hitResult": {
+                    "names": {
+                        "vanilla": "hitResult",
+                        "fabric": "hitResult",
+                        "forge": "hitResult",
+                        "neoforge": "hitResult"
+                    }
+                },
                 "inGameHasFocus": {
                     "absent": true
                 },
@@ -729,14 +737,6 @@
                         "neoforge": "getBlockState"
                     }
                 },
-                "getChunk": {
-                    "names": {
-                        "vanilla": "getChunk",
-                        "fabric": "getChunk",
-                        "forge": "getChunk",
-                        "neoforge": "getChunk"
-                    }
-                },
                 "getChunkSource": {
                     "names": {
                         "vanilla": "getChunkSource",
@@ -746,7 +746,11 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "getChunk": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/multiplayer/ClientPacketListener": {
             "names": {
@@ -755,7 +759,16 @@
                 "forge": "net.minecraft.client.multiplayer.ClientPacketListener",
                 "neoforge": "net.minecraft.client.multiplayer.ClientPacketListener"
             },
-            "methods": {},
+            "methods": {
+                "send": {
+                    "names": {
+                        "vanilla": "send",
+                        "fabric": "send",
+                        "forge": "send",
+                        "neoforge": "send"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
@@ -796,6 +809,22 @@
                         "fabric": "stopDestroyBlock",
                         "forge": "stopDestroyBlock",
                         "neoforge": "stopDestroyBlock"
+                    }
+                },
+                "useItem": {
+                    "names": {
+                        "vanilla": "useItem",
+                        "fabric": "useItem",
+                        "forge": "useItem",
+                        "neoforge": "useItem"
+                    }
+                },
+                "useItemOn": {
+                    "names": {
+                        "vanilla": "useItemOn",
+                        "fabric": "useItemOn",
+                        "forge": "useItemOn",
+                        "neoforge": "useItemOn"
                     }
                 }
             },
@@ -1347,7 +1376,16 @@
                 "neoforge": "net.minecraft.world.InteractionHand"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "MAIN_HAND": {
+                    "names": {
+                        "vanilla": "MAIN_HAND",
+                        "fabric": "MAIN_HAND",
+                        "forge": "MAIN_HAND",
+                        "neoforge": "MAIN_HAND"
+                    }
+                }
+            }
         },
         "net/minecraft/world/effect/MobEffect": {
             "names": {
@@ -2456,7 +2494,24 @@
                 "forge": "net.minecraft.world.phys.BlockHitResult",
                 "neoforge": "net.minecraft.world.phys.BlockHitResult"
             },
-            "methods": {},
+            "methods": {
+                "getBlockPos": {
+                    "names": {
+                        "vanilla": "getBlockPos",
+                        "fabric": "getBlockPos",
+                        "forge": "getBlockPos",
+                        "neoforge": "getBlockPos"
+                    }
+                },
+                "getDirection": {
+                    "names": {
+                        "vanilla": "getDirection",
+                        "fabric": "getDirection",
+                        "forge": "getDirection",
+                        "neoforge": "getDirection"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/phys/Vec3": {

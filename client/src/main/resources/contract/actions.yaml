@@ -15,7 +15,8 @@
           "parameters": [
             "net.minecraft.world.entity.player.Player",
             "net.minecraft.world.entity.Entity"
-          ]
+          ],
+          "arguments": ["player", "target"]
         }
       ]
     },
@@ -31,9 +32,21 @@
           "method": "useItemOn",
           "parameters": [
             "net.minecraft.client.player.LocalPlayer",
+            "net.minecraft.client.multiplayer.ClientLevel",
             "net.minecraft.world.InteractionHand",
             "net.minecraft.world.phys.BlockHitResult"
-          ]
+          ],
+          "arguments": ["player", "level", "hand", "hitResult"]
+        },
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "useItemOn",
+          "parameters": [
+            "net.minecraft.client.player.LocalPlayer",
+            "net.minecraft.world.InteractionHand",
+            "net.minecraft.world.phys.BlockHitResult"
+          ],
+          "arguments": ["player", "hand", "hitResult"]
         }
       ]
     },
@@ -49,8 +62,19 @@
           "method": "useItem",
           "parameters": [
             "net.minecraft.world.entity.player.Player",
+            "net.minecraft.world.level.Level",
             "net.minecraft.world.InteractionHand"
-          ]
+          ],
+          "arguments": ["player", "level", "hand"]
+        },
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "useItem",
+          "parameters": [
+            "net.minecraft.world.entity.player.Player",
+            "net.minecraft.world.InteractionHand"
+          ],
+          "arguments": ["player", "hand"]
         }
       ]
     },
@@ -74,7 +98,8 @@
           "method": "send",
           "parameters": [
             "net.minecraft.network.protocol.Packet"
-          ]
+          ],
+          "arguments": ["packet"]
         }
       ]
     },

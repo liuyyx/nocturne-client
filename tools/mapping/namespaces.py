@@ -911,6 +911,11 @@ class AnchorResolver:
     def resolve_class(self, canonical: str) -> "dict[str, str] | None":
         key = canonical.replace(".", "/")
         inter = self.anchor.classes.get(key)
+        if (key == "net/minecraft/world/phys/BlockHitResult"
+                and self.version in {"1.14", "1.14.1", "1.14.2", "1.14.3"}):
+            # 1.12.2 的 RayTraceResult 同时承担命中结果与方块命中结果；1.14 拆出
+            # BlockRayTraceResult（class_3965），getBlockPos 只在这个子类上。
+            inter = "net/minecraft/class_3965"
         if inter is None:
             return None
         obf = self.intermediary.from_inter.get(inter)
@@ -953,6 +958,12 @@ class AnchorResolver:
                        shape_hint: "int | None") -> "dict[str, tuple] | None":
         key = canonical.replace(".", "/")
         inter = self.anchor.methods.get((key, name))
+        if (key == "net/minecraft/world/phys/BlockHitResult"
+                and self.version in {"1.14", "1.14.1", "1.14.2", "1.14.3"}):
+            if name == "getBlockPos":
+                inter = "method_17777"
+            elif name == "getDirection":
+                inter = "method_17780"
         if inter is None:
             return None
         entries = self._owner_filter(key, inter, list(self.intermediary.methods_by_inter.get(inter, ())))

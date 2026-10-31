@@ -69,7 +69,14 @@ public final class ActionContract {
                     List<String> parameters = candidate.parameters == null
                             ? Collections.<String>emptyList()
                             : Collections.unmodifiableList(new ArrayList<String>(candidate.parameters));
-                    candidates.add(new CandidateSpec(candidate.owner, candidate.method, parameters));
+                    List<String> arguments = candidate.arguments == null
+                            ? Collections.<String>emptyList()
+                            : Collections.unmodifiableList(new ArrayList<String>(candidate.arguments));
+                    if (!arguments.isEmpty() && arguments.size() != parameters.size()) {
+                        throw new IllegalStateException("arguments/parameters arity mismatch for " + action.id);
+                    }
+                    candidates.add(new CandidateSpec(candidate.owner, candidate.method, parameters,
+                            arguments));
                 }
             }
             boolean needsCandidates = !"rotation".equals(action.operation)
@@ -147,11 +154,14 @@ public final class ActionContract {
         private final String owner;
         private final String method;
         private final List<String> parameters;
+        private final List<String> arguments;
 
-        private CandidateSpec(String owner, String method, List<String> parameters) {
+        private CandidateSpec(String owner, String method, List<String> parameters,
+                              List<String> arguments) {
             this.owner = owner;
             this.method = method;
             this.parameters = parameters;
+            this.arguments = arguments;
         }
 
         public String owner() {
@@ -164,6 +174,10 @@ public final class ActionContract {
 
         public List<String> parameters() {
             return parameters;
+        }
+
+        public List<String> arguments() {
+            return arguments;
         }
     }
 
@@ -185,5 +199,6 @@ public final class ActionContract {
         private String owner;
         private String method;
         private List<String> parameters;
+        private List<String> arguments;
     }
 }

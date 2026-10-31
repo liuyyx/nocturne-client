@@ -307,6 +307,18 @@
                         "forge": "Lnet/minecraft/client/gui/Gui;"
                     }
                 },
+                "hitResult": {
+                    "names": {
+                        "vanilla": "v",
+                        "fabric": "field_1765",
+                        "forge": "f_91077_"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ldpm;",
+                        "fabric": "Lnet/minecraft/class_239;",
+                        "forge": "Lnet/minecraft/world/phys/HitResult;"
+                    }
+                },
                 "inGameHasFocus": {
                     "absent": true
                 },
@@ -800,18 +812,6 @@
                         "forge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
                     }
                 },
-                "getChunk": {
-                    "names": {
-                        "vanilla": "a",
-                        "fabric": "method_20783",
-                        "forge": "m_6325_"
-                    },
-                    "signatures": {
-                        "vanilla": "(II)Lcqq;",
-                        "fabric": "(II)Lnet/minecraft/class_2791;",
-                        "forge": "(II)Lnet/minecraft/world/level/chunk/ChunkAccess;"
-                    }
-                },
                 "getChunkSource": {
                     "names": {
                         "vanilla": "h",
@@ -825,7 +825,11 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "getChunk": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/multiplayer/ClientPacketListener": {
             "names": {
@@ -833,7 +837,20 @@
                 "fabric": "net.minecraft.class_634",
                 "forge": "net.minecraft.client.multiplayer.ClientPacketListener"
             },
-            "methods": {},
+            "methods": {
+                "send": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2883",
+                        "forge": "m_104955_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lrc;)V",
+                        "fabric": "(Lnet/minecraft/class_2596;)V",
+                        "forge": "(Lnet/minecraft/network/protocol/Packet;)V"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
@@ -889,6 +906,30 @@
                         "vanilla": "()V",
                         "fabric": "()V",
                         "forge": "()V"
+                    }
+                },
+                "useItem": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2919",
+                        "forge": "m_105235_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lboj;Lcav;Lawg;)Lawh;",
+                        "fabric": "(Lnet/minecraft/class_1657;Lnet/minecraft/class_1937;Lnet/minecraft/class_1268;)Lnet/minecraft/class_1269;",
+                        "forge": "(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;"
+                    }
+                },
+                "useItemOn": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2896",
+                        "forge": "m_105262_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lepw;Lems;Lawg;Ldpk;)Lawh;",
+                        "fabric": "(Lnet/minecraft/class_746;Lnet/minecraft/class_638;Lnet/minecraft/class_1268;Lnet/minecraft/class_3965;)Lnet/minecraft/class_1269;",
+                        "forge": "(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;"
                     }
                 }
             },
@@ -1584,7 +1625,20 @@
                 "forge": "net.minecraft.world.InteractionHand"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "MAIN_HAND": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_5808",
+                        "forge": "MAIN_HAND"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lawg;",
+                        "fabric": "Lnet/minecraft/class_1268;",
+                        "forge": "Lnet/minecraft/world/InteractionHand;"
+                    }
+                }
+            }
         },
         "net/minecraft/world/effect/MobEffect": {
             "names": {
@@ -3069,7 +3123,32 @@
                 "fabric": "net.minecraft.class_3965",
                 "forge": "net.minecraft.world.phys.BlockHitResult"
             },
-            "methods": {},
+            "methods": {
+                "getBlockPos": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_17777",
+                        "forge": "m_82425_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lgj;",
+                        "fabric": "()Lnet/minecraft/class_2338;",
+                        "forge": "()Lnet/minecraft/core/BlockPos;"
+                    }
+                },
+                "getDirection": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_17780",
+                        "forge": "m_82434_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lgo;",
+                        "fabric": "()Lnet/minecraft/class_2350;",
+                        "forge": "()Lnet/minecraft/core/Direction;"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/phys/Vec3": {

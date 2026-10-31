@@ -597,6 +597,9 @@ isAir = { unsupported = "1.8.9 IBlockState 没有 isAir()；用 Block.isAir 判�
 isArmor = { unsupported = "EquipmentSlot 不存在于 1.8.9" }
 getIndex = { unsupported = "EquipmentSlot 不存在于 1.8.9" }
 
+[overrides."net/minecraft/world/phys/BlockHitResult"]
+getBlockPos = { mcp = "getBlockPos", scope = "net/minecraft/util/math/RayTraceResult" }
+
 # LocalPlayer also inherits PlayerRef/LivingEntityRef/EntityRef members; the
 # only extra ones are handled here.
 [overrides."net/minecraft/client/player/LocalPlayer"]

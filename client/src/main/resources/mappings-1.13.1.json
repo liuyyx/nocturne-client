@@ -179,6 +179,9 @@
                         "fabric": "Lnet/minecraft/class_329;"
                     }
                 },
+                "hitResult": {
+                    "absent": true
+                },
                 "inGameHasFocus": {
                     "absent": true
                 },
@@ -483,18 +486,6 @@
                 "getBlockState": {
                     "absent": true
                 },
-                "getChunk": {
-                    "names": {
-                        "vanilla": "c",
-                        "fabric": "method_0_271",
-                        "forge": "func_72964_e"
-                    },
-                    "signatures": {
-                        "vanilla": "(II)Lbni;",
-                        "fabric": "(II)Lnet/minecraft/class_2818;",
-                        "forge": "(II)Lnet/minecraft/world/chunk/Chunk;"
-                    }
-                },
                 "getChunkSource": {
                     "names": {
                         "vanilla": "H",
@@ -508,7 +499,11 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "getChunk": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/multiplayer/ClientPacketListener": {
             "absent": true,
@@ -570,6 +565,12 @@
                         "fabric": "()V",
                         "forge": "()V"
                     }
+                },
+                "useItem": {
+                    "absent": true
+                },
+                "useItemOn": {
+                    "absent": true
                 }
             },
             "fields": {}
@@ -2568,7 +2569,23 @@
                 "fabric": "net.minecraft.class_239",
                 "forge": "net.minecraft.util.math.RayTraceResult"
             },
-            "methods": {},
+            "methods": {
+                "getBlockPos": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1015",
+                        "forge": "func_178782_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lel;",
+                        "fabric": "()Lnet/minecraft/class_2338;",
+                        "forge": "()Lnet/minecraft/util/math/BlockPos;"
+                    }
+                },
+                "getDirection": {
+                    "absent": true
+                }
+            },
             "fields": {}
         },
         "net/minecraft/world/phys/Vec3": {

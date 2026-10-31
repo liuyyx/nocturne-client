@@ -23,6 +23,7 @@ net/minecraft/client/Minecraft#fontRenderer
 net/minecraft/client/Minecraft#gameMode
 net/minecraft/client/Minecraft#gameRenderer
 net/minecraft/client/Minecraft#gui
+net/minecraft/client/Minecraft#hitResult
 net/minecraft/client/Minecraft#level
 net/minecraft/client/Minecraft#options
 net/minecraft/client/Minecraft#player
@@ -72,18 +73,24 @@ net/minecraft/client/gui/screens/inventory/InventoryScreen#extractEntityInInvent
 net/minecraft/client/multiplayer/ClientLevel
 net/minecraft/client/multiplayer/ClientLevel#entitiesForRendering()
 net/minecraft/client/multiplayer/ClientLevel#getBlockState()
-net/minecraft/client/multiplayer/ClientLevel#getChunk()
+net/minecraft/client/multiplayer/ClientLevel#getChunk
+
+net/minecraft/client/multiplayer/ClientPacketListener
+net/minecraft/client/multiplayer/ClientPacketListener#send()
 
 net/minecraft/client/multiplayer/MultiPlayerGameMode
 net/minecraft/client/multiplayer/MultiPlayerGameMode#attack()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#continueDestroyBlock()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#startDestroyBlock()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#stopDestroyBlock()
+net/minecraft/client/multiplayer/MultiPlayerGameMode#useItem()
+net/minecraft/client/multiplayer/MultiPlayerGameMode#useItemOn()
 
 net/minecraft/client/multiplayer/PlayerInfo
 net/minecraft/client/multiplayer/PlayerInfo#gameMode
 
 net/minecraft/client/player/LocalPlayer
+net/minecraft/client/player/LocalPlayer#connection
 net/minecraft/client/player/LocalPlayer#fallDistance
 net/minecraft/client/player/LocalPlayer#jumping
 net/minecraft/client/player/LocalPlayer#noPhysics
@@ -286,6 +293,11 @@ net/minecraft/world/level/chunk/LevelChunk
 net/minecraft/world/level/chunk/LevelChunk#getBlockEntities()
 
 net/minecraft/world/phys/BlockHitResult
+net/minecraft/world/phys/BlockHitResult#getBlockPos()
+net/minecraft/world/phys/BlockHitResult#getDirection()
+
+net/minecraft/world/InteractionHand
+net/minecraft/world/InteractionHand#MAIN_HAND
 
 net/minecraft/world/phys/Vec3
 net/minecraft/world/phys/Vec3#x

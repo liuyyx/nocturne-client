@@ -2165,7 +2165,19 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "selected": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_7545",
+                        "forge": "field_70461_c"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/player/Player": {
             "names": {
@@ -2348,6 +2360,17 @@
                         "fabric": "F"
                     }
                 },
+                "inventory": {
+                    "names": {
+                        "vanilla": "br",
+                        "fabric": "field_7514",
+                        "forge": "field_71071_by"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lzi;",
+                        "fabric": "Lnet/minecraft/class_1661;"
+                    }
+                },
                 "jumping": {
                     "names": {
                         "vanilla": "bc",
@@ -2495,6 +2518,18 @@
                 "forge": "net.minecraft.item.ItemStack"
             },
             "methods": {
+                "getDestroySpeed": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_7924",
+                        "forge": "func_150997_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Larc;)F",
+                        "fabric": "(Lnet/minecraft/class_0_378;)F",
+                        "forge": "(Lnet/minecraft/block/state/IBlockState;)F"
+                    }
+                },
                 "getItem": {
                     "absent": true
                 }

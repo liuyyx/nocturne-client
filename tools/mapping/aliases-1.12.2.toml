@@ -486,6 +486,18 @@ scope = "net/minecraft/entity/Entity"
 mcp = "prevRotationPitch"
 scope = "net/minecraft/entity/Entity"
 
+[methods.getDestroySpeed]
+mcp = "getDestroySpeed"
+scope = "net/minecraft/item/ItemStack"
+
+[fields.inventory]
+mcp = "inventory"
+scope = "net/minecraft/entity/player/EntityPlayer"
+
+[fields.selected]
+mcp = "currentItem"
+scope = "net/minecraft/entity/player/InventoryPlayer"
+
 [fields.motionX]
 mcp = "motionX"
 scope = "net/minecraft/entity/Entity"

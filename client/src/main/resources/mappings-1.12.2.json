@@ -1963,7 +1963,15 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "selected": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_7545",
+                        "forge": "field_70461_c"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/player/Player": {
             "names": {
@@ -2147,6 +2155,13 @@
                         "forge": "field_70143_R"
                     }
                 },
+                "inventory": {
+                    "names": {
+                        "vanilla": "bv",
+                        "fabric": "field_7514",
+                        "forge": "field_71071_by"
+                    }
+                },
                 "jumping": {
                     "names": {
                         "vanilla": "bd",
@@ -2262,6 +2277,18 @@
                 "forge": "net.minecraft.item.ItemStack"
             },
             "methods": {
+                "getDestroySpeed": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_7924",
+                        "forge": "func_150997_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lawt;)F",
+                        "fabric": "(Lnet/minecraft/class_0_378;)F",
+                        "forge": "(Lnet/minecraft/block/state/IBlockState;)F"
+                    }
+                },
                 "getItem": {
                     "names": {
                         "vanilla": "c",

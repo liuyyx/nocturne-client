@@ -2079,7 +2079,16 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "selected": {
+                    "names": {
+                        "vanilla": "selected",
+                        "fabric": "selected",
+                        "forge": "selected",
+                        "neoforge": "selected"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/player/Player": {
             "names": {
@@ -2219,6 +2228,14 @@
                         "neoforge": "fallDistance"
                     }
                 },
+                "inventory": {
+                    "names": {
+                        "vanilla": "inventory",
+                        "fabric": "inventory",
+                        "forge": "inventory",
+                        "neoforge": "inventory"
+                    }
+                },
                 "jumping": {
                     "names": {
                         "vanilla": "jumping",
@@ -2343,6 +2360,14 @@
                 "neoforge": "net.minecraft.world.item.ItemStack"
             },
             "methods": {
+                "getDestroySpeed": {
+                    "names": {
+                        "vanilla": "getDestroySpeed",
+                        "fabric": "getDestroySpeed",
+                        "forge": "getDestroySpeed",
+                        "neoforge": "getDestroySpeed"
+                    }
+                },
                 "getItem": {
                     "names": {
                         "vanilla": "getItem",

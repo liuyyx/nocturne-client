@@ -22,6 +22,8 @@ public enum ClassType {
     CLIENT_LEVEL("net.minecraft.client.multiplayer.ClientLevel"),
     /** 玩家实体基类。 */
     PLAYER("net.minecraft.world.entity.player.Player"),
+    /** 玩家背包；快捷栏选中槽与物品读取。 */
+    INVENTORY("net.minecraft.world.entity.player.Inventory"),
     /** 生物实体基类。 */
     LIVING_ENTITY("net.minecraft.world.entity.LivingEntity"),
     /**

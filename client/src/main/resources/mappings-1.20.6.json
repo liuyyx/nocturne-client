@@ -3079,7 +3079,22 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "selected": {
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "field_7545",
+                        "forge": "f_35977_",
+                        "neoforge": "selected"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I",
+                        "neoforge": "I"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/player/Player": {
             "names": {
@@ -3315,6 +3330,20 @@
                         "neoforge": "F"
                     }
                 },
+                "inventory": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "field_7514",
+                        "forge": "f_36093_",
+                        "neoforge": "inventory"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lcmy;",
+                        "fabric": "Lnet/minecraft/class_1661;",
+                        "forge": "Lnet/minecraft/world/entity/player/Inventory;",
+                        "neoforge": "Lnet/minecraft/world/entity/player/Inventory;"
+                    }
+                },
                 "jumping": {
                     "names": {
                         "vanilla": "bn",
@@ -3493,6 +3522,20 @@
                 "neoforge": "net.minecraft.world.item.ItemStack"
             },
             "methods": {
+                "getDestroySpeed": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_7924",
+                        "forge": "m_41691_",
+                        "neoforge": "getDestroySpeed"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ldse;)F",
+                        "fabric": "(Lnet/minecraft/class_2680;)F",
+                        "forge": "(Lnet/minecraft/world/level/block/state/BlockState;)F",
+                        "neoforge": "(Lnet/minecraft/world/level/block/state/BlockState;)F"
+                    }
+                },
                 "getItem": {
                     "names": {
                         "vanilla": "g",

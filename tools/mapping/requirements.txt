@@ -242,6 +242,7 @@ net/minecraft/world/entity/Mob#swing()
 
 net/minecraft/world/entity/player/Inventory
 net/minecraft/world/entity/player/Inventory#getItem()
+net/minecraft/world/entity/player/Inventory#selected
 
 net/minecraft/world/effect/MobEffect
 net/minecraft/world/effect/MobEffects
@@ -260,6 +261,7 @@ net/minecraft/world/entity/player/Player#zza
 net/minecraft/world/entity/player/Player#distanceToSqr()
 net/minecraft/world/entity/player/Player#getEyePosition()
 net/minecraft/world/entity/player/Player#getHealth()
+net/minecraft/world/entity/player/Player#inventory
 net/minecraft/world/entity/player/Player#getId()
 net/minecraft/world/entity/player/Player#getMaxHealth()
 net/minecraft/world/entity/player/Player#getName()
@@ -280,6 +282,7 @@ net/minecraft/world/item/Item
 
 net/minecraft/world/item/ItemStack
 net/minecraft/world/item/ItemStack#getItem()
+net/minecraft/world/item/ItemStack#getDestroySpeed()
 net/minecraft/world/item/Item
 net/minecraft/world/item/BlockItem
 net/minecraft/world/item/SnowballItem

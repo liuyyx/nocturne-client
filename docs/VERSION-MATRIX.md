@@ -323,6 +323,10 @@
 >   `GameBridge.inferParameters` 每个实体、每一帧重新扫描继承链方法表（`collectMethods`/`signature`
 >   占满 Render thread）。NameTags 同时做了一遍 `onRender` 计数和一遍绘制；现在去掉重复扫描、
 >   按类缓存方法表，并把 LivingEntity 解析与玩家坐标缓存/复用。同场景真机回到 101 帧。
+> - **2026-11-01 D2/DrawPlan**：`PlannedBackend` 重新接入 extractor；文本/渐变/玩家模型前先 flush 几何，
+>   防止底色盖字。26.3 真机 GUI 正常。1.20.1 修正 HUD 映射（vanilla `eow`）与描述符
+>   `eow.render(Leox;F)V`；`attackPost` 的 chop 帧末尾注入改为安全跳过，世界不再 VerifyError。
+>   1.20.1 的 GUI 可见性仍缺一次真人键盘验收（合成键盘到不了 GLFW）。
 > - 原生 Screen（暂停菜单/主菜单/聊天）出现时停止绘制自绘 GUI 与世界覆盖层；NameTags 不再盖住
 >   “回到游戏”菜单。
 > - 真机证据：`callback hook woven: ...SDLEventHandler.handleMouseWheelEvent`；把一个真实 `SDL_Event`

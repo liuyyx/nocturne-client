@@ -51,7 +51,7 @@
 | P2 注入点 | 帧交换钩子 + 绘制上下文钩子 | ✅ 已完成 |
 | P3 映射表生成器 | 66 个 release（1.8.9–26.3）四套命名空间；`--check` / `--javap` 全绿 | ✅ 已完成 |
 | P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **仍打开**（1.21.11 文字黑块/旧后端未收尾）；C（26.x extractor）✅ 真机，26.3 运行中 attach 也已复验 | B 未关闭 |
-| P4-D 绘制层重构 | D1 完成；D2 的 `PlannedBackend` 已实现，但 1.20.1 真机 Screen 回调未进入 overlay（无 `overlay active`），接线已撤回；D3/D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
+| P4-D 绘制层重构 | D1 完成；D2 已重新接线并在 26.3 真机可见；1.20.1 HUD 钩子/末尾注入已修，但合成键盘无法验收 GUI；D3/D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
 | P5 输入 | 1.8.9 / 26.3 真机；GUI 打开时 1.8.9 压 `inGameHasFocus`、26.3 屏蔽 `MouseHandler#grabMouse`；SDL 滚轮已落地；1.8.9/1.16.5 滚轮与真实点击仍待真人 | 部分 |
 | P6 模块 | 22 个注册模块；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
 | P7 自实现 attach | Windows 真机；Linux/macOS 已实现未实机；`PayloadPack` 已接生产 | ✅ 已完成（平台待验） |
@@ -117,12 +117,14 @@
   - 同一纹理的 `blit` 连续提交。
 - 验收：`ui` 模块单测 —— 给定 `roundedRect` 输出确定数量的 `fill`；合并/剔除规则有断言；无游戏依赖。
 
-### D2 1.20–1.21.x：`GuiGraphics` sink（进行中，接线已撤回）
+### D2 1.20–1.21.x：`GuiGraphics` sink（进行中）
 
-> `ui/gl/PlannedBackend` 已实现并通过单测/编译，但 1.20.1 真机注入后日志只有
-> `gui-graphics: context=eox via euq.a`，没有 `overlay active`，界面不绘制。为避免影响已验收的
-> 26.3/1.8.9 路径，`OverlayBootstrap` 暂不启用包装；下一步先查 1.20.1 的 `Screen` 回调/帧分发，
-> 再重新接线。1.21.11 尚未测。
+> 2026-11-01：`PlannedBackend` 已重新接线；补上文本/渐变前 flush，避免缓冲几何盖住文字。
+> 26.3 真机 GUI 正常（`backendClass=PlannedBackend`，文字/勾选/Bind 行均可见）。
+> 1.20.1 修复了 HUD 入口：`ClassType.HUD` 映射到 vanilla `eow`，描述符修正为
+> `eow.render(Leox;F)V`；`attackPost` 的末尾 `chop_frame` 注入改为安全跳过，世界不再 VerifyError。
+> 但当前自动化只能向窗口发合成键盘，1.20.1 打不开自绘 GUI，无法完成可见性/点击验收；
+> 需真人按键或可注入键盘的测试环境。1.21.4/1.21.10 未测。
 
 - 在**现有 `ExtractorRenderer`** 上加签名分支，不新写类：
   - `fill(int,int,int,int,int)`

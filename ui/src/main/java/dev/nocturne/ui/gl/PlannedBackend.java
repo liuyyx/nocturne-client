@@ -135,6 +135,9 @@ public final class PlannedBackend implements UiBackend, PlayerModelPreview {
 
     @Override
     public void text(String text, float x, float y, float size, Color color) {
+        // 文本由后端立即提交，几何在 endFrame 才 flush；先冲掉之前的矩形，否则
+        // 背景会盖在文字上。裁剪状态在 flush 后仍保留，文本仍受当前 scissor 约束。
+        flushNow();
         delegate.text(text, x, y, size, color);
     }
 
@@ -151,6 +154,7 @@ public final class PlannedBackend implements UiBackend, PlayerModelPreview {
     @Override
     public boolean gradientQuad(float x, float y, float width, float height, Color topLeft,
                                 Color topRight, Color bottomRight, Color bottomLeft) {
+        flushNow();
         return delegate.gradientQuad(x, y, width, height, topLeft, topRight, bottomRight, bottomLeft);
     }
 
@@ -199,8 +203,14 @@ public final class PlannedBackend implements UiBackend, PlayerModelPreview {
     @Override
     public boolean drawPlayer(Object player, float x1, float y1, float x2, float y2,
                               float mouseX, float mouseY) {
+        flushNow();
         return delegate instanceof PlayerModelPreview
                 && ((PlayerModelPreview) delegate).drawPlayer(player, x1, y1, x2, y2, mouseX, mouseY);
+    }
+
+    /** 立即提交当前累积的几何，保证立即绘制的文本/渐变/玩家模型不会改变覆盖顺序。 */
+    private void flushNow() {
+        plan.flush(sink);
     }
 
     private void applyScissor(float x, float y, float width, float height) {

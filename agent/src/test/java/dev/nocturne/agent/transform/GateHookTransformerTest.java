@@ -191,7 +191,9 @@ class GateHookTransformerTest {
 
     private static byte[] earlyReturnSubject() {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, TARGET, null, "java/lang/Object", null);
+        // 故意用 Java 5 字节码：末尾钩子对带 StackMapTable 的方法会安全跳过，
+        // 这个样本要验证“无帧方法的每个 RETURN 都能注入”。
+        writer.visit(Opcodes.V1_5, Opcodes.ACC_PUBLIC, TARGET, null, "java/lang/Object", null);
         defaultConstructor(writer);
         MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "hit", "(Z)V", null, null);
         method.visitCode();
@@ -200,7 +202,6 @@ class GateHookTransformerTest {
         method.visitJumpInsn(Opcodes.IFEQ, body);
         method.visitInsn(Opcodes.RETURN);
         method.visitLabel(body);
-        method.visitFrame(Opcodes.F_NEW, 2, new Object[]{TARGET, Opcodes.INTEGER}, 0, null);
         method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "earlyBody", "()V", false);
         method.visitInsn(Opcodes.RETURN);
         method.visitMaxs(0, 0);

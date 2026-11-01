@@ -1631,10 +1631,14 @@ public final class NocturneAgent {
     private static void installHudRenderHook(Instrumentation instrumentation,
                                              EmbeddedAsmLoader asmLoader, ClassLoader gameLoader) {
         Class<?> hud = null;
-        for (String name : new String[]{"net.minecraft.client.gui.Gui", "net.minecraft.class_329"}) {
-            hud = loadNoInit(name, gameLoader);
-            if (hud != null) {
-                break;
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        if (mapping != null) {
+            for (String name : mapping.classNameCandidates(
+                    dev.nocturne.client.mapping.ClassType.HUD)) {
+                hud = loadNoInit(name.replace('/', '.'), gameLoader);
+                if (hud != null) {
+                    break;
+                }
             }
         }
         if (hud == null) {
@@ -1668,7 +1672,7 @@ public final class NocturneAgent {
                 continue;
             }
             String descriptor = "(L" + parameters[0].getName().replace('.', '/')
-                    + ";L" + parameters[1].getName().replace('.', '/') + ";)V";
+                    + ";" + typeDescriptor(parameters[1]) + ")V";
             registerGuiDrawHook(instrumentation, asmLoader,
                     hud.getName().replace('.', '/'), method.getName(), descriptor, HUD_HOOK_METHOD);
             log("hud render hook: " + hud.getName() + ".render" + descriptor);
@@ -1676,6 +1680,7 @@ public final class NocturneAgent {
         }
         log("hud render hook: render(GuiGraphics-like, *) not found in " + hud.getName());
     }
+
 
     /**
      * 手动跑一遍转换器，得到改写后的字节码；没有变化时返回 {@code null}。

@@ -89,6 +89,18 @@ public final class GateHookTransformer implements ClassFileTransformer {
                         return delegate;
                     }
                     return new MethodVisitor(ASM_API, delegate) {
+                        /** 该方法是否出现过 StackMapTable 帧。 */
+                        private boolean sawFrame;
+                        /** 是否已记录“带帧末尾钩子跳过”日志。 */
+                        private boolean tailSkipLogged;
+
+                        @Override
+                        public void visitFrame(int type, int numLocal, Object[] local,
+                                               int numStack, Object[] stack) {
+                            sawFrame = true;
+                            super.visitFrame(type, numLocal, local, numStack, stack);
+                        }
+
                         @Override
                         public void visitCode() {
                             super.visitCode();
@@ -101,8 +113,20 @@ public final class GateHookTransformer implements ClassFileTransformer {
                         @Override
                         public void visitInsn(int opcode) {
                             if (atMethodEnd && opcode == Opcodes.RETURN) {
-                                inject(access);
-                                patched.set(true);
+                                // 末尾 void 钩子：带 StackMapTable 的 RETURN 常见 chop_frame，
+                                // 直接 aload 参数会 VerifyError；补帧又会触发 bad offset。
+                                // 保住方法头钩子，跳过这个末尾通知，绝不能把游戏类搞成校验失败。
+                                if ("V".equals(hookReturn) && sawFrame) {
+                                    if (!tailSkipLogged) {
+                                        tailSkipLogged = true;
+                                        System.out.println("[nocturne] tail hook skipped (stack map): "
+                                                + targetClassInternalName + "." + targetMethod
+                                                + targetDescriptor);
+                                    }
+                                } else {
+                                    inject(access);
+                                    patched.set(true);
+                                }
                             }
                             super.visitInsn(opcode);
                         }

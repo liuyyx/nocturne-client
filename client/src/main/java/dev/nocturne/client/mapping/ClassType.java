@@ -59,6 +59,8 @@ public enum ClassType {
     MOUSE_BUTTON_INFO("net.minecraft.client.input.MouseButtonInfo"),
     /** 界面基类。 */
     SCREEN("net.minecraft.client.gui.screens.Screen"),
+    /** HUD 绘制入口（1.20–1.21 的 {@code Gui.render}）。 */
+    HUD("net.minecraft.client.gui.Gui"),
     /** 物品栏界面：调用游戏原生玩家模型绘制方法。 */
     INVENTORY_SCREEN("net.minecraft.client.gui.screens.inventory.InventoryScreen"),
     /** 1.20+ 的绘制上下文；26.x 已被 {@code GuiGraphicsExtractor} 取代。 */

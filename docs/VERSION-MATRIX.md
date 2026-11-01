@@ -100,8 +100,10 @@
 - **26.3 运行中 attach 已恢复 GUI**：先 `retransformClasses` 捕获包含 Fabric Mixin 接口的**当前字节**，
   再在其上注入并 redefine，`Hud/Screen` 不再因接口集合变化被拒。真机日志出现
   `hook transform`、`gui draw hook active`、`GUI overlay attached`，主菜单截图可见完整三栏。
-  游戏事件钩子（`LocalPlayer`/`Minecraft`）仍因 Mixin 结构无法 redefine，运行中 attach 下
-  NoFall 的 Motion 改写不可用；需要它时仍用启动期 `-javaagent`。
+  游戏事件钩子也改为同一策略：`LocalPlayer.tick/sendPosition`、`Connection.send/channelRead0`、
+  `MultiPlayerGameMode.attack`、`Minecraft.startAttack/startUseItem`、`KeyboardHandler.keyPress`
+  均以当前字节注入；运行中 attach 真机验证 NoFall `motion.events=136 forcedGround=54`。
+  不再要求 26.3 必须启动期 `-javaagent`。
 - 开关键除配置键外额外接受 **INSERT**（AWT `VK_INSERT`）：第三方客户端常占用右 Shift，
   两个入口都能开关，避免“按了只开别人的面板”。1.8.9 已用真实按键注入分别验证右 Shift 与 INSERT。
 - 26.3 点击自绘界面会把光标拽回中心：`MouseHandler#onButton` 不能整条屏蔽（`activeButton` 是界面
@@ -143,6 +145,8 @@
 - 1.8.9 真机补齐：打开 GUI 时每帧把 `Minecraft.inGameHasFocus` 压为 false，实测 `true → false`
   且移动鼠标后 yaw 不变；`Entity#onGround` 补 `onGround` 别名后 `PlayerState` 不再返回空快照，
   Scaffold/AimAssist 能读到真实坐标。
+- 1.8.9 相机：零参 `getEyePosition` 的 arity 回退会误命中同名无参方法并返回 World 对象；
+  按 `Vec3` 返回类型剔除后，`CameraState.update=true`，世界覆盖层恢复。
 
 ## B7 大型状态机模块验收
 

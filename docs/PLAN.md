@@ -51,7 +51,7 @@
 | P2 注入点 | 帧交换钩子 + 绘制上下文钩子 | ✅ 已完成 |
 | P3 映射表生成器 | 66 个 release（1.8.9–26.3）四套命名空间；`--check` / `--javap` 全绿 | ✅ 已完成 |
 | P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **仍打开**（1.21.11 文字黑块/旧后端未收尾）；C（26.x extractor）✅ 真机，26.3 运行中 attach 也已复验 | B 未关闭 |
-| P4-D 绘制层重构 | DrawPlan + DrawSink + 签名装配翻译层 | ⏳ 未开始（= B 的关闭路径） |
+| P4-D 绘制层重构 | D1 `DrawPlan`/`DrawSink` + 单测已完成；D2（1.20–1.21 GuiGraphics sink）、D3（1.13–1.19 RenderSystem）、D4（收尾）未完成 | ⏳ 进行中（= B 的关闭路径） |
 | P5 输入 | 1.8.9 / 26.3 真机；GUI 打开时 1.8.9 压 `inGameHasFocus`、26.3 屏蔽 `MouseHandler#grabMouse`；SDL 滚轮已落地；1.8.9/1.16.5 滚轮与真实点击仍待真人 | 部分 |
 | P6 模块 | 22 个注册模块；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
 | P7 自实现 attach | Windows 真机；Linux/macOS 已实现未实机；`PayloadPack` 已接生产 | ✅ 已完成（平台待验） |
@@ -71,19 +71,19 @@
 - **中文化**：补分类/模块/设置词条；修复“先截断再翻译”导致长标签仍显示英文的问题。
 - **Insert**：GUI 同时接受配置键与 INSERT，规避右 Shift 被第三方客户端占用。
 
-仍开放（按优先级）：
+已验证与仍开放（按优先级）：
 
-1. **P0 1.8.9 世界覆盖层相机**：日志 `world overlay: cannot read Vec3#x/y/z`，ESP/Tracers 在 1.8.9
-   会被整帧跳过；先查 `CameraState` 的 `getEyePosition`/Vec3 读取路径。
-2. **P0 26.3 运行中 attach 的游戏事件**：GUI 已通，但 `LocalPlayer/Minecraft/Connection` 的
-   redefine 仍因 Mixin 接口变化失败，NoFall/Motion 只能靠启动期 `-javaagent`；决定产品路径：
-   注入器引导启动期 agent，或继续寻找不改接口的运行期入口。
-3. **P4-D 绘制层重构**：仍按原 D1–D4 执行，P4-B 才算关闭。
-4. **1.8.9 服务端命中**：`attacks=9` 已证明动作调用，但测试实体是客户端生成的；需真实服务端僵尸
+1. **P0 1.8.9 世界覆盖层相机**：已修。零参 `getEyePosition` 会误命中同名无参方法并返回 World
+   对象；按 `Vec3` 返回类型剔除后 `CameraState.update=true`。
+2. **P0 26.3 运行中 attach 的游戏事件**：已修。`LocalPlayer/Minecraft/Connection/MultiPlayerGameMode/
+   KeyboardHandler/MouseHandler` 全部用当前字节注入；运行中 attach 真机 NoFall
+   `motion.events=136 forcedGround=54`。产品路径确定为**运行中 attach**，不强制启动期 agent。
+3. **P4-D 绘制层重构**：D1 已完成，下一步 D2（1.20–1.21 `GuiGraphics` sink）；P4-B 才算关闭。
+4. **1.8.9 服务端命中**：`attacks=10` 已证明动作调用，但测试实体是客户端生成的；需真实服务端僵尸
    掉血复验。
 5. P5 滚轮真人验收（1.8.9/LWJGL2、1.16.5/GLFW）仍未做。
 
-下一阶段顺序：先固定 `CameraState` 1.8.9 → 26.3 注入产品路径 → P4-D → 真实服务端模块复验。
+下一阶段顺序：D2 → D3 → D4 → 真实服务端模块复验 → P5 滚轮。
 
 ## 工作纪律（每次开工前读一遍）
 
@@ -98,7 +98,10 @@
 目标：把「每代一个自写后端」改成「一份 draw plan + 每代一个薄 sink」，让 1.13–1.21 不再绕开游戏的绘制 API。
 1.21.11 的文字黑块作为 D2 的验收项，不单独修。
 
-### D1 DrawPlan + DrawSink（纯 Java，先做）
+### D1 DrawPlan + DrawSink（纯 Java，先做）✅ 已完成
+
+> `ui/render/DrawPlan.java`、`DrawSink.java`、`TextSink.java` 已落地，`DrawPlanTest` 覆盖圆角降级、
+> 相邻同色矩形合并、裁剪外剔除和嵌套 scissor。当前缺口是**尚未接入三个后端**，不是接口/算法。
 
 - `DrawSink` 接口只有三个方法：`fill / blit / scissor`（含嵌套裁剪的栈语义）。
 - `DrawPlan` 接收 `Renderer` 的 5 个原语，编译成命令序列：
@@ -114,7 +117,10 @@
   - 同一纹理的 `blit` 连续提交。
 - 验收：`ui` 模块单测 —— 给定 `roundedRect` 输出确定数量的 `fill`；合并/剔除规则有断言；无游戏依赖。
 
-### D2 1.20–1.21.x：`GuiGraphics` sink
+### D2 1.20–1.21.x：`GuiGraphics` sink（下一步）
+
+> 先做这一项：`DrawPlan` 已就绪，只差把 `ExtractorRenderer` 的 fill/blit/scissor 改为实现
+> `DrawSink`，并让 UI 层通过 `DrawPlan` 提交。
 
 - 在**现有 `ExtractorRenderer`** 上加签名分支，不新写类：
   - `fill(int,int,int,int,int)`

@@ -1105,7 +1105,18 @@ public final class NocturneAgent {
                 continue;
             }
             try {
-                byte[] bytes = patchBytes(loaded, composite, targetClass, method);
+                byte[] current = captureCurrentBytes(instrumentation, loaded);
+                String internalName = loaded.getName().replace('.', '/');
+                if (current != null && containsAscii(current, GAMEPLAY_HOOK_OWNER)) {
+                    log("gameplay hook already applied by retransform: " + targetClass
+                            + "." + method + " -> " + hookMethod);
+                    patched = true;
+                    break;
+                }
+                byte[] bytes = current != null
+                        ? composite.transform(loaded.getClassLoader(), internalName,
+                                loaded, null, current)
+                        : patchBytes(loaded, composite, targetClass, method);
                 if (bytes != null) {
                     instrumentation.redefineClasses(new java.lang.instrument.ClassDefinition(loaded, bytes));
                     patched = true;

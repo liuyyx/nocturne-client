@@ -48,6 +48,11 @@ public final class CameraState {
             return false;
         }
         Object eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition");
+        if (!bridge.isInstance(eye, ClassType.VEC3)) {
+            // 1.8.9 没有零参 getEyePosition；GameBridge 的 arity 回退可能命中同名的无参方法，
+            // 例如返回 WorldClient。必须按返回类型剔除，否则后续 Vec3 字段读取必然失败。
+            eye = null;
+        }
         if (eye == null) {
             // 1.17+ 是零参 getEyePosition()；1.8.9–1.16.5 的签名带 partialTicks
             // （SRG func_174824_e(F) / MCP getPositionEyes(float)）。两形态各试一次——只试零参会让
@@ -55,7 +60,7 @@ public final class CameraState {
             eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition",
                     Float.valueOf(0.0F));
         }
-        if (eye == null) {
+        if (!bridge.isInstance(eye, ClassType.VEC3)) {
             return missing(bridge, "Entity#getEyePosition");
         }
         Double eyeX = number(bridge.readField(eye, ClassType.VEC3, "x"));

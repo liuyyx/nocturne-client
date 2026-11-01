@@ -28,10 +28,10 @@ class PanicTest {
         resetInputBlock();
     }
 
-    /** {@code InputBlock} 的"已停用"标志是单向的（生产语义如此），测试间用反射复位。 */
+    /** {@code KeySink} 的"已停用"标志是单向的（生产语义如此），测试间用反射复位。 */
     private static void resetInputBlock() throws Exception {
         java.lang.reflect.Field disabled =
-                dev.nocturne.client.runtime.InputBlock.class.getDeclaredField("disabled");
+                dev.nocturne.bootstrap.KeySink.class.getDeclaredField("disabled");
         disabled.setAccessible(true);
         disabled.setBoolean(null, false);
     }

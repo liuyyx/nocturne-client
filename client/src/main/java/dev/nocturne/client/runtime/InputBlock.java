@@ -1,12 +1,13 @@
 package dev.nocturne.client.runtime;
 
+import dev.nocturne.bootstrap.KeySink;
+
 /**
  * 我们的界面是否占用输入。
  *
- * <p><b>为什么必须放在 bootstrap 层</b>（与 {@link FrameDispatcher} 同样的理由）：这个类有两类
- * 调用方，分属两个类加载器——一是游戏自己的输入入口（织入 {@code MouseHandler.onButton} /
- * {@code KeyboardHandler.keyPress} 的字节码里），二是我们的叠加层。类若落在别处，两边会各持一份
- * 静态状态，织入的短路永远读到 {@code false}，症状是"改了没用"。
+ * <p><b>真正的状态在 bootstrap 的 {@link KeySink}</b>：26.3 的 KnotClassLoader 会给游戏侧输入
+ * 入口再加载一份本类，而叠加层写的是另一份；静态字段分裂后织入的短路永远读到 {@code false}，
+ * 表现就是“界面开着，点一下鼠标却被游戏抓回中心”。本类只保留 API 转发，所有加载器读写同一份。
  *
  * <p><b>为什么需要它</b>：我们的界面不是 vanilla {@code Screen}，MC 的输入派发不知道我们吃掉了
  * 这次点击/按键，于是同一次点击**同时**打在后面的原生界面上（点模块会顺带按到「回到游戏」这类
@@ -14,65 +15,28 @@ package dev.nocturne.client.runtime;
  */
 public final class InputBlock {
 
-    /** 我们的界面是否正在占用输入；游戏侧输入入口据此短路。 */
-    private static volatile boolean blocked;
-
-    /**
-     * 是否已永久停止占用输入（自销毁）。
-     *
-     * <p>{@link #blocked} 由叠加层每帧刷新；自销毁后叠加层不再运行，最后一次写入的值会永久留下——
-     * 若那一刻界面正开着，游戏侧输入入口就被永久短路（点不动、按不动、滚不动）。自销毁时置位本标志，
-     * 使判定不再取决于那个再也不会被刷新的值。
-     */
-    private static volatile boolean disabled;
-
-    /** 最近一次按下的 GLFW 键码（-1 表示没有新按键）。 */
-    private static volatile int lastPressedKey = -1;
-    /** 最近一次按下的时间戳（纳秒），用于消费后过期。 */
-    private static volatile long lastPressedAt;
-    /** 按键诊断计数（仅 debug）。 */
-    private static int debugKeys;
+    private InputBlock() {
+    }
 
     /**
      * 记录一次按键（由织入 {@code KeyboardHandler.keyPress} 的字节码调用）。
-     *
-     * <p>为什么不用 GLFW 轮询：1.21.1 真机实测 {@code glfwGetKey} 在合成按键下恒为 0，
-     * 而游戏自己的回调能收到（Esc 能开暂停菜单、T 能开聊天）。事件驱动是唯一可靠来源。
      *
      * @param glfwKey GLFW 键码
      * @param action  GLFW 动作（1 = 按下）
      */
     public static void recordKey(int glfwKey, int action) {
-        if (action == 1) {
-            if (System.getProperty("nocturne.ui.debug") != null && debugKeys++ < 12) {
-                System.out.println("[nocturne] recordKey glfw=" + glfwKey
-                        + " cls=" + System.identityHashCode(InputBlock.class)
-                        + " loader=" + InputBlock.class.getClassLoader());
-            }
-            lastPressedKey = glfwKey;
-            lastPressedAt = System.nanoTime();
-        }
+        KeySink.recordKey(glfwKey, action);
     }
 
     /**
      * 取出并清除一次「刚按下」的按键。
      *
-     * @param glfwKey 期望的 GLFW 键码
+     * @param glfwKey     期望的 GLFW 键码
      * @param windowNanos 有效窗口（超过则视为过期，避免界面打开瞬间消费到很久以前的按键）
      * @return 命中返回 {@code true}
      */
     public static boolean consumePressed(int glfwKey, long windowNanos) {
-        if (lastPressedKey != glfwKey) {
-            return false;
-        }
-        if (System.nanoTime() - lastPressedAt > windowNanos) {
-            return false;
-        }
-        lastPressedKey = -1;
-        return true;
-    }
-
-    private InputBlock() {
+        return KeySink.consumePressed(glfwKey, windowNanos);
     }
 
     /**
@@ -81,7 +45,7 @@ public final class InputBlock {
      * @param value {@code true} = 我们的界面对着，游戏侧输入入口应短路
      */
     public static void setBlocked(boolean value) {
-        blocked = value;
+        KeySink.setBlocked(value);
     }
 
     /**
@@ -90,14 +54,13 @@ public final class InputBlock {
      * <p>幂等；可在任意线程调用。
      */
     public static void disable() {
-        disabled = true;
-        blocked = false;
+        KeySink.disable();
     }
 
     /**
      * @return 游戏侧输入入口是否应短路（由织入的字节码调用）
      */
     public static boolean shouldBlock() {
-        return !disabled && blocked;
+        return KeySink.shouldBlock();
     }
 }

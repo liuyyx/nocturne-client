@@ -16,6 +16,10 @@ public final class KeySink {
     private static volatile int lastPressedKey = -1;
     /** 最近一次按下的时间戳（纳秒）。 */
     private static volatile long lastPressedAt;
+    /** 我们的界面是否正在占用输入；游戏侧输入入口据此短路。 */
+    private static volatile boolean blocked;
+    /** 是否已永久停止占用输入（自销毁）。 */
+    private static volatile boolean disabled;
     /** 滚轮累加器与读取之间的锁。 */
     private static final Object SCROLL_LOCK = new Object();
     /** 自上次取走以来累积的滚轮增量；放这里是因为本类全局只有 bootstrap 一份。 */
@@ -53,6 +57,26 @@ public final class KeySink {
         }
         lastPressedKey = -1;
         return true;
+    }
+
+    /**
+     * 设置我们的界面是否占用输入。
+     *
+     * @param value {@code true} = 游戏侧输入入口应短路
+     */
+    public static void setBlocked(boolean value) {
+        blocked = value;
+    }
+
+    /** 永久停止占用输入（自销毁时调用），此后一律放行。 */
+    public static void disable() {
+        disabled = true;
+        blocked = false;
+    }
+
+    /** @return 游戏侧输入入口是否应短路 */
+    public static boolean shouldBlock() {
+        return !disabled && blocked;
     }
 
     /**

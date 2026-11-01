@@ -257,6 +257,11 @@ public final class FaClickGui implements OverlayGui {
         return open;
     }
 
+    /** @return 是否有控件正在等待下一次按键（键位绑定行） */
+    public boolean isCapturingKey() {
+        return focus != null && focus.capturing();
+    }
+
     @Override
     public void setOpen(boolean state) {
         if (this.open == state) {

@@ -17,6 +17,11 @@ interface FaKeySink {
         return false;
     }
 
+    /** @return 当前是否正在等待用户按键；真正捕获时输入层必须派发完整键表，而不只是可打印键。 */
+    default boolean capturing() {
+        return false;
+    }
+
     /** 焦点移走（点到别处、界面关闭）。 */
     default void focusLost() {
     }

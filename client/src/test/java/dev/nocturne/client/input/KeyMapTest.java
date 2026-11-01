@@ -96,6 +96,21 @@ class KeyMapTest {
         assertEquals(KeyMap.NONE, KeyMap.fromSdl(-999));
     }
 
+    /** 绑定界面必须能拿到字母、F 键、Insert 与右侧修饰键，而不只是可打印字符。 */
+    @Test
+    void bindableKeysCoverNonPrintableKeys() {
+        int[] keys = KeyMap.bindableKeys();
+        java.util.Set<Integer> set = new java.util.HashSet<Integer>();
+        for (int key : keys) {
+            set.add(key);
+        }
+        assertEquals(true, set.contains(82), "letter R");
+        assertEquals(true, set.contains(112), "F1");
+        assertEquals(true, set.contains(155), "Insert");
+        assertEquals(true, set.contains(KeyMap.VK_RIGHT_SHIFT), "right Shift sentinel");
+        assertEquals("Right Shift", KeyMap.displayName(KeyMap.VK_RIGHT_SHIFT));
+    }
+
     /**
      * 表外键返回 {@link KeyMap#NONE}，调用方据此视为"永不按下"。
      *

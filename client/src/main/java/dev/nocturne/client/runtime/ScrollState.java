@@ -1,24 +1,19 @@
 package dev.nocturne.client.runtime;
 
+import dev.nocturne.bootstrap.KeySink;
+
 /**
  * 滚轮增量的中转站（SDL 世代）。
  *
- * <p><b>为什么需要中转</b>：SDL 的滚轮是**事件驱动**的，没有轮询接口——而叠加层的输入是每帧轮询的，
- * 于是 SDL 世代一直"列表滚不动"。事件钩子在游戏自己的事件入口上把它累加起来，界面每帧取走即可。
+ * <p><b>为什么需要中转</b>：SDL 的滚轮是事件驱动的，没有轮询接口——叠加层的输入却是每帧
+ * 轮询的。事件钩子在游戏自己的事件入口上把它累加，界面每帧取走即可。
  *
- * <p><b>为什么放在 bootstrap 层</b>（与 {@link FrameDispatcher}、{@link InputBlock} 同样的理由）：
- * 写方是织入游戏类的钩子、读方是叠加层，两者分属不同类加载器各自的拷贝，类放在别处会各持一份状态。
- *
- * <p>线程：事件在游戏主线程产生，叠加层在渲染线程读取，因此用 {@code synchronized} 保护；
- * 每帧最多几次锁竞争，可以忽略。
+ * <p><b>为什么状态不放在本类</b>：26.3 的 KnotClassLoader 会给 {@code ScrollHook} 再加载
+ * 一份本类，而叠加层读的是 bootstrap 那份；静态字段因此分成两套（实测 hook 与 UI 的
+ * {@code ScrollState} class identity 不同）。真正的状态放在只由 bootstrap 提供的
+ * {@link KeySink}，本类只做 API 转发，所有加载器就都读写同一份。
  */
 public final class ScrollState {
-
-    /** 累加器与读取之间的锁。 */
-    private static final Object LOCK = new Object();
-
-    /** 自上次取走以来累积的滚轮增量（正数 = 向上/远离，与 SDL 的约定一致）。 */
-    private static double pending;
 
     private ScrollState() {
     }
@@ -29,12 +24,7 @@ public final class ScrollState {
      * @param delta 增量；{@code 0}、NaN、无穷会被忽略
      */
     public static void accumulate(double delta) {
-        if (delta == 0d || Double.isNaN(delta) || Double.isInfinite(delta)) {
-            return;
-        }
-        synchronized (LOCK) {
-            pending += delta;
-        }
+        KeySink.accumulateScroll(delta);
     }
 
     /**
@@ -43,17 +33,11 @@ public final class ScrollState {
      * @return 自上次取走以来的增量；没有时返回 {@code 0}
      */
     public static double take() {
-        synchronized (LOCK) {
-            double value = pending;
-            pending = 0d;
-            return value;
-        }
+        return KeySink.takeScroll();
     }
 
     /** 清空（自销毁等场景用）。 */
     public static void reset() {
-        synchronized (LOCK) {
-            pending = 0d;
-        }
+        KeySink.resetScroll();
     }
 }

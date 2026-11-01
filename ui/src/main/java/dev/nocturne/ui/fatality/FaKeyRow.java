@@ -58,6 +58,11 @@ final class FaKeyRow extends FaRow implements FaKeySink {
     }
 
     @Override
+    public boolean capturing() {
+        return listening;
+    }
+
+    @Override
     public void focusLost() {
         listening = false;
     }

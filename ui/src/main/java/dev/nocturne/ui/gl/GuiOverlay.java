@@ -115,6 +115,10 @@ public final class GuiOverlay implements FrameListener {
 
     /** 可打印键上一帧是否按下，下标与 {@link KeyChars#keys()} 对齐。 */
     private final boolean[] charWasDown;
+    /** 键位绑定时轮询的完整规范键表。 */
+    private final int[] bindKeys = KeyMap.bindableKeys();
+    /** 完整键表上一帧是否按下，下标与 {@link #bindKeys} 对齐。 */
+    private final boolean[] bindWasDown = new boolean[bindKeys.length];
     /**
      * 不可打印但界面必须收到的键（删除/提交/方向）。
      *
@@ -575,6 +579,29 @@ public final class GuiOverlay implements FrameListener {
      * @param modifiers 本帧修饰位
      */
     private void dispatchKeys(int modifiers) {
+        if (gui.isCapturingKey()) {
+            // 绑定键位时不能只走“可打印键 + 固定特殊键”：F1–F12、Insert、小键盘等
+            // 都不会出现在那两张表里。这里按完整规范键表派发，且只派发按下沿。
+            for (int i = 0; i < bindKeys.length; i++) {
+                boolean down = input.keyDown(bindKeys[i]);
+                boolean fresh = down && !bindWasDown[i];
+                bindWasDown[i] = down;
+                if (fresh) {
+                    gui.keyPressed(bindKeys[i], modifiers);
+                }
+            }
+            // 捕获期间不能合成字符；同时同步普通键的基准，避免退出捕获后把仍按住的键
+            // 误判成新按下（例如 Esc 关闭界面）。
+            for (int i = 0; i < SPECIAL_KEYS.length; i++) {
+                specialWasDown[i] = input.keyDown(SPECIAL_KEYS[i]);
+            }
+            int[] printable = KeyChars.keys();
+            for (int i = 0; i < printable.length; i++) {
+                charWasDown[i] = input.keyDown(printable[i]);
+            }
+            return;
+        }
+        java.util.Arrays.fill(bindWasDown, false);
         // 先派发不可打印键：退格/回车/方向键走 keyPressed，不参与字符合成。
         for (int i = 0; i < SPECIAL_KEYS.length; i++) {
             boolean down = input.keyDown(SPECIAL_KEYS[i]);

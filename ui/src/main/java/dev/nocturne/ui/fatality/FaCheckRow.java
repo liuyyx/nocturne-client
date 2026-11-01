@@ -28,7 +28,9 @@ class FaCheckRow extends FaRow {
         float boxX = right() - size;
         float used = accessory(ctx, boxX - 6.0f, centerY, alpha);
         drawLabel(ctx, x, centerY, boxX - used - x - FaTheme.ROW_PAD - 6.0f, alpha);
-        int box = FaTheme.mix(FaTheme.FIELD, FaTheme.FIELD_HOVER, hover.value());
+        int box = t > 0.01f
+                ? FaTheme.mix(FaTheme.ACCENT, FaTheme.ACCENT_DIM, hover.value())
+                : FaTheme.mix(FaTheme.FIELD, FaTheme.FIELD_HOVER, hover.value());
         ctx.draw.rect(boxX, centerY - size * 0.5f, size, size, 2.0f, FaTheme.alpha(box, alpha));
         if (t > 0.01f) {
             // 对勾从 70% 放大到 100%，让开关读起来像"弹出"而不是"闪烁"。

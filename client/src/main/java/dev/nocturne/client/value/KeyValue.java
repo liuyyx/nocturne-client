@@ -22,6 +22,6 @@ public final class KeyValue extends Value<Integer> {
 
     @Override
     public String display() {
-        return bound() ? java.awt.event.KeyEvent.getKeyText(get()) : "None";
+        return bound() ? dev.nocturne.client.input.KeyMap.displayName(get()) : "None";
     }
 }

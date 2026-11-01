@@ -1,6 +1,7 @@
 package dev.nocturne.client.module;
 
 import dev.nocturne.client.hud.HudSink;
+import dev.nocturne.client.value.KeyValue;
 import dev.nocturne.client.value.Value;
 
 import java.util.ArrayList;
@@ -20,6 +21,8 @@ public abstract class Module {
     private volatile boolean enabled;
     /** 本模块拥有的全部设置项，按注册顺序保存。 */
     private final List<Value<?>> values = new ArrayList<Value<?>>();
+    /** 模块热键；0 表示未绑定。放在基类里，所有版本/模块共用同一套绑定与持久化面。 */
+    private final KeyValue bind = add(new KeyValue("Bind", KeyValue.NONE));
 
     /**
      * 注册一个设置项并原样返回，便于子类在字段初始化表达式里直接写
@@ -33,6 +36,11 @@ public abstract class Module {
     /** 本模块拥有的设置项，按注册顺序返回只读视图。 */
     public final List<Value<?>> values() {
         return Collections.unmodifiableList(values);
+    }
+
+    /** 模块热键；0 表示未绑定。 */
+    public final KeyValue bind() {
+        return bind;
     }
 
     /** 模块名；在注册表内必须唯一。 */

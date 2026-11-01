@@ -120,6 +120,44 @@ public final class KeyMap {
     }
 
     /**
+     * 所有可作为模块/界面绑定键的规范键码。
+     *
+     * <p>界面轮询只能逐键查询，因此捕获绑定时需要完整表；返回副本，调用方不能污染内部二分表。
+     *
+     * @return 规范键码副本
+     */
+    public static int[] bindableKeys() {
+        return CANONICAL.clone();
+    }
+
+    /**
+     * 键码的界面显示名；AWT 不认识的右侧修饰键使用稳定名称。
+     *
+     * @param vk 规范键码
+     * @return 显示名，未绑定时为 {@code "None"}
+     */
+    public static String displayName(int vk) {
+        switch (vk) {
+            case VK_RIGHT_SHIFT:
+                return "Right Shift";
+            case VK_LEFT_SHIFT:
+                return "Shift";
+            case VK_RIGHT_CONTROL:
+                return "Right Ctrl";
+            case VK_LEFT_CONTROL:
+                return "Ctrl";
+            case VK_RIGHT_ALT:
+                return "Right Alt";
+            case VK_LEFT_ALT:
+                return "Alt";
+            case VK_RIGHT_WIN:
+                return "Right Win";
+            default:
+                return java.awt.event.KeyEvent.getKeyText(vk);
+        }
+    }
+
+    /**
      * 把规范键码翻译为 LWJGL2 {@code Keyboard.isKeyDown(int)} 可用的键码。
      *
      * @param vk 规范键码

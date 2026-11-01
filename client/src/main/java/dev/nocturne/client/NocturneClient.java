@@ -191,6 +191,7 @@ public final class NocturneClient {
     /** 执行实际安装：注册内置模块并打日志。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */
     private void install() {
         registerModules();
+        dev.nocturne.client.module.ModuleKeybinds.install(this);
         gameplayEvents = dev.nocturne.client.event.GameplayEvents.install(this);
         rotations.install(this);
         dev.nocturne.client.runtime.NocturneRuntime.addListener(

@@ -310,8 +310,12 @@
 >
 > - 落点：`ScrollHook`（agent，织入 `SDLEventHandler#handleMouseWheelEvent`——游戏的事件分发用
 >   `lookupswitch` 按类型分流，滚轮**不会**走到 `Window.handleEvent`，那是 `default` 分支）
->   → `ScrollState`（bootstrap 层中转：写方在游戏类加载器、读方在叠加层）→ `GameInput.scrollDelta()`
->   每帧取走；同时短路 `MouseHandler#onScroll`，否则界面开着时滚轮会顺带切快捷栏。
+>   → `ScrollState`（bootstrap 层中转）→ `GameInput.scrollDelta()` 每帧取走；同时短路
+>   `MouseHandler#onScroll`，否则界面开着时滚轮会顺带切快捷栏。
+> - **2026-11-01 修复**：26.3 的 Knot 给 `ScrollHook` 再加载一份 `ScrollState`，与叠加层的
+>   bootstrap 份静态字段分裂（hook class id 1820305762 / UI id 972588132）。现在 `ScrollState`
+>   只做 API 转发，真正状态放在只在 bootstrap 存在的 `KeySink`；真机日志变为
+>   `scroll wheel event seen: y=...` → `scroll delta consumed: ...`，面板实际滚动。
 > - 真机证据：`callback hook woven: ...SDLEventHandler.handleMouseWheelEvent`；把一个真实 `SDL_Event`
 >   结构喂进钩子后 `scroll wheel event seen: y=4.0` → `scroll delta consumed: 4.0` → 面板整体平移
 >   （前后截图对比）。
@@ -457,6 +461,6 @@
 | 项 | 现状 | 缺什么 |
 |---|---|---|
 | 3D 玩家预览（Render 分类 Player 卡片） | 已接游戏原生库存人物入口：1.8.9–1.14.4 固定管线 6 参、1.15–1.19.3 PoseStack 7 参、1.20–26.3 GuiGraphics 7/10 参；旋转字段在 `finally` 中恢复。仅声明实现覆盖，未逐版本真机验收 | 不需要自建 `EntityRenderDispatcher` 或 FBO；`INVENTORY_SCREEN` 的方法与玩家朝向字段已进映射表。SDL 仍只走游戏绘制队列 |
-| 原版槽位选择器、按键绑定行、子设置展开、文本/区间/多选设置行 | 已移植并完成离屏验收 | 对应 `TextValue / BoundsNumberValue / SlotValue / KeyValue / GroupValue / MultiBoolValue` 与实际 Fatality 控件已落地；动态条件与父组共同控制可见性 |
+| 原版槽位选择器、按键绑定行、子设置展开、文本/区间/多选设置行 | 已移植并完成离屏验收 | 对应 `TextValue / BoundsNumberValue / SlotValue / KeyValue / GroupValue / MultiBoolValue` 与实际 Fatality 控件已落地；每个模块基类自带 `Bind` 行，捕获完整 AWT VK 表（字母/F 键/Insert 等），热键由 `ModuleKeybinds` 统一分发 |
 | 物品图标（预览卡的装备行） | 未移植 | 物品渲染通路仍未实现，与设置值/GUI 可见性无关 |
 | HUD / HUD 编辑器 | 已随旧 UI 库删除 | 用户确认删除；需要时按新绘制层重写 |

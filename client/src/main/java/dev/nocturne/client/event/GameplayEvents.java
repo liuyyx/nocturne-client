@@ -111,7 +111,7 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public boolean key(long window, int key, int scancode, int action, int modifiers) {
-        if (!active()) {
+        if (!active() || action == 2 || action < 0) {
             return true;
         }
         hit("H7");
@@ -120,7 +120,7 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public boolean key(long window, int action, Object raw) {
-        if (!active()) {
+        if (!active() || action == 2 || action < 0) {
             return true;
         }
         hit("H7");

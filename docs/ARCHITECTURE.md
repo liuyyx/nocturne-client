@@ -153,6 +153,7 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   因为 `SDL_GetMouseState` 在"无鼠标焦点"时静默给 0,0；见 VERSION-MATRIX P5-C。**滚轮**走
   `ScrollState`（bootstrap 层）：注入器在游戏自己的滚轮入口 `SDLEventHandler#handleMouseWheelEvent`
   上挂 `ScrollHook`（SDL 滚轮是事件驱动、没有轮询接口，只能从事件对象上取），`GameInput` 每帧取走；
+  真正状态落在只存在于 bootstrap 的 `KeySink`，因为 26.3 的 Knot 会再加载一份 `ScrollState`；
   同时短路 `MouseHandler#onScroll`，否则滚轮会顺带切快捷栏）、
   `SdlInput`（26.x SDL3：轮询 `SDL_GetMouseState` / `SDL_GetKeyboardState`；没有滚轮轮询能力，
   `scrollDelta()` 恒为 0，滚轮由上面的 `ScrollState` 提供）；三代都解析不出时退化为 `NoInput`。

@@ -19,6 +19,11 @@ public interface OverlayGui {
     /** 直接设置开关状态。 */
     void setOpen(boolean open);
 
+    /** @return 是否有控件正在等待下一次按键（键位绑定行） */
+    default boolean isCapturingKey() {
+        return false;
+    }
+
     /** 在打开与关闭之间切换。 */
     void toggle();
 

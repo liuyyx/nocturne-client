@@ -105,19 +105,20 @@ class FaGroupMappingTest {
         FaGroup group = new FaGroup(new LabModule());
         List<FaRow> rows = group.rows();
 
-        assertEquals(12, rows.size(), "Enabled + ten values + one nested child; unknown is skipped");
+        assertEquals(13, rows.size(), "Enabled + base bind + ten values + one nested child; unknown is skipped");
         assertTrue(rows.get(0) instanceof FaEnableRow, "the first row is the module switch");
-        assertTrue(rows.get(1) instanceof FaCheckRow, "BooleanValue maps to a checkbox");
-        assertTrue(rows.get(2) instanceof FaSliderRow, "NumberValue maps to a slider");
-        assertTrue(rows.get(3) instanceof FaComboRow, "ModeValue maps to a combo");
-        assertTrue(rows.get(4) instanceof FaColorRow, "ColorValue maps to a colour chip");
-        assertTrue(rows.get(5) instanceof FaTextRow);
-        assertTrue(rows.get(6) instanceof FaBoundsRow);
-        assertTrue(rows.get(7) instanceof FaSlotRow);
-        assertTrue(rows.get(8) instanceof FaKeyRow);
-        assertTrue(rows.get(9) instanceof FaComboRow);
-        assertTrue(rows.get(10) instanceof FaCheckRow);
+        assertTrue(rows.get(1) instanceof FaKeyRow, "every module gets a bind row");
+        assertTrue(rows.get(2) instanceof FaCheckRow, "BooleanValue maps to a checkbox");
+        assertTrue(rows.get(3) instanceof FaSliderRow, "NumberValue maps to a slider");
+        assertTrue(rows.get(4) instanceof FaComboRow, "ModeValue maps to a combo");
+        assertTrue(rows.get(5) instanceof FaColorRow, "ColorValue maps to a colour chip");
+        assertTrue(rows.get(6) instanceof FaTextRow);
+        assertTrue(rows.get(7) instanceof FaBoundsRow);
+        assertTrue(rows.get(8) instanceof FaSlotRow);
+        assertTrue(rows.get(9) instanceof FaKeyRow);
+        assertTrue(rows.get(10) instanceof FaComboRow);
         assertTrue(rows.get(11) instanceof FaCheckRow);
+        assertTrue(rows.get(12) instanceof FaCheckRow);
     }
 
     /** 未知类型必须被丢弃（返回 {@code null}）而不是抛异常。 */
@@ -171,8 +172,8 @@ class FaGroupMappingTest {
             }
         });
 
-        assertFalse(group.rows().get(2).visible());
-        assertEquals(0.0f, group.rows().get(2).targetHeight());
+        assertFalse(group.rows().get(3).visible());
+        assertEquals(0.0f, group.rows().get(3).targetHeight());
         assertTrue(group.targetHeight() < full);
     }
 
@@ -181,8 +182,8 @@ class FaGroupMappingTest {
     void groupedChildrenCombineParentAndOwnVisibility() {
         LabModule module = new LabModule();
         FaGroup group = new FaGroup(module);
-        FaRow parent = group.rows().get(10);
-        FaRow child = group.rows().get(11);
+        FaRow parent = group.rows().get(11);
+        FaRow child = group.rows().get(12);
 
         assertTrue(parent.visible());
         assertFalse(child.visible());

@@ -16,6 +16,10 @@ public final class KeySink {
     private static volatile int lastPressedKey = -1;
     /** 最近一次按下的时间戳（纳秒）。 */
     private static volatile long lastPressedAt;
+    /** 滚轮累加器与读取之间的锁。 */
+    private static final Object SCROLL_LOCK = new Object();
+    /** 自上次取走以来累积的滚轮增量；放这里是因为本类全局只有 bootstrap 一份。 */
+    private static double pendingScroll;
 
     private KeySink() {
     }
@@ -49,5 +53,42 @@ public final class KeySink {
         }
         lastPressedKey = -1;
         return true;
+    }
+
+    /**
+     * 累加一次滚轮增量。
+     *
+     * <p>与按键一样，状态必须放在 bootstrap 唯一的一份 {@code KeySink}；Knot 会再加载一份
+     * {@code ScrollState}，但两边最终都转发到这里。
+     *
+     * @param delta 增量；{@code 0}、NaN、无穷会被忽略
+     */
+    public static void accumulateScroll(double delta) {
+        if (delta == 0d || Double.isNaN(delta) || Double.isInfinite(delta)) {
+            return;
+        }
+        synchronized (SCROLL_LOCK) {
+            pendingScroll += delta;
+        }
+    }
+
+    /**
+     * 取走并清零滚轮增量。
+     *
+     * @return 自上次取走以来的增量；没有时返回 {@code 0}
+     */
+    public static double takeScroll() {
+        synchronized (SCROLL_LOCK) {
+            double value = pendingScroll;
+            pendingScroll = 0d;
+            return value;
+        }
+    }
+
+    /** 清空滚轮增量（自销毁等场景）。 */
+    public static void resetScroll() {
+        synchronized (SCROLL_LOCK) {
+            pendingScroll = 0d;
+        }
     }
 }

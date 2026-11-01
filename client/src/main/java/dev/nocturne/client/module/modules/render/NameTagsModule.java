@@ -1,8 +1,6 @@
 package dev.nocturne.client.module.modules.render;
 
 import dev.nocturne.client.NocturneClient;
-import dev.nocturne.client.event.RenderEvent;
-import dev.nocturne.client.event.EventBus;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
@@ -55,10 +53,11 @@ public final class NameTagsModule extends Module implements WorldOverlay {
     private final NumberValue mobsMaxDistance =
             add(new NumberValue("Mob Max Distance", 0.0, 0.0, 250.0, 1.0));
 
-    /** RenderEvent 订阅句柄；禁用时退订。 */
-    private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
     private boolean gateLogged;
+    /** 已解析的 LivingEntity 类；避免每个实体、每一帧重复 Class.forName。 */
+    private ClassLoader livingLoader;
+    private Class<?> livingClass;
     /** 上一帧收集到的可见实体数（HUD/诊断用）。 */
     private int lastVisibleCount;
 
@@ -74,90 +73,22 @@ public final class NameTagsModule extends Module implements WorldOverlay {
         return Category.RENDER;
     }
 
-    /** 启用时订阅渲染事件。 */
+    /** 启用时重置状态。 */
     @Override
     protected void onEnable() {
         gateLogged = false;
         lastVisibleCount = 0;
-        subscribe();
     }
 
-    /** 禁用时退订渲染事件。 */
+    /** 禁用时重置状态。 */
     @Override
     protected void onDisable() {
-        unsubscribe();
         lastVisibleCount = 0;
     }
 
-    /** 每 tick 确保订阅存在（总线晚于模块启用才就绪时补上）。 */
-    @Override
-    public void onTick() {
-        synchronized (this) {
-            if (isEnabled() && renderSubscription == null) {
-                // 只在启用状态下自愈重订阅：禁用后照旧重订阅会让监听器复活——GUI 关掉的模块
-                // 会被游戏线程的 tick 又订回去，而且每次 subscribe 都新建 lambda，永远摘不干净。
-                subscribe();
-            }
-        }
-    }
-
-    /** @return 上一帧收集到的可见实体数（绘制挂钩落地前供验收用）。 */
+    /** @return 上一帧收集到的可见实体数（HUD/诊断用）。 */
     public int lastVisibleCount() {
         return lastVisibleCount;
-    }
-
-    /** 订阅渲染事件；总线未就绪时返回不抛，由 onTick 重试。 */
-    private void subscribe() {
-        NocturneClient client = NocturneClient.get();
-        if (client == null || renderSubscription != null) {
-            return;
-        }
-        try {
-            renderSubscription = client.events().subscribe(RenderEvent.class, this::onRender);
-        } catch (Throwable t) {
-            renderSubscription = null;
-        }
-    }
-
-    /** 退订渲染事件。 */
-    private void unsubscribe() {
-        if (renderSubscription == null) {
-            return;
-        }
-        try {
-            NocturneClient client = NocturneClient.get();
-            if (client != null) {
-                client.events().unsubscribe(renderSubscription);
-            }
-        } catch (Throwable ignored) {
-            // 退订失败不影响禁用语义。
-        } finally {
-            renderSubscription = null;
-        }
-    }
-
-    /**
-     * 每渲染帧收集可见实体。
-     *
-     * <p>表驱动门：实体面缺失的版本一次性日志 + 跳过，不刷屏不抛异常。
-     */
-    private void onRender(RenderEvent event) {
-        GameBridge bridge = bridge();
-        if (bridge == null) {
-            return;
-        }
-        Object level = level(bridge);
-        if (level == null) {
-            lastVisibleCount = 0;
-            return;
-        }
-        if (!hasEntityFace(bridge)) {
-            logGateOnce("实体面缺失（版本无该成员），NameTags 已禁用");
-            lastVisibleCount = 0;
-            return;
-        }
-        lastVisibleCount = countVisible(bridge, level);
-        // billboard 标签 + 装备/药水图标待世界渲染挂钩落地后补齐；此处只做收集与计数。
     }
 
     /** 取客户端世界；未进世界时返回 {@code null}。 */
@@ -166,32 +97,31 @@ public final class NameTagsModule extends Module implements WorldOverlay {
         return minecraft == null ? null : bridge.readField(minecraft, ClassType.MINECRAFT, "level");
     }
 
-    /** 实体面是否存在：LivingEntity 类可解析即认为可用。 */
-    private static boolean hasEntityFace(GameBridge bridge) {
+    /** 实体面是否存在：LivingEntity 类可解析即认为可用（缓存结果）。 */
+    private boolean hasEntityFace(GameBridge bridge) {
+        return livingClass(bridge) != null;
+    }
+
+    /** 解析并缓存当前类加载器下的 LivingEntity；类加载器变化时重新解析。 */
+    private Class<?> livingClass(GameBridge bridge) {
         ClassLoader loader = bridge.gameLoader();
-        // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
+        if (livingClass != null && livingLoader == loader) {
+            return livingClass;
+        }
+        livingLoader = loader;
+        livingClass = null;
         for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
             try {
-                if (Class.forName(mapped, false, loader) != null) {
-                    return true;
+                Class<?> found = Class.forName(mapped, false, loader);
+                if (found != null) {
+                    livingClass = found;
+                    break;
                 }
             } catch (Throwable t) {
                 // 该候选名在当前加载器里不可用：继续尝试下一个。
             }
         }
-        return false;
-    }
-
-    /**
-     * 统计可见实体数（三组开关过滤）。
-     *
-     * <p>玩家/动物/怪物的区分需要实体类型面，当前表里只有 LivingEntity 一层，
-     * 故按“任一组开着就计数全部 LivingEntity（除自己）”保守实现，
-     * 类型细分与血量/距离/装备/药水明细待实体上下文落地后补齐。
-     */
-    @SuppressWarnings("unchecked")
-    private int countVisible(GameBridge bridge, Object level) {
-        return visibleEntities(bridge, level).size();
+        return livingClass;
     }
 
     /** 收集可见实体（三组开关，除自己）；收集与绘制共用同一份列表。 */
@@ -199,6 +129,10 @@ public final class NameTagsModule extends Module implements WorldOverlay {
     private List<Object> visibleEntities(GameBridge bridge, Object level) {
         List<Object> out = new java.util.ArrayList<Object>();
         if (!(renderPlayers.get() || renderAnimals.get() || renderMobs.get())) {
+            return out;
+        }
+        Class<?> living = livingClass(bridge);
+        if (living == null) {
             return out;
         }
         Object raw;
@@ -216,7 +150,7 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             if (entity == null || (self != null && self.equals(entity))) {
                 continue;
             }
-            if (!isLiving(bridge, entity)) {
+            if (!living.isInstance(entity)) {
                 continue;
             }
             if (ignoreInvisibles.get() && isInvisible(bridge, entity)) {
@@ -246,7 +180,10 @@ public final class NameTagsModule extends Module implements WorldOverlay {
         boolean withDistance = playersDistance.get() || animalsDistance.get() || mobsDistance.get();
         boolean withHealth = playersHealth.get() || animalsHealth.get() || mobsHealth.get();
         float lineHeight = draw.textHeight();
-        for (Object entity : visibleEntities(bridge, level)) {
+        double[] selfPos = withDistance ? position(bridge, bridge.player()) : null;
+        List<Object> entities = visibleEntities(bridge, level);
+        int drawn = 0;
+        for (Object entity : entities) {
             double[] pos = position(bridge, entity);
             if (pos == null) {
                 continue;
@@ -255,12 +192,14 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             if (!point.visible) {
                 continue;
             }
-            String label = label(bridge, entity, withDistance, withHealth);
+            String label = label(bridge, entity, withDistance, withHealth, selfPos);
             if (label == null) {
                 continue;
             }
             draw.text(label, point.x - draw.textWidth(label) / 2f, point.y - lineHeight, 0xFFFFFFFF);
+            drawn++;
         }
+        lastVisibleCount = drawn;
     }
 
     /**
@@ -271,7 +210,7 @@ public final class NameTagsModule extends Module implements WorldOverlay {
      * 等 kind 面进表后再按组精确匹配。
      */
     private static String label(GameBridge bridge, Object entity, boolean withDistance,
-                                boolean withHealth) {
+                                boolean withHealth, double[] selfPos) {
         // getName 返回的是聊天组件而不是字符串，必须经映射表读文本（见 GameBridge#componentText）。
         String name = bridge.componentText(bridge.callMapped(entity, ClassType.ENTITY, "getName"));
         if (name == null) {
@@ -285,7 +224,7 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             }
         }
         if (withDistance) {
-            double dist = distanceTo(bridge, bridge.player(), entity);
+            double dist = distanceTo(selfPos, entity);
             if (dist >= 0) {
                 text.append(' ').append(Math.round(dist)).append('m');
             }
@@ -321,31 +260,16 @@ public final class NameTagsModule extends Module implements WorldOverlay {
     }
 
     /** 本地玩家到实体的距离（米）；任一端坐标读不到时返回负数。 */
-    private static double distanceTo(GameBridge bridge, Object self, Object entity) {
-        double[] a = position(bridge, self);
-        double[] b = position(bridge, entity);
-        if (a == null || b == null) {
+    private static double distanceTo(double[] selfPos, Object entity) {
+        GameBridge bridge = bridge();
+        double[] b = bridge == null ? null : position(bridge, entity);
+        if (selfPos == null || b == null) {
             return -1.0;
         }
-        double dx = a[0] - b[0];
-        double dy = a[1] - b[1];
-        double dz = a[2] - b[2];
+        double dx = selfPos[0] - b[0];
+        double dy = selfPos[1] - b[1];
+        double dz = selfPos[2] - b[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
-    }
-
-    /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */
-    private static boolean isLiving(GameBridge bridge, Object entity) {
-        ClassLoader loader = bridge.gameLoader();
-        // 候选名逐个试，第一个加载成功者即该环境下的 LivingEntity。
-        for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
-            try {
-                Class<?> living = Class.forName(mapped, false, loader);
-                return living.isInstance(entity);
-            } catch (Throwable t) {
-                // 该候选名在当前加载器里不可用：继续尝试下一个。
-            }
-        }
-        return false;
     }
 
     /** 表驱动门日志：缺成员版本只报一次。 */

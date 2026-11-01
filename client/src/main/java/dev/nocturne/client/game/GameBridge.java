@@ -49,6 +49,9 @@ public final class GameBridge {
     private final ConcurrentHashMap<FieldKey, Field> fieldCache = new ConcurrentHashMap<FieldKey, Field>();
     /** 已成功定位的方法句柄，键为（宿主类，方法名，形参签名）。 */
     private final ConcurrentHashMap<MethodKey, Method> methodCache = new ConcurrentHashMap<MethodKey, Method>();
+    /** 每个类的方法表缓存；NameTags 等每帧反射调用不再重复扫描继承链。 */
+    private final ConcurrentHashMap<Class<?>, List<Method>> methodListCache =
+            new ConcurrentHashMap<Class<?>, List<Method>>();
     /** 已成功解析的映射类；只缓存成功结果，类晚加载时仍可重试。 */
     private final ConcurrentHashMap<ClassType, Class<?>> typeCache =
             new ConcurrentHashMap<ClassType, Class<?>>();
@@ -587,6 +590,7 @@ public final class GameBridge {
         // 时，旧 Class 强引用其 ClassLoader → 泄漏落地。javadoc 承诺的「适应重载」在这里落实。
         fieldCache.clear();
         methodCache.clear();
+        methodListCache.clear();
     }
 
     /** 记录一次「现在已尝试过解析」，供 {@link #resolve()} 的 250ms 退避判定使用。 */
@@ -671,14 +675,19 @@ public final class GameBridge {
      *
      * <p>接口必须单独遍历：只走 {@code getSuperclass()} 会漏掉接口上的默认方法（M-78）。
      */
-    private static List<Method> collectMethods(Class<?> type) {
+    private List<Method> collectMethods(Class<?> type) {
+        List<Method> cached = methodListCache.get(type);
+        if (cached != null) {
+            return cached;
+        }
         List<Method> out = new ArrayList<Method>();
-        collectMethods(type, out, new HashSet<String>());
-        return out;
+        collectMethodsInto(type, out, new HashSet<String>());
+        List<Method> existing = methodListCache.putIfAbsent(type, out);
+        return existing == null ? out : existing;
     }
 
     /** 递归收集的辅助实现；{@code seen} 以“名字+形参签名”去重，避免重复扫描同一签名。 */
-    private static void collectMethods(Class<?> type, List<Method> out, Set<String> seen) {
+    private static void collectMethodsInto(Class<?> type, List<Method> out, Set<String> seen) {
         if (type == null) {
             return;
         }
@@ -687,9 +696,9 @@ public final class GameBridge {
                 out.add(method);
             }
         }
-        collectMethods(type.getSuperclass(), out, seen);
+        collectMethodsInto(type.getSuperclass(), out, seen);
         for (Class<?> iface : type.getInterfaces()) {
-            collectMethods(iface, out, seen);
+            collectMethodsInto(iface, out, seen);
         }
     }
 

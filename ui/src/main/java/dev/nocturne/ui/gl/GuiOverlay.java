@@ -360,12 +360,15 @@ public final class GuiOverlay implements FrameListener {
         double my = input.mouseY();
 
         // 原生 Screen 优先：它出现时不能再短路 MouseHandler/KeyboardHandler，否则暂停菜单
-        // 连“回到游戏”都点不了。自绘 GUI 保持绘制，但在原生 Screen 存活期间暂停输入分发。
+        // 连“回到游戏”都点不了。原生界面必须盖住自绘 GUI 与世界覆盖层（NameTags/ESP 等），
+        // 因此这一帧不调用 drawFrame()，并关闭自绘 GUI，避免“回到游戏”被标签压住。
         boolean nativeScreen = hasNativeScreen();
-        InputBlock.setBlocked(gui.isOpen() && !nativeScreen);
-        if (nativeScreen && gui.isOpen()) {
-            nativeMouseHandoff = true;
-            input.setPointerGrabbed(false);
+        if (nativeScreen) {
+            InputBlock.setBlocked(false);
+            nativeMouseHandoff = false;
+            if (gui.isOpen()) {
+                gui.setOpen(false);
+            }
             input.scrollDelta(); // 丢弃原生界面期间的滚轮，返回后不得补发。
             leftWasDown = input.mouseDown(BUTTON_LEFT);
             rightWasDown = input.mouseDown(BUTTON_RIGHT);
@@ -374,9 +377,9 @@ public final class GuiOverlay implements FrameListener {
             lastX = mx;
             lastY = my;
             java.util.Arrays.fill(charWasDown, false);
-            drawFrame();
             return;
         }
+        InputBlock.setBlocked(gui.isOpen());
         // 事件驱动优先：1.21.1 的 glfwGetKey 在合成按键下恒为 0（游戏回调却正常）。
         boolean toggleDown = togglePressed();
         if (toggleDown && !toggleWasDown) {

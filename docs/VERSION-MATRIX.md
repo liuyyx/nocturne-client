@@ -312,10 +312,16 @@
 >   `lookupswitch` 按类型分流，滚轮**不会**走到 `Window.handleEvent`，那是 `default` 分支）
 >   → `ScrollState`（bootstrap 层中转）→ `GameInput.scrollDelta()` 每帧取走；同时短路
 >   `MouseHandler#onScroll`，否则界面开着时滚轮会顺带切快捷栏。
-> - **2026-11-01 修复**：26.3 的 Knot 给 `ScrollHook` 再加载一份 `ScrollState`，与叠加层的
+> - **2026-11-01 滚轮修复**：26.3 的 Knot 给 `ScrollHook` 再加载一份 `ScrollState`，与叠加层的
 >   bootstrap 份静态字段分裂（hook class id 1820305762 / UI id 972588132）。现在 `ScrollState`
 >   只做 API 转发，真正状态放在只在 bootstrap 存在的 `KeySink`；真机日志变为
 >   `scroll wheel event seen: y=...` → `scroll delta consumed: ...`，面板实际滚动。
+> - **2026-11-01 性能修复**：26.3 开 NameTags 从 100+ 掉到 11 帧。JFR 采样显示热点不是文字绘制，而是
+>   `GameBridge.inferParameters` 每个实体、每一帧重新扫描继承链方法表（`collectMethods`/`signature`
+>   占满 Render thread）。NameTags 同时做了一遍 `onRender` 计数和一遍绘制；现在去掉重复扫描、
+>   按类缓存方法表，并把 LivingEntity 解析与玩家坐标缓存/复用。同场景真机回到 101 帧。
+> - 原生 Screen（暂停菜单/主菜单/聊天）出现时停止绘制自绘 GUI 与世界覆盖层；NameTags 不再盖住
+>   “回到游戏”菜单。
 > - 真机证据：`callback hook woven: ...SDLEventHandler.handleMouseWheelEvent`；把一个真实 `SDL_Event`
 >   结构喂进钩子后 `scroll wheel event seen: y=4.0` → `scroll delta consumed: 4.0` → 面板整体平移
 >   （前后截图对比）。

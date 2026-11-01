@@ -42,7 +42,7 @@
   （`uProjection=0 uColor=-1 uSampler=-1 uTexture=-1`，程序里没有片元阶段），去掉调用即恢复。
   该实验已完全回退，不要在未复现验证前重开。
 
-## 状态快照（2026-10-20，以实测与入库代码为准）
+## 状态快照（2026-11-01，以实测与入库代码为准）
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
@@ -50,12 +50,40 @@
 | P1 版本传递 | `AgentOptions`（组装 + 版本族归一化）；注入器 GUI 与命令行两条路径共用判定；`mcVersion=` 下发 | ✅ 已完成（fpsmaster 真机验证） |
 | P2 注入点 | 帧交换钩子 + 绘制上下文钩子 | ✅ 已完成 |
 | P3 映射表生成器 | 66 个 release（1.8.9–26.3）四套命名空间；`--check` / `--javap` 全绿 | ✅ 已完成 |
-| P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **未收尾**（1.21.11 文字黑块）；C（26.x extractor）✅ 真机 | B 未关闭 |
-| P4-D 绘制层重构 | DrawPlan + DrawSink + 签名装配翻译层（本计划新增，解决 B） | ⏳ 未开始 |
-| P5 输入 | 1.8.9 / 26.3 真机；SDL 滚轮已落地；GLFW/LWJGL2 滚轮待真人 | 部分 |
-| P6 模块 | 13 个自研模块；世界覆盖层已铺；Panic 已落地；OpenVape 批量移植未开始 | 部分 |
+| P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **仍打开**（1.21.11 文字黑块/旧后端未收尾）；C（26.x extractor）✅ 真机，26.3 运行中 attach 也已复验 | B 未关闭 |
+| P4-D 绘制层重构 | DrawPlan + DrawSink + 签名装配翻译层 | ⏳ 未开始（= B 的关闭路径） |
+| P5 输入 | 1.8.9 / 26.3 真机；GUI 打开时 1.8.9 压 `inGameHasFocus`、26.3 屏蔽 `MouseHandler#grabMouse`；SDL 滚轮已落地；1.8.9/1.16.5 滚轮与真实点击仍待真人 | 部分 |
+| P6 模块 | 22 个注册模块；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
 | P7 自实现 attach | Windows 真机；Linux/macOS 已实现未实机；`PayloadPack` 已接生产 | ✅ 已完成（平台待验） |
 | P8 模组形态 | Fabric/Forge/NeoForge 入口 | 未开始（依赖 P4-D） |
+
+## 2026-11-01 本轮结论
+
+已验证并入库（`b53265b`、`9806ab7`）：
+
+- **1.8.9 GUI 视角**：打开界面时压 `Minecraft.inGameHasFocus=false`，关闭恢复；真机 `true → false`，
+  移动鼠标后 yaw/pitch 不变。
+- **1.8.9 模块驱动**：1.8.9 帧钩子直接调 bootstrap `FrameDispatcher.dispatch()`，原先模块 tick 根本没跑
+  （`ticks=0`）。新增 `ModuleTicker` 作为普通监听器挂同一分发器；真机 `KillAura targets=1 attacks=9`。
+- **1.8.9 状态映射**：补 `Entity#onGround` 的 `onGround` 别名，`PlayerState` 不再返回空快照。
+- **26.3 运行中 attach**：先 `retransformClasses` 捕获带 Fabric Mixin 接口的当前字节，再注入
+  `Hud/Screen`；真机可见完整 GUI。`MouseHandler#grabMouse` 在 GUI 打开时短路，点击后光标不再回中心。
+- **中文化**：补分类/模块/设置词条；修复“先截断再翻译”导致长标签仍显示英文的问题。
+- **Insert**：GUI 同时接受配置键与 INSERT，规避右 Shift 被第三方客户端占用。
+
+仍开放（按优先级）：
+
+1. **P0 1.8.9 世界覆盖层相机**：日志 `world overlay: cannot read Vec3#x/y/z`，ESP/Tracers 在 1.8.9
+   会被整帧跳过；先查 `CameraState` 的 `getEyePosition`/Vec3 读取路径。
+2. **P0 26.3 运行中 attach 的游戏事件**：GUI 已通，但 `LocalPlayer/Minecraft/Connection` 的
+   redefine 仍因 Mixin 接口变化失败，NoFall/Motion 只能靠启动期 `-javaagent`；决定产品路径：
+   注入器引导启动期 agent，或继续寻找不改接口的运行期入口。
+3. **P4-D 绘制层重构**：仍按原 D1–D4 执行，P4-B 才算关闭。
+4. **1.8.9 服务端命中**：`attacks=9` 已证明动作调用，但测试实体是客户端生成的；需真实服务端僵尸
+   掉血复验。
+5. P5 滚轮真人验收（1.8.9/LWJGL2、1.16.5/GLFW）仍未做。
+
+下一阶段顺序：先固定 `CameraState` 1.8.9 → 26.3 注入产品路径 → P4-D → 真实服务端模块复验。
 
 ## 工作纪律（每次开工前读一遍）
 

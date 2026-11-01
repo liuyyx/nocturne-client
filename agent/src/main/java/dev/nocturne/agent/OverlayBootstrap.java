@@ -9,6 +9,7 @@ import dev.nocturne.client.runtime.NocturneRuntime;
 import dev.nocturne.ui.gl.ExtractorRenderer;
 import dev.nocturne.ui.gl.GlApi;
 import dev.nocturne.ui.gl.GameInput;
+import dev.nocturne.ui.gl.PlannedBackend;
 import dev.nocturne.ui.gl.GuiOverlay;
 import dev.nocturne.ui.gl.InputSource;
 import dev.nocturne.ui.gl.MinecraftTextRenderer;
@@ -301,6 +302,11 @@ public final class OverlayBootstrap implements FrameListener {
             backend = extractor;
         } else {
             backend = selectBackend(gl, gl11, font, bridge);
+        }
+        // 1.20–1.21 与 26.x 的 extractor 后端统一走 DrawPlan：圆角/描边/纹理提交只在
+        // ui/render 里实现一份，后端只收到 fill/blit/scissor。
+        if (backend instanceof ExtractorRenderer) {
+            backend = new PlannedBackend(backend);
         }
         modernBackend = backend instanceof ModernRenderer ? (ModernRenderer) backend : null;
         if (modernBackend != null && pendingGraphics != null) {

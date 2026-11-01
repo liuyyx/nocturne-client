@@ -51,7 +51,7 @@
 | P2 注入点 | 帧交换钩子 + 绘制上下文钩子 | ✅ 已完成 |
 | P3 映射表生成器 | 66 个 release（1.8.9–26.3）四套命名空间；`--check` / `--javap` 全绿 | ✅ 已完成 |
 | P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **仍打开**（1.21.11 文字黑块/旧后端未收尾）；C（26.x extractor）✅ 真机，26.3 运行中 attach 也已复验 | B 未关闭 |
-| P4-D 绘制层重构 | D1 `DrawPlan`/`DrawSink` + 单测已完成；D2（1.20–1.21 GuiGraphics sink）、D3（1.13–1.19 RenderSystem）、D4（收尾）未完成 | ⏳ 进行中（= B 的关闭路径） |
+| P4-D 绘制层重构 | D1 完成；D2 已把 `ExtractorRenderer` 包进 `PlannedBackend`（26.3 smoke 通过），1.20/1.21 真机未测；D3/D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
 | P5 输入 | 1.8.9 / 26.3 真机；GUI 打开时 1.8.9 压 `inGameHasFocus`、26.3 屏蔽 `MouseHandler#grabMouse`；SDL 滚轮已落地；1.8.9/1.16.5 滚轮与真实点击仍待真人 | 部分 |
 | P6 模块 | 22 个注册模块；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
 | P7 自实现 attach | Windows 真机；Linux/macOS 已实现未实机；`PayloadPack` 已接生产 | ✅ 已完成（平台待验） |
@@ -79,11 +79,11 @@
    KeyboardHandler/MouseHandler` 全部用当前字节注入；运行中 attach 真机 NoFall
    `motion.events=136 forcedGround=54`。产品路径确定为**运行中 attach**，不强制启动期 agent。
 3. **P4-D 绘制层重构**：D1 已完成，下一步 D2（1.20–1.21 `GuiGraphics` sink）；P4-B 才算关闭。
-4. **1.8.9 服务端命中**：`attacks=10` 已证明动作调用，但测试实体是客户端生成的；需真实服务端僵尸
-   掉血复验。
-5. P5 滚轮真人验收（1.8.9/LWJGL2、1.16.5/GLFW）仍未做。
+4. **1.8.9 服务端命中**：已复验。服务端召唤僵尸，KillAura 范围 6、Mobs=true，血量
+   `17.16 → 10.72`、`attacks=10`，攻击包到达服务端。
+5. P5 滚轮真人验收（1.8.9/LWJGL2、1.16.5/GLFW）仍未做，需要物理滚轮。
 
-下一阶段顺序：D2 → D3 → D4 → 真实服务端模块复验 → P5 滚轮。
+下一阶段顺序：D2 → D3 → D4 → P5 滚轮真人验收。
 
 ## 工作纪律（每次开工前读一遍）
 
@@ -117,8 +117,12 @@
   - 同一纹理的 `blit` 连续提交。
 - 验收：`ui` 模块单测 —— 给定 `roundedRect` 输出确定数量的 `fill`；合并/剔除规则有断言；无游戏依赖。
 
-### D2 1.20–1.21.x：`GuiGraphics` sink（下一步）
+### D2 1.20–1.21.x：`GuiGraphics` sink（进行中）
 
+> 已新增 `ui/gl/PlannedBackend`：把任意 `UiBackend` 包成 DrawPlan + fill/blit/scissor sink，
+> `OverlayBootstrap` 对 `ExtractorRenderer` 启用。26.3 smoke：`backendClass=PlannedBackend`、
+> `GUI overlay attached`、界面可绘制。1.20.1/1.21.11 真机截图与点击验收仍未做。
+>
 > 先做这一项：`DrawPlan` 已就绪，只差把 `ExtractorRenderer` 的 fill/blit/scissor 改为实现
 > `DrawSink`，并让 UI 层通过 `DrawPlan` 提交。
 

@@ -53,6 +53,7 @@ public final class KeySink {
             return false;
         }
         if (System.nanoTime() - lastPressedAt > windowNanos) {
+            lastPressedKey = -1;
             return false;
         }
         lastPressedKey = -1;

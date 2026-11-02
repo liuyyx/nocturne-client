@@ -158,6 +158,11 @@ public final class NocturneAgent {
                 selectMapping();   // 用新版本重选映射（selectMapping 内部已记住）
                 upgraded = true;
             }
+            if (newOpenGui && !openGuiOnInstall) {
+                openGuiOnInstall = true;
+                OverlayBootstrap.openNow();
+                upgraded = true;
+            }
             if (upgraded) {
                 log("agent options upgraded by " + via + ": guiKey=" + guiToggleKey
                         + ", mcVersion=" + mcVersion);

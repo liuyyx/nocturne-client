@@ -56,10 +56,12 @@ public final class SprintModule extends Module {
                 bridge.callMapped(player, ClassType.ENTITY, "isShiftKeyDown"));
         boolean invisible = cancelInvis.get()
                 && Boolean.TRUE.equals(bridge.callMapped(player, ClassType.ENTITY, "isInvisible"));
-        if (!shouldForceSprint(shift, invisible, isMovingHorizontally(bridge, player))) {
-            return;
+        boolean force = shouldForceSprint(shift, invisible, isMovingHorizontally(bridge, player));
+        if (force) {
+            bridge.callMapped(player, ClassType.ENTITY, "setSprinting", Boolean.TRUE);
+        } else {
+            bridge.callMapped(player, ClassType.ENTITY, "setSprinting", Boolean.FALSE);
         }
-        bridge.callMapped(player, ClassType.ENTITY, "setSprinting", Boolean.TRUE);
     }
 
     /** 只有未蹲、未因隐身禁用、且确实在水平移动时才补疾跑。 */

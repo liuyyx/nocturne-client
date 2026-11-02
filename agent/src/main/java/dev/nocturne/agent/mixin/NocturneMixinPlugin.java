@@ -215,6 +215,7 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
             if ("(JDD)V".equals(candidate.desc)
                     && ("method_1598".equals(candidate.name) || "onScroll".equals(candidate.name))) {
                 // 先取原始 yoffset，再按占用短路：自绘 GUI 收到同一次滚动，物品栏不再收到。
+                // 槽位：实例方法 this=0、long window=1-2、double xoffset=3-4、double yoffset=5-6。
                 entry.add(new org.objectweb.asm.tree.VarInsnNode(Opcodes.DLOAD, 5));
                 entry.add(new MethodInsnNode(Opcodes.INVOKESTATIC,
                         "dev/nocturne/client/runtime/ScrollState", "accumulate", "(D)V", false));
@@ -222,7 +223,8 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
             if ("(JIIII)V".equals(candidate.desc)
                     && ("method_1466".equals(candidate.name) || "keyPress".equals(candidate.name))) {
                 // mod 形态没有 bootstrap bridge：Knot 中的游戏类与 GuiOverlay 共用这份 InputBlock。
-                // 记录必须排在短路前面，否则界面打开后 Esc / 开关键无法再通过事件关闭界面。
+                // 记录必须排在短路前面，否则界面打开后 Esc / 开关键无法再通过界面事件关闭。
+                // 槽位：实例方法 this=0、long window=1-2、int key=3、scancode=4、action=5、modifiers=6。
                 entry.add(new org.objectweb.asm.tree.VarInsnNode(Opcodes.ILOAD, 3));
                 entry.add(new org.objectweb.asm.tree.VarInsnNode(Opcodes.ILOAD, 5));
                 entry.add(new MethodInsnNode(Opcodes.INVOKESTATIC,

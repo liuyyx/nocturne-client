@@ -48,7 +48,7 @@ public final class KillAuraModule extends Module {
     private final Random random = new Random();
     private volatile EventBus.Subscription mouseSubscription;
     private volatile boolean leftHeld;
-    private long nextAttackNanos;
+    private volatile long nextAttackNanos;
     /** 最近一次 tick 的目标数，供真机诊断。 */
     private volatile int lastTargetCount;
     /** 已成功调用的攻击次数，供真机诊断。 */
@@ -99,7 +99,6 @@ public final class KillAuraModule extends Module {
         List<TargetManager.Target> targets = client.targets().list(client, options);
         lastTargetCount = targets.size();
         int limit = Math.max(1, maxTargets.get().intValue());
-        boolean attacked = false;
         int attempts = 0;
         for (TargetManager.Target target : targets) {
             if (attempts >= limit) {
@@ -110,13 +109,11 @@ public final class KillAuraModule extends Module {
             }
             attempts++;
             if (actions.attack(target.entity())) {
-                attacked = true;
                 attackCount++;
             }
         }
-        if (attacked) {
-            nextAttackNanos = now + attackDelayNanos();
-        }
+        // 失败也推进节拍：目标都在范围外或动作暂不可用时不能每 tick 重试。
+        nextAttackNanos = now + attackDelayNanos();
     }
 
     private void configureOptions() {

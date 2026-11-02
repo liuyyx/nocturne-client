@@ -94,6 +94,11 @@ public final class OverlayBootstrap implements FrameListener {
     /** 装好后是否直接打开界面（验收用；见 {@code NocturneAgent} 的 {@code openGui=true}）。 */
     private final boolean openGuiOnInstall;
 
+    /** 已安装的自绘界面；运行期 attach 带 {@code openGui=true} 时用于直接打开。 */
+    private static volatile GuiOverlay activeOverlay;
+    /** 安装完成前收到的打开请求（运行期 attach 可能早于首帧）。 */
+    private static volatile boolean openWhenReady;
+
     /** 已尝试安装的次数；仅覆盖「前置就绪但安装失败」的帧。 */
     private int attempts;
     /** 是否已安装成功；成功后本监听器退场。 */
@@ -139,6 +144,20 @@ public final class OverlayBootstrap implements FrameListener {
         // 安装状态由 tryInstall 成功后的 overlay diag 日志行覆盖。
         NocturneRuntime.addListener(new OverlayBootstrap(gameLoader, instrumentation, toggleKey,
                 openGuiOnInstall));
+    }
+
+    /**
+     * 运行期打开已安装的界面。
+     *
+     * <p>用于 attach 时补发 {@code openGui=true}：安装已完成时不会再经过
+     * {@link #tryInstall()}，因此必须单独入口；安装未完成则记住请求，装好后立即打开。
+     */
+    public static void openNow() {
+        openWhenReady = true;
+        GuiOverlay overlay = activeOverlay;
+        if (overlay != null) {
+            overlay.setOpen(true);
+        }
     }
 
     @Override
@@ -341,8 +360,9 @@ public final class OverlayBootstrap implements FrameListener {
                 + " from=" + codeSourceOf(backend.getClass()) + " mark=diag1");
         // HUD 行汇：已随旧 UI 库一并删除（用户确认）。client 侧的 HudSink 接口保留，暂不注入实现。
         GuiOverlay overlay = new GuiOverlay(client.modules(), backend, input, toggleKey);
+        activeOverlay = overlay;
         NocturneRuntime.addListener(overlay);
-        if (openGuiOnInstall) {
+        if (openGuiOnInstall || openWhenReady) {
             overlay.setOpen(true);
             log("GUI opened on install (openGui=true)");
         }

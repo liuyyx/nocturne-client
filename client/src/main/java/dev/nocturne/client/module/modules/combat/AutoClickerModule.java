@@ -30,8 +30,8 @@ public final class AutoClickerModule extends Module {
 
     private final Random random = new Random();
     private volatile EventBus.Subscription mouseSubscription;
-    private boolean leftHeld;
-    private long nextClickNanos;
+    private volatile boolean leftHeld;
+    private volatile long nextClickNanos;
     private volatile int clickCount;
 
     @Override
@@ -80,8 +80,9 @@ public final class AutoClickerModule extends Module {
         }
         if (actions.click()) {
             clickCount++;
-            nextClickNanos = now + delayNanos();
         }
+        // 失败也推进节拍：动作不可用（GUI 打开、无焦点）时不能每 tick 重试。
+        nextClickNanos = now + delayNanos();
     }
 
     /** @return 本次启用以来成功触发的左键次数（诊断/验收用） */

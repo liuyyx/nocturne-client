@@ -256,6 +256,13 @@ public final class ItemEspModule extends Module implements WorldOverlay {
      * 这样同一份代码在四种安装上都不需要版本分支。
      */
     private static Class<?> resolveMapped(GameBridge bridge, ClassType type, ClassLoader loader) {
+        // 走桥上的类型缓存：手写的候选循环会让每个实体每帧把未命中的名字重新 Class.forName 一遍
+        // （每次失败都抛异常），这是"开 ESP 后卡顿"的主要成本之一。
+        Class<?> resolved = bridge.type(type);
+        if (resolved != null) {
+            return resolved;
+        }
+        // 桥没解析出来时才用调用方给的加载器再试一次（例如 Fabric 的隔离加载器）。
         ClassLoader effective = loader != null ? loader : bridge.gameLoader();
         for (String mapped : bridge.mapping().classNameCandidates(type)) {
             try {

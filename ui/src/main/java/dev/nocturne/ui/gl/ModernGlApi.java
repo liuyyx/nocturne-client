@@ -46,6 +46,16 @@ public final class ModernGlApi {
     public static final int GL_COMPILE_STATUS = 0x8B81;
     /** glGetProgrami 查询项：链接状态。 */
     public static final int GL_LINK_STATUS = 0x8B82;
+    /** glGetIntegerv 查询项：当前着色器程序。 */
+    public static final int GL_CURRENT_PROGRAM = 0x8B8D;
+    /** glGetIntegerv 查询项：当前绑定的顶点数组对象。 */
+    public static final int GL_VERTEX_ARRAY_BINDING = 0x85B5;
+    /** glGetIntegerv 查询项：当前纹理单元上绑定的二维纹理。 */
+    public static final int GL_TEXTURE_BINDING_2D = 0x8069;
+    /** glGetIntegerv 查询项：当前绑定的 GL_ARRAY_BUFFER。 */
+    public static final int GL_ARRAY_BUFFER_BINDING = 0x8894;
+    /** glGetIntegerv 查询项：当前活动纹理单元（返回值是 {@code GL_TEXTURE0 + n}）。 */
+    public static final int GL_ACTIVE_TEXTURE = 0x84E0;
     /** 裁剪测试开关。 */
     public static final int GL_SCISSOR_TEST = 0x0C11;
     /** glGetIntegerv 查询项：当前视口。 */

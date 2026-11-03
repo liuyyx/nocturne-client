@@ -52,7 +52,7 @@ public final class GuiDrawHook {
     /** {@code dev.nocturne.client.runtime.NocturneRuntime} 的类与缓存方法（经 system 加载器解析）。 */
     private static volatile Class<?> runtimeType;
     private static volatile Method runtimeSetDrawContext;
-    private static volatile Method runtimeOnFrame;
+    private static volatile Method runtimeOnDrawFrame;
 
     /** Fabric：Gui.render 捕获、GameRenderer 后置清理之间传递的当帧上下文。 */
     private static final ThreadLocal<Object> PENDING_HUD_GRAPHICS = new ThreadLocal<Object>();
@@ -114,10 +114,12 @@ public final class GuiDrawHook {
                 method.invoke(null, args == null ? null : (args.length > 0 ? args[0] : null));
                 return;
             }
-            java.lang.reflect.Method method = runtimeOnFrame;
+            // 调 onDrawFrame 而不是 onFrame：帧交换点已经存在的栈上，两种驱动同时生效会让
+            // RenderEvent 与叠加层绘制每帧各跑两遍（真机：「开模块后像加速了」）。
+            java.lang.reflect.Method method = runtimeOnDrawFrame;
             if (method == null) {
-                method = type.getMethod("onFrame");
-                runtimeOnFrame = method;
+                method = type.getMethod("onDrawFrame");
+                runtimeOnDrawFrame = method;
             }
             method.invoke(null);
         } catch (Throwable error) {
@@ -219,7 +221,7 @@ public final class GuiDrawHook {
         try {
             runtime("setDrawContext", graphics);
             try {
-                runtime("onFrame");
+                runtime("onDrawFrame");
             } finally {
                 // 绘制上下文只在这次调用期间有效：用完立刻释放，避免后端持有已失效的对象。
                 runtime("setDrawContext", (Object) null);

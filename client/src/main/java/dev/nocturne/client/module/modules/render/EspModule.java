@@ -157,20 +157,9 @@ public final class EspModule extends Module implements WorldOverlay {
         return minecraft == null ? null : bridge.readField(minecraft, ClassType.MINECRAFT, "level");
     }
 
-    /** 实体面是否存在：LivingEntity 类可解析即认为可用。 */
+    /** 实体面是否存在：LivingEntity 类可解析即认为可用（走桥上的类型缓存）。 */
     private static boolean hasEntityFace(GameBridge bridge) {
-        ClassLoader loader = bridge.gameLoader();
-        // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
-        for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
-            try {
-                if (Class.forName(mapped, false, loader) != null) {
-                    return true;
-                }
-            } catch (Throwable t) {
-                // 该候选名在当前加载器里不可用：继续尝试下一个。
-            }
-        }
-        return false;
+        return bridge.type(ClassType.LIVING_ENTITY) != null;
     }
 
     /**
@@ -301,17 +290,11 @@ public final class EspModule extends Module implements WorldOverlay {
 
     /** 是否为生物实体（按 LivingEntity 映射类做 instanceof，避免写版本分支）。 */
     private static boolean isLiving(GameBridge bridge, Object entity) {
-        ClassLoader loader = bridge.gameLoader();
-        // 候选名逐个试，第一个加载成功者即该环境下的 LivingEntity。
-        for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
-            try {
-                Class<?> living = Class.forName(mapped, false, loader);
-                return living.isInstance(entity);
-            } catch (Throwable t) {
-                // 该候选名在当前加载器里不可用：继续尝试下一个。
-            }
-        }
-        return false;
+        // 必须走桥上的类型缓存：手写「候选名逐个 Class.forName」时，未命中的候选每个实体每帧都会
+        // 抛一次异常，几百个实体就是每帧上千次类加载查询——实测表现为「一开透视框，游戏就开始卡、
+        // 服务端 tick 掉队」。
+        Class<?> living = bridge.type(ClassType.LIVING_ENTITY);
+        return living != null && living.isInstance(entity);
     }
 
     /** 表驱动门日志：缺成员版本只报一次。 */

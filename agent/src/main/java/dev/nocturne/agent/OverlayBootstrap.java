@@ -363,6 +363,9 @@ public final class OverlayBootstrap implements FrameListener {
         // 后端只收到 fill/blit/scissor；文本由 PlannedBackend 在提交前 flush，顺序不会反。
         if (backend instanceof ExtractorRenderer) {
             backend = new PlannedBackend(backend);
+            // 游戏绘制 API 后端的上下文只在绘制钩子那一次调用内有效：必须让绘制钩子驱动，
+            // 不能只靠帧交换点（那时上下文已被清空）。
+            NocturneRuntime.setContextDriven(true);
         }
         modernBackend = backend instanceof ModernRenderer ? (ModernRenderer) backend : null;
         if (modernBackend != null && pendingGraphics != null) {

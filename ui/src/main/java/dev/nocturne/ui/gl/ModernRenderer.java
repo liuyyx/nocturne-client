@@ -109,6 +109,21 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
 
     /** 当前正交投影矩阵（16 个元素，列主序）。 */
     private float[] projection = new float[16];
+    /** 状态探针是否已打印（一次即可区分"查询通道可用"与"只能设回已知值"）。 */
+    private boolean stateProbeLogged;
+    /** 进入前绑定的着色器程序；{@code -1} 表示查询不可用。 */
+    private int programBefore = -1;
+    /** 进入前绑定的顶点数组对象。 */
+    private int vaoBefore = -1;
+    /** 进入前绑定的 {@code GL_ARRAY_BUFFER}。 */
+    private int arrayBufferBefore = -1;
+    /** 进入前当前纹理单元上的二维纹理绑定。 */
+    private int textureBefore = -1;
+    /** 进入前的活动纹理单元（返回值是 {@code GL_TEXTURE0 + n}）。 */
+    private int activeTextureBefore = -1;
+    /** 是否成功保存了各能力开关；查询通道不可用时为 {@code false}，此时不能盲目还原。 */
+    private boolean capsSaved;
+
     /** 缓存的视口原点 x（像素）。 */
     private int screenX;
     /** 缓存的视口原点 y（像素）。 */
@@ -669,42 +684,72 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         }
     }
 
-    /** 记录被本后端改写的开关状态，供 {@link #endFrame()} 精确还原。 */
+    /** 记录被本后端改写的开关与绑定状态，供 {@link #endFrame()} 精确还原。 */
     private void saveState() {
-        if (stateSaved || !gl.hasIsEnabled()) {
+        if (stateSaved) {
             return;
         }
-        blendWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_BLEND);
-        depthWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_DEPTH_TEST);
-        cullWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_CULL_FACE);
+        if (gl.hasIsEnabled()) {
+            blendWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_BLEND);
+            depthWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_DEPTH_TEST);
+            cullWasEnabled = gl.capabilityEnabled(ModernGlApi.GL_CULL_FACE);
+            capsSaved = true;
+        }
+        // 绑定状态必须记「进入前的实际值」而不是退出时解绑成 0：1.13+ 的 GlStateManager
+        // 缓存的就是这些值，解绑 0 等于把缓存与实际拆散——游戏下次设置同值会被判为
+        // 「已经是它」而跳过真实调用，后续 pass 用错 program/纹理/VAO。
+        programBefore = firstOf(gl.getInteger(ModernGlApi.GL_CURRENT_PROGRAM, 1));
+        vaoBefore = firstOf(gl.getInteger(ModernGlApi.GL_VERTEX_ARRAY_BINDING, 1));
+        arrayBufferBefore = firstOf(gl.getInteger(ModernGlApi.GL_ARRAY_BUFFER_BINDING, 1));
+        activeTextureBefore = firstOf(gl.getInteger(ModernGlApi.GL_ACTIVE_TEXTURE, 1));
+        textureBefore = firstOf(gl.getInteger(ModernGlApi.GL_TEXTURE_BINDING_2D, 1));
         stateSaved = true;
+        if (!stateProbeLogged) {
+            stateProbeLogged = true;
+            // 1.16.5 上 glGetIntegerv 曾出现"调了不写值"：读出的绑定若全是 -1，
+            // 说明查询通道不可用，只能退回「解绑 0」的旧行为。
+            System.out.println("[nocturne] gl-core state probe: blend=" + blendWasEnabled
+                    + " depth=" + depthWasEnabled + " cull=" + cullWasEnabled
+                    + " program=" + programBefore + " vao=" + vaoBefore
+                    + " tex=" + textureBefore + " unit=" + activeTextureBefore);
+        }
+    }
+
+    /** @return 查询结果的第一个元素；不可用时返回 {@code -1} */
+    private static int firstOf(int[] values) {
+        return values == null || values.length == 0 ? -1 : values[0];
     }
 
     @Override
     public void endFrame() {
         if (stateSaved) {
-            // 不做「无条件关混合」之类的粗暴清理：那会把同帧后续的游戏 HUD / 粒子绘制一并污染。
-            restore(ModernGlApi.GL_BLEND, blendWasEnabled);
-            restore(ModernGlApi.GL_DEPTH_TEST, depthWasEnabled);
-            restore(ModernGlApi.GL_CULL_FACE, cullWasEnabled);
-            // 还原混合因子：修复前只还原开关位，glBlendFunc 的 src/dst 因子永远留在我们的
-            // src-alpha 值上，同帧后续的游戏 pass 若用别的因子（发光/加色/粒子）会被静默改写。
-            gl.restoreBlendFunc(blendBefore);
+            // 只还原**我们自己改过**的开关位；查询通道不可用时什么都不做，
+            // 宁可留着我们的值，也不要盲目把它们全关掉。
+            if (capsSaved) {
+                restore(ModernGlApi.GL_BLEND, blendWasEnabled);
+                restore(ModernGlApi.GL_DEPTH_TEST, depthWasEnabled);
+                restore(ModernGlApi.GL_CULL_FACE, cullWasEnabled);
+                // 还原混合因子：修复前只还原开关位，glBlendFunc 的 src/dst 因子永远留在我们的
+                // src-alpha 值上，同帧后续的游戏 pass 若用别的因子（发光/加色/粒子）会被静默改写。
+                gl.restoreBlendFunc(blendBefore);
+            }
             blendBefore = null;
+            capsSaved = false;
             stateSaved = false;
         }
         if (clipDepth > 0) {
             gl.disableScissorTest();
             clipDepth = 0;
         }
-        // 解绑 program/VAO/array buffer：1.13+ 的 GlStateManager 缓存这些绑定；不还原会让
-        // 后续游戏代码「绑定自己的 VAO」被判为已绑定而跳过真实调用 → 画面损坏或崩溃。
         if (ready) {
+            // 解绑到 0（VAO 0 是独立的默认状态，不会改写游戏 VAO 的内容）。
+            // 曾经尝试「恢复到进入前的绑定」，但游戏 VAO 1 上的 glBindBuffer 会改写它自己的
+            // ARRAY_BUFFER 绑定，实测直接触发 `GL_INVALID_OPERATION: Invalid VAO/VBO/pointer usage`
+            // 并让服务端掉 100+ tick —— 恢复原绑定的收益远小于这个风险。
             gl.bindVertexArray(0);
             gl.bindArrayBuffer(0);
             gl.useProgram(0);
-            // 顶层纹理也解绑：1.13+ 的状态管理器会缓存纹理绑定，留着我们的图集会让游戏
-            // 「以为已经绑好了」而跳过真实绑定，后续绘制采到字形图集。
+            gl.activeTexture(activeTextureBefore >= 0 ? activeTextureBefore : ModernGlApi.GL_TEXTURE0);
             gl.bindTexture2D(0);
         }
     }

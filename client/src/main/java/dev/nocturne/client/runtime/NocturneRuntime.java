@@ -264,12 +264,99 @@ public final class NocturneRuntime {
     }
 
     /**
+     * 帧交换点是否在工作。
+     *
+     * <p>一旦观察到帧钩子（{@code Display.update} / {@code glfwSwapBuffers} / {@code SDL_GL_SwapWindow}）
+     * 驱动过一帧，绘制钩子就不再重复驱动——GLFW 栈上两者同时存在，不区分会让 RenderEvent 与叠加层
+     * 绘制每帧各跑两遍（真机表现：「开了 ESP/NameTags 之后像是游戏加速了」）。
+     */
+    private static volatile boolean frameHookSeen;
+
+    /** 当前后端是否必须用当帧绘制上下文绘制（游戏绘制 API 后端为 true）。 */
+    private static volatile boolean contextDriven;
+
+    /** 上一秒统计窗口起点（纳秒）；{@code 0} 表示尚未开始。 */
+    private static volatile long lastStatNanos;
+    /** 当前统计窗口内的驱动次数。 */
+    private static volatile int driveCount;
+    /** 其中来自帧交换点的次数（区分双驱动）。 */
+    private static volatile int frameDrives;
+    /** 其中来自绘制钩子的次数。 */
+    private static volatile int drawDrives;
+    /** 绘制钩子被跳过的次数。 */
+    private static volatile int drawSkips;
+    /** 是否打印每秒帧驱动统计（{@code -Dnocturne.debug.frames}）；默认关闭，生产不打日志。 */
+    private static final boolean FRAME_STAT =
+            System.getProperty("nocturne.debug.frames") != null;
+
+    /**
      * 由注入的字节码每帧调用一次。
      *
      * <p>契约：无论发生什么都不得抛出异常，也不得阻塞。分发本身由 bootstrap 分发器保证异常隔离
      * （单个监听器抛出的 Throwable 不会传播回被补丁的游戏方法）；之后按 20Hz 折算驱动模块 tick。
      */
     public static void onFrame() {
+        frameHookSeen = true;
+        frameDrives++;
+        drive();
+    }
+
+    /**
+     * 由 GUI 绘制钩子每帧调用（{@code GuiDrawHook}）。
+     *
+     * <p>只在帧交换点**不存在**时才真正驱动：SDL 栈（26.x）按设计不注册帧钩子，Fabric mod 形态也没有
+     * {@code Instrumentation}，那时绘制入口是唯一的每帧时机；而 GLFW 栈上帧钩子已经驱动过，再驱动一次
+     * 就是同帧两遍。
+     */
+    public static void onDrawFrame() {
+        if (frameHookSeen && !contextDriven) {
+            drawSkips++;
+            return;
+        }
+        drawDrives++;
+        drive();
+    }
+
+    /**
+     * 标记当前后端是否**必须**用当帧绘制上下文绘制。
+     *
+     * <p>游戏绘制 API 后端（`gui-graphics` / `gui-stack` / `gui-extractor`）的上下文只在
+     * 绘制钩子那一次调用内有效，错过了什么都画不出来；自绘 GL 的后端（`gl-core` / `gl-fixed`）
+     * 不需要上下文，帧钩子已经画过，再画一遍就是同帧两遍。
+     *
+     * @param required {@code true} = 绘制钩子必须驱动
+     */
+    public static void setContextDriven(boolean required) {
+        contextDriven = required;
+    }
+
+    /** 每秒打印一次帧驱动次数与来源；仅在 {@link #FRAME_STAT} 时工作。 */
+    private static void statFrames() {
+        if (!FRAME_STAT) {
+            return;
+        }
+        driveCount++;
+        long now = System.nanoTime();
+        if (lastStatNanos == 0L) {
+            lastStatNanos = now;
+            return;
+        }
+        if (now - lastStatNanos < 1_000_000_000L) {
+            return;
+        }
+        System.out.println("[nocturne] frame drive/s=" + driveCount
+                + " (frameHook=" + frameDrives + " drawHook=" + drawDrives
+                + " drawSkipped=" + drawSkips + ")");
+        driveCount = 0;
+        frameDrives = 0;
+        drawDrives = 0;
+        drawSkips = 0;
+        lastStatNanos = now;
+    }
+
+    /** 每帧实际工作：分发监听器 + 广播渲染事件。 */
+    private static void drive() {
+        statFrames();
         // 自销毁后不再做任何每帧工作：分发器确实已被清空，但本方法后半段的 RenderEvent 广播与模块
         // tick 既不经过分发器、也不看驱动闸门——其中 driveModules 还会按"是否在世界里"把闸门重新
         // 置回 true，于是 panic 关掉的闸门会在 50ms 内自动翻回来并永久保持（模块照 tick）。

@@ -390,6 +390,12 @@ public final class StorageEspModule extends Module implements WorldOverlay {
      * 返回 {@code null}（调用方据此跳过）。
      */
     private static Class<?> resolveMapped(GameBridge bridge, ClassType type, ClassLoader loader) {
+        // 走桥上的类型缓存：每个方块实体每帧对每个候选类调一次 Class.forName（失败还抛异常），
+        // 几百个容器就是每帧数千次类加载查询——这是"开容器透视后卡顿/掉 tick"的主要成本。
+        Class<?> resolved = bridge.type(type);
+        if (resolved != null) {
+            return resolved;
+        }
         ClassLoader effective = loader != null ? loader : bridge.gameLoader();
         for (String mapped : bridge.mapping().classNameCandidates(type)) {
             try {

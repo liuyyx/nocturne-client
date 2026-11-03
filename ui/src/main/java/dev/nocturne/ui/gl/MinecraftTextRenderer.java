@@ -366,7 +366,6 @@ public final class MinecraftTextRenderer implements TextRenderer {
         if (text == null || text.isEmpty()) {
             return;
         }
-        drawCalls++;
         if (!ensureFont()) {
             return;   // 字体还没就绪：不画，但下面每帧都会再试（见 ensureFont 的退避）
         }
@@ -401,6 +400,9 @@ public final class MinecraftTextRenderer implements TextRenderer {
 
     /** 用按签名解析出的句柄画一行字（句柄已由 {@link #drawUnsupported} 保证非空）。 */
     private void drawWithHandle(String text, int x, int y, int rgb) {
+        // 计数放在真正产生笔画的位置：之前记在 draw() 开头，字体未就绪/不支持时也会 +1，
+        // 于是 `text/s` 永远虚高，没法用来判断「到底画了多少字」。
+        drawCalls++;
         if (drawStringFloats) {
             Reflect.call(drawStringHandle, fontRenderer, text, (float) x, (float) y,
                     Integer.valueOf(rgb));

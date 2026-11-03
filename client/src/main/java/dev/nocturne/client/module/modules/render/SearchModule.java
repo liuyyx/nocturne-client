@@ -248,13 +248,15 @@ public final class SearchModule extends Module implements WorldOverlay {
             int offsetZ = (int) ((index / spanXZ) % spanXZ) - radius;
             int offsetY = (int) (index / ((long) spanXZ * spanXZ)) - VERTICAL_RANGE;
             long key = pack(originX + offsetX, originY + offsetY, originZ + offsetZ);
-            String id = blockIdAt(bridge, level, origin, offsetX, offsetY, offsetZ);
+            String id = blockIdAt(bridge, level, originX, originY, originZ,
+                    offsetX, offsetY, offsetZ);
             if (id == null) {
                 continue;
             }
             boolean hit = TARGETS.contains(id);
             if (hit && caved) {
-                hit = AIR.contains(blockIdAt(bridge, level, origin, offsetX, offsetY + 1, offsetZ));
+                hit = AIR.contains(blockIdAt(bridge, level, originX, originY, originZ,
+                        offsetX, offsetY + 1, offsetZ));
             }
             if (hit) {
                 hits.put(key, id);
@@ -298,9 +300,9 @@ public final class SearchModule extends Module implements WorldOverlay {
     /**
      * 读某格方块的描述 id（相对 {@code origin} 偏移）；读不到返回 {@code null}。
      */
-    private String blockIdAt(GameBridge bridge, Object level, Object origin,
+    private String blockIdAt(GameBridge bridge, Object level, int originX, int originY, int originZ,
                              int offsetX, int offsetY, int offsetZ) {
-        Object pos = offsetPos(bridge, origin, offsetX, offsetY, offsetZ);
+        Object pos = offsetPos(bridge, originX, originY, originZ, offsetX, offsetY, offsetZ);
         if (pos == null) {
             return null;
         }
@@ -325,27 +327,18 @@ public final class SearchModule extends Module implements WorldOverlay {
     }
 
     /**
-     * 造一个相对 {@code origin} 偏移的方块坐标。
+     * 造一个绝对方块坐标（{@code origin + offset}）。
      *
-     * <p>桥接层不支持构造器，只能用 {@code BlockPos} 的方向面拼：{@code above(dy)} +
-     * {@code east(dx)} + {@code south(dz)}（负参数即反方向）。刻意不用
-     * {@code offset(int,int,int)}：它有 DDD/III/Vec3i 三个重载，映射表每种成员只记一条，
-     * 挑错重载就会在运行期静默找不到方法。偏移为 0 的分量直接跳过，省调用。
+     * <p>用 {@code GameBridge#blockPos}（缓存好的 {@code BlockPos(int,int,int)} 构造器）而不是
+     * {@code above/east/south} 方向面：后者每格最多三次反射，而这个扫描每 tick 要跑
+     * {@code BLOCKS_PER_TICK} 格。也不用 {@code offset(int,int,int)}——它有 DDD/III/Vec3i
+     * 三个重载，映射表每个成员只记一条，挑错重载会在运行期静默找不到方法。
      *
-     * @return 新坐标；任一环读不到时返回 {@code null}
+     * @return 方块坐标；构造器不可用时返回 {@code null}
      */
-    private static Object offsetPos(GameBridge bridge, Object origin, int dx, int dy, int dz) {
-        Object pos = origin;
-        if (dy != 0) {
-            pos = bridge.callMapped(pos, ClassType.BLOCK_POS, "above", dy);
-        }
-        if (pos != null && dx != 0) {
-            pos = bridge.callMapped(pos, ClassType.BLOCK_POS, "east", dx);
-        }
-        if (pos != null && dz != 0) {
-            pos = bridge.callMapped(pos, ClassType.BLOCK_POS, "south", dz);
-        }
-        return pos;
+    private static Object offsetPos(GameBridge bridge, int originX, int originY, int originZ,
+                                    int dx, int dy, int dz) {
+        return bridge.blockPos(originX + dx, originY + dy, originZ + dz);
     }
 
     /** 丢掉离当前原点超过半径（+1 容差）的陈旧命中。 */

@@ -1266,6 +1266,9 @@
                         "forge": "(DDD)D"
                     }
                 },
+                "getBbHeight": {
+                    "absent": true
+                },
                 "getBoundingBox": {
                     "absent": true
                 },

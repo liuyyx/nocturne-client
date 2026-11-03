@@ -42,11 +42,50 @@ public interface OverlayDraw {
     /** 一行文本；字号由后端决定（各代际字体尺寸不同，实现自会取当前字体的原生行高）。 */
     void text(String text, float x, float y, int argb);
 
+    /**
+     * 圆角矩形（世界标签背景用）。
+     *
+     * @param x      左上角 x
+     * @param y      左上角 y
+     * @param width  宽
+     * @param height 高
+     * @param radius 圆角半径
+     * @param argb   颜色
+     */
+    void roundedRect(float x, float y, float width, float height, float radius, int argb);
+
     /** @return 文本在当前字体下的绘制宽度（像素） */
     float textWidth(String text);
 
     /** @return 当前字体的行高（像素） */
     float textHeight();
+
+    /**
+     * 按指定字号画一行文本。
+     *
+     * <p>世界标签要按透视距离缩放（对齐 eps-plus 的 NameTags）：固定字号时远处标签和近处一样大，
+     * 一屏几十个标签就糊成一片。后端的缩放能力是矩阵/位图字号，`size` 就是设计字号。
+     *
+     * @param text 文本
+     * @param x    基线左端
+     * @param y    基线顶端
+     * @param size 字号（逻辑像素）
+     * @param argb 颜色
+     */
+    void text(String text, float x, float y, float size, int argb);
+
+    /**
+     * @param text 文本
+     * @param size 字号（逻辑像素）
+     * @return 该字号下的绘制宽度
+     */
+    float textWidth(String text, float size);
+
+    /**
+     * @param size 字号（逻辑像素）
+     * @return 该字号下的行高
+     */
+    float textHeight(float size);
 
     /** @return 绘制区宽（逻辑像素）；未知时为 0 */
     int width();

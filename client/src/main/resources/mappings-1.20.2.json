@@ -2122,6 +2122,20 @@
                         "neoforge": "(DDD)D"
                     }
                 },
+                "getBbHeight": {
+                    "names": {
+                        "vanilla": "dg",
+                        "fabric": "method_17682",
+                        "forge": "m_20206_",
+                        "neoforge": "getBbHeight"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F",
+                        "neoforge": "()F"
+                    }
+                },
                 "getBoundingBox": {
                     "names": {
                         "vanilla": "cG",

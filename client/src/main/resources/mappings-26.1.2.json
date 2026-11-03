@@ -1500,6 +1500,14 @@
                         "neoforge": "distanceToSqr"
                     }
                 },
+                "getBbHeight": {
+                    "names": {
+                        "vanilla": "getBbHeight",
+                        "fabric": "getBbHeight",
+                        "forge": "getBbHeight",
+                        "neoforge": "getBbHeight"
+                    }
+                },
                 "getBoundingBox": {
                     "names": {
                         "vanilla": "getBoundingBox",

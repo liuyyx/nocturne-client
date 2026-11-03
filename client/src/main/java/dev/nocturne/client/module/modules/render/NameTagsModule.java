@@ -37,8 +37,25 @@ public final class NameTagsModule extends Module implements WorldOverlay {
     /** 每帧最多画多少条标签：极端场景（大船/刷怪塔）下按距离截断，避免覆盖层拖垮渲染线程。 */
     private static final int MAX_LABELS = 256;
 
-    /** 标签画在实体头顶上方多高处（米）。 */
+    /** 标签画在实体头顶上方多高处（米）；只在读不到实体真实高度时兜底。 */
     private static final double TAG_HEIGHT = 2.1d;
+
+    /** 参考像素密度：depth 为 1 时的标签字号基准（对齐 eps-plus 的透视缩放）。 */
+    private static final float PERSPECTIVE_PX = 64f;
+    /** 标签基础字号（逻辑像素，缩放前）。 */
+    private static final float BASE_FONT_PX = 8f;
+    /** 标签相对实体头顶再抬升多少（米）。 */
+    private static final double HEIGHT_OFFSET = 0.5d;
+    /** 内边距、锚点间隙与圆角（逻辑像素，随透视缩放）。 */
+    private static final float PADDING_X = 3f;
+    private static final float PADDING_Y = 2f;
+    private static final float ANCHOR_GAP = 2f;
+    private static final float CORNER = 3f;
+    /** 背景色：深色半透明，保证白字在任何地形上都清晰。 */
+    private static final int BACKGROUND_COLOR = 0xA50D1014;
+    /** 透视缩放夹取范围：太远太小看不清，太近太大挡视线。 */
+    private static final float MIN_TAG_SCALE = 0.6f;
+    private static final float MAX_TAG_SCALE = 2.0f;
 
     /** 投影结果复用（每帧几十个实体，避免逐点分配）。 */
     private final WorldProjection.ScreenPoint point = new WorldProjection.ScreenPoint();
@@ -209,15 +226,32 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             if (maxDistance > 0d && selfPos != null && distanceSq(selfPos, pos) > maxDistanceSq) {
                 continue;
             }
-            projection.project(pos[0], pos[1] + TAG_HEIGHT, pos[2], point);
-            if (!point.visible) {
+            projection.project(pos[0], pos[1] + bbHeightOf(bridge, entity) + HEIGHT_OFFSET,
+                    pos[2], point);
+            if (!point.visible || point.depth <= 0d) {
                 continue;
             }
             String label = label(bridge, entity, withDistance, withHealth, selfPos, pos);
             if (label == null) {
                 continue;
             }
-            draw.text(label, point.x - labelWidth(label, draw) / 2f, point.y - lineHeight, 0xFFFFFFFF);
+            // 透视缩放（对齐 eps-plus 的 NameTags）：标签随距离变小，近处才读得清、远处不糊屏。
+            float scale = clampScale((float) (PERSPECTIVE_PX / point.depth));
+            float fontSize = BASE_FONT_PX * scale;
+            float width = textWidthCached(label, fontSize, draw);
+            float height = draw.textHeight(fontSize);
+            float padX = PADDING_X * scale;
+            float padY = PADDING_Y * scale;
+            float left = point.x - width / 2f - padX;
+            float top = point.y - height - padY - ANCHOR_GAP * scale;
+            // 完全在屏幕外的标签直接跳过（不画也省一次排版）。
+            if (left + width + padX * 2f < 0f || top + height + padY * 2f < 0f
+                    || left > draw.width() || top > draw.height()) {
+                continue;
+            }
+            draw.roundedRect(left, top, width + padX * 2f, height + padY * 2f,
+                    CORNER * scale, BACKGROUND_COLOR);
+            draw.text(label, point.x - width / 2f, top + padY, fontSize, 0xFFFFFFFF);
             drawn++;
             if (drawn >= MAX_LABELS) {
                 break;
@@ -291,22 +325,43 @@ public final class NameTagsModule extends Module implements WorldOverlay {
                 ((Number) z).doubleValue()};
     }
 
+
+    /** 实体视觉高度（米）：读不到时退回硬编码的玩家高度。 */
+    private static double bbHeightOf(GameBridge bridge, Object entity) {
+        Object value = bridge.callMapped(entity, ClassType.ENTITY, "getBbHeight");
+        return value instanceof Number ? ((Number) value).doubleValue() : TAG_HEIGHT;
+    }
+
+    /** 透视缩放夹取。 */
+    private static float clampScale(float value) {
+        if (!Float.isFinite(value)) {
+            return 1f;
+        }
+        return Math.max(MIN_TAG_SCALE, Math.min(MAX_TAG_SCALE, value));
+    }
+
     /**
-     * 标签渲染宽度（带缓存）。
+     * 标签渲染宽度（带缓存，按字号区分）。
      *
      * <p>`textWidth` 走 {@code MinecraftTextRenderer.width} → 反射调字体度量；标签文本每帧重拼，
-     * 但大部分内容稳定，缓存能把每条标签的反射次数从 2 次降到 1 次。
+     * 但「文本 + 字号」组合变化很少，缓存能把每条标签的反射次数从 2 次降到 1 次。
+     *
+     * @param label 标签文本
+     * @param size  字号（透视缩放后）
+     * @param draw  绘制接口
+     * @return 渲染宽度
      */
-    private float labelWidth(String label, OverlayDraw draw) {
-        Float cached = widthCache.get(label);
+    private float textWidthCached(String label, float size, OverlayDraw draw) {
+        String key = size + "|" + label;
+        Float cached = widthCache.get(key);
         if (cached != null) {
             return cached.floatValue();
         }
-        float width = draw.textWidth(label);
+        float width = draw.textWidth(label, size);
         if (widthCache.size() >= WIDTH_CACHE_LIMIT) {
             widthCache.clear();
         }
-        widthCache.put(label, Float.valueOf(width));
+        widthCache.put(key, Float.valueOf(width));
         return width;
     }
 

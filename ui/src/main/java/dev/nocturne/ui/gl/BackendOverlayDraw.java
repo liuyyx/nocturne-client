@@ -47,6 +47,12 @@ public final class BackendOverlayDraw implements OverlayDraw {
     }
 
     @Override
+    public void roundedRect(float x, float y, float width, float height, float radius, int argb) {
+        renderer.roundedRect(x, y, width, height, radius, Color.of(argb));
+        drawCalls++;
+    }
+
+    @Override
     public void outline(float x, float y, float width, float height, float thickness, int argb) {
         renderer.outline(x, y, width, height, thickness, Color.of(argb));
         drawCalls++;
@@ -66,6 +72,22 @@ public final class BackendOverlayDraw implements OverlayDraw {
     @Override
     public float textHeight() {
         return renderer.textHeight(TEXT_SIZE);
+    }
+
+    @Override
+    public void text(String text, float x, float y, float size, int argb) {
+        renderer.text(text, x, y, size, Color.of(argb));
+        drawCalls++;
+    }
+
+    @Override
+    public float textWidth(String text, float size) {
+        return renderer.textWidth(text, size);
+    }
+
+    @Override
+    public float textHeight(float size) {
+        return renderer.textHeight(size);
     }
 
     @Override

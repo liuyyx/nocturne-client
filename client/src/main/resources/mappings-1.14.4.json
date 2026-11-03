@@ -1680,6 +1680,18 @@
                         "forge": "(DDD)D"
                     }
                 },
+                "getBbHeight": {
+                    "names": {
+                        "vanilla": "ch",
+                        "fabric": "method_17682",
+                        "forge": "func_213302_cg"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F"
+                    }
+                },
                 "getBoundingBox": {
                     "names": {
                         "vanilla": "bL",

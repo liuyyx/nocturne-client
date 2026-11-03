@@ -474,3 +474,7 @@ net/minecraft/world/phys/AABB#minZ
 net/minecraft/world/phys/AABB#maxX
 net/minecraft/world/phys/AABB#maxY
 net/minecraft/world/phys/AABB#maxZ
+
+# 实体视觉高度：NameTags 的锚点用真实高度（eps-plus 的 NameTags 用 getBbHeight），
+# 不再硬编码 2.1。1.8.9 是 getHeight()（表里 absent，那边退回固定值）。
+net/minecraft/world/entity/Entity#getBbHeight()

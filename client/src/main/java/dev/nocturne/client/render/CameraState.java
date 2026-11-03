@@ -23,6 +23,15 @@ public final class CameraState {
 
     /** 是否已经就缺成员打过一次诊断（避免每帧刷屏）。 */
     private boolean missingLogged;
+    /**
+     * 是否按 {@code partialTicks} 插值朝向。
+     *
+     * <p>默认开启（与游戏的插值渲染对齐，消除框相对画面的 20Hz 阶梯）。排查「开覆盖层后画面/人物
+     * 乱窜」时可用 {@code -Dnocturne.debug.noCameraInterp} 关掉二分：关掉之后相机退回 tick 末值，
+     * 覆盖层会重新出现轻微抖动，但任何由插值引入的异常都会消失。
+     */
+    private static final boolean INTERPOLATE =
+            System.getProperty("nocturne.debug.noCameraInterp") == null;
 
     /**
      * @param projection 要刷新的投影对象（由调用方持有并复用）
@@ -88,7 +97,7 @@ public final class CameraState {
         // 朝向同样要插值：游戏用 yRotO/xRotO 与当帧 yRot/xRot 之间按 partialTicks 插值渲染。
         Double yawOld = number(bridge.readField(player, ClassType.ENTITY, "yRotO"));
         Double pitchOld = number(bridge.readField(player, ClassType.ENTITY, "xRotO"));
-        if (yawOld != null && pitchOld != null && partialTicks > 0f) {
+        if (INTERPOLATE && yawOld != null && pitchOld != null && partialTicks > 0f) {
             // yaw 必须先绕回 [-180,180) 再做差：直接减会在跨越 ±180 的那一帧得到 ∓358 度的差值，
             // 插值结果把相机瞬移到反方向——真机表现就是「一开渲染框，画面里的人/框在飞速乱窜」。
             // 游戏自己用的是 Mth.rotLerp，语义一致。

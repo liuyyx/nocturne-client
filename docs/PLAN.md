@@ -201,6 +201,20 @@
 「把 program/VAO/纹理恢复成进入前的原值」，实测在游戏 VAO 上 `glBindBuffer` 会改写它自己的
 ARRAY_BUFFER 绑定，直接刷 `GL_INVALID_OPERATION` 并让服务端掉 100+ tick，已回退为解绑到 VAO 0。
 
+**覆盖层耗时实测（2026-11-03，1.16.5 + gl-core，120fps）**：
+
+| 场景 | `world overlay cost` | 每帧顶点 |
+|---|---|---|
+| 空世界，ESP+NameTags+StorageESP | 884–984 µs | ~2280 |
+| 同上 + `/fill` 192 个箱子（视野内约 75 个） | 1396–2051 µs | ~2270 |
+| 7 个渲染模块全开（再加 Tracers/SpawnerFinder/ItemEsp/Search） | 1404–1584 µs | ~2700 |
+
+帧预算 8.3 ms，覆盖层占 11–25%；每容器约 5 µs，线性可控。为此加的护栏：
+方块实体扫描按 20Hz 缓存、`NameTags` 名字/宽度缓存、容器坐标与陷阱箱判定按方块实体缓存、
+NameTags 与 StorageESP 每帧 256 绘制上限。排查「开覆盖层后画面乱窜」时用
+`-Dnocturne.debug.noCameraInterp` 可关掉相机插值二分（默认开）。
+`-Dnocturne.debug.modules=ESP,NameTags` 可在启动时直接启用模块（GUI 点击在无焦点会话里不可达）。
+
 **帧驱动**：1.16.5 实测 `frameHook=0 drawHook=120` —— `glfwSwapBuffers` 钩子没有触发，
 实际由绘制钩子单驱动；`NocturneRuntime` 仍保留 `onFrame`/`onDrawFrame` 拆分与
 `contextDriven` 判定，供 26.x（无帧钩子）与双驱动栈使用。诊断开关 `-Dnocturne.debug.frames`

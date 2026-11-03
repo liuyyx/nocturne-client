@@ -219,6 +219,9 @@ ARRAY_BUFFER 绑定，直接刷 `GL_INVALID_OPERATION` 并让服务端掉 100+ t
 NameTags 与 StorageESP 每帧 256 绘制上限。排查「开覆盖层后画面乱窜」时用
 `-Dnocturne.debug.noCameraInterp` 可关掉相机插值二分（默认开）。
 `-Dnocturne.debug.modules=ESP,NameTags` 可在启动时直接启用模块（GUI 点击在无焦点会话里不可达）。
+`-Dnocturne.debug.motion` 打印「一 tick 位移 > 5 格」或「`setPos` 写回值与原值偏差 > 0.5 格」——
+`postMotion` 在 pre 阶段会把事件坐标写回玩家，这段此前完全不可见；玩家报「人物飞速移动」时
+这条日志直接区分「位置被改坏」与「只是掉帧看起来快」。
 
 **帧驱动**：1.16.5 实测 `frameHook=0 drawHook=120` —— `glfwSwapBuffers` 钩子没有触发，
 实际由绘制钩子单驱动；`NocturneRuntime` 仍保留 `onFrame`/`onDrawFrame` 拆分与

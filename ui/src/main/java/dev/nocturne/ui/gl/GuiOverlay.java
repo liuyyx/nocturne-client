@@ -669,6 +669,23 @@ public final class GuiOverlay implements FrameListener {
 
     /** 输入占用状态变化时打一次：确认 setBlocked 真的写到了 bootstrap 那份。 */
     private boolean lastBlockedLogged;
+    /** @return 当前启用中的世界覆盖层模块数（诊断用） */
+    private int worldOverlayCount() {
+        NocturneClient client = NocturneClient.get();
+        if (client == null) {
+            return 0;
+        }
+        int count = 0;
+        for (dev.nocturne.client.module.Module module : client.modules().all()) {
+            if (module instanceof WorldOverlay && module.isEnabled()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** 上一帧世界覆盖层绘制耗时（纳秒），配合 debug 统计打印。 */
+    private long lastOverlayNanos;
 
     /** @return 游戏当前是否显示原生 Screen；桥不可用时按没有处理，不阻断自绘 GUI。 */
     private boolean hasNativeScreen() {
@@ -718,7 +735,9 @@ public final class GuiOverlay implements FrameListener {
             // 管线后端会按 0 尺寸布局，整个界面等于空框。
             gui.setViewport(renderer.width(), renderer.height());
             // 世界覆盖物画在最底下：GUI 菜单要盖住它们，否则 ESP 的框会糊在面板上。
+            long overlayStart = System.nanoTime();
             drawWorldOverlays();
+            lastOverlayNanos = System.nanoTime() - overlayStart;
             if (guiOpen) {
                 gui.render(renderer);
             }
@@ -737,6 +756,10 @@ public final class GuiOverlay implements FrameListener {
                                 + " text/s=" + MinecraftTextRenderer.takeDrawCalls()
                                 + " upload full/s=" + uploads[0] + " sub/s=" + uploads[1]);
                     } else if (renderer instanceof ModernRenderer) {
+                        // 世界覆盖层耗时：玩家报「开渲染框后人物飞速移动」时，这一行直接区分
+                        // 「覆盖层自己画得太慢」与「游戏 tick 在追赶」。
+                        System.out.println("[nocturne] world overlay cost=" + (lastOverlayNanos / 1000L)
+                                + "us modules=" + worldOverlayCount());
                         // gl-core 没有顶点批处理层：这里的小批次是「同色几何合并后」的真实下发次数，
                         // 与图元数的比值直接反映合批收益。
                         int[] counts = ((ModernRenderer) renderer).takeDrawCounts();

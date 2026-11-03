@@ -89,8 +89,11 @@ public final class CameraState {
         Double yawOld = number(bridge.readField(player, ClassType.ENTITY, "yRotO"));
         Double pitchOld = number(bridge.readField(player, ClassType.ENTITY, "xRotO"));
         if (yawOld != null && pitchOld != null && partialTicks > 0f) {
-            yaw = Double.valueOf(yawOld.doubleValue()
-                    + (yaw.doubleValue() - yawOld.doubleValue()) * partialTicks);
+            // yaw 必须先绕回 [-180,180) 再做差：直接减会在跨越 ±180 的那一帧得到 ∓358 度的差值，
+            // 插值结果把相机瞬移到反方向——真机表现就是「一开渲染框，画面里的人/框在飞速乱窜」。
+            // 游戏自己用的是 Mth.rotLerp，语义一致。
+            yaw = Double.valueOf(yawOld.doubleValue() + wrapDegrees(yaw.doubleValue()
+                    - yawOld.doubleValue()) * partialTicks);
             pitch = Double.valueOf(pitchOld.doubleValue()
                     + (pitch.doubleValue() - pitchOld.doubleValue()) * partialTicks);
         }
@@ -110,6 +113,23 @@ public final class CameraState {
     /** @return 当帧投影（由 {@link #update} 刷新） */
     public WorldProjection projection() {
         return projection;
+    }
+
+    /**
+     * 把角度差折回 {@code [-180, 180)}（等价于游戏里的 {@code Mth.wrapDegrees}）。
+     *
+     * @param degrees 原始角度差
+     * @return 折算后的角度差
+     */
+    static double wrapDegrees(double degrees) {
+        double wrapped = degrees % 360.0d;
+        if (wrapped >= 180.0d) {
+            wrapped -= 360.0d;
+        }
+        if (wrapped < -180.0d) {
+            wrapped += 360.0d;
+        }
+        return wrapped;
     }
 
     /** 把读到的值转成 {@code Double}；不是数字（含 {@code null}）时返回 {@code null}。 */

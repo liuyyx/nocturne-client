@@ -107,8 +107,16 @@ public enum ClassType {
     VEC3("net.minecraft.world.phys.Vec3"),
     /** 方块实体基类；StorageESP 遍历容器用。 */
     BLOCK_ENTITY("net.minecraft.world.level.block.entity.BlockEntity"),
-    /** 方块坐标（方块实体的位置读它上面的 getX/getY/getZ）。 */
+    /** 方块坐标（blockPos() 构造、BlockEntity#getBlockPos 的返回类型）。 */
     BLOCK_POS("net.minecraft.core.BlockPos"),
+    /**
+     * 方块坐标的父类：坐标分量 x/y/z 是它的字段。
+     *
+     * <p>不要用 {@code BlockPos#getX()} 读分量：1.16.5 里同名方法既有实例版又有静态打包版
+     * {@code getX(long)}，映射表只记一个重载，选中静态版就会在运行期静默读不到坐标
+     * （真机症状：StorageESP `scanned=9 matched=6 visible=0`，一个框都画不出来）。
+     */
+    VEC3_I("net.minecraft.core.Vec3i"),
     /** 方块基类：Search 用它的描述 id 认方块（1.8.9 是 Block.getUnlocalizedName）。 */
     BLOCK("net.minecraft.world.level.block.Block"),
     /** 只读方块访问面：逐格读方块走它（1.8.9 是 IBlockAccess），比具体世界类稳。 */

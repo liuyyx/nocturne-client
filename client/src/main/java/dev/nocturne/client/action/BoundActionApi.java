@@ -50,9 +50,10 @@ final class BoundActionApi implements ActionApi {
         if (player == null || gameMode == null) {
             return false;
         }
-        Number x = number(bridge.callMapped(blockPos, ClassType.BLOCK_POS, "getX"));
-        Number y = number(bridge.callMapped(blockPos, ClassType.BLOCK_POS, "getY"));
-        Number z = number(bridge.callMapped(blockPos, ClassType.BLOCK_POS, "getZ"));
+        // 走 Vec3i 字段：BlockPos#getX() 在 1.16.5 有实例/静态两个重载，映射表只记一个。
+        Number x = number(bridge.readField(blockPos, ClassType.VEC3_I, "x"));
+        Number y = number(bridge.readField(blockPos, ClassType.VEC3_I, "y"));
+        Number z = number(bridge.readField(blockPos, ClassType.VEC3_I, "z"));
         if (x == null || y == null || z == null) {
             return false;
         }

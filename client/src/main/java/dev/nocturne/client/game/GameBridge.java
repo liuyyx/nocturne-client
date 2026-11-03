@@ -467,6 +467,15 @@ public final class GameBridge {
         return null;
     }
 
+    /**
+     * 字段查找的起点类：优先用 {@code owner} 解析出的类（它才是字段声明的宿主），
+     * 解析不到或不是 {@code target} 的父类型时才退回实例类。
+     */
+    private Class<?> fieldOwnerType(ClassType owner, Object target) {
+        Class<?> declared = owner == null ? null : type(owner);
+        return declared != null && declared.isInstance(target) ? declared : target.getClass();
+    }
+
     /** 命中缓存则直接返回；未命中时查找，仅缓存成功结果以便失败可重试。 */
     private Method findMethodCached(Class<?> type, String name, Class<?>[] parameters) {
         MethodKey key = new MethodKey(type, name, signature(parameters));
@@ -493,8 +502,9 @@ public final class GameBridge {
         // 候选名逐个试：原版混淆名 → SRG 名 → 规范名（见 Mapping#fieldNameCandidates）。
         // 只试一个名字时，Forge 目标上写字段会静默失败（成员名是 SRG），
         // 表现成毫不相关的症状——例如"拖 GUI 时视角跟着转"。
+        Class<?> start = fieldOwnerType(owner, target);
         for (String candidate : mapping.fieldNameCandidates(owner, canonicalField)) {
-            Field field = findFieldCached(target.getClass(), candidate);
+            Field field = findFieldCached(start, candidate);
             if (field == null) {
                 continue;
             }
@@ -508,13 +518,22 @@ public final class GameBridge {
         return false;
     }
 
-    /** 读取一个映射字段，沿类继承链向上查找声明处（候选名顺序同 {@link #writeField}）。 */
+    /**
+     * 读取一个映射字段，沿类继承链向上查找声明处（候选名顺序同 {@link #writeField}）。
+     *
+     * <p><b>起点必须是 {@code owner} 解析出的类，而不是 {@code target.getClass()}</b>：
+     * 子类里同名的静态字段会遮蔽父类的实例字段。真机踩过：{@code BlockPos}（混淆 {@code fx}）
+     * 有一个静态字段 {@code a}（类型是 BlockPos），而 {@code Vec3i}（{@code gr}）的实例字段
+     * {@code a} 才是 x 坐标；从实例类开始查就会拿到那个静态字段，读出来不是数字，
+     * StorageESP 于是整片容器都读不到坐标（`scanned=200 matched=196 visible=0`）。
+     */
     public Object readField(Object target, ClassType owner, String canonicalField) {
         if (target == null) {
             return null;
         }
+        Class<?> start = fieldOwnerType(owner, target);
         for (String candidate : mapping.fieldNameCandidates(owner, canonicalField)) {
-            Field field = findFieldCached(target.getClass(), candidate);
+            Field field = findFieldCached(start, candidate);
             if (field == null) {
                 continue;
             }

@@ -226,9 +226,9 @@ public final class SearchModule extends Module implements WorldOverlay {
         if (origin == null) {
             return;
         }
-        int originX = coordinate(bridge, origin, "getX");
-        int originY = coordinate(bridge, origin, "getY");
-        int originZ = coordinate(bridge, origin, "getZ");
+        int originX = coordinate(bridge, origin, "x");
+        int originY = coordinate(bridge, origin, "y");
+        int originZ = coordinate(bridge, origin, "z");
         if (originX == Integer.MIN_VALUE || originY == Integer.MIN_VALUE
                 || originZ == Integer.MIN_VALUE) {
             return;
@@ -367,9 +367,14 @@ public final class SearchModule extends Module implements WorldOverlay {
                 && resolveMapped(bridge, ClassType.LEVEL_READER, null) != null;
     }
 
-    /** 读方块坐标的一个分量；缺成员时返回 {@link Integer#MIN_VALUE}（真实坐标不可能是它）。 */
+    /**
+     * 读方块坐标的一个分量；缺成员时返回 {@link Integer#MIN_VALUE}（真实坐标不可能是它）。
+     *
+     * <p>走 {@code Vec3i} 的字段：{@code BlockPos#getX()} 在 1.16.5 有实例与静态打包两个重载，
+     * 映射表只记一个，选中静态版就会静默读不到（扫描器会整片放弃）。
+     */
     private static int coordinate(GameBridge bridge, Object pos, String member) {
-        Object value = bridge.callMapped(pos, ClassType.BLOCK_POS, member);
+        Object value = bridge.readField(pos, ClassType.VEC3_I, member);
         return value instanceof Number ? ((Number) value).intValue() : Integer.MIN_VALUE;
     }
 

@@ -40,10 +40,12 @@ class SearchMappingTest {
         {"net/minecraft/world/level/block/state/BlockState", "methods", "getBlock"},
         // 扫描原点：玩家所在方块
         {"net/minecraft/world/entity/Entity", "methods", "blockPosition"},
-        // 坐标偏移：用 arity-1 的方向面（offset 有 DDD/III/Vec3i 三个重载，表里只能记一条）
-        {"net/minecraft/core/BlockPos", "methods", "east"},
-        {"net/minecraft/core/BlockPos", "methods", "south"},
-        {"net/minecraft/core/BlockPos", "methods", "above"},
+        // 坐标分量：必须走 Vec3i 的字段。BlockPos#getX() 在 1.16.5 同时有实例与静态打包两个重载，
+        // 映射表只记一个；选中静态版就会静默读不到坐标（StorageESP 真机 visible=0）。
+        {"net/minecraft/core/Vec3i", "class", null},
+        {"net/minecraft/core/Vec3i", "fields", "x"},
+        {"net/minecraft/core/Vec3i", "fields", "y"},
+        {"net/minecraft/core/Vec3i", "fields", "z"},
     };
 
     /** 走 SRG 别名桥、官方 ProGuard、恒等映射三条路径的代表版本都要覆盖 Search 的整条面。 */

@@ -944,26 +944,6 @@
                 "fabric": "net.minecraft.class_2338"
             },
             "methods": {
-                "above": {
-                    "names": {
-                        "vanilla": "b",
-                        "fabric": "method_10086"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lcm;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;"
-                    }
-                },
-                "east": {
-                    "names": {
-                        "vanilla": "g",
-                        "fabric": "method_10089"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lcm;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;"
-                    }
-                },
                 "getX": {
                     "names": {
                         "vanilla": "p",
@@ -992,16 +972,6 @@
                     "signatures": {
                         "vanilla": "()I",
                         "fabric": "()I"
-                    }
-                },
-                "south": {
-                    "names": {
-                        "vanilla": "e",
-                        "fabric": "method_10077"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lcm;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;"
                     }
                 }
             },
@@ -1092,7 +1062,38 @@
                 "fabric": "net.minecraft.class_2382"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "x": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_1352"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D"
+                    }
+                },
+                "y": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_1351"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D"
+                    }
+                },
+                "z": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_1350"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D"
+                    }
+                }
+            }
         },
         "net/minecraft/network/Connection": {
             "names": {

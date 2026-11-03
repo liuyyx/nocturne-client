@@ -127,9 +127,9 @@ public final class SpawnerFinderModule extends Module implements WorldOverlay {
             if (pos == null) {
                 continue;
             }
-            double x = coordinate(bridge, pos, "getX");
-            double y = coordinate(bridge, pos, "getY");
-            double z = coordinate(bridge, pos, "getZ");
+            double x = coordinate(bridge, pos, "x");
+            double y = coordinate(bridge, pos, "y");
+            double z = coordinate(bridge, pos, "z");
             if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(z)) {
                 continue;
             }
@@ -222,8 +222,9 @@ public final class SpawnerFinderModule extends Module implements WorldOverlay {
         return Character.toUpperCase(normalized.charAt(0)) + normalized.substring(1);
     }
 
+    /** 读方块坐标的一个分量；走 {@code Vec3i} 字段（`BlockPos#getX()` 有重载歧义）。 */
     private static double coordinate(GameBridge bridge, Object pos, String member) {
-        Object value = bridge.callMapped(pos, ClassType.BLOCK_POS, member);
+        Object value = bridge.readField(pos, ClassType.VEC3_I, member);
         return value instanceof Number ? ((Number) value).doubleValue() : Double.NaN;
     }
 

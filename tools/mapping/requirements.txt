@@ -126,9 +126,13 @@ net/minecraft/client/player/RemotePlayer
 net/minecraft/client/renderer/GameRenderer
 
 net/minecraft/core/BlockPos
-net/minecraft/core/BlockPos#getX()
-net/minecraft/core/BlockPos#getY()
-net/minecraft/core/BlockPos#getZ()
+# 坐标分量走 Vec3i 的字段，不用 BlockPos#getX()：1.16.5 里 getX 同时存在实例版 (u()) 与
+# 静态打包版 b(J)I，映射表只记一个重载，选中静态版就会在运行期静默读不到坐标
+# （真机症状：StorageESP scanned=9 matched=6 visible=0，一个框都画不出来）。
+net/minecraft/core/Vec3i
+net/minecraft/core/Vec3i#x
+net/minecraft/core/Vec3i#y
+net/minecraft/core/Vec3i#z
 
 net/minecraft/core/Direction
 net/minecraft/core/Direction#DOWN

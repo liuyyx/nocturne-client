@@ -980,30 +980,6 @@
                 "forge": "net.minecraft.util.BlockPos"
             },
             "methods": {
-                "above": {
-                    "names": {
-                        "vanilla": "b",
-                        "fabric": "method_10086",
-                        "forge": "func_177981_b"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lcj;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/util/BlockPos;"
-                    }
-                },
-                "east": {
-                    "names": {
-                        "vanilla": "g",
-                        "fabric": "method_10089",
-                        "forge": "func_177965_g"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lcj;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/util/BlockPos;"
-                    }
-                },
                 "getX": {
                     "names": {
                         "vanilla": "n",
@@ -1038,18 +1014,6 @@
                         "vanilla": "()I",
                         "fabric": "()I",
                         "forge": "()I"
-                    }
-                },
-                "south": {
-                    "names": {
-                        "vanilla": "e",
-                        "fabric": "method_10077",
-                        "forge": "func_177970_e"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lcj;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/util/BlockPos;"
                     }
                 }
             },
@@ -1124,7 +1088,29 @@
                 "forge": "net.minecraft.util.Vec3i"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "x": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_1352",
+                        "forge": "field_72450_a"
+                    }
+                },
+                "y": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_1351",
+                        "forge": "field_72448_b"
+                    }
+                },
+                "z": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_1350",
+                        "forge": "field_72449_c"
+                    }
+                }
+            }
         },
         "net/minecraft/network/Connection": {
             "names": {

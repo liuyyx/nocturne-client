@@ -1500,30 +1500,6 @@
                 "forge": "net.minecraft.core.BlockPos"
             },
             "methods": {
-                "above": {
-                    "names": {
-                        "vanilla": "b",
-                        "fabric": "method_10086",
-                        "forge": "m_6630_"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lgt;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/core/BlockPos;"
-                    }
-                },
-                "east": {
-                    "names": {
-                        "vanilla": "g",
-                        "fabric": "method_10089",
-                        "forge": "m_122030_"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lgt;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/core/BlockPos;"
-                    }
-                },
                 "getX": {
                     "names": {
                         "vanilla": "a",
@@ -1558,18 +1534,6 @@
                         "vanilla": "(J)I",
                         "fabric": "(J)I",
                         "forge": "(J)I"
-                    }
-                },
-                "south": {
-                    "names": {
-                        "vanilla": "e",
-                        "fabric": "method_10077",
-                        "forge": "m_122020_"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Lgt;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/core/BlockPos;"
                     }
                 }
             },
@@ -1674,7 +1638,44 @@
                 "forge": "net.minecraft.core.Vec3i"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "x": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_11175",
+                        "forge": "f_123285_"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I"
+                    }
+                },
+                "y": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_11174",
+                        "forge": "f_123286_"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I"
+                    }
+                },
+                "z": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_11173",
+                        "forge": "f_123289_"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I"
+                    }
+                }
+            }
         },
         "net/minecraft/network/Connection": {
             "names": {

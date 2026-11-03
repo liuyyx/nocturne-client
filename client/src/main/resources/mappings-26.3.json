@@ -1209,22 +1209,6 @@
                 "neoforge": "net.minecraft.core.BlockPos"
             },
             "methods": {
-                "above": {
-                    "names": {
-                        "vanilla": "above",
-                        "fabric": "above",
-                        "forge": "above",
-                        "neoforge": "above"
-                    }
-                },
-                "east": {
-                    "names": {
-                        "vanilla": "east",
-                        "fabric": "east",
-                        "forge": "east",
-                        "neoforge": "east"
-                    }
-                },
                 "getX": {
                     "names": {
                         "vanilla": "getX",
@@ -1247,14 +1231,6 @@
                         "fabric": "getZ",
                         "forge": "getZ",
                         "neoforge": "getZ"
-                    }
-                },
-                "south": {
-                    "names": {
-                        "vanilla": "south",
-                        "fabric": "south",
-                        "forge": "south",
-                        "neoforge": "south"
                     }
                 }
             },
@@ -1337,7 +1313,32 @@
                 "neoforge": "net.minecraft.core.Vec3i"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "x": {
+                    "names": {
+                        "vanilla": "x",
+                        "fabric": "x",
+                        "forge": "x",
+                        "neoforge": "x"
+                    }
+                },
+                "y": {
+                    "names": {
+                        "vanilla": "y",
+                        "fabric": "y",
+                        "forge": "y",
+                        "neoforge": "y"
+                    }
+                },
+                "z": {
+                    "names": {
+                        "vanilla": "z",
+                        "fabric": "z",
+                        "forge": "z",
+                        "neoforge": "z"
+                    }
+                }
+            }
         },
         "net/minecraft/network/Connection": {
             "names": {

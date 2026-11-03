@@ -1711,34 +1711,6 @@
                 "neoforge": "net.minecraft.core.BlockPos"
             },
             "methods": {
-                "above": {
-                    "names": {
-                        "vanilla": "b",
-                        "fabric": "method_10086",
-                        "forge": "m_6630_",
-                        "neoforge": "above"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Liw;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/core/BlockPos;",
-                        "neoforge": "(I)Lnet/minecraft/core/BlockPos;"
-                    }
-                },
-                "east": {
-                    "names": {
-                        "vanilla": "g",
-                        "fabric": "method_10089",
-                        "forge": "m_122030_",
-                        "neoforge": "east"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Liw;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/core/BlockPos;",
-                        "neoforge": "(I)Lnet/minecraft/core/BlockPos;"
-                    }
-                },
                 "getX": {
                     "names": {
                         "vanilla": "a",
@@ -1779,20 +1751,6 @@
                         "fabric": "(J)I",
                         "forge": "(J)I",
                         "neoforge": "(J)I"
-                    }
-                },
-                "south": {
-                    "names": {
-                        "vanilla": "e",
-                        "fabric": "method_10077",
-                        "forge": "m_122020_",
-                        "neoforge": "south"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)Liw;",
-                        "fabric": "(I)Lnet/minecraft/class_2338;",
-                        "forge": "(I)Lnet/minecraft/core/BlockPos;",
-                        "neoforge": "(I)Lnet/minecraft/core/BlockPos;"
                     }
                 }
             },
@@ -1911,7 +1869,50 @@
                 "neoforge": "net.minecraft.core.Vec3i"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "x": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_11175",
+                        "forge": "f_123285_",
+                        "neoforge": "x"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I",
+                        "neoforge": "I"
+                    }
+                },
+                "y": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_11174",
+                        "forge": "f_123286_",
+                        "neoforge": "y"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I",
+                        "neoforge": "I"
+                    }
+                },
+                "z": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_11173",
+                        "forge": "f_123289_",
+                        "neoforge": "z"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I",
+                        "forge": "I",
+                        "neoforge": "I"
+                    }
+                }
+            }
         },
         "net/minecraft/network/Connection": {
             "names": {

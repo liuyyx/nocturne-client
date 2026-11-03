@@ -77,6 +77,9 @@ public final class StorageEspModule extends Module implements WorldOverlay {
     private boolean chunkGateLogged;
     /** 上一帧画出来的容器数（HUD/诊断用）。 */
     private int lastVisibleCount;
+    /** 诊断日志限流：每秒最多一条。 */
+    private long diagLoggedAt;
+
     /** 方块实体 → 世界坐标（{@code getBlockPos} + 三次 {@code getX/Y/Z} 反射）；方块实体不移动。 */
     private final java.util.WeakHashMap<Object, double[]> posCache =
             new java.util.WeakHashMap<Object, double[]>();
@@ -226,11 +229,13 @@ public final class StorageEspModule extends Module implements WorldOverlay {
             return;
         }
         int visible = 0;
+        int matched = 0;
         for (Object blockEntity : blockEntities) {
             Kind kind = kindOf(bridge, level, blockEntity);
             if (kind == null || !enabledFor(kind)) {
                 continue;
             }
+            matched++;
             if (drawContainer(draw, projection, bridge, blockEntity, kind)) {
                 visible++;
                 if (visible >= MAX_BOXES) {
@@ -240,6 +245,16 @@ public final class StorageEspModule extends Module implements WorldOverlay {
             }
         }
         lastVisibleCount = visible;
+        if (System.getProperty("nocturne.ui.debug") != null) {
+            long now = System.currentTimeMillis();
+            if (now - diagLoggedAt > 1000L) {
+                diagLoggedAt = now;
+                // scanned = 已加载的方块实体总数；matched = 是容器且该类开关打开的数量；
+                // visible = 投影成功并画了框的数量。三者骤降说明卡在对应环节。
+                System.out.println("[nocturne] StorageESP: scanned=" + blockEntities.size()
+                        + " matched=" + matched + " visible=" + visible);
+            }
+        }
     }
 
     /** 取客户端世界；未进世界时返回 {@code null}。 */
@@ -264,10 +279,18 @@ public final class StorageEspModule extends Module implements WorldOverlay {
             if (pos == null) {
                 return false;
             }
-            double x = coordinate(bridge, pos, "getX");
-            double y = coordinate(bridge, pos, "getY");
-            double z = coordinate(bridge, pos, "getZ");
+            double x = coordinate(bridge, pos, "x");
+            double y = coordinate(bridge, pos, "y");
+            double z = coordinate(bridge, pos, "z");
             if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(z)) {
+                if (System.getProperty("nocturne.ui.debug") != null) {
+                    long now = System.currentTimeMillis();
+                    if (now - diagLoggedAt > 1000L) {
+                        diagLoggedAt = now;
+                        System.out.println("[nocturne] StorageESP: coordinate read failed on "
+                                + blockEntity.getClass().getName() + " pos=" + pos.getClass().getName());
+                    }
+                }
                 return false;
             }
             coords = new double[]{x, y, z};
@@ -275,6 +298,15 @@ public final class StorageEspModule extends Module implements WorldOverlay {
         }
         projection.project(coords[0] + 0.5d, coords[1] + 0.5d, coords[2] + 0.5d, point);
         if (!point.visible) {
+            if (System.getProperty("nocturne.ui.debug") != null) {
+                long now = System.currentTimeMillis();
+                if (now - diagLoggedAt > 1000L) {
+                    diagLoggedAt = now;
+                    System.out.println("[nocturne] StorageESP: not visible at ("
+                            + coords[0] + "," + coords[1] + "," + coords[2] + ") ready="
+                            + projection.isReady());
+                }
+            }
             return false;
         }
         int argb = colorOf(kind);
@@ -284,9 +316,15 @@ public final class StorageEspModule extends Module implements WorldOverlay {
         return true;
     }
 
-    /** 读方块坐标的一个分量；缺成员时返回 {@code NaN}。 */
+    /**
+     * 读方块坐标的一个分量；缺成员时返回 {@code NaN}。
+     *
+     * <p>走 {@code Vec3i} 的**字段**而不是 {@code BlockPos#getX()} 方法：后者在 1.16.5 里有两个
+     * 重载（实例 {@code getX()} 与静态打包 {@code getX(long)}），映射表只记一个，选中静态版时
+     * 调用会静默失败——真机表现就是容器框一个都画不出来（`visible=0`）。
+     */
     private static double coordinate(GameBridge bridge, Object pos, String member) {
-        Object value = bridge.callMapped(pos, ClassType.BLOCK_POS, member);
+        Object value = bridge.readField(pos, ClassType.VEC3_I, member);
         return value instanceof Number ? ((Number) value).doubleValue() : Double.NaN;
     }
 

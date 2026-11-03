@@ -74,6 +74,9 @@ public final class StorageEspModule extends Module implements WorldOverlay {
     private boolean chunkGateLogged;
     /** 上一帧画出来的容器数（HUD/诊断用）。 */
     private int lastVisibleCount;
+    /** 方块实体 → 是否陷阱箱；弱引用，区块卸载后自动回收。 */
+    private final java.util.WeakHashMap<Object, Boolean> trappedCache =
+            new java.util.WeakHashMap<Object, Boolean>();
 
     /** 容器种类：决定用哪个开关与哪个配色。 */
     private enum Kind {
@@ -275,7 +278,7 @@ public final class StorageEspModule extends Module implements WorldOverlay {
      *
      * <p>顺序要紧：投掷器继承发射器，必须先判投掷器，否则投掷器会被算成发射器。
      */
-    private static Kind kindOf(GameBridge bridge, Object level, Object blockEntity) {
+    private Kind kindOf(GameBridge bridge, Object level, Object blockEntity) {
         if (isInstance(bridge, ClassType.ENDER_CHEST_BLOCK_ENTITY, blockEntity)) {
             return Kind.ENDER_CHEST;
         }
@@ -310,7 +313,20 @@ public final class StorageEspModule extends Module implements WorldOverlay {
      *
      * <p>方块读不到的版本（1.13.2/1.14.x 的映射面缺失，或未进世界）按普通箱处理——不猜。
      */
-    private static boolean isTrappedChest(GameBridge bridge, Object level, Object blockEntity) {
+    private boolean isTrappedChest(GameBridge bridge, Object level, Object blockEntity) {
+        // 方块实体的方块状态在它自己存活期间不会变（箱子不会自己变成陷阱箱），而 getBlockPos +
+        // getBlockState + getBlock 是每帧每箱子三次反射。按方块实体身份缓存，弱引用随区块卸载回收。
+        Boolean cached = trappedCache.get(blockEntity);
+        if (cached != null) {
+            return cached.booleanValue();
+        }
+        boolean trapped = computeTrappedChest(bridge, level, blockEntity);
+        trappedCache.put(blockEntity, Boolean.valueOf(trapped));
+        return trapped;
+    }
+
+    /** 首次判定一个箱子是否为陷阱箱（结果由 {@link #isTrappedChest} 缓存）。 */
+    private static boolean computeTrappedChest(GameBridge bridge, Object level, Object blockEntity) {
         Class<?> chestBlock = resolveMapped(bridge, ClassType.CHEST_BLOCK, null);
         if (chestBlock == null) {
             return false;

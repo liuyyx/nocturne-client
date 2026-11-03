@@ -296,23 +296,44 @@ public final class StorageEspModule extends Module implements WorldOverlay {
             coords = new double[]{x, y, z};
             posCache.put(blockEntity, coords);
         }
-        projection.project(coords[0] + 0.5d, coords[1] + 0.5d, coords[2] + 0.5d, point);
-        if (!point.visible) {
-            if (System.getProperty("nocturne.ui.debug") != null) {
-                long now = System.currentTimeMillis();
-                if (now - diagLoggedAt > 1000L) {
-                    diagLoggedAt = now;
-                    System.out.println("[nocturne] StorageESP: not visible at ("
-                            + coords[0] + "," + coords[1] + "," + coords[2] + ") ready="
-                            + projection.isReady());
-                }
+        // 按方块的 1×1×1 AABB 投影取屏幕包围盒（对齐 eps-plus 的 BlockESP 思路）：
+        // 固定像素方块不随距离变化，远处一堆容器会挤成同样大小的点；AABB 投影天然近大远小。
+        float left = Float.POSITIVE_INFINITY;
+        float top = Float.POSITIVE_INFINITY;
+        float right = Float.NEGATIVE_INFINITY;
+        float bottom = Float.NEGATIVE_INFINITY;
+        for (int vertex = 0; vertex < 8; vertex++) {
+            double wx = coords[0] + ((vertex & 1) == 0 ? 0d : 1d);
+            double wy = coords[1] + ((vertex & 2) == 0 ? 0d : 1d);
+            double wz = coords[2] + ((vertex & 4) == 0 ? 0d : 1d);
+            projection.project(wx, wy, wz, point);
+            if (point.depth <= 0d) {
+                continue;
             }
+            if (point.x < left) {
+                left = point.x;
+            }
+            if (point.y < top) {
+                top = point.y;
+            }
+            if (point.x > right) {
+                right = point.x;
+            }
+            if (point.y > bottom) {
+                bottom = point.y;
+            }
+        }
+        if (left > right || top > bottom) {
+            return false;
+        }
+        float width = right - left;
+        float height = bottom - top;
+        if (width < 1f || height < 1f) {
             return false;
         }
         int argb = colorOf(kind);
-        float size = BOX_HALF * 2f;
-        draw.rect(point.x - BOX_HALF, point.y - BOX_HALF, size, size, argb);
-        draw.outline(point.x - BOX_HALF, point.y - BOX_HALF, size, size, BOX_THICKNESS, argb);
+        draw.rect(left, top, width, height, argb);
+        draw.outline(left, top, width, height, BOX_THICKNESS, argb);
         return true;
     }
 

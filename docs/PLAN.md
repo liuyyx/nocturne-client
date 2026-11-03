@@ -53,7 +53,7 @@
 | P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **仍打开**（1.21.11 文字黑块/旧后端未收尾）；C（26.x extractor）✅ 真机，26.3 运行中 attach 也已复验 | B 未关闭 |
 | P4-D 绘制层重构 | D1 完成；D2 已重新接线并在 26.3 真机可见；1.20.1 HUD 钩子/末尾注入已修，但合成键盘无法验收 GUI；D3 已落地，1.16.5 真机验收后**改为默认 gl-core**（`gui-stack` 观感粗糙，降为兜底；双端钩子 + PoseStack 文本缩放 + RenderSystem 裁剪回退仍保留）；D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
 | P5 输入 | 1.8.9 / 26.3 真机；GUI 打开时 1.8.9 压 `inGameHasFocus`、26.3 屏蔽 `MouseHandler#grabMouse`；SDL 滚轮已落地；1.8.9/1.16.5 滚轮与真实点击仍待真人 | 部分 |
-| P6 模块 | 22 个注册模块；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
+| P6 模块 | 21 个注册模块（Chams 与 Xray 因渲染拦截点未接入而暂不注册，避免"开了没反应"）；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
 | P7 自实现 attach | Windows 真机；Linux/macOS 已实现未实机；`PayloadPack` 已接生产 | ✅ 已完成（平台待验） |
 | P8 模组形态 | Fabric/Forge/NeoForge 入口 | 未开始（依赖 P4-D） |
 
@@ -176,6 +176,35 @@
 真机状态（2026-11-03，1.16.5 + LWJGL3，`gui-stack`）：面板可见、三列布局正常、中文文字正常（字号按 `size/9` 缩放）、开关点击生效。
 日志证据：`gui-stack bind: dkv fill=a text=b scissor=rendersystem poseScale=true`、`extractor backend first frame`、`text width probe: ... scaled=true`。
 两条关键修复：① 1.16–1.19 绘制入口改「开头捕获 + 末尾无参消费」（末尾 `aload` 形参槽会 VerifyError）；② `ClassType.POSE_STACK` 绑定 `pushPose/popPose/scale`，文本度量与绘制同源缩放。
+
+### D3.1 渲染性能与状态收尾（2026-11-03，1.16.5 gl-core 真机）
+
+开「透视框 / NameTags / 容器透视」时游戏卡顿、服务端 tick 掉队、画面异常。十个并行审计 +
+真机定位后落地的修复：
+
+| 处 | 问题 | 修法 | 证据 |
+|---|---|---|---|
+| `EspModule` / `ItemEspModule` / `StorageEspModule` / `ChamsModule` | 每帧每实体手写「候选名逐个 `Class.forName`」循环，未命中候选每次抛异常 | 改走 `GameBridge.type()` 的 `typeCache`（桥解析失败才回退原循环，覆盖 Fabric 隔离加载器） | 代码 + 编译 |
+| `CameraState` | `getEyePosition(0.0F)`、`yRot/xRot` 直接取 tick 末值，框以 20Hz 阶梯相对游戏画面甩动 | 从 `Minecraft#pausePartialTick` 取插值量（映射表新增），眼位传真实 partialTicks，朝向 `yRotO + (yRot-yRotO)*pt` | `--check` 全绿；1.16–1.20.1 有该字段，1.8.9/1.21+ 无则退回 0 |
+| `ModernRenderer` 几何 | 一次 `outline` = 4 次、`roundedRect` = 7 次 `glBufferData`+`drawArrays` | 同色合并到 16K float 缓冲；`text`/`texturedQuad`/`drawPlayer`/`pushClip`/`popClip`/`uploadTexture`/`endFrame` 强制 flush | `draw/s=1056 vertices/s=68904`（120fps → 每帧 8.8 次下发，合批前约 95 次） |
+| `ModernRenderer` 文字 | 每条文字 `useProgram(0)+bindVertexArray(0)` 再抢回 | 让出后不立刻抢回，由下一条几何/纹理/预览/帧末统一 `reclaimFromText()` | 主菜单与叠加层界面逐像素正常 |
+| `StorageEspModule` | 陷阱箱判定每帧每箱子 3 次反射 | 按方块实体身份缓存到 `WeakHashMap`（随区块卸载回收） | 编译 + 单测 |
+| `NameTagsModule` | `Player/Animal/Mob Max Distance` 三个设置**从未被读取** | 按三者最大值裁剪（0 仍表示不限），`label()` 复用已读坐标 | 代码 |
+| `FullBrightModule` | Gamma 启用 → 切 Night Vision → 禁用：只摘药水就 return，gamma 永停在模块值 | 两个分支都走 `restoreOriginal()` | 代码 |
+| `ChamsModule` | 只做门检查，双 pass 重绘未接入 → 空转开关 | 按 Xray 先例从注册表移除（类与门逻辑保留） | 真机 `modules=21` |
+
+**已知结构性限制**：1.16.5 的 client jar **没有 `GlStateManager`**（只有
+`com.mojang.blaze3d.systems.RenderSystem`），而 `RenderSystem` 的 shader 管理是
+`setShader(ShaderInstance)`，没有 `setProgram(int)`。因此自建 GLSL 程序的绑定**无法同步到
+游戏的缓存**——`gl-core` 上 `useProgram` 只能裸调，游戏下次设置同一 program 时会被缓存判为
+「已绑定」而跳过。缓解：游戏每帧自己会切换 shader，污染会被覆盖。另：`endFrame` 曾尝试
+「把 program/VAO/纹理恢复成进入前的原值」，实测在游戏 VAO 上 `glBindBuffer` 会改写它自己的
+ARRAY_BUFFER 绑定，直接刷 `GL_INVALID_OPERATION` 并让服务端掉 100+ tick，已回退为解绑到 VAO 0。
+
+**帧驱动**：1.16.5 实测 `frameHook=0 drawHook=120` —— `glfwSwapBuffers` 钩子没有触发，
+实际由绘制钩子单驱动；`NocturneRuntime` 仍保留 `onFrame`/`onDrawFrame` 拆分与
+`contextDriven` 判定，供 26.x（无帧钩子）与双驱动栈使用。诊断开关 `-Dnocturne.debug.frames`
+打印每秒驱动次数与来源。
 
 ### D4 收尾
 

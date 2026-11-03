@@ -292,7 +292,7 @@
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`（旧界面）；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
-| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3；**默认 `backend=gl-core`**（2026-11-03 起：`gui-stack` 观感明显粗糙——圆角 1px 阶梯、位图字体缩放方块字，因此降为 gl-core 不可用时的兜底，`-Dnocturne.ui.backend=game` 可强制）；`gui-stack` 绑定亦已验收（`dkv fill=a text=b scissor=rendersystem poseScale=true`）） | ✅ | ✅ 已产出 | ✅ 可见可点（`backend=gl-core`；滚轮经 `MouseHandler#onScroll` 织入 `ScrollState`，界面开着时物品栏不再跟着滚；点击不再穿透挥手臂） |
+| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3；**默认 `backend=gl-core`**；D3.1 性能收尾后：同色几何合批 `draw/s=1056`、相机按 partialTicks 插值、类解析走桥缓存、陷阱箱判定按方块实体缓存）（2026-11-03 起：`gui-stack` 观感明显粗糙——圆角 1px 阶梯、位图字体缩放方块字，因此降为 gl-core 不可用时的兜底，`-Dnocturne.ui.backend=game` 可强制）；`gui-stack` 绑定亦已验收（`dkv fill=a text=b scissor=rendersystem poseScale=true`）） | ✅ | ✅ 已产出 | ✅ 可见可点（`backend=gl-core`；滚轮经 `MouseHandler#onScroll` 织入 `ScrollState`，界面开着时物品栏不再跟着滚；点击不再穿透挥手臂） |
 | 26.2 | ✅ **真机已实测**（修复后） | ✅ 帧钩子按设计不注册（GLFW 交换点只驱动输入轮询） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor; input=glfw`；`GuiDrawHook` 织入成功；截图 `docs/research/fatality-26.2-fixed.png`） |
 | 26.2（Vulkan） | ⏳ | 未验 | ✅ 已产出 | ⏳ 待真机（26.2 的图形 API 需在游戏设置里手动切换，本次实测的是 OpenGL 路径） |
 | 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转；2026-10-29 原版 26.3 复验浮点字形矩阵与线性采样生效） |

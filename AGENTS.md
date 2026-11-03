@@ -136,6 +136,13 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
   lambda 是不同对象，只能靠这个 handle `unsubscribe`。
 - 渲染模块**不走 EventBus 画图**：在 `GuiOverlay.drawFrame` 的 `beginFrame()`/`endFrame()` 之间调用
   `WorldOverlay.drawWorldOverlay(OverlayDraw, WorldProjection)`（`RenderEvent` 时后端还没准备好）。
+- **每帧每实体禁止手写 `Class.forName` 候选循环**：一律走 `GameBridge.type(ClassType)`（内部有
+  `typeCache`，只缓存成功结果）。未命中的候选每次都会抛异常，几百个实体 × 每帧就是上千次类加载
+  查询——1.16.5 真机表现为「一开透视框，服务端 tick 掉队、随后追赶」，像游戏加速。
+- **帧驱动有两入口**：`NocturneRuntime.onFrame()`（帧交换点，权威）与 `onDrawFrame()`（GUI 绘制钩子）。
+  游戏绘制 API 后端（`gui-graphics`/`gui-stack`/`gui-extractor`）的上下文只在绘制钩子那一次调用内
+  有效，所以 `OverlayBootstrap` 会置 `setContextDriven(true)`；自绘 GL 后端在帧钩子已驱动时
+  `onDrawFrame()` 直接返回，避免同帧两遍。诊断开关 `-Dnocturne.debug.frames` 打印每秒驱动次数与来源。
 
 ### 4.6 自销毁
 
@@ -161,6 +168,15 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 实现 `WorldOverlay`，在 `onEnable` 订阅 `RenderEvent`（并在 `onTick` 里自愈重订阅），
 用 `OverlayDraw` 画、用 `WorldProjection` 把世界坐标投影成屏幕逻辑像素。
 需要实体渲染 pass / 方块渲染拦截的效果（Chams、Xray）在 2D 覆盖层下**做不了**——这是能力边界，不是没做。
+**没接入的模块不要注册**：注册出去的「开了没反应」开关比不提供更糟（Chams/Xray 都是这个处理）。
+
+`ModernRenderer`（gl-core）的两条硬约束：
+1. 同色几何走合并缓冲（`batchBuffer`），任何会改 GL 状态或改变层级的调用前必须 `flushBatch()`——
+   `text` / `texturedQuad` / `drawPlayer` / `pushClip` / `popClip` / `uploadTexture` / `endFrame`。
+   漏一个的后果是纯色几何被裁进新矩形、或压在文字下面。
+2. **不要试图把 program/VAO/纹理「恢复成进入前的原值」**：在游戏自己的 VAO 上 `glBindBuffer` 会改写
+   它自己的 ARRAY_BUFFER 绑定，1.16.5 实测直接刷 `GL_INVALID_OPERATION: Invalid VAO/VBO/pointer usage`
+   并让服务端掉 100+ tick。只解绑到 VAO 0（VAO 0 是独立的默认状态，不触碰游戏 VAO 内容）。
 
 ### 5.3 新增映射需求
 

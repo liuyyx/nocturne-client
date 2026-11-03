@@ -355,6 +355,18 @@
                         "forge": "Lnet/minecraft/client/GameSettings;"
                     }
                 },
+                "pausePartialTick": {
+                    "names": {
+                        "vanilla": "ab",
+                        "fabric": "field_1741",
+                        "forge": "field_193996_ah"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
                 "player": {
                     "names": {
                         "vanilla": "i",

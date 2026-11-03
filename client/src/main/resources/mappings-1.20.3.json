@@ -476,6 +476,20 @@
                         "neoforge": "Lnet/minecraft/client/Options;"
                     }
                 },
+                "pausePartialTick": {
+                    "names": {
+                        "vanilla": "aU",
+                        "fabric": "field_1741",
+                        "forge": "f_91013_",
+                        "neoforge": "pausePartialTick"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
                 "player": {
                     "names": {
                         "vanilla": "s",

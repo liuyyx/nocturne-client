@@ -209,6 +209,9 @@
                         "forge": "field_71474_y"
                     }
                 },
+                "pausePartialTick": {
+                    "absent": true
+                },
                 "player": {
                     "names": {
                         "vanilla": "h",

@@ -47,6 +47,17 @@ public final class CameraState {
         if (player == null) {
             return false;
         }
+        Object minecraft = bridge.minecraft();
+        // 渲染插值量：游戏按 partialTicks 在「上一个 tick」与「当前 tick」之间插值渲染，覆盖层若直接用
+        // tick 末值，60-120fps 的画面里框会以 20Hz 阶梯抖动（真机表现就是「框在甩、像加速」）。
+        // 1.13–1.20 从 Minecraft.pausePartialTick 取；更老/更新的版本拿不到就退回 0（等同 tick 末值）。
+        float partialTicks = 0f;
+        if (minecraft != null) {
+            Double raw = number(bridge.readField(minecraft, ClassType.MINECRAFT, "pausePartialTick"));
+            if (raw != null && raw.doubleValue() >= 0d && raw.doubleValue() <= 1d) {
+                partialTicks = raw.floatValue();
+            }
+        }
         Object eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition");
         if (!bridge.isInstance(eye, ClassType.VEC3)) {
             // 1.8.9 没有零参 getEyePosition；GameBridge 的 arity 回退可能命中同名的无参方法，
@@ -56,9 +67,9 @@ public final class CameraState {
         if (eye == null) {
             // 1.17+ 是零参 getEyePosition()；1.8.9–1.16.5 的签名带 partialTicks
             // （SRG func_174824_e(F) / MCP getPositionEyes(float)）。两形态各试一次——只试零参会让
-            // A/B 代覆盖层整帧不画。插值量取 0 等价于"就用当前位置"，覆盖物不会因此画偏。
+            // A/B 代覆盖层整帧不画。插值量必须传真实值，否则眼位比画面慢半个 tick。
             eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition",
-                    Float.valueOf(0.0F));
+                    Float.valueOf(partialTicks));
         }
         if (!bridge.isInstance(eye, ClassType.VEC3)) {
             return missing(bridge, "Entity#getEyePosition");
@@ -74,7 +85,15 @@ public final class CameraState {
         if (yaw == null || pitch == null) {
             return missing(bridge, "Entity#yRot/xRot");
         }
-        Object minecraft = bridge.minecraft();
+        // 朝向同样要插值：游戏用 yRotO/xRotO 与当帧 yRot/xRot 之间按 partialTicks 插值渲染。
+        Double yawOld = number(bridge.readField(player, ClassType.ENTITY, "yRotO"));
+        Double pitchOld = number(bridge.readField(player, ClassType.ENTITY, "xRotO"));
+        if (yawOld != null && pitchOld != null && partialTicks > 0f) {
+            yaw = Double.valueOf(yawOld.doubleValue()
+                    + (yaw.doubleValue() - yawOld.doubleValue()) * partialTicks);
+            pitch = Double.valueOf(pitchOld.doubleValue()
+                    + (pitch.doubleValue() - pitchOld.doubleValue()) * partialTicks);
+        }
         Object options = minecraft == null
                 ? null
                 : bridge.readField(minecraft, ClassType.MINECRAFT, "options");

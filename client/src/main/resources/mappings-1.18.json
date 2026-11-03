@@ -416,6 +416,18 @@
                         "forge": "Lnet/minecraft/client/Options;"
                     }
                 },
+                "pausePartialTick": {
+                    "names": {
+                        "vanilla": "aM",
+                        "fabric": "field_1741",
+                        "forge": "f_91013_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
                 "player": {
                     "names": {
                         "vanilla": "s",

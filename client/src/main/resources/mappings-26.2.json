@@ -325,6 +325,9 @@
                         "neoforge": "options"
                     }
                 },
+                "pausePartialTick": {
+                    "absent": true
+                },
                 "player": {
                     "names": {
                         "vanilla": "player",

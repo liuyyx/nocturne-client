@@ -476,6 +476,9 @@
                         "neoforge": "Lnet/minecraft/client/Options;"
                     }
                 },
+                "pausePartialTick": {
+                    "absent": true
+                },
                 "player": {
                     "names": {
                         "vanilla": "t",

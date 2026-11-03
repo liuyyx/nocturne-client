@@ -454,3 +454,8 @@ net/minecraft/client/gui/Gui
 # 1.8.9 的等价物是 Minecraft.inGameHasFocus（见 aliases-1.8.9.toml）；
 # 现代版本用 MouseHandler.grabMouse()/releaseMouse()（上面已列）。
 net/minecraft/client/Minecraft#inGameHasFocus
+
+# 渲染插值：覆盖层（ESP/NameTags/Tracers）必须按 partialTicks 取眼位与朝向，
+# 否则每帧用的是上一个 tick 的边界值，60-120fps 的画面里框会以 20Hz 阶梯抖动。
+# 1.13+ 用 Minecraft.pausePartialTick；1.8.9-1.12.2 用 Timer.renderPartialTicks。
+net/minecraft/client/Minecraft#pausePartialTick

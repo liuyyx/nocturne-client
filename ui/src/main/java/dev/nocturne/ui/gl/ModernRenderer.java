@@ -111,6 +111,13 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     private float[] projection = new float[16];
     /** 状态探针是否已打印（一次即可区分"查询通道可用"与"只能设回已知值"）。 */
     private boolean stateProbeLogged;
+
+    /** 同色几何的合并缓冲：一次 drawSolid 一个 glBufferData 时，一个 outline 就是 4 次上传。 */
+    private float[] batchBuffer = new float[16 * 1024];
+    /** batchBuffer 中已累积的 float 数。 */
+    private int batchCount;
+    /** 当前批次颜色（ARGB）；{@code 0} 表示批次为空。 */
+    private int batchColor;
     /** 进入前绑定的着色器程序；{@code -1} 表示查询不可用。 */
     private int programBefore = -1;
     /** 进入前绑定的顶点数组对象。 */
@@ -444,6 +451,8 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     @Override
     public boolean drawPlayer(Object player, float left, float top, float right, float bottom,
                               float mouseX, float mouseY) {
+        // 3D 预览自己会切 program/VAO/纹理：批里的几何先画掉。
+        flushBatch();
         if (!ready || !stateSaved || bridge == null || player == null
                 || right - left < 16.0f || bottom - top < 24.0f) {
             return false;
@@ -741,6 +750,8 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
             gl.disableScissorTest();
             clipDepth = 0;
         }
+        // 帧末必须把批次画掉：漏掉就是整屏纯色消失。
+        flushBatch();
         if (ready) {
             // 解绑到 0（VAO 0 是独立的默认状态，不会改写游戏 VAO 的内容）。
             // 曾经尝试「恢复到进入前的绑定」，但游戏 VAO 1 上的 glBindBuffer 会改写它自己的
@@ -860,6 +871,8 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
 
     @Override
     public int uploadTexture(int id, int width, int height, int[] argb) {
+        // 上传纹理要改纹理绑定与解包状态，先画掉批里的几何。
+        flushBatch();
         if (!gl.hasTextures() || width <= 0 || height <= 0 || argb == null) {
             return id;
         }
@@ -907,6 +920,7 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     @Override
     public void texturedQuad(int texture, float x, float y, float width, float height,
                              float u0, float v0, float u1, float v1, int argb) {
+        flushBatch();
         if (!ready || texture <= 0 || width <= 0f || height <= 0f || (argb >>> 24) == 0) {
             return;
         }
@@ -941,6 +955,8 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
 
     @Override
     public void pushClip(float x, float y, float width, float height) {
+        // 裁剪是 GL 状态切换：先画掉已累积的几何，否则它会被裁到新矩形里。
+        flushBatch();
         if (!gl.hasScissor()) {
             return;
         }
@@ -965,6 +981,7 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
 
     @Override
     public void popClip() {
+        flushBatch();
         if (clipDepth == 0) {
             return;
         }
@@ -1082,6 +1099,39 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
      * 因此无需像旧实现那样每次绘制都 {@code new float[length]} 复制一份，避免逐帧短命数组。
      */
     private void drawSolid(float[] data, int length, Color color) {
+        int vertices = length / FLOATS_PER_VERTEX;
+        if (vertices == 0) {
+            return;
+        }
+        int argb = color.argb; // Color 把打包值暴露成字段而不是方法
+        // 同色几何先攒起来：一次 outline = 4 条边、一次 roundedRect = 3 条 + 4 个圆角，
+        // 每条都单独 glBufferData + drawArrays 时，实体一多就是每帧上千次 GL 调用。
+        if (batchColor != 0 && (batchColor != argb || batchCount + length > batchBuffer.length)) {
+            flushBatch();
+        }
+        if (length > batchBuffer.length) {
+            // 单个图元就超过整个缓冲：只能立刻画，不进批。
+            drawSolidNow(data, length, color, argb);
+            return;
+        }
+        System.arraycopy(data, 0, batchBuffer, batchCount, length);
+        batchCount += length;
+        batchColor = argb;
+    }
+
+    /** 把已累积的同色几何一次性上传并绘制。 */
+    private void flushBatch() {
+        if (batchCount == 0) {
+            return;
+        }
+        Color color = Color.of(batchColor);
+        drawSolidNow(batchBuffer, batchCount, color, batchColor);
+        batchCount = 0;
+        batchColor = 0;
+    }
+
+    /** 立即上传并绘制一段纯色几何（批处理与非批处理共用）。 */
+    private void drawSolidNow(float[] data, int length, Color color, int argb) {
         int vertices = length / FLOATS_PER_VERTEX;
         if (vertices == 0) {
             return;

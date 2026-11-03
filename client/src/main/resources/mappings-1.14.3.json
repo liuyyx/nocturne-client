@@ -216,6 +216,9 @@
                         "fabric": "Lnet/minecraft/class_315;"
                     }
                 },
+                "pausePartialTick": {
+                    "absent": true
+                },
                 "player": {
                     "names": {
                         "vanilla": "j",

@@ -467,6 +467,10 @@ public final class GuiOverlay implements FrameListener {
         // 滚轮先于 Esc 派发：Esc 会在本帧关闭界面，若先处理 Esc，这一帧取出的滚轮增量就再也
         // 没有接收方，被静默丢弃——玩家看到的是「界面明明还开着，滚轮这一下没反应」。
         if (scroll != 0d) {
+            if (!scrollDispatchLogged) {
+                scrollDispatchLogged = true;
+                System.out.println("[nocturne] gui wheel dispatch: " + scroll);
+            }
             gui.mouseScrolled(mx, my, scroll);
         }
 
@@ -654,6 +658,9 @@ public final class GuiOverlay implements FrameListener {
 
     /** 原生 Screen 探针只打一次：读不到字段会让 GUI 永不关闭，输入被永久短路。 */
     private boolean nativeScreenProbeLogged;
+
+    /** 滚轮派发诊断只打一次：区分「增量没进来」和「进来了但界面没接住」。 */
+    private boolean scrollDispatchLogged;
 
     /** @return 游戏当前是否显示原生 Screen；桥不可用时按没有处理，不阻断自绘 GUI。 */
     private boolean hasNativeScreen() {

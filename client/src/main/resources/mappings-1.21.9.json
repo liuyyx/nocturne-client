@@ -587,6 +587,20 @@
                 "onPress": {
                     "absent": true
                 },
+                "onScroll": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1598",
+                        "forge": "m_91526_",
+                        "neoforge": "onScroll"
+                    },
+                    "signatures": {
+                        "vanilla": "(JDD)V",
+                        "fabric": "(JDD)V",
+                        "forge": "(JDD)V",
+                        "neoforge": "(JDD)V"
+                    }
+                },
                 "releaseMouse": {
                     "names": {
                         "vanilla": "j",

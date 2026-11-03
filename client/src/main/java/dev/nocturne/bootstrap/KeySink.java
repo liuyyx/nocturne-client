@@ -24,6 +24,8 @@ public final class KeySink {
     private static final Object SCROLL_LOCK = new Object();
     /** 自上次取走以来累积的滚轮增量；放这里是因为本类全局只有 bootstrap 一份。 */
     private static double pendingScroll;
+    /** 游戏自己的滚轮入口是否已被织入累加钩子（是则叠加层不得再顶掉 GLFW 回调）。 */
+    private static volatile boolean scrollHookActive;
 
     private KeySink() {
     }
@@ -115,5 +117,21 @@ public final class KeySink {
         synchronized (SCROLL_LOCK) {
             pendingScroll = 0d;
         }
+    }
+
+    /**
+     * 标记游戏自己的滚轮入口已被织入累加钩子。
+     *
+     * <p>置位后叠加层不再注册 GLFW 滚轮回调：{@code glfwSetScrollCallback} 是单槽位接口，
+     * LWJGL 3.2 上它还不返回旧回调，顶掉之后游戏自己的 {@code MouseHandler#onScroll} 就再也不会
+     * 被调用——滚轮会彻底失效（1.16.5 真机实测）。
+     */
+    public static void markScrollHook() {
+        scrollHookActive = true;
+    }
+
+    /** @return 游戏自己的滚轮入口是否已被织入累加钩子 */
+    public static boolean scrollHookActive() {
+        return scrollHookActive;
     }
 }

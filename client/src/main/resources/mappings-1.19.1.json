@@ -512,6 +512,18 @@
                         "forge": "(JIII)V"
                     }
                 },
+                "onScroll": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1598",
+                        "forge": "m_91526_"
+                    },
+                    "signatures": {
+                        "vanilla": "(JDD)V",
+                        "fabric": "(JDD)V",
+                        "forge": "(JDD)V"
+                    }
+                },
                 "releaseMouse": {
                     "names": {
                         "vanilla": "j",

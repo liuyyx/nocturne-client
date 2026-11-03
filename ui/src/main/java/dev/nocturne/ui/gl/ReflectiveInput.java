@@ -489,6 +489,12 @@ public final class ReflectiveInput implements InputSource {
         if (glfwSetScrollCallback == null || scrollCallbackType == null || glfwWindow == 0L) {
             return;
         }
+        // 游戏自己的滚轮入口已经织入了累加钩子时不要再注册：glfwSetScrollCallback 是单槽位接口，
+        // LWJGL 3.2 上还不返回旧回调，顶掉之后 MouseHandler#onScroll 永不调用、滚轮彻底失效。
+        if (dev.nocturne.client.runtime.ScrollState.gameHookPresent()) {
+            System.out.println("[nocturne] scroll callback skipped (game hook feeds ScrollState)");
+            return;
+        }
         try {
             Object callback = Proxy.newProxyInstance(
                     scrollCallbackType.getClassLoader(),

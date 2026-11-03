@@ -931,6 +931,14 @@ public final class NocturneAgent {
         String grabMouse = mappedMethodName(dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
                 "grabMouse", "grabMouse");
         registerInputBlock(instrumentation, asmLoader, mouseHandler, grabMouse, "()V");
+        // 滚轮：界面开着时游戏不该再自己处理（否则滚轮会顺带切快捷栏），同时把增量交给界面。
+        // GLFW 世代只从这里拿得到滚轮——没有轮询接口，SDLEventHandler 那条路也不存在。
+        // 顺序有意义：先注册短路（入口判定），再挂累加钩子（后注册的插在 visitCode 更前面，
+        // 先拿到增量再决定是否短路）。
+        String onScroll = mappedMethodName(dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
+                "onScroll", "onScroll");
+        registerInputBlock(instrumentation, asmLoader, mouseHandler, onScroll, MOUSE_SCROLL_DESCRIPTOR);
+        installMouseWheelHook(instrumentation, asmLoader, mouseHandler, onScroll);
         // 旧世代（1.8.9 / 1.12.2）没有上面那些类名：真正把指针抓走的是 Minecraft#setIngameFocus
         // ——点击游戏窗口时它重新捕获指针并把光标拽到屏幕中心。界面开着时这条必须禁掉，
         // 否则"点一下界面，鼠标就被游戏抢走并跳到正中"。
@@ -1461,9 +1469,73 @@ public final class NocturneAgent {
             }
         }
         log("scroll hook registered on " + WHEEL_EVENT_CLASS + "." + WHEEL_EVENT_METHOD);
-        // 界面开着时游戏不该再自己处理滚轮（否则滚轮会顺带切快捷栏）。
-        registerInputBlock(instrumentation, asmLoader, "net.minecraft.client.MouseHandler", "onScroll",
-                MOUSE_SCROLL_DESCRIPTOR);
+    }
+
+    /**
+     * 给 GLFW 世代的 {@code MouseHandler#onScroll(JDD)V} 挂滚轮累加钩子。
+     *
+     * <p>为什么需要它：{@code ReflectiveInput} 那条路要顶掉 GLFW 回调，而回调是单槽位的——顶掉之后
+     * 只要有一条路径没接住（不同 LWJGL 版本的回调包装方式不一样），滚轮就彻底消失。游戏自己的
+     * {@code onScroll} 是必经之路，挂在这里不受绑定版本影响。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader       内嵌 ASM 子加载器
+     * @param targetClass     运行期类名（已按映射表解析，可能是混淆名）
+     * @param method          运行期方法名（已按映射表解析）
+     */
+    private static void installMouseWheelHook(Instrumentation instrumentation,
+                                              EmbeddedAsmLoader asmLoader,
+                                              String targetClass, String method) {
+        if (isSdlStack(instrumentation, gameClassLoader(instrumentation))) {
+            // SDL 世代的增量由 SDLEventHandler 钩子提供；这里再挂一次会双份累加。
+            return;
+        }
+        ClassFileTransformer transformer = asmLoader.createScrollHookTransformer(
+                targetClass, method, MOUSE_SCROLL_DESCRIPTOR,
+                SCROLL_HOOK_OWNER, "onMouseWheel", 2);
+        if (transformer == null) {
+            return;
+        }
+        try {
+            instrumentation.addTransformer(transformer, true);
+        } catch (Throwable t) {
+            log("could not register mouse wheel hook: " + t);
+            return;
+        }
+        Class<?> target = null;
+        try {
+            ClassLoader gameLoader = gameClassLoader(instrumentation);
+            if (gameLoader != null) {
+                target = Class.forName(targetClass, false, gameLoader);
+            }
+        } catch (Throwable ignored) {
+            // 类还没加载：交给新加载路径的转换器。
+        }
+        if (target != null) {
+            try {
+                instrumentation.retransformClasses(target);
+            } catch (Throwable t) {
+                log("retransform " + targetClass + " for wheel hook failed: " + t);
+            }
+        }
+        boolean patched = false;
+        try {
+            java.lang.reflect.Method probe = transformer.getClass().getMethod("patched");
+            patched = Boolean.TRUE.equals(probe.invoke(transformer));
+        } catch (Throwable ignored) {
+            // 探查失败不影响结论，日志里保持 false 即可。
+        }
+        log("mouse wheel hook registered on " + targetClass + "." + method
+                + " patched=" + patched);
+        if (patched) {
+            // 让叠加层知道增量已经由游戏自己的入口送进来，别再顶掉 GLFW 回调——
+            // 那个接口单槽位，顶掉之后 onScroll 就再也不会被调用（1.16.5 实测滚轮彻底失效）。
+            try {
+                dev.nocturne.client.runtime.ScrollState.markGameHook();
+            } catch (Throwable ignored) {
+                // 桥缺失：叠加层仍会走自己的 GLFW 回调路径，不影响启动。
+            }
+        }
     }
 
     /**

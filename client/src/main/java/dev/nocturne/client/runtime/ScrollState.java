@@ -40,4 +40,19 @@ public final class ScrollState {
     public static void reset() {
         KeySink.resetScroll();
     }
+
+    /**
+     * 标记游戏自己的滚轮入口已被织入累加钩子（由织入方调用）。
+     *
+     * <p>置位后叠加层不再注册 GLFW 滚轮回调：那个接口是单槽位的，顶掉之后游戏自己的
+     * {@code MouseHandler#onScroll} 再也不会被调用，滚轮会彻底失效。
+     */
+    public static void markGameHook() {
+        KeySink.markScrollHook();
+    }
+
+    /** @return 游戏自己的滚轮入口是否已被织入累加钩子 */
+    public static boolean gameHookPresent() {
+        return KeySink.scrollHookActive();
+    }
 }

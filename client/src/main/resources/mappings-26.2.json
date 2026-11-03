@@ -389,6 +389,14 @@
                 "onPress": {
                     "absent": true
                 },
+                "onScroll": {
+                    "names": {
+                        "vanilla": "onScroll",
+                        "fabric": "onScroll",
+                        "forge": "onScroll",
+                        "neoforge": "onScroll"
+                    }
+                },
                 "releaseMouse": {
                     "names": {
                         "vanilla": "releaseMouse",

@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@link ScrollState} 的契约：累加、一次性取走、脏值过滤。
@@ -51,5 +53,18 @@ class ScrollStateTest {
         ScrollState.accumulate(1d);
 
         assertEquals(1d, ScrollState.take(), 0.0001);
+    }
+
+    /**
+     * 织入标记必须转发到只存在于 bootstrap 的 {@code KeySink}。
+     *
+     * <p>叠加层据此决定要不要顶掉 GLFW 回调：{@code glfwSetScrollCallback} 是单槽位接口，顶掉之后
+     * 游戏自己的 {@code MouseHandler#onScroll} 就再也不会被调用——这个标记读不到，滚轮会彻底失效。
+     */
+    @Test
+    void exposesTheGameHookFlag() {
+        assertFalse(ScrollState.gameHookPresent(), "fresh state must report no game hook");
+        ScrollState.markGameHook();
+        assertTrue(ScrollState.gameHookPresent(), "flag must survive the class-identity split");
     }
 }

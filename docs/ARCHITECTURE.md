@@ -162,14 +162,19 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 - 输入占用：界面开着时由 `InputBlock`（bootstrap 层共享标志）让游戏侧入口短路
   （`KeyboardHandler#keyPress`、`KeyMapping#setAll/set/click`、`ContainerEventHandler#mouseClicked`），
   否则同一次点击/按键会同时打在后面的原生界面上。我们自己的输入不经过这些入口，不受影响。
-- 输入四路：`ReflectiveInput` 绑 lwjgl2 / glfw（GLFW 滚轮走动态代理回调并转发被顶掉的旧回调）、
+- 输入四路：`ReflectiveInput` 绑 lwjgl2 / glfw（GLFW 滚轮默认走动态代理回调并转发被顶掉的旧回调；
+  **但注入器在 `MouseHandler#onScroll` 上织入累加钩子成功时它会主动放弃注册**——
+  `glfwSetScrollCallback` 是单槽位接口，LWJGL 3.2 上还不返回旧回调，顶掉之后游戏自己的
+  `onScroll` 就再也不会被调用，滚轮会彻底失效；标记经 `KeySink.scrollHookActive` 跨加载器传递）、
   `GameInput`（SDL 世代：**鼠标取游戏自己的事件态**——`MouseHandler.xpos/ypos` + `activeButton`，
   因为 `SDL_GetMouseState` 在"无鼠标焦点"时静默给 0,0；见 VERSION-MATRIX P5-C。**滚轮**走
   `ScrollState`（bootstrap 层）：注入器在游戏自己的滚轮入口 `SDLEventHandler#handleMouseWheelEvent`
   上挂 `ScrollHook`（SDL 滚轮是事件驱动、没有轮询接口，只能从事件对象上取），`GameInput` 每帧取走；
   真正状态落在只存在于 bootstrap 的 `KeySink`，因为 26.3 的 Knot 会再加载一份 `ScrollState`；
-  同时短路 `MouseHandler#onScroll`，否则滚轮会顺带切快捷栏）、
-  `SdlInput`（26.x SDL3：轮询 `SDL_GetMouseState` / `SDL_GetKeyboardState`；没有滚轮轮询能力，
+  同时短路 `MouseHandler#onScroll`，否则滚轮会顺带切快捷栏；GLFW 世代`1.13–1.19`没有 SDL 事件入口，
+  改在同一个 `MouseHandler#onScroll(JDD)V` 上由 `ScrollHookTransformer` 把第三个形参推给
+  `ScrollHook.onMouseWheel`，注册顺序保证「先累加、再由 InputBlock 决定是否短路」）、
+  `SdlInput`（26.x SDL3：轮询 `SDL_GetMouseState` / `SDL_GetKeyboardState`；没有滚轮轮询能力,
   `scrollDelta()` 恒为 0，滚轮由上面的 `ScrollState` 提供）；三代都解析不出时退化为 `NoInput`。
 - 旧 UI 库（Skija 后端、Setsuna 移植件、组件树、主题、动画、HUD、HUD 编辑器、纹理桥）
   **已整体删除**；`ui` 不再依赖任何第三方 UI 库。

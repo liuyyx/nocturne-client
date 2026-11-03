@@ -35,8 +35,30 @@ public final class ScrollHook {
 
     /** 首条滚轮诊断是否已打印（只印一次，避免刷屏）。 */
     private static boolean loggedOnce;
+    /** GLFW 世代滚轮诊断是否已打印（同上）。 */
+    private static boolean wheelLogged;
 
     private ScrollHook() {
+    }
+
+    /**
+     * GLFW 世代入口：{@code MouseHandler#onScroll(JDD)V} 的第三个形参（纵向增量）。
+     *
+     * <p>与 {@link #onEvent} 的分工：SDL 世代把事件对象交给钩子，GLFW 世代没有事件对象，滚轮只以
+     * 这个方法形参的形式出现一次，因此由 {@code ScrollHookTransformer} 直接把 {@code double} 推过来。
+     * 注入点是方法开头，早于「占用输入则直接返回」，所以界面打开时仍然能拿到增量。
+     *
+     * @param yoffset 纵向滚轮增量，符号决定方向
+     */
+    public static void onMouseWheel(double yoffset) {
+        if (yoffset == 0d || Double.isNaN(yoffset) || Double.isInfinite(yoffset)) {
+            return;
+        }
+        if (!wheelLogged) {
+            wheelLogged = true;
+            System.out.println("[nocturne] game wheel event: dy=" + yoffset);
+        }
+        ScrollState.accumulate(yoffset);
     }
 
     /**

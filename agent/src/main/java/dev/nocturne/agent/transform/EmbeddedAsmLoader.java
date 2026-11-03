@@ -63,6 +63,9 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     /** 支持包替换与取消的转换器。 */
     private static final String PACKET_TRANSFORMER_CLASS =
             "dev.nocturne.agent.transform.PacketHookTransformer";
+    /** 滚轮形参转换器：取指定的 double 形参（GLFW 世代 {@code MouseHandler#onScroll}）。 */
+    private static final String SCROLL_TRANSFORMER_CLASS =
+            "dev.nocturne.agent.transform.ScrollHookTransformer";
     /** 钩子所在类内部名（斜杠形式）。 */
     // 必须指向 bootstrap 层的中立类：Forge 的模块化 classloader 看不到 agent jar，
     // 直接调 NocturneRuntime.onFrame 会 NoClassDefFoundError（1.20.1 Forge 实测）。
@@ -200,6 +203,37 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         } catch (Throwable t) {
             log("could not create input block transformer for " + targetInternalName + "." + method
                     + ": " + t + "; input block disabled");
+            return null;
+        }
+    }
+
+    /**
+     * 创建滚轮形参转换器：把目标方法第 {@code argumentIndex} 个 {@code double} 形参交给无返回值钩子。
+     *
+     * <p>GLFW 世代没有 SDL 那种"事件对象"，滚轮增量只以 {@code MouseHandler#onScroll(JDD)V} 的
+     * 形参形式出现一次，因此必须按形参下标取。
+     *
+     * @param targetInternalName 目标类内部名（斜杠形式）
+     * @param method             目标方法名
+     * @param descriptor         目标方法描述符（返回类型须为 {@code V}）
+     * @param hookOwner          钩子类内部名（斜杠形式）
+     * @param hookMethod         钩子方法名，签名 {@code (D)V}
+     * @param argumentIndex      要交出去的形参下标（0 起），该形参必须是 double
+     * @return 转换器；内嵌 ASM 缺失或类加载失败时返回 {@code null}
+     */
+    public ClassFileTransformer createScrollHookTransformer(String targetInternalName, String method,
+                                                            String descriptor, String hookOwner,
+                                                            String hookMethod, int argumentIndex) {
+        try {
+            Class<?> transformerClass = loadClass(SCROLL_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, String.class, int.class);
+            Object instance = constructor.newInstance(targetInternalName, method, descriptor,
+                    hookOwner, hookMethod, Integer.valueOf(argumentIndex));
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create scroll hook transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; scroll hook disabled");
             return null;
         }
     }

@@ -12,6 +12,7 @@ import dev.nocturne.client.render.WorldOverlay;
 import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.ColorValue;
+import dev.nocturne.client.value.NumberValue;
 
 import java.util.List;
 
@@ -31,8 +32,13 @@ public final class EspModule extends Module implements WorldOverlay {
     private static final double ENTITY_HEIGHT = 1.8d;
     /** 框宽与框高的比例：玩家 hitbox 宽 0.6、高 1.8，约 1/3。 */
     private static final float WIDTH_RATIO = 0.3f;
-    /** 框的最小边长（逻辑像素）：投影压扁时（低头/侧视/超远）保证仍然可见。 */
-    private static final float MIN_BOX_PX = 12f;
+    /**
+     * 框的最小边长（逻辑像素）：投影压扁时（低头/侧视/超远）保证仍然可见。
+     *
+     * <p>取 8 而不是更大：远处实体本来就会被压到几像素，强行放大到 12 会让整屏飘满小方块
+     * （真机实测 40+ 个），可见性与噪声的折中点是 8。
+     */
+    private static final float MIN_BOX_PX = 8f;
 
     /** 投影结果复用（每帧几十个实体，避免逐点分配）。 */
     private final WorldProjection.ScreenPoint topPoint = new WorldProjection.ScreenPoint();
@@ -51,6 +57,8 @@ public final class EspModule extends Module implements WorldOverlay {
     private final BooleanValue showBoundingBox = add(new BooleanValue("Bounding Box", true));
     /** 显示名字。 */
     private final BooleanValue showName = add(new BooleanValue("Name", false));
+    /** 最大绘制距离（米）；0 = 不限。远处实体在最小框尺寸下会糊成一片，给玩家一个上限。 */
+    private final NumberValue maxDistance = add(new NumberValue("Max Distance", 64.0, 0.0, 256.0, 8.0));
 
     /** 诊断日志限流：每秒最多一条。 */
     private long diagLoggedAt;
@@ -194,6 +202,9 @@ public final class EspModule extends Module implements WorldOverlay {
             return java.util.Collections.emptyList();
         }
         Object self = bridge.player();
+        // 距离上限（0 = 不限）：远处实体在最小框尺寸下会糊成一片，而且每帧仍要逐实体投影。
+        double maxDistanceValue = maxDistance.get();
+        double[] selfPos = maxDistanceValue > 0d && self != null ? position(bridge, self) : null;
         List<Object> out = new java.util.ArrayList<Object>();
         for (Object entity : (Iterable<Object>) raw) {
             if (entity == null || (self != null && self.equals(entity))) {
@@ -204,6 +215,12 @@ public final class EspModule extends Module implements WorldOverlay {
             }
             if (!showInvisibles.get() && isInvisible(bridge, entity)) {
                 continue;
+            }
+            if (selfPos != null) {
+                double[] pos = position(bridge, entity);
+                if (pos != null && distanceSq(selfPos, pos) > maxDistanceValue * maxDistanceValue) {
+                    continue;
+                }
             }
             out.add(entity);
         }
@@ -312,6 +329,14 @@ public final class EspModule extends Module implements WorldOverlay {
         }
         return new double[]{((Number) x).doubleValue(), ((Number) y).doubleValue(),
                 ((Number) z).doubleValue()};
+    }
+
+    /** 两点距离的平方（省掉开方）。 */
+    private static double distanceSq(double[] a, double[] b) {
+        double dx = a[0] - b[0];
+        double dy = a[1] - b[1];
+        double dz = a[2] - b[2];
+        return dx * dx + dy * dy + dz * dz;
     }
 
     /** 实体显示名；读不到时返回 {@code null}。 */

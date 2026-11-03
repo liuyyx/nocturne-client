@@ -26,6 +26,9 @@ import java.util.List;
  */
 public final class NameTagsModule extends Module implements WorldOverlay {
 
+    /** 每帧最多画多少条标签：极端场景（大船/刷怪塔）下按距离截断，避免覆盖层拖垮渲染线程。 */
+    private static final int MAX_LABELS = 256;
+
     /** 标签画在实体头顶上方多高处（米）。 */
     private static final double TAG_HEIGHT = 2.1d;
 
@@ -208,6 +211,9 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             }
             draw.text(label, point.x - draw.textWidth(label) / 2f, point.y - lineHeight, 0xFFFFFFFF);
             drawn++;
+            if (drawn >= MAX_LABELS) {
+                break;
+            }
         }
         lastVisibleCount = drawn;
     }

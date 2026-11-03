@@ -44,6 +44,9 @@ public final class StorageEspModule extends Module implements WorldOverlay {
     /** 框线宽（像素）。 */
     private static final float BOX_THICKNESS = 1.5f;
 
+    /** 每帧最多画多少个容器框：大仓库/自动分类房里容器上千，按距离截断避免拖垮渲染线程。 */
+    private static final int MAX_BOXES = 256;
+
     /** 投影结果复用（每帧可能有上百个容器，避免逐个分配）。 */
     private final WorldProjection.ScreenPoint point = new WorldProjection.ScreenPoint();
 
@@ -226,6 +229,10 @@ public final class StorageEspModule extends Module implements WorldOverlay {
             }
             if (drawContainer(draw, projection, bridge, blockEntity, kind)) {
                 visible++;
+                if (visible >= MAX_BOXES) {
+                    // 超过上限就停：宁可少画几个远处的框，也不让覆盖层把渲染线程拖到 tick 掉队。
+                    break;
+                }
             }
         }
         lastVisibleCount = visible;

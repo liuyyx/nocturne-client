@@ -23,6 +23,9 @@ public final class CameraState {
 
     /** 是否已经就缺成员打过一次诊断（避免每帧刷屏）。 */
     private boolean missingLogged;
+
+    /** 相机输入探针是否已打印（{@code -Dnocturne.debug.camera}）。 */
+    private boolean cameraProbeLogged;
     /**
      * 是否按 {@code partialTicks} 插值朝向。
      *
@@ -127,6 +130,15 @@ public final class CameraState {
                 : fovOf(bridge, bridge.readField(options, ClassType.OPTIONS, "fov"));
         if (fov == null) {
             return missing(bridge, "Options#fov / OptionInstance#get");
+        }
+        if (System.getProperty("nocturne.debug.camera") != null && !cameraProbeLogged) {
+            cameraProbeLogged = true;
+            // 一次打印相机输入：投影算错时先看这里——yaw/pitch 合理范围、eye 与玩家位置一致、
+            // fov 在 30–110，viewport 是 GUI 逻辑尺寸。
+            System.out.println("[nocturne] camera: eye=(" + Math.round(eyeX * 100) / 100.0 + ","
+                    + Math.round(eyeY * 100) / 100.0 + "," + Math.round(eyeZ * 100) / 100.0 + ")"
+                    + " yaw=" + yaw + " pitch=" + pitch + " pt=" + partialTicks
+                    + " fov=" + fov + " viewport=" + width + "x" + height);
         }
         projection.update(eyeX, eyeY, eyeZ, yaw.floatValue(), pitch.floatValue(), fov.floatValue(),
                 width, height);

@@ -31,13 +31,20 @@ public final class EspModule extends Module implements WorldOverlay {
     private static final double ENTITY_HEIGHT = 1.8d;
     /** 框宽与框高的比例：玩家 hitbox 宽 0.6、高 1.8，约 1/3。 */
     private static final float WIDTH_RATIO = 0.3f;
+    /** 框的最小边长（逻辑像素）：投影压扁时（低头/侧视/超远）保证仍然可见。 */
+    private static final float MIN_BOX_PX = 12f;
 
     /** 投影结果复用（每帧几十个实体，避免逐点分配）。 */
     private final WorldProjection.ScreenPoint topPoint = new WorldProjection.ScreenPoint();
     private final WorldProjection.ScreenPoint bottomPoint = new WorldProjection.ScreenPoint();
 
-    /** 玩家颜色。 */
-    private final ColorValue playerColor = add(new ColorValue("Player Color", 0xFF249824));
+    /**
+     * 玩家颜色。
+     *
+     * <p>默认取高对比亮绿：原先的 `0xFF249824`（深绿）在草地、夜晚、洞穴里与背景亮度接近，
+     * 再加上框只有 1px 描边，实战中就是"开了 ESP 但看不见框"。
+     */
+    private final ColorValue playerColor = add(new ColorValue("Player Color", 0xFF3CF03C));
     /** 显示隐身玩家。 */
     private final BooleanValue showInvisibles = add(new BooleanValue("Invisibles", false));
     /** 显示包围框。 */
@@ -248,10 +255,27 @@ public final class EspModule extends Module implements WorldOverlay {
             }
             float centerX = (topPoint.x + bottomPoint.x) / 2f;
             float topY = Math.min(topPoint.y, bottomPoint.y);
-            float boxHeight = Math.max(2f, Math.abs(bottomPoint.y - topPoint.y));
-            float halfWidth = boxHeight * WIDTH_RATIO;
+            // 最小尺寸不是为了好看：低头/侧视时头顶与脚下两点在屏幕上几乎重合（真机量到
+            // h=2px、w=1px），框逻辑上"画了"却完全看不见——玩家报的就是"框不显示"。
+            // 给一个下限，远的和压扁的实体也留一个可辨的方框。
+            float boxHeight = Math.max(MIN_BOX_PX, Math.abs(bottomPoint.y - topPoint.y));
+            float halfWidth = Math.max(MIN_BOX_PX * WIDTH_RATIO, boxHeight * WIDTH_RATIO);
             if (box) {
-                draw.outline(centerX - halfWidth, topY, halfWidth * 2f, boxHeight, 1f, argb);
+                if (System.getProperty("nocturne.ui.debug") != null && drawn < 3) {
+                    // 前三个框的几何：坐标全在屏幕外/尺寸为 0 时"画了但看不见"，
+                    // 这一行直接给出判定依据（drawn 只是逻辑计数）。
+                    System.out.println("[nocturne] ESP box: cx=" + Math.round(centerX)
+                            + " top=" + Math.round(topY) + " h=" + Math.round(boxHeight)
+                            + " w=" + Math.round(halfWidth * 2f)
+                            + " screen=" + draw.width() + "x" + draw.height()
+                            + " topPt=(" + Math.round(topPoint.x) + "," + Math.round(topPoint.y) + ")"
+                            + " botPt=(" + Math.round(bottomPoint.x) + "," + Math.round(bottomPoint.y) + ")");
+                }
+                // 半透明填充 + 描边：只靠 1px 描边时，远处的框在草地/夜里几乎不可辨
+                // （真机实测：h=2px、w=1px，玩家反馈"开了 ESP 但看不见框"）。
+                draw.rect(centerX - halfWidth, topY, halfWidth * 2f, boxHeight,
+                        (argb & 0x00FFFFFF) | 0x60000000);
+                draw.outline(centerX - halfWidth, topY, halfWidth * 2f, boxHeight, 1.5f, argb);
                 drawn++;
             }
             if (name) {

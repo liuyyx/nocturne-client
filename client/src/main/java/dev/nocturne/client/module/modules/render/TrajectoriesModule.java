@@ -239,14 +239,23 @@ public final class TrajectoriesModule extends Module implements WorldOverlay {
         double y = eye[1];
         double z = eye[2];
 
+        Object level = bridge.readField(bridge.minecraft(), ClassType.MINECRAFT, "level");
         int lineArgb = trajectoryColor.argb();
         boolean hasPrevious = false;
         float previousX = 0f;
         float previousY = 0f;
         for (int step = 0; step < MAX_STEPS; step++) {
-            x += vx;
-            y += vy;
-            z += vz;
+            double nextX = x + vx;
+            double nextY = y + vy;
+            double nextZ = z + vz;
+            // 方块碰撞：参考 eps-plus 的 Trajectories（它有完整的 ProjectileSimulator），
+            // 这里只做「下一格是不是空气」的一步判定——没有它，轨迹会穿过地形把落点十字画到地里。
+            if (isSolid(level, nextX, nextY, nextZ)) {
+                break;
+            }
+            x = nextX;
+            y = nextY;
+            z = nextZ;
             vx *= DRAG;
             vz *= DRAG;
             vy = vy * DRAG - GRAVITY;
@@ -267,6 +276,28 @@ public final class TrajectoriesModule extends Module implements WorldOverlay {
             draw.line(previousX - CROSS_ARM, previousY, previousX + CROSS_ARM, previousY, 1.5f, crossArgb);
             draw.line(previousX, previousY - CROSS_ARM, previousX, previousY + CROSS_ARM, 1.5f, crossArgb);
         }
+    }
+
+
+    /** 方块坐标处的方块是否不是空气；读不到时按"空气"处理（宁可多画一截也不整条不画）。 */
+    private static boolean isSolid(Object level, double x, double y, double z) {
+        if (level == null) {
+            return false;
+        }
+        GameBridge bridge = bridge();
+        if (bridge == null) {
+            return false;
+        }
+        Object pos = bridge.blockPos((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+        if (pos == null) {
+            return false;
+        }
+        Object state = bridge.callMapped(level, ClassType.LEVEL_READER, "getBlockState", pos);
+        if (state == null) {
+            return false;
+        }
+        Object air = bridge.callMapped(state, ClassType.BLOCK_STATE, "isAir");
+        return air instanceof Boolean && !((Boolean) air).booleanValue();
     }
 
     /** 读实体朝向（{@code yRot} / {@code xRot}，度）；缺成员时返回 {@code null}。 */

@@ -20,8 +20,28 @@ final class BlockEntityScan {
         return minecraft == null ? null : bridge.readField(minecraft, ClassType.MINECRAFT, "level");
     }
 
-    /** @return 所有已加载区块里的方块实体；区块表面不可用时为空列表 */
+    /** 扫描结果缓存的有效期：与模块 tick 同频（20Hz），方块实体不会在 50ms 内变几次。 */
+    private static final long CACHE_NANOS = 50_000_000L;
+
+    /** 上次扫描完成的时间戳（纳秒）；{@code 0} 表示尚无缓存。 */
+    private static long cacheNanos;
+    /** 上次扫描结果；调用方只读，不得修改。 */
+    private static List<Object> cache;
+
+    /**
+     * @return 所有已加载区块里的方块实体；区块表面不可用时为空列表
+     *
+     * <p><b>按 20Hz 缓存</b>：这个扫描要遍历每个已加载区块、对每个区块反射调一次
+     * {@code getBlockEntities}、再把所有方块实体塞进新列表。几百个区块时单次就是上千次分配 +
+     * 反射，而 StorageESP 与 SpawnerFinder 每帧各要一次——1.16.5 真机上这就是「开容器透视后
+     * 帧率腰斩、随后 tick 追赶」的主开销。方块实体在 50ms 内不会有几次变化，缓存无感知。
+     */
     static List<Object> loadedBlockEntities(GameBridge bridge) {
+        long now = System.nanoTime();
+        List<Object> cached = cache;
+        if (cached != null && now - cacheNanos < CACHE_NANOS) {
+            return cached;
+        }
         List<Object> out = new ArrayList<Object>();
         Object level = level(bridge);
         if (level == null) {
@@ -39,6 +59,8 @@ final class BlockEntityScan {
                 }
             }
         }
+        cache = out;
+        cacheNanos = now;
         return out;
     }
 

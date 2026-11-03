@@ -32,11 +32,12 @@ class StorageEspMappingTest {
         {"net/minecraft/client/multiplayer/ClientChunkCache", "fields", "storage"},
         // 区块的方块实体表：LevelChunk#getBlockEntities（1.8.9/1.12.2 是 Chunk#getTileEntityMap）
         {"net/minecraft/world/level/chunk/LevelChunk", "methods", "getBlockEntities"},
-        // 方块实体坐标：BlockEntity#getBlockPos → BlockPos#getX/getY/getZ
+        // 方块实体坐标：BlockEntity#getBlockPos → Vec3i 的 x/y/z 字段。
+        // 不用 BlockPos#getX()：1.16.5 里同名方法有实例与静态打包两个重载，映射表只记一个。
         {"net/minecraft/world/level/block/entity/BlockEntity", "methods", "getBlockPos"},
-        {"net/minecraft/core/BlockPos", "methods", "getX"},
-        {"net/minecraft/core/BlockPos", "methods", "getY"},
-        {"net/minecraft/core/BlockPos", "methods", "getZ"},
+        {"net/minecraft/core/Vec3i", "fields", "x"},
+        {"net/minecraft/core/Vec3i", "fields", "y"},
+        {"net/minecraft/core/Vec3i", "fields", "z"},
         // 容器类型判定：按方块实体类
         {"net/minecraft/world/level/block/entity/ChestBlockEntity", "class", null},
         {"net/minecraft/world/level/block/entity/EnderChestBlockEntity", "class", null},

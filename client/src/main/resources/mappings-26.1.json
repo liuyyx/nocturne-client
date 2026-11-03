@@ -1195,32 +1195,7 @@
                 "forge": "net.minecraft.core.BlockPos",
                 "neoforge": "net.minecraft.core.BlockPos"
             },
-            "methods": {
-                "getX": {
-                    "names": {
-                        "vanilla": "getX",
-                        "fabric": "getX",
-                        "forge": "getX",
-                        "neoforge": "getX"
-                    }
-                },
-                "getY": {
-                    "names": {
-                        "vanilla": "getY",
-                        "fabric": "getY",
-                        "forge": "getY",
-                        "neoforge": "getY"
-                    }
-                },
-                "getZ": {
-                    "names": {
-                        "vanilla": "getZ",
-                        "fabric": "getZ",
-                        "forge": "getZ",
-                        "neoforge": "getZ"
-                    }
-                }
-            },
+            "methods": {},
             "fields": {
                 "above(int)": {
                     "absent": true
@@ -1523,6 +1498,14 @@
                         "fabric": "distanceToSqr",
                         "forge": "distanceToSqr",
                         "neoforge": "distanceToSqr"
+                    }
+                },
+                "getBoundingBox": {
+                    "names": {
+                        "vanilla": "getBoundingBox",
+                        "fabric": "getBoundingBox",
+                        "forge": "getBoundingBox",
+                        "neoforge": "getBoundingBox"
                     }
                 },
                 "getDeltaMovement": {
@@ -2756,6 +2739,65 @@
                 }
             },
             "fields": {}
+        },
+        "net/minecraft/world/phys/AABB": {
+            "names": {
+                "vanilla": "net.minecraft.world.phys.AABB",
+                "fabric": "net.minecraft.world.phys.AABB",
+                "forge": "net.minecraft.world.phys.AABB",
+                "neoforge": "net.minecraft.world.phys.AABB"
+            },
+            "methods": {},
+            "fields": {
+                "maxX": {
+                    "names": {
+                        "vanilla": "maxX",
+                        "fabric": "maxX",
+                        "forge": "maxX",
+                        "neoforge": "maxX"
+                    }
+                },
+                "maxY": {
+                    "names": {
+                        "vanilla": "maxY",
+                        "fabric": "maxY",
+                        "forge": "maxY",
+                        "neoforge": "maxY"
+                    }
+                },
+                "maxZ": {
+                    "names": {
+                        "vanilla": "maxZ",
+                        "fabric": "maxZ",
+                        "forge": "maxZ",
+                        "neoforge": "maxZ"
+                    }
+                },
+                "minX": {
+                    "names": {
+                        "vanilla": "minX",
+                        "fabric": "minX",
+                        "forge": "minX",
+                        "neoforge": "minX"
+                    }
+                },
+                "minY": {
+                    "names": {
+                        "vanilla": "minY",
+                        "fabric": "minY",
+                        "forge": "minY",
+                        "neoforge": "minY"
+                    }
+                },
+                "minZ": {
+                    "names": {
+                        "vanilla": "minZ",
+                        "fabric": "minZ",
+                        "forge": "minZ",
+                        "neoforge": "minZ"
+                    }
+                }
+            }
         },
         "net/minecraft/world/phys/BlockHitResult": {
             "names": {

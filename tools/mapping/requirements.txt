@@ -463,3 +463,14 @@ net/minecraft/client/Minecraft#inGameHasFocus
 # 否则每帧用的是上一个 tick 的边界值，60-120fps 的画面里框会以 20Hz 阶梯抖动。
 # 1.13+ 用 Minecraft.pausePartialTick；1.8.9-1.12.2 用 Timer.renderPartialTicks。
 net/minecraft/client/Minecraft#pausePartialTick
+
+# 实体包围盒：ESP 框按 AABB 的 8 个角投影取屏幕包围矩形（对齐 eps-plus 的 ESP2D 写法）。
+# 只投影头顶/脚下两点时，低头/侧视/远距离会把竖直差压到 1–4px，框实际不可见。
+net/minecraft/world/entity/Entity#getBoundingBox()
+net/minecraft/world/phys/AABB
+net/minecraft/world/phys/AABB#minX
+net/minecraft/world/phys/AABB#minY
+net/minecraft/world/phys/AABB#minZ
+net/minecraft/world/phys/AABB#maxX
+net/minecraft/world/phys/AABB#maxY
+net/minecraft/world/phys/AABB#maxZ

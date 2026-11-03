@@ -969,44 +969,7 @@
                 "fabric": "net.minecraft.class_2338",
                 "forge": "net.minecraft.util.math.BlockPos"
             },
-            "methods": {
-                "getX": {
-                    "names": {
-                        "vanilla": "o",
-                        "fabric": "method_10263",
-                        "forge": "func_177958_n"
-                    },
-                    "signatures": {
-                        "vanilla": "()I",
-                        "fabric": "()I",
-                        "forge": "()I"
-                    }
-                },
-                "getY": {
-                    "names": {
-                        "vanilla": "p",
-                        "fabric": "method_10264",
-                        "forge": "func_177956_o"
-                    },
-                    "signatures": {
-                        "vanilla": "()I",
-                        "fabric": "()I",
-                        "forge": "()I"
-                    }
-                },
-                "getZ": {
-                    "names": {
-                        "vanilla": "q",
-                        "fabric": "method_10260",
-                        "forge": "func_177952_p"
-                    },
-                    "signatures": {
-                        "vanilla": "()I",
-                        "fabric": "()I",
-                        "forge": "()I"
-                    }
-                }
-            },
+            "methods": {},
             "fields": {
                 "above(int)": {
                     "absent": true
@@ -1332,6 +1295,9 @@
                         "fabric": "(DDD)D",
                         "forge": "(DDD)D"
                     }
+                },
+                "getBoundingBox": {
+                    "absent": true
                 },
                 "getDeltaMovement": {
                     "absent": true
@@ -2843,6 +2809,12 @@
                     }
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/world/phys/AABB": {
+            "absent": true,
+            "names": {},
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/world/phys/BlockHitResult": {

@@ -179,6 +179,9 @@ public final class WorldProjection {
 
         out.x = (float) ((ndcX + 1d) * 0.5d * viewportWidth);
         out.y = (float) ((1d - ndcY) * 0.5d * viewportHeight);
+        // depth 无条件写出：调用方（AABB 8 角包围盒）需要用它判断"在相机前方"，
+        // 而 visible 只表示"落在视口 2 倍范围内"，两者的语义不能混。
+        out.depth = forward;
         // 投影落到视口 2 倍范围之外的点，画出来也只是屏幕外的废物（每个框要好几次绘制调用）。
         // 边距取宽松的 2 倍，保证"一半在屏幕内"的框仍然保留——只剔掉完全在远处的。
         if (out.x < -viewportWidth || out.x > viewportWidth * 2f
@@ -186,6 +189,5 @@ public final class WorldProjection {
             return;
         }
         out.visible = true;
-        out.depth = forward;
     }
 }

@@ -1342,44 +1342,7 @@
                 "fabric": "net.minecraft.class_2338",
                 "forge": "net.minecraft.util.math.BlockPos"
             },
-            "methods": {
-                "getX": {
-                    "names": {
-                        "vanilla": "b",
-                        "fabric": "method_10061",
-                        "forge": "func_218290_b"
-                    },
-                    "signatures": {
-                        "vanilla": "(J)I",
-                        "fabric": "(J)I",
-                        "forge": "(J)I"
-                    }
-                },
-                "getY": {
-                    "names": {
-                        "vanilla": "c",
-                        "fabric": "method_10071",
-                        "forge": "func_218274_c"
-                    },
-                    "signatures": {
-                        "vanilla": "(J)I",
-                        "fabric": "(J)I",
-                        "forge": "(J)I"
-                    }
-                },
-                "getZ": {
-                    "names": {
-                        "vanilla": "d",
-                        "fabric": "method_10083",
-                        "forge": "func_218282_d"
-                    },
-                    "signatures": {
-                        "vanilla": "(J)I",
-                        "fabric": "(J)I",
-                        "forge": "(J)I"
-                    }
-                }
-            },
+            "methods": {},
             "fields": {
                 "above(int)": {
                     "absent": true
@@ -1715,6 +1678,18 @@
                         "vanilla": "(DDD)D",
                         "fabric": "(DDD)D",
                         "forge": "(DDD)D"
+                    }
+                },
+                "getBoundingBox": {
+                    "names": {
+                        "vanilla": "bL",
+                        "fabric": "method_5829",
+                        "forge": "func_174813_aQ"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lcsc;",
+                        "fabric": "()Lnet/minecraft/class_238;",
+                        "forge": "()Lnet/minecraft/util/math/AxisAlignedBB;"
                     }
                 },
                 "getDeltaMovement": {
@@ -3312,6 +3287,88 @@
                 }
             },
             "fields": {}
+        },
+        "net/minecraft/world/phys/AABB": {
+            "names": {
+                "vanilla": "csc",
+                "fabric": "net.minecraft.class_238",
+                "forge": "net.minecraft.util.math.AxisAlignedBB"
+            },
+            "methods": {},
+            "fields": {
+                "maxX": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_1320",
+                        "forge": "field_72336_d"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D",
+                        "forge": "D"
+                    }
+                },
+                "maxY": {
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "field_1325",
+                        "forge": "field_72337_e"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D",
+                        "forge": "D"
+                    }
+                },
+                "maxZ": {
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "field_1324",
+                        "forge": "field_72334_f"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D",
+                        "forge": "D"
+                    }
+                },
+                "minX": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_1323",
+                        "forge": "field_72340_a"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D",
+                        "forge": "D"
+                    }
+                },
+                "minY": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_1322",
+                        "forge": "field_72338_b"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D",
+                        "forge": "D"
+                    }
+                },
+                "minZ": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_1321",
+                        "forge": "field_72339_c"
+                    },
+                    "descriptors": {
+                        "vanilla": "D",
+                        "fabric": "D",
+                        "forge": "D"
+                    }
+                }
+            }
         },
         "net/minecraft/world/phys/BlockHitResult": {
             "names": {

@@ -105,6 +105,13 @@ public enum ClassType {
     MOUSE_HANDLER("net.minecraft.client.MouseHandler"),
     /** 三维向量：相机眼位、实体坐标都从它上面读 x/y/z（世界覆盖层投影用）。 */
     VEC3("net.minecraft.world.phys.Vec3"),
+    /**
+     * 轴对齐包围盒：ESP 框按它的 8 个角投影取屏幕包围矩形（对齐 eps-plus 的 ESP2D）。
+     *
+     * <p>只投影头顶/脚下两点时，低头/侧视/远距离会把竖直差压到 1–4px，框实际不可见。
+     * 1.8.9 叫 AxisAlignedBB（表里 absent），那边退回两点方案。
+     */
+    AABB("net.minecraft.world.phys.AABB"),
     /** 方块实体基类；StorageESP 遍历容器用。 */
     BLOCK_ENTITY("net.minecraft.world.level.block.entity.BlockEntity"),
     /** 方块坐标（blockPos() 构造、BlockEntity#getBlockPos 的返回类型）。 */

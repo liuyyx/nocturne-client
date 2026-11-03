@@ -261,44 +261,33 @@ public final class EspModule extends Module implements WorldOverlay {
         List<Object> entities = visibleEntities(bridge, level);
         int drawn = 0;
         for (Object entity : entities) {
-            double[] pos = position(bridge, entity);
-            if (pos == null) {
+            float[] bounds = projectBox(bridge, entity, projection);
+            if (bounds == null) {
                 continue;
             }
-            projection.project(pos[0], pos[1] + ENTITY_HEIGHT, pos[2], topPoint);
-            projection.project(pos[0], pos[1], pos[2], bottomPoint);
-            if (!topPoint.visible || !bottomPoint.visible) {
+            float left = bounds[0];
+            float top = bounds[1];
+            float width = bounds[2] - left;
+            float height = bounds[3] - top;
+            if (width < 1f || height < 1f) {
                 continue;
             }
-            float centerX = (topPoint.x + bottomPoint.x) / 2f;
-            float topY = Math.min(topPoint.y, bottomPoint.y);
-            // 最小尺寸不是为了好看：低头/侧视时头顶与脚下两点在屏幕上几乎重合（真机量到
-            // h=2px、w=1px），框逻辑上"画了"却完全看不见——玩家报的就是"框不显示"。
-            // 给一个下限，远的和压扁的实体也留一个可辨的方框。
-            float boxHeight = Math.max(MIN_BOX_PX, Math.abs(bottomPoint.y - topPoint.y));
-            float halfWidth = Math.max(MIN_BOX_PX * WIDTH_RATIO, boxHeight * WIDTH_RATIO);
+            float centerX = left + width / 2f;
             if (box) {
                 if (System.getProperty("nocturne.ui.debug") != null && drawn < 3) {
-                    // 前三个框的几何：坐标全在屏幕外/尺寸为 0 时"画了但看不见"，
-                    // 这一行直接给出判定依据（drawn 只是逻辑计数）。
-                    System.out.println("[nocturne] ESP box: cx=" + Math.round(centerX)
-                            + " top=" + Math.round(topY) + " h=" + Math.round(boxHeight)
-                            + " w=" + Math.round(halfWidth * 2f)
-                            + " screen=" + draw.width() + "x" + draw.height()
-                            + " topPt=(" + Math.round(topPoint.x) + "," + Math.round(topPoint.y) + ")"
-                            + " botPt=(" + Math.round(bottomPoint.x) + "," + Math.round(bottomPoint.y) + ")");
+                    System.out.println("[nocturne] ESP box: x=" + Math.round(left)
+                            + " y=" + Math.round(top) + " w=" + Math.round(width)
+                            + " h=" + Math.round(height)
+                            + " screen=" + draw.width() + "x" + draw.height());
                 }
-                // 半透明填充 + 描边：只靠 1px 描边时，远处的框在草地/夜里几乎不可辨
-                // （真机实测：h=2px、w=1px，玩家反馈"开了 ESP 但看不见框"）。
-                draw.rect(centerX - halfWidth, topY, halfWidth * 2f, boxHeight,
-                        (argb & 0x00FFFFFF) | 0x60000000);
-                draw.outline(centerX - halfWidth, topY, halfWidth * 2f, boxHeight, 1.5f, argb);
+                draw.rect(left, top, width, height, (argb & 0x00FFFFFF) | 0x40000000);
+                draw.outline(left, top, width, height, 1f, argb);
                 drawn++;
             }
             if (name) {
                 String label = entityName(bridge, entity);
                 if (label != null) {
-                    draw.text(label, centerX - draw.textWidth(label) / 2f, topY - lineHeight - 1f, argb);
+                    draw.text(label, centerX - draw.textWidth(label) / 2f, top - lineHeight - 1f, argb);
                 }
             }
         }
@@ -337,6 +326,86 @@ public final class EspModule extends Module implements WorldOverlay {
         double dy = a[1] - b[1];
         double dz = a[2] - b[2];
         return dx * dx + dy * dy + dz * dz;
+    }
+
+
+    /** 包围盒 8 个角的临时投影点（复用，避免每实体分配）。 */
+    private final WorldProjection.ScreenPoint cornerPoint = new WorldProjection.ScreenPoint();
+
+    /**
+     * 实体在屏幕上的包围矩形 {@code {left, top, right, bottom}}；不可见时返回 {@code null}。
+     *
+     * <p><b>投影 AABB 的 8 个角取包围盒</b>（对齐 eps-plus 的 {@code ESP2D.projectBox}）：
+     * 只投影"头顶 + 脚下"两点时，低头/侧视/远距离会把竖直差压到 1–4px，框实际不可见；
+     * 而且两点法不知道实体宽度，只能按固定比例猜。
+     *
+     * <p>角点用 {@code depth > 0} 判断在相机前方，不用 {@code visible}——后者还会按视口 2 倍
+     * 范围裁剪，跨界的大框会被误判成"完全不可见"。
+     *
+     * <p>{@code getBoundingBox} 缺失的版本（1.8.9 的 {@code AxisAlignedBB} 不在表里）退回两点法，
+     * 保证老版本仍然有框。
+     */
+    private float[] projectBox(GameBridge bridge, Object entity, WorldProjection projection) {
+        Object box = bridge.callMapped(entity, ClassType.ENTITY, "getBoundingBox");
+        if (box != null) {
+            Double minX = number(bridge.readField(box, ClassType.AABB, "minX"));
+            Double minY = number(bridge.readField(box, ClassType.AABB, "minY"));
+            Double minZ = number(bridge.readField(box, ClassType.AABB, "minZ"));
+            Double maxX = number(bridge.readField(box, ClassType.AABB, "maxX"));
+            Double maxY = number(bridge.readField(box, ClassType.AABB, "maxY"));
+            Double maxZ = number(bridge.readField(box, ClassType.AABB, "maxZ"));
+            if (minX != null && minY != null && minZ != null
+                    && maxX != null && maxY != null && maxZ != null) {
+                float left = Float.POSITIVE_INFINITY;
+                float top = Float.POSITIVE_INFINITY;
+                float right = Float.NEGATIVE_INFINITY;
+                float bottom = Float.NEGATIVE_INFINITY;
+                for (int vertex = 0; vertex < 8; vertex++) {
+                    double wx = (vertex & 1) == 0 ? minX.doubleValue() : maxX.doubleValue();
+                    double wy = (vertex & 2) == 0 ? minY.doubleValue() : maxY.doubleValue();
+                    double wz = (vertex & 4) == 0 ? minZ.doubleValue() : maxZ.doubleValue();
+                    projection.project(wx, wy, wz, cornerPoint);
+                    if (cornerPoint.depth <= 0d) {
+                        continue;
+                    }
+                    if (cornerPoint.x < left) {
+                        left = cornerPoint.x;
+                    }
+                    if (cornerPoint.y < top) {
+                        top = cornerPoint.y;
+                    }
+                    if (cornerPoint.x > right) {
+                        right = cornerPoint.x;
+                    }
+                    if (cornerPoint.y > bottom) {
+                        bottom = cornerPoint.y;
+                    }
+                }
+                if (left <= right && top <= bottom) {
+                    return new float[]{left, top, right, bottom};
+                }
+                return null;
+            }
+        }
+        // 回退：老版本没有 AABB 面，用头顶/脚下两点 + 固定宽度比例。
+        double[] pos = position(bridge, entity);
+        if (pos == null) {
+            return null;
+        }
+        projection.project(pos[0], pos[1] + ENTITY_HEIGHT, pos[2], topPoint);
+        projection.project(pos[0], pos[1], pos[2], bottomPoint);
+        if (topPoint.depth <= 0d || bottomPoint.depth <= 0d) {
+            return null;
+        }
+        float topY = Math.min(topPoint.y, bottomPoint.y);
+        float height = Math.max(4f, Math.abs(bottomPoint.y - topPoint.y));
+        float halfWidth = Math.max(2f, height * WIDTH_RATIO);
+        return new float[]{topPoint.x - halfWidth, topY, topPoint.x + halfWidth, topY + height};
+    }
+
+    /** 把反射读到的值转成 {@code Double}；不是数字时返回 {@code null}。 */
+    private static Double number(Object value) {
+        return value instanceof Number ? Double.valueOf(((Number) value).doubleValue()) : null;
     }
 
     /** 实体显示名；读不到时返回 {@code null}。 */

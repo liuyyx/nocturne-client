@@ -33,8 +33,8 @@
 | 后端 | 适用 | 绘制方式 |
 |---|---|---|
 | `gl-fixed` | 1.8.9 – 1.12.2（LWJGL2） | `GlRenderer` + `GlApi`：反射绑 `org.lwjgl.opengl.GL11`，立即模式 + **批次层**（`ensureBatch` / `flushBatch`），矩阵与能力位自己接管 |
-| `gl-core` | 1.13 – 1.15（LWJGL3/GLFW）；诊断开关 `-Dnocturne.ui.backend=gl` 与 1.21.1 attach 兼容豁免也会走它 | `ModernRenderer` + `ModernGlApi`：GLSL150 + VBO |
-| `gui-stack` | 1.16 – 1.19 | `ExtractorRenderer`（`poseArg` 分支）：静态 `GuiComponent.fill` / `drawString` + 游戏 `PoseStack`；文本按 `PoseStack.pushPose/scale/popPose` 缩放；裁剪 1.19.1+ 用 `GuiComponent.enableScissor`，1.16–1.18 回退 `RenderSystem.enableScissor(x,y,w,h)` |
+| `gl-core` | 1.13 – 1.19（1.16–1.19 默认）；诊断开关 `-Dnocturne.ui.backend=gl` 与 1.21.1 attach 兼容豁免也会走它 | `ModernRenderer` + `ModernGlApi`：GLSL150 + VBO |
+| `gui-stack` | 1.16 – 1.19 兜底（gl-core 绑不上核心 profile 时可用 `-Dnocturne.ui.backend=game` 强制） | `ExtractorRenderer`（`poseArg` 分支）：静态 `GuiComponent.fill` / `drawString` + 游戏 `PoseStack`。**观感明显差于 gl-core**——`fill` 是整数像素矩形（圆角逐行 1px 阶梯），文字是位图字体按 `size/9` 矩阵缩放（NEAREST 放出方块字），所以只作兜底 |
 | `gui-graphics` | 1.20 – 1.21（1.21.1 attach 强制 `gl-core`） | `ExtractorRenderer`：把绘制交给游戏自己的 `GuiGraphics`；日志 `gui-graphics stack`，`backendName()` 仍报 `gui-extractor` |
 | `gui-extractor` | 26.x（SDL） | `ExtractorRenderer`：把绘制交给游戏自己的 `GuiGraphicsExtractor`，GL 与 Vulkan 都由游戏决定 |
 

@@ -17,17 +17,17 @@ import dev.nocturne.ui.render.Renderer;
  *
  * <p><b>适用版本（P4-D 之后）</b>：
  * <ul>
- *   <li><b>1.13–1.15</b>：主力后端。这一段没有 {@code PoseStack}，游戏绘制入口
- *       {@code ExtractorRenderer.bindLegacy} 装配不上，只能自写 GL 管线。</li>
- *   <li><b>1.16–1.19</b>：仅兜底。正常情况下走 extractor + {@code bindLegacy}；只有那段签名
- *       认不出来时才回落到这里。</li>
+ *   <li><b>1.13–1.19</b>：主力后端。1.13–1.15 没有 {@code PoseStack}，游戏绘制入口
+ *       {@code ExtractorRenderer.bindLegacy} 装配不上，只能自写 GL 管线；1.16–1.19 虽然有
+ *       {@code gui-stack} 可用，但那条路的 {@code fill} 是整数像素矩形、文字是位图字体矩阵缩放，
+ *       圆角呈 1px 阶梯、字呈方块状（真机对比后确认），因此**也默认走这里**。</li>
  *   <li><b>1.20+ 与 26.x</b>：**默认不再使用**，改为游戏自己的绘制 API（{@code GuiGraphics} /
  *       {@code GuiGraphicsExtractor}）。唯一例外是诊断开关
  *       {@code -Dnocturne.ui.backend=gl}（用于对比两条路的差异），见 {@code OverlayBootstrap.tryInstall}。</li>
  * </ul>
  *
- * <p>结论：本类现在只服务 <b>1.13–1.15</b>（这一段没有 {@code PoseStack}，且 {@code fill} 是实例方法，
- * 装配不进 {@code gui-stack}）与诊断开关；1.16–1.19 正常走 {@code ExtractorRenderer} 的 {@code gui-stack}。
+ * <p>结论：本类服务 <b>1.13–1.19</b>（1.13–1.15 装配不进 {@code gui-stack}；1.16–1.19 的
+ * {@code gui-stack} 观感明显更差，已降为 gl-core 绑不上核心 profile 时的兜底）与诊断开关。
  */
 public final class ModernRenderer implements UiBackend, PlayerModelPreview {
 

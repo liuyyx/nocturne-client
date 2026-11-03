@@ -5,6 +5,7 @@ import dev.nocturne.client.bootstrap.GameplayHook;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.input.KeyMap;
 import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.runtime.InputBlock;
 
 import java.util.Collections;
 import java.util.Set;
@@ -175,12 +176,21 @@ public final class GameplayEvents implements GameplayHook.Sink {
     private boolean postKey(int keyCode, boolean pressed) {
         KeyEvent event = new KeyEvent(keyCode, pressed);
         client.events().post(event);
+        // 自绘 GUI 开着时不能把按键交还游戏：游戏侧入口的返回值是"是否继续处理"。
+        if (InputBlock.shouldBlock()) {
+            return false;
+        }
         return !event.cancelled;
     }
 
     private boolean postMouse(int button, boolean pressed) {
         MouseButtonEvent event = new MouseButtonEvent(button, pressed);
         client.events().post(event);
+        // 同上：交还点击会让游戏顺带挥手臂/挖方块——玩家看到的是"点模块时手臂在挥"。
+        // 模块仍然照常收到 MouseButtonEvent，只有游戏自己那份被拦掉。
+        if (InputBlock.shouldBlock()) {
+            return false;
+        }
         return !event.cancelled;
     }
 

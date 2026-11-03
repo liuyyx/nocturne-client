@@ -78,8 +78,8 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 | 后端 | 类 | 代际 | 版本 |
 |---|---|---|---|
 | `gl-fixed` | `GlRenderer` | LWJGL2 固定管线 | 1.8.9 – 1.12.2 |
-| `gl-core` | `ModernRenderer` | GL 3.2 core + GLSL 150 | 1.13 – 1.15（诊断开关 `-Dnocturne.ui.backend=gl`、1.21.1 attach 兼容豁免也会走它） |
-| `gui-stack` | `ExtractorRenderer`（`poseArg` 分支） | 静态 `GuiComponent.fill`/`drawString` + 游戏 `PoseStack` | 1.16 – 1.19（scissor 1.19.1 起才有） |
+| `gl-core` | `ModernRenderer` | GL 3.2 core + GLSL 150 | 1.13 – 1.19（1.16–1.19 默认；`-Dnocturne.ui.backend=gl` 与 1.21.1 attach 兼容豁免也走它） |
+| `gui-stack` | `ExtractorRenderer`（`poseArg` 分支） | 静态 `GuiComponent.fill`/`drawString` + 游戏 `PoseStack` | 仅 1.16 – 1.19 的**兜底**（gl-core 绑不上核心 profile 时；`-Dnocturne.ui.backend=game` 可强制；scissor 1.19.1 起才有） |
 | `gui-graphics` | `ExtractorRenderer` | 游戏自己的 `GuiGraphics`，**零 GL**（日志 `gui-graphics stack`；`backendName()` 仍报 `gui-extractor`） | 1.20 – 1.21（1.21.1 attach 强制 gl-core） |
 | `gui-extractor` | `ExtractorRenderer` | 游戏自己的 `GuiGraphicsExtractor`，**零 GL** | 26.1 – 26.3 |
 

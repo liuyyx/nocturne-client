@@ -254,7 +254,7 @@
 
 | 能力 | 代际 A（1.8.9/1.12.2） | 代际 B（1.13–1.21.x） | 代际 C（26.1–26.3） |
 |---|---|---|---|
-| **UI 绘制后端** | `gl-fixed`（固定管线） | 1.13–1.15 = `gl-core`（`ModernRenderer` 兜底，`fill` 是实例方法、无 `PoseStack`）；1.16–1.19 = `gui-stack`（静态 `fill`/`drawString` + 游戏 `PoseStack`，scissor 1.19.1+ 才有）；1.20–1.21 = `gui-graphics`（D2 sink；日志 `gui-graphics stack`，`backendName()` 仍报 `gui-extractor`；1.21.1 attach 与 1.21.11 的历史实测仍是 `gl-core`） | `gui-extractor` |
+| **UI 绘制后端** | `gl-fixed`（固定管线） | 1.13–1.19 = `gl-core`（`ModernRenderer`；1.16–1.19 默认走它——`gui-stack` 只有 gl-core 绑不上核心 profile 时才用，`fill` 整数像素矩形 + 位图字体缩放导致圆角阶梯与方块字）；1.20–1.21 = `gui-graphics`（D2 sink；日志 `gui-graphics stack`，`backendName()` 仍报 `gui-extractor`；1.21.1 attach 与 1.21.11 的历史实测仍是 `gl-core`） | `gui-extractor` |
 | 矩形 | `Gui.drawRect` | 1.16–1.19 `GuiComponent.fill(PoseStack,…)`；1.20–1.21 `GuiGraphics.fill` | `GuiGraphicsExtractor.fill` |
 | 文字 | `FontRenderer.drawString`（自绘） | `drawString(PoseStack,Font,…)` / `GuiGraphics.drawString(Font,…)` | `extractor.text(Font,…)`（字体不自绘） |
 | 字体度量 | `getStringWidth` / 行高 9 | `Font.width` | `Font.width` / `lineHeight` |
@@ -292,7 +292,7 @@
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`（旧界面）；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
-| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3；旧 jar 的 `backend=gl-core` 结论已过期，1.16–1.19 现走 `gui-stack`（`GuiComponent.fill`/`drawString` + 游戏 `PoseStack`），`Screen.render(PoseStack,…)` 不会被误判成 GuiGraphics；`backend=gui-stack` 的新绑定**待真机复验**） | ✅ | ✅ 已产出 | ✅ 可见（旧后端 `tmp/mc1165-final.png`、`tmp/mc-1_16_5.log`；`gui-stack` 待复验） |
+| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3；**默认 `backend=gl-core`**（2026-11-03 起：`gui-stack` 观感明显粗糙——圆角 1px 阶梯、位图字体缩放方块字，因此降为 gl-core 不可用时的兜底，`-Dnocturne.ui.backend=game` 可强制）；`gui-stack` 绑定亦已验收（`dkv fill=a text=b scissor=rendersystem poseScale=true`）） | ✅ | ✅ 已产出 | ✅ 可见可点（`backend=gl-core`；滚轮经 `MouseHandler#onScroll` 织入 `ScrollState`，界面开着时物品栏不再跟着滚；点击不再穿透挥手臂） |
 | 26.2 | ✅ **真机已实测**（修复后） | ✅ 帧钩子按设计不注册（GLFW 交换点只驱动输入轮询） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor; input=glfw`；`GuiDrawHook` 织入成功；截图 `docs/research/fatality-26.2-fixed.png`） |
 | 26.2（Vulkan） | ⏳ | 未验 | ✅ 已产出 | ⏳ 待真机（26.2 的图形 API 需在游戏设置里手动切换，本次实测的是 OpenGL 路径） |
 | 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转；2026-10-29 原版 26.3 复验浮点字形矩阵与线性采样生效） |
@@ -472,7 +472,7 @@
 |---|---|---|---|
 | 1.8.9 | 原版 / Forge | `gl-fixed` | ⏳ 待真机（旧界面在该格已验过注入链路） |
 | 1.12.2 | Forge | `gl-fixed` | ⏳ 待真机 |
-| 1.16.5 | Forge | `gui-stack`（1.16–1.19） | ✅ 真机已验收 2026-11-03（面板/三列/中文/点击；`scissor=rendersystem poseScale=true`） |
+| 1.16.5 | Forge | `gl-core`（1.13–1.19；`gui-stack` 仅兜底） | ✅ 真机已验收 2026-11-03（gl-core 渲染；`gui-stack` 绑定亦验证 `scissor=rendersystem poseScale=true`） |
 | 1.20.1 | Forge / Fabric | `gui-graphics`（1.20–1.21） | ⏳ 待真机（旧记录为 `gl-core`） |
 | 1.21.1 | Fabric mod | `gui-extractor` | ✅ **已实测**（Mixin 绘制/输入钩子织入；修复 `NativeImage` 原图写入、独立 UV 区域的 11 参 `blit`、2× 栅格密度与 alpha 混合后，文字和柔和阴影正常；滚轮走 `ScrollState`，日志确认 `view.scroll` 从 34 连续变化到 404 且物品栏不滚动。隔离实例诊断构建验证 Esc 关闭自绘 GUI、原生暂停菜单返回游戏及右 Shift 重开；原生 Screen 与自绘 GUI 同时打开时鼠标拦截为 `false`，暂停菜单上重开自绘 GUI 后，Back to Game 已实机点击返回，原生输入未被拦截；返回按压在松开前不再穿透到自绘 GUI，后续新点击正常；左 Shift（GLFW 340）不再误触发右 Shift（GLFW 344）快捷键。颜色选择器二维渐变已复验无横条；Fabric HUD 改为 Gui.render 捕获 + GameRenderer 深度清理后绘制，准星与快捷栏不再覆盖 GUI，颜色弹窗和滚轮均已复验） |
 | 1.21.8 | Fabric / NeoForge | `gui-graphics`（1.20–1.21） | ⏳ 待真机（旧记录为 `gl-core`） |

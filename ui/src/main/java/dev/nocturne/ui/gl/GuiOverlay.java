@@ -380,6 +380,11 @@ public final class GuiOverlay implements FrameListener {
             return;
         }
         InputBlock.setBlocked(gui.isOpen());
+        if (lastBlockedLogged != gui.isOpen()) {
+            lastBlockedLogged = gui.isOpen();
+            System.out.println("[nocturne] input block: guiOpen=" + gui.isOpen()
+                    + " blocked=" + InputBlock.shouldBlock());
+        }
         // 事件驱动优先：1.21.1 的 glfwGetKey 在合成按键下恒为 0（游戏回调却正常）。
         boolean toggleDown = togglePressed();
         if (toggleDown && !toggleWasDown) {
@@ -661,6 +666,9 @@ public final class GuiOverlay implements FrameListener {
 
     /** 滚轮派发诊断只打一次：区分「增量没进来」和「进来了但界面没接住」。 */
     private boolean scrollDispatchLogged;
+
+    /** 输入占用状态变化时打一次：确认 setBlocked 真的写到了 bootstrap 那份。 */
+    private boolean lastBlockedLogged;
 
     /** @return 游戏当前是否显示原生 Screen；桥不可用时按没有处理，不阻断自绘 GUI。 */
     private boolean hasNativeScreen() {

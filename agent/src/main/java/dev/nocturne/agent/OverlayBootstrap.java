@@ -235,8 +235,20 @@ public final class OverlayBootstrap implements FrameListener {
         // 原语是 Gui 从 GuiComponent 继承的静态 fill(PoseStack,...)。与 1.20+ 共用同一个后端，
         // 只在装配处按「实例方法与静态方法 + 首参绘制栈」分开（见 ExtractorRenderer.bindLegacy）。
         boolean guiStack = extractorType == null && !forceGl;
-        if (guiStack) {
+        if (guiStack && "game".equalsIgnoreCase(System.getProperty("nocturne.ui.backend", ""))) {
+            // 诊断开关：强制走游戏绘制 API，用于对照两条路径的观感/性能。
             extractorType = resolveLegacyGui();
+        } else if (guiStack) {
+            // 默认**优先 gl-core**：gui-stack 的 fill 是整数像素矩形（圆角逐行 1px 阶梯）、
+            // 文字是位图字体按 size/9 矩阵缩放（NEAREST 放出方块字），真机上明显比 1.8.9/26.x 粗糙。
+            // 这一段带着 LWJGL3 核心 profile，gl-core 完全可用（1.16.5 实测），因此只在它绑不上
+            // 核心 profile 入口时才退回 gui-stack。
+            Class<?> glProbe = resolveGl11();
+            if (glProbe != null && GlApi.bind(glProbe) != null) {
+                guiStack = false;
+            } else {
+                extractorType = resolveLegacyGui();
+            }
         }
         boolean gameApi = extractorType != null;
         Class<?> gl11 = null;

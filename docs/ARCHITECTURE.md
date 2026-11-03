@@ -144,9 +144,14 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   分开（`poseArg` 形状分支），`backendName()` 报 `gui-stack`。命中条件是
   `ClassType.HUD` 候选类上存在静态 6 参 `fill`（`OverlayBootstrap.resolveLegacyGui`），否则回退到
   `ModernRenderer`）。
-  选栈顺序（`OverlayBootstrap.tryInstall`，:205-245）：`-Dnocturne.ui.backend=gl` 强制跳过前三层 →
+  选栈顺序（`OverlayBootstrap.tryInstall`，:205-255）：`-Dnocturne.ui.backend=gl` 强制跳过前三层 →
   `GuiGraphicsExtractor` 存在（26.x `sdl`）→ `resolveGuiGraphics()`（1.20–1.21 `gui-graphics`）→
-  `resolveLegacyGui()`（1.16–1.19 `gui-stack`）→ `selectBackend` 的 GL 后端（`ModernRenderer` / `GlRenderer`）。
+  1.16–1.19 先试 gl-core（`GlApi.bind` 成功就跳过 `gui-stack`）→ `resolveLegacyGui()`（仅在 gl-core
+  不可用时才装配 `gui-stack`；`-Dnocturne.ui.backend=game` 可强制）→ `selectBackend` 的 GL 后端
+  （`ModernRenderer` / `GlRenderer`）。
+  为什么 1.16–1.19 默认不再用 `gui-stack`：`GuiComponent.fill` 是整数像素矩形（圆角逐行 1px 阶梯、
+  `Math.round` 取整），文字是位图字体按 `size/9` 矩阵缩放（NEAREST 采出方块字），真机对比 gl-core 后
+  明显粗糙；这一段带着 LWJGL3 核心 profile，gl-core 完全可用。
   特例：1.21.1 attach（`instrumentation != null` 且映射描述含 `1.21.1 `）强制 `forceGl = true`，
   属兼容豁免（代码注释 :217-221）。
 - 字形与程序化纹理：`text/FontRegistry` 从资源加载 TTF，`text/GlyphAtlas` 按 `(fontId, 字号)`

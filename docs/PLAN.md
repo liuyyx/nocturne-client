@@ -51,7 +51,7 @@
 | P2 注入点 | 帧交换钩子 + 绘制上下文钩子 | ✅ 已完成 |
 | P3 映射表生成器 | 66 个 release（1.8.9–26.3）四套命名空间；`--check` / `--javap` 全绿 | ✅ 已完成 |
 | P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **仍打开**（1.21.11 文字黑块/旧后端未收尾）；C（26.x extractor）✅ 真机，26.3 运行中 attach 也已复验 | B 未关闭 |
-| P4-D 绘制层重构 | D1 完成；D2 已重新接线并在 26.3 真机可见；1.20.1 HUD 钩子/末尾注入已修，但合成键盘无法验收 GUI；D3 已落地且 1.16.5 真机验收（`gui-stack` 绘制/文字/点击；双端钩子 + PoseStack 文本缩放 + RenderSystem 裁剪回退）；D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
+| P4-D 绘制层重构 | D1 完成；D2 已重新接线并在 26.3 真机可见；1.20.1 HUD 钩子/末尾注入已修，但合成键盘无法验收 GUI；D3 已落地，1.16.5 真机验收后**改为默认 gl-core**（`gui-stack` 观感粗糙，降为兜底；双端钩子 + PoseStack 文本缩放 + RenderSystem 裁剪回退仍保留）；D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
 | P5 输入 | 1.8.9 / 26.3 真机；GUI 打开时 1.8.9 压 `inGameHasFocus`、26.3 屏蔽 `MouseHandler#grabMouse`；SDL 滚轮已落地；1.8.9/1.16.5 滚轮与真实点击仍待真人 | 部分 |
 | P6 模块 | 22 个注册模块；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
 | P7 自实现 attach | Windows 真机；Linux/macOS 已实现未实机；`PayloadPack` 已接生产 | ✅ 已完成（平台待验） |
@@ -137,7 +137,12 @@
 - 验收（真机，至少 1.21.11 与 1.20.1）：界面可见、**文字正常显示**、可点；日志出现 `gui-graphics stack`（现状 `backendName()` 仍报 `gui-extractor`）；
   无 GL 异常日志；commit + push。
 
-### D3 1.16–1.19：`gui-stack` sink（静态 `fill`/`drawString` + 游戏 `PoseStack`）✅ 1.16.5 真机已验收（2026-11-03）
+### D3 1.16–1.19：`gui-stack` sink（静态 `fill`/`drawString` + 游戏 `PoseStack`）✅ 真机已验收（2026-11-03），**现降为 gl-core 的兜底**
+
+> 2026-11-03 观感结论：`GuiComponent.fill` 是整数像素矩形（圆角逐行 1px 阶梯 + `Math.round` 取整），
+> 文字是位图字体按 `size/9` 矩阵缩放（NEAREST 采出方块字）。真机对比 gl-core 后明显粗糙，
+> 因此 `OverlayBootstrap` 对 1.16–1.19 改为**先试 gl-core**，只有 `GlApi.bind` 失败才装配 `gui-stack`
+> （`-Dnocturne.ui.backend=game` 可强制对照）。本节的装配与修复全部保留。
 
 落地位置（不新增后端类，复用 `ExtractorRenderer`）：
 

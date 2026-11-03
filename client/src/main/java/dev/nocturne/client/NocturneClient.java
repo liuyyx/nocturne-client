@@ -191,6 +191,7 @@ public final class NocturneClient {
     /** 执行实际安装：注册内置模块并打日志。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */
     private void install() {
         registerModules();
+        enableDebugModules();
         dev.nocturne.client.module.ModuleKeybinds.install(this);
         gameplayEvents = dev.nocturne.client.event.GameplayEvents.install(this);
         rotations.install(this);
@@ -229,6 +230,38 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.player.AutoToolModule());
         modules.register(new dev.nocturne.client.module.modules.player.NoFallModule());
         modules.register(new dev.nocturne.client.module.modules.misc.PanicModule());
+    }
+
+
+    /**
+     * 调试用：{@code -Dnocturne.debug.modules=ESP,NameTags} 在启动时直接启用这些模块。
+     *
+     * <p>为什么不走 GUI：真实窗口的 GUI 点击依赖 `glfwGetMouseButton` 轮询，在无焦点/远程会话
+     * 下读不到按键；验证「某模块开启后」的行为时，这个入口省掉整条交互链路。
+     * 生产不受影响（属性不设就什么都不做）。
+     */
+    private void enableDebugModules() {
+        String spec = System.getProperty("nocturne.debug.modules");
+        if (spec == null || spec.isEmpty()) {
+            return;
+        }
+        for (String part : spec.split(",")) {
+            String wanted = part.trim();
+            if (wanted.isEmpty()) {
+                continue;
+            }
+            for (dev.nocturne.client.module.Module module : modules.all()) {
+                if (module.name().equalsIgnoreCase(wanted)) {
+                    try {
+                        module.setEnabled(true);
+                        System.out.println("[nocturne] debug: enabled module " + module.name());
+                    } catch (Throwable t) {
+                        System.out.println("[nocturne] debug: enable " + module.name() + " failed: " + t);
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     /** 全局事件总线。 */

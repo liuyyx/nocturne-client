@@ -217,7 +217,9 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.render.NameTagsModule());
         modules.register(new dev.nocturne.client.module.modules.render.ItemEspModule());
         modules.register(new dev.nocturne.client.module.modules.render.TrajectoriesModule());
-        modules.register(new dev.nocturne.client.module.modules.render.ChamsModule());
+        // Chams 暂不注册：它的 `onRender` 只做门检查，双 pass 重绘（取消原渲染 → 关深度绘墙后色
+        // → 绘可见色 → 恢复）需要的实体渲染拦截点还没织入。注册出去就是一个"开了没反应"的开关，
+        // 和 Xray 同样的处理——比让玩家以为是 bug 更糟。接入实体渲染挂钩后在这里重新注册。
         // Xray 暂不注册：它尚未接入方块渲染管线（没有区块重绘拦截，Opacity / Cave Mode 两个设置
         // 也没有任何读取点），注册出去只会是个"开了没反应"的开关——比不提供更糟。
         // 接入渲染管线后在这里重新注册（类与门逻辑保留在 XrayModule）。

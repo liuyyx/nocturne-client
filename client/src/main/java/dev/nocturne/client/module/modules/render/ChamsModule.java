@@ -130,13 +130,17 @@ public final class ChamsModule extends Module {
         // 双 pass 重绘待实体渲染挂钩落地后补齐；此处只做门检查。
     }
 
-    /** 实体面是否存在：LivingEntity 类可解析即认为可用。 */
+    /** 实体面是否存在：LivingEntity 类可解析即认为可用（走桥上的类型缓存）。 */
     private static boolean hasEntityFace(GameBridge bridge) {
+        // 与其它世界模块一致：手写候选循环会让每个实体每帧把未命中的名字重新 Class.forName 一遍。
+        if (bridge.type(ClassType.LIVING_ENTITY) != null) {
+            return true;
+        }
         Object player = bridge.player();
         ClassLoader loader = player != null && player.getClass().getClassLoader() != null
                 ? player.getClass().getClassLoader()
                 : ChamsModule.class.getClassLoader();
-        // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
+        // 桥没解析出来时再用实体的加载器试一遍（Fabric 隔离加载器）。
         for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
             try {
                 if (Class.forName(mapped, false, loader) != null) {

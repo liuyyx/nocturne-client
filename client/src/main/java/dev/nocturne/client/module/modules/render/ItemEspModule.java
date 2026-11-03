@@ -121,7 +121,11 @@ public final class ItemEspModule extends Module implements WorldOverlay {
     }
 
     /**
-     * 每渲染帧收集掉落物。
+     * 每渲染帧做门检查。
+     *
+     * <p>与 {@code EspModule} 同理：`RenderEvent` 在绘制之后广播，这里收集的列表下一帧才用得上，
+     * 而 {@link #drawWorldOverlay} 每帧本来就要遍历一次——两处各遍历等于把全量实体列表和每实体
+     * 反射做两遍。`lastVisibleCount` 由绘制路径更新。
      *
      * <p>表驱动门：实体面缺失的版本一次性日志 + 跳过，不刷屏不抛异常。
      */
@@ -130,17 +134,14 @@ public final class ItemEspModule extends Module implements WorldOverlay {
         if (bridge == null) {
             return;
         }
-        Object level = level(bridge);
-        if (level == null) {
+        if (level(bridge) == null) {
             lastVisibleCount = 0;
             return;
         }
         if (!hasItemFace(bridge)) {
             logGateOnce("掉落物面缺失（版本无该成员），ItemESP 已禁用");
             lastVisibleCount = 0;
-            return;
         }
-        lastVisibleCount = countVisible(bridge, level);
     }
 
     /** 取客户端世界；未进世界时返回 {@code null}。 */
@@ -152,15 +153,6 @@ public final class ItemEspModule extends Module implements WorldOverlay {
     /** 掉落物面是否存在：{@code ItemEntity} 类可解析即认为可用。 */
     private static boolean hasItemFace(GameBridge bridge) {
         return resolveMapped(bridge, ClassType.ITEM_ENTITY, null) != null;
-    }
-
-    /**
-     * 统计掉落物数。
-     *
-     * <p>白名单开且名单缺失时计 0（宁可不画不错画）——名单值类型还没落地。
-     */
-    private int countVisible(GameBridge bridge, Object level) {
-        return visibleEntities(bridge, level).size();
     }
 
     /**

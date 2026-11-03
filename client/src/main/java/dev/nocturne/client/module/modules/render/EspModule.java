@@ -127,7 +127,13 @@ public final class EspModule extends Module implements WorldOverlay {
     }
 
     /**
-     * 每渲染帧收集可见玩家。
+     * 每渲染帧做门检查。
+     *
+     * <p>**不再在这里收集实体**：`RenderEvent` 在 {@code NocturneRuntime.drive()} 的绘制之后才
+     * 广播，收藏结果给下一帧用会过期；而 {@link #drawWorldOverlay} 本身每帧就要遍历一次，
+     * 两边各遍历一次等于把全量实体列表和每实体反射都做两遍——1.16.5 真机上这就是
+     * 「开 ESP 之后帧率腰斩、随后游戏 tick 追赶」的主要开销之一。
+     * {@code lastVisibleCount} 由绘制路径更新。
      *
      * <p>表驱动门：实体面（LivingEntity#getHealth 等）在某版本 absent 时，
      * 本帧跳过并打一次性日志——错版本上干净禁用，不刷屏不抛异常。
@@ -137,18 +143,14 @@ public final class EspModule extends Module implements WorldOverlay {
         if (bridge == null) {
             return;
         }
-        Object level = level(bridge);
-        if (level == null) {
+        if (level(bridge) == null) {
             lastVisibleCount = 0;
             return;
         }
         if (!hasEntityFace(bridge)) {
             logGateOnce("实体面缺失（版本无该成员），ESP 已禁用");
             lastVisibleCount = 0;
-            return;
         }
-        lastVisibleCount = countVisible(bridge, level);
-        // 世界空间 3D 盒 / 屏幕空间 2D 框待世界渲染挂钩落地后补齐；此处只做收集与计数。
     }
 
     /** 取客户端世界；未进世界时返回 {@code null}。 */
@@ -160,16 +162,6 @@ public final class EspModule extends Module implements WorldOverlay {
     /** 实体面是否存在：LivingEntity 类可解析即认为可用（走桥上的类型缓存）。 */
     private static boolean hasEntityFace(GameBridge bridge) {
         return bridge.type(ClassType.LIVING_ENTITY) != null;
-    }
-
-    /**
-     * 统计可见玩家数（按 Invisibles / Hide Bots 开关过滤）。
-     *
-     * <p>Bot 判定与隐身无装备判定待实体上下文落地后补齐，当前按开关字面语义保守计数
-     * （Hide Bots 开时暂不扣减，避免误杀）。
-     */
-    private int countVisible(GameBridge bridge, Object level) {
-        return visibleEntities(bridge, level).size();
     }
 
     /**

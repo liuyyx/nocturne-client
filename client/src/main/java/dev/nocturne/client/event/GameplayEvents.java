@@ -194,6 +194,16 @@ public final class GameplayEvents implements GameplayHook.Sink {
         return !event.cancelled;
     }
 
+    /** 位置诊断开关：{@code -Dnocturne.debug.motion} 时打印每 tick 的位移与写回结果。 */
+    private static final boolean MOTION_DEBUG =
+            System.getProperty("nocturne.debug.motion") != null;
+    /** 上一 tick 记录的玩家位置（诊断用）。 */
+    private double debugLastX = Double.NaN;
+    private double debugLastY = Double.NaN;
+    private double debugLastZ = Double.NaN;
+    /** 诊断日志限流：每秒最多一条。 */
+    private long debugMotionLoggedAt;
+
     /** 读取完整 Motion 状态；缺任何必需成员时不投递，更不把零值写回玩家。 */
     private void postMotion(Object player, boolean pre) {
         GameBridge bridge = client.gameBridge();
@@ -216,6 +226,25 @@ public final class GameplayEvents implements GameplayHook.Sink {
         client.events().post(event);
         if (!pre) {
             return;
+        }
+        if (MOTION_DEBUG) {
+            // 一 tick 位移超过 5 格（正常走路 < 0.5 格）几乎只可能是位置被谁改坏了：
+            // 玩家报「开覆盖层后人物飞速移动」时，这行直接区分「位置异常」与「只是掉帧看起来快」。
+            double dx = x.doubleValue() - debugLastX;
+            double dy = y.doubleValue() - debugLastY;
+            double dz = z.doubleValue() - debugLastZ;
+            double step = Double.isNaN(debugLastX) ? 0d : Math.sqrt(dx * dx + dy * dy + dz * dz);
+            long now = System.currentTimeMillis();
+            if ((step > 5d || Math.abs(event.x - x.doubleValue()) > 0.5d) && now - debugMotionLoggedAt > 1000L) {
+                debugMotionLoggedAt = now;
+                System.out.println("[nocturne] motion anomaly: step=" + step
+                        + " at=" + x.doubleValue() + "," + y.doubleValue() + "," + z.doubleValue()
+                        + " post=" + event.x + "," + event.y + "," + event.z
+                        + " yaw=" + yaw.floatValue() + "->" + event.yaw);
+            }
+            debugLastX = x.doubleValue();
+            debugLastY = y.doubleValue();
+            debugLastZ = z.doubleValue();
         }
         if (finite(event.x) && finite(event.y) && finite(event.z)) {
             bridge.callMapped(player, ClassType.ENTITY, "setPos", event.x, event.y, event.z);

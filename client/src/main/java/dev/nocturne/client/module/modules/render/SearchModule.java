@@ -86,6 +86,9 @@ public final class SearchModule extends Module implements WorldOverlay {
     /** 命中框颜色。 */
     private final ColorValue color = add(new ColorValue("Color", 0xFFFFFFFF));
 
+    /** 上次清理陈旧命中的时间戳（毫秒）。 */
+    private long lastPruneAt;
+
     /** 命中缓存：打包坐标（x/z 各 26 位、y 12 位，与游戏的方块坐标打包同构）→ 方块描述 id。 */
     private final Map<Long, String> hits = new HashMap<Long, String>();
     /** 方块实例 → 描述 id。方块是注册表单例，实例身份稳定，省掉每格的反射调用。 */
@@ -238,6 +241,13 @@ public final class SearchModule extends Module implements WorldOverlay {
         int spanY = VERTICAL_RANGE * 2 + 1;
         long total = (long) spanXZ * spanY * spanXZ;
         boolean caved = onlyCaves.get();
+        // 命中缓存要跟着世界变化走：只在整圈扫完时 prune 的话，方块被挖掉后幽灵框能留好几秒
+        // （真机：/fill air 之后框还在屏幕上）。这里按墙钟每 500ms 清一次陈旧命中。
+        long now = System.currentTimeMillis();
+        if (now - lastPruneAt >= 500L) {
+            lastPruneAt = now;
+            prune(originX, originY, originZ, radius);
+        }
         for (int step = 0; step < BLOCKS_PER_TICK; step++) {
             if (cursor >= total) {
                 cursor = 0;
@@ -278,7 +288,6 @@ public final class SearchModule extends Module implements WorldOverlay {
         boolean tracers = useTracers.get();
         float bottomX = draw.width() / 2f;
         float bottomY = draw.height();
-        float size = BOX_HALF * 2f;
         Iterator<Map.Entry<Long, String>> iterator = hits.entrySet().iterator();
         while (iterator.hasNext()) {
             long key = iterator.next().getKey();
@@ -289,11 +298,13 @@ public final class SearchModule extends Module implements WorldOverlay {
             if (!point.visible) {
                 continue;
             }
+            // 按距离缩放：固定 14px 在近距离会把相邻方块糊成一片白（真机：125 个金矿铺满整屏）。
+            float box = Math.max(4f, Math.min(BOX_HALF * 2f, 90f / (float) point.depth));
             if (tracers) {
                 draw.line(bottomX, bottomY, point.x, point.y, LINE_THICKNESS, argb);
             }
-            draw.rect(point.x - BOX_HALF, point.y - BOX_HALF, size, size, argb);
-            draw.outline(point.x - BOX_HALF, point.y - BOX_HALF, size, size, LINE_THICKNESS, argb);
+            draw.rect(point.x - box / 2f, point.y - box / 2f, box, box, argb);
+            draw.outline(point.x - box / 2f, point.y - box / 2f, box, box, LINE_THICKNESS, argb);
         }
     }
 

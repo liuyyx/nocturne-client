@@ -118,6 +118,8 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     private int batchCount;
     /** 当前批次颜色（ARGB）；{@code 0} 表示批次为空。 */
     private int batchColor;
+    /** 是否已把 program/VAO 让给游戏字体渲染器（连续文字之间不必反复切换）。 */
+    private boolean yieldedToText;
 
     /** 自上次取走以来真正下发的 draw 次数（诊断用，合并批次后应远小于图元数）。 */
     private int drawCalls;
@@ -470,6 +472,7 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
                               float mouseX, float mouseY) {
         // 3D 预览自己会切 program/VAO/纹理：批里的几何先画掉。
         flushBatch();
+        reclaimFromText();
         if (!ready || !stateSaved || bridge == null || player == null
                 || right - left < 16.0f || bottom - top < 24.0f) {
             return false;
@@ -769,6 +772,7 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         }
         // 帧末必须把批次画掉：漏掉就是整屏纯色消失。
         flushBatch();
+        reclaimFromText();
         if (ready) {
             // 解绑到 0（VAO 0 是独立的默认状态，不会改写游戏 VAO 的内容）。
             // 曾经尝试「恢复到进入前的绑定」，但游戏 VAO 1 上的 glBindBuffer 会改写它自己的
@@ -853,14 +857,22 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         // 交给游戏字体前必须让出本后端占用的 program 与 VAO：字体渲染器走自己的管线，
         // 留着我们的绑定会与它的状态互相覆盖。注意不要在这里改混合开关——
         // 字体绘制结束后不会替我们恢复，状态会与本后端的假设不符。
-        if (ready) {
+        if (ready && !yieldedToText) {
             gl.useProgram(0);
             gl.bindVertexArray(0);
+            yieldedToText = true;
         }
         text.draw(value, x, y, size, color);
-        if (ready) {
+        // 不在这里抢回来：名字标签是成串绘制的，每条都切两次 program/VAO 在几十个实体时要
+        // 上百次状态切换。下一条几何绘制（drawSolidNow）会负责恢复。
+    }
+
+    /** 从游戏字体手里夺回 program/VAO（若之前让出过）。 */
+    private void reclaimFromText() {
+        if (yieldedToText && ready) {
             gl.useProgram(program);
             gl.bindVertexArray(vertexArray);
+            yieldedToText = false;
         }
     }
 
@@ -938,6 +950,7 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     public void texturedQuad(int texture, float x, float y, float width, float height,
                              float u0, float v0, float u1, float v1, int argb) {
         flushBatch();
+        reclaimFromText();
         if (!ready || texture <= 0 || width <= 0f || height <= 0f || (argb >>> 24) == 0) {
             return;
         }
@@ -1153,6 +1166,7 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         if (vertices == 0) {
             return;
         }
+        reclaimFromText();
         gl.uniform1i(textureFlagLocation, 0);
         // 纯色也绑白纹理：uniform 分支不保证跳过采样（见片元着色器）。
         gl.bindTexture2D(whiteTexture);

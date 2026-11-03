@@ -199,6 +199,8 @@
 | `BlockEntityScan` | 每帧遍历所有已加载区块 + 每区块反射 | 按 20Hz 缓存（与模块 tick 同频） | `cost` 1500–2700 → 884–984 µs |
 | `NameTagsModule` / `StorageEspModule` | 名字/宽度/容器坐标/陷阱箱判定每帧重复反射 | 按实体身份或文本缓存（弱引用随卸载回收） | 代码 |
 | `MinecraftTextRenderer` | `draw/s` 计数在 `draw()` 开头，字体未就绪也 +1 | 移到真正绘制点 | 空世界不再报 11000+ |
+| `EspModule` 框不可见 | 头顶/脚下两点投影差被透视压到 1–4px（真机探针 `h=2 w=1`），叠加深绿 `0xFF249824` + 1px 描边 → 草地/夜晚/洞穴完全不可辨；玩家报"开了看不见框" | `MIN_BOX_PX=8` 最小尺寸 + 默认色改亮绿 `0xFF3CF03C` + 半透明填充；新增 `Max Distance`（默认 64）避免远处被放大成噪声 | 截图为证：同位置从零框 → 5 个清晰框 |
+| `EspModule` 计数 | 删 `countVisible` 时漏了回写 `lastVisibleCount`，HUD 数量恒 0 | 绘制循环末尾回写，并加 `ESP: entities=N drawn=M` 每秒诊断 | 真机 114 实体 / 42 框 |
 
 **已知结构性限制**：1.16.5 的 client jar **没有 `GlStateManager`**（只有
 `com.mojang.blaze3d.systems.RenderSystem`），而 `RenderSystem` 的 shader 管理是

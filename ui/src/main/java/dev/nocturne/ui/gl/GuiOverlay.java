@@ -724,18 +724,26 @@ public final class GuiOverlay implements FrameListener {
             }
         } finally {
             renderer.endFrame();
-            if (renderer instanceof GlRenderer
-                    && System.getProperty("nocturne.ui.debug") != null) {
+            if (System.getProperty("nocturne.ui.debug") != null) {
                 long now = System.currentTimeMillis();
                 if (now - batchLoggedAt >= 1000L) {
                     batchLoggedAt = now;
-                    int[] counts = ((GlRenderer) renderer).takeBatchCounts();
-                    int[] uploads = ((GlRenderer) renderer).takeUploadCounts();
-                    System.out.println("[nocturne] draw batches/s=" + counts[0]
-                            + " vertices/s=" + counts[1]
-                            + " tex batches/s=" + counts[2]
-                            + " text/s=" + MinecraftTextRenderer.takeDrawCalls()
-                            + " upload full/s=" + uploads[0] + " sub/s=" + uploads[1]);
+                    if (renderer instanceof GlRenderer) {
+                        int[] counts = ((GlRenderer) renderer).takeBatchCounts();
+                        int[] uploads = ((GlRenderer) renderer).takeUploadCounts();
+                        System.out.println("[nocturne] draw batches/s=" + counts[0]
+                                + " vertices/s=" + counts[1]
+                                + " tex batches/s=" + counts[2]
+                                + " text/s=" + MinecraftTextRenderer.takeDrawCalls()
+                                + " upload full/s=" + uploads[0] + " sub/s=" + uploads[1]);
+                    } else if (renderer instanceof ModernRenderer) {
+                        // gl-core 没有顶点批处理层：这里的小批次是「同色几何合并后」的真实下发次数，
+                        // 与图元数的比值直接反映合批收益。
+                        int[] counts = ((ModernRenderer) renderer).takeDrawCounts();
+                        System.out.println("[nocturne] gl-core draw/s=" + counts[0]
+                                + " vertices/s=" + counts[1]
+                                + " text/s=" + MinecraftTextRenderer.takeDrawCalls());
+                    }
                 }
             }
         }

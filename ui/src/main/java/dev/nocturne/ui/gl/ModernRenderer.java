@@ -118,6 +118,23 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     private int batchCount;
     /** 当前批次颜色（ARGB）；{@code 0} 表示批次为空。 */
     private int batchColor;
+
+    /** 自上次取走以来真正下发的 draw 次数（诊断用，合并批次后应远小于图元数）。 */
+    private int drawCalls;
+    /** 自上次取走以来下发的顶点数。 */
+    private int drawnVertices;
+
+    /**
+     * 取走并清零绘制计数器（诊断用）。
+     *
+     * @return {@code {draw 次数, 顶点数}}
+     */
+    public int[] takeDrawCounts() {
+        int[] counts = new int[]{drawCalls, drawnVertices};
+        drawCalls = 0;
+        drawnVertices = 0;
+        return counts;
+    }
     /** 进入前绑定的着色器程序；{@code -1} 表示查询不可用。 */
     private int programBefore = -1;
     /** 进入前绑定的顶点数组对象。 */
@@ -1144,6 +1161,8 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         gl.uniformMatrix4fv(projectionLocation, projection);
         gl.uniform4f(colorLocation, color.rf(), color.gf(), color.bf(), color.af());
         gl.drawTriangles(0, vertices);
+        drawCalls++;
+        drawnVertices += vertices;
     }
 
     /**

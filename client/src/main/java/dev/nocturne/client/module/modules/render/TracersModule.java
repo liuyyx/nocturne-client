@@ -139,7 +139,11 @@ public final class TracersModule extends Module implements WorldOverlay {
     }
 
     /**
-     * 每渲染帧收集可见实体。
+     * 每渲染帧做门检查。
+     *
+     * <p>与 ESP 同理：`RenderEvent` 在绘制之后才广播，这里收来的实体列表下一帧就过期，
+     * 而 {@link #drawWorldOverlay} 每帧本来就要遍历一次——两处各遍历等于把全量实体列表和
+     * 每实体反射做两遍。`lastVisibleCount` 由绘制路径更新。
      *
      * <p>表驱动门：实体面缺失的版本一次性日志 + 跳过，不刷屏不抛异常。
      */
@@ -148,18 +152,14 @@ public final class TracersModule extends Module implements WorldOverlay {
         if (bridge == null) {
             return;
         }
-        Object level = level(bridge);
-        if (level == null) {
+        if (level(bridge) == null) {
             lastVisibleCount = 0;
             return;
         }
         if (!hasEntityFace(bridge)) {
             logGateOnce("实体面缺失（版本无该成员），Tracers 已禁用");
             lastVisibleCount = 0;
-            return;
         }
-        lastVisibleCount = countVisible(bridge, level);
-        // 屏幕空间直线待世界渲染挂钩落地后补齐；此处只做收集与计数。
     }
 
     /** 取客户端世界；未进世界时返回 {@code null}。 */
@@ -168,10 +168,12 @@ public final class TracersModule extends Module implements WorldOverlay {
         return minecraft == null ? null : bridge.readField(minecraft, ClassType.MINECRAFT, "level");
     }
 
-    /** 实体面是否存在：LivingEntity 类可解析即认为可用。 */
+    /** 实体面是否存在：LivingEntity 类可解析即认为可用（走桥上的类型缓存）。 */
     private static boolean hasEntityFace(GameBridge bridge) {
+        if (bridge.type(ClassType.LIVING_ENTITY) != null) {
+            return true;
+        }
         ClassLoader loader = bridge.gameLoader();
-        // 候选名逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名），第一个加载成功者胜出。
         for (String mapped : bridge.mapping().classNameCandidates(ClassType.LIVING_ENTITY)) {
             try {
                 if (Class.forName(mapped, false, loader) != null) {
@@ -182,17 +184,6 @@ public final class TracersModule extends Module implements WorldOverlay {
             }
         }
         return false;
-    }
-
-    /**
-     * 统计可见实体数（三组开关 + 距离上限过滤）。
-     *
-     * <p>玩家/生物/动物的区分需要实体类型面（Player/Animal/Mob kind），当前表里只有
-     * LivingEntity 一层，故三组开关按"任一组开着就计全部 LivingEntity（除自己）"保守实现，
-     * 类型细分待 kind 面落地后补齐。
-     */
-    private int countVisible(GameBridge bridge, Object level) {
-        return visibleEntities(bridge, level).size();
     }
 
     /**

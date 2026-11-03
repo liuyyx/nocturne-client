@@ -193,7 +193,9 @@
 | `FullBrightModule` | Gamma 启用 → 切 Night Vision → 禁用：只摘药水就 return，gamma 永停在模块值 | 两个分支都走 `restoreOriginal()` | 代码 |
 | `ChamsModule` | 只做门检查，双 pass 重绘未接入 → 空转开关 | 按 Xray 先例从注册表移除（类与门逻辑保留） | 真机 `modules=21` |
 | `TracersModule` | 同 ESP：`onRender` 与 `drawWorldOverlay` 各遍历一次实体 | 只留门检查 + 走 `GameBridge.type()` | 代码 |
+| `SearchModule` 建点 | 每格 `above/east/south` 三次方向面反射 | 改用桥缓存的 `BlockPos(int,int,int)` 构造器，每格一次 | `cost` 96–575 µs |
 | `CameraState` yaw 插值 | 直接 `yRot - yRotO`，跨 ±180 那一帧差值为 ∓358 → 相机瞬移、框乱窜 | 先 `wrapDegrees` 再插值（`Mth.rotLerp` 语义） | 代码；`-Dnocturne.debug.noCameraInterp` 可整体关插值 |
+| `CameraState` 眼位 | 只插值朝向、眼位仍走零参 `getEyePosition()`（tick 末值）→ 移动时框比画面慢半拍 | 有插值量时优先调 `getEyePosition(float)`，零参只兜底 | 真机无缺成员日志 |
 | `BlockEntityScan` | 每帧遍历所有已加载区块 + 每区块反射 | 按 20Hz 缓存（与模块 tick 同频） | `cost` 1500–2700 → 884–984 µs |
 | `NameTagsModule` / `StorageEspModule` | 名字/宽度/容器坐标/陷阱箱判定每帧重复反射 | 按实体身份或文本缓存（弱引用随卸载回收） | 代码 |
 | `MinecraftTextRenderer` | `draw/s` 计数在 `draw()` 开头，字体未就绪也 +1 | 移到真正绘制点 | 空世界不再报 11000+ |

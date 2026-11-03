@@ -45,6 +45,9 @@ public final class EspModule extends Module implements WorldOverlay {
     /** 显示名字。 */
     private final BooleanValue showName = add(new BooleanValue("Name", false));
 
+    /** 诊断日志限流：每秒最多一条。 */
+    private long diagLoggedAt;
+
     /** RenderEvent 订阅句柄；禁用时退订。 */
     private volatile EventBus.Subscription renderSubscription;
     /** 缺成员门日志是否已打过（每个版本只报一次）。 */
@@ -231,7 +234,9 @@ public final class EspModule extends Module implements WorldOverlay {
         boolean box = showBoundingBox.get();
         boolean name = showName.get();
         float lineHeight = draw.textHeight();
-        for (Object entity : visibleEntities(bridge, level)) {
+        List<Object> entities = visibleEntities(bridge, level);
+        int drawn = 0;
+        for (Object entity : entities) {
             double[] pos = position(bridge, entity);
             if (pos == null) {
                 continue;
@@ -247,12 +252,24 @@ public final class EspModule extends Module implements WorldOverlay {
             float halfWidth = boxHeight * WIDTH_RATIO;
             if (box) {
                 draw.outline(centerX - halfWidth, topY, halfWidth * 2f, boxHeight, 1f, argb);
+                drawn++;
             }
             if (name) {
                 String label = entityName(bridge, entity);
                 if (label != null) {
                     draw.text(label, centerX - draw.textWidth(label) / 2f, topY - lineHeight - 1f, argb);
                 }
+            }
+        }
+        lastVisibleCount = drawn;
+        if (System.getProperty("nocturne.ui.debug") != null) {
+            long now = System.currentTimeMillis();
+            if (now - diagLoggedAt > 1000L) {
+                diagLoggedAt = now;
+                // entities 是"通过 LivingEntity + 隐身过滤"的数量；drawn 是真正投影成功并画了框的数量。
+                // 两者差距大 = 投影/可见性判定把实体剔掉了（例如头顶/脚下点出屏）。
+                System.out.println("[nocturne] ESP: entities=" + entities.size()
+                        + " drawn=" + drawn + " box=" + box + " name=" + name);
             }
         }
     }

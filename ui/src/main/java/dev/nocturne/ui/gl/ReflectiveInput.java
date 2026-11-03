@@ -509,8 +509,21 @@ public final class ReflectiveInput implements InputSource {
                             return null;
                         }
                     });
-            Object previous = Reflect.call(glfwSetScrollCallback, null, glfwWindow, callback);
-            installedScrollCallback = callback;
+            // LWJGL 3.x 的 glfwSetScrollCallback 需要「具体回调类」而不是裸接口实例：
+            // 直接传动态代理时 GLFW 能接受、但 native 侧永不回调（真机：注册日志有、事件一次没有）。
+            // 官方工厂 GLFWScrollCallback.create(接口实例) 会生成带 native 方法表的实现。
+            Object nativeCallback = callback;
+            Class<?> concrete = Reflect.loadWithoutInit("org.lwjgl.glfw.GLFWScrollCallback",
+                    scrollCallbackType.getClassLoader());
+            Method factory = Reflect.method(concrete, "create", scrollCallbackType);
+            if (factory != null) {
+                Object made = Reflect.call(factory, null, callback);
+                if (made != null) {
+                    nativeCallback = made;
+                }
+            }
+            Object previous = Reflect.call(glfwSetScrollCallback, null, glfwWindow, nativeCallback);
+            installedScrollCallback = nativeCallback;
             if (previous != null && scrollCallbackType.isInstance(previous)) {
                 // 保留被顶掉的旧回调引用并（在代理里）转发，而不是让它成为孤儿
                 previousScrollCallback = previous;

@@ -652,8 +652,8 @@ public final class GuiOverlay implements FrameListener {
      */
     /** TEMP-DIAG：每帧画红矩形并回读中心像素（不需要界面打开）。 */
 
-    /** TEMP-DIAG：probe 模式的日志限流。 */
-
+    /** 原生 Screen 探针只打一次：读不到字段会让 GUI 永不关闭，输入被永久短路。 */
+    private boolean nativeScreenProbeLogged;
 
     /** @return 游戏当前是否显示原生 Screen；桥不可用时按没有处理，不阻断自绘 GUI。 */
     private boolean hasNativeScreen() {
@@ -664,10 +664,21 @@ public final class GuiOverlay implements FrameListener {
             if (minecraft == null) {
                 return false;
             }
-            return bridge.readField(minecraft, dev.nocturne.client.mapping.ClassType.MINECRAFT,
-                    "currentScreen") != null || bridge.readField(minecraft,
-                    dev.nocturne.client.mapping.ClassType.MINECRAFT, "screen") != null;
-        } catch (Throwable ignored) {
+            Object current = bridge.readField(minecraft,
+                    dev.nocturne.client.mapping.ClassType.MINECRAFT, "currentScreen");
+            Object legacy = bridge.readField(minecraft,
+                    dev.nocturne.client.mapping.ClassType.MINECRAFT, "screen");
+            if (!nativeScreenProbeLogged) {
+                nativeScreenProbeLogged = true;
+                System.out.println("[nocturne] native screen probe: currentScreen=" + current
+                        + " screen=" + legacy);
+            }
+            return current != null || legacy != null;
+        } catch (Throwable t) {
+            if (!nativeScreenProbeLogged) {
+                nativeScreenProbeLogged = true;
+                System.out.println("[nocturne] native screen probe failed: " + t);
+            }
             return false;
         }
     }

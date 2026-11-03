@@ -67,18 +67,32 @@ public final class CameraState {
                 partialTicks = raw.floatValue();
             }
         }
-        Object eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition");
-        if (!bridge.isInstance(eye, ClassType.VEC3)) {
-            // 1.8.9 没有零参 getEyePosition；GameBridge 的 arity 回退可能命中同名的无参方法，
-            // 例如返回 WorldClient。必须按返回类型剔除，否则后续 Vec3 字段读取必然失败。
-            eye = null;
+        Object eye = null;
+        if (partialTicks > 0f) {
+            // 有插值量时**优先**带参重载：1.16.5 的零参 getEyePosition() 返回 tick 末值，
+            // 光插值朝向不插值眼位，玩家移动时框仍然会比画面慢半拍（各版本都实现了 (F) 重载）。
+            Object interpolated = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition",
+                    Float.valueOf(partialTicks));
+            if (bridge.isInstance(interpolated, ClassType.VEC3)) {
+                eye = interpolated;
+            }
         }
         if (eye == null) {
-            // 1.17+ 是零参 getEyePosition()；1.8.9–1.16.5 的签名带 partialTicks
+            Object raw = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition");
+            if (bridge.isInstance(raw, ClassType.VEC3)) {
+                // 1.8.9 / 1.12.2 只有带参形态；这里命中说明零参确实存在（1.17+）。
+                eye = raw;
+            }
+        }
+        if (eye == null) {
+            // 1.8.9–1.16.5 的签名带 partialTicks
             // （SRG func_174824_e(F) / MCP getPositionEyes(float)）。两形态各试一次——只试零参会让
-            // A/B 代覆盖层整帧不画。插值量必须传真实值，否则眼位比画面慢半个 tick。
-            eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition",
+            // A/B 代覆盖层整帧不画。
+            Object fallback = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition",
                     Float.valueOf(partialTicks));
+            if (bridge.isInstance(fallback, ClassType.VEC3)) {
+                eye = fallback;
+            }
         }
         if (!bridge.isInstance(eye, ClassType.VEC3)) {
             return missing(bridge, "Entity#getEyePosition");

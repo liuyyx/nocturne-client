@@ -77,6 +77,10 @@ public final class StorageEspModule extends Module implements WorldOverlay {
     private boolean chunkGateLogged;
     /** 上一帧画出来的容器数（HUD/诊断用）。 */
     private int lastVisibleCount;
+    /** 方块实体 → 世界坐标（{@code getBlockPos} + 三次 {@code getX/Y/Z} 反射）；方块实体不移动。 */
+    private final java.util.WeakHashMap<Object, double[]> posCache =
+            new java.util.WeakHashMap<Object, double[]>();
+
     /** 方块实体 → 是否陷阱箱；弱引用，区块卸载后自动回收。 */
     private final java.util.WeakHashMap<Object, Boolean> trappedCache =
             new java.util.WeakHashMap<Object, Boolean>();
@@ -253,17 +257,23 @@ public final class StorageEspModule extends Module implements WorldOverlay {
     /** 画一个容器框；不可见或坐标读不到时返回 {@code false}。 */
     private boolean drawContainer(OverlayDraw draw, WorldProjection projection, GameBridge bridge,
                                   Object blockEntity, Kind kind) {
-        Object pos = bridge.callMapped(blockEntity, ClassType.BLOCK_ENTITY, "getBlockPos");
-        if (pos == null) {
-            return false;
+        // 方块实体不会移动：位置按实体身份缓存，省掉每帧 4 次反射（getBlockPos + getX/Y/Z）。
+        double[] coords = posCache.get(blockEntity);
+        if (coords == null) {
+            Object pos = bridge.callMapped(blockEntity, ClassType.BLOCK_ENTITY, "getBlockPos");
+            if (pos == null) {
+                return false;
+            }
+            double x = coordinate(bridge, pos, "getX");
+            double y = coordinate(bridge, pos, "getY");
+            double z = coordinate(bridge, pos, "getZ");
+            if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(z)) {
+                return false;
+            }
+            coords = new double[]{x, y, z};
+            posCache.put(blockEntity, coords);
         }
-        double x = coordinate(bridge, pos, "getX");
-        double y = coordinate(bridge, pos, "getY");
-        double z = coordinate(bridge, pos, "getZ");
-        if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(z)) {
-            return false;
-        }
-        projection.project(x + 0.5d, y + 0.5d, z + 0.5d, point);
+        projection.project(coords[0] + 0.5d, coords[1] + 0.5d, coords[2] + 0.5d, point);
         if (!point.visible) {
             return false;
         }

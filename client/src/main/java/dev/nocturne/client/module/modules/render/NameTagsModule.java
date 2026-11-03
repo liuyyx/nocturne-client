@@ -26,6 +26,14 @@ import java.util.List;
  */
 public final class NameTagsModule extends Module implements WorldOverlay {
 
+    /** 实体 → 显示名缓存：名字几乎不变，而 `getName()` + 组件转文本都是反射。 */
+    private final java.util.WeakHashMap<Object, String> nameCache =
+            new java.util.WeakHashMap<Object, String>();
+    /** 标签文本 → 渲染宽度缓存：`textWidth` 每次都要反射调字体度量。 */
+    private final java.util.HashMap<String, Float> widthCache = new java.util.HashMap<String, Float>();
+    /** 宽度缓存上限；超出就整体清空（标签文本随距离/血量变化，长期累积没有意义）。 */
+    private static final int WIDTH_CACHE_LIMIT = 512;
+
     /** 每帧最多画多少条标签：极端场景（大船/刷怪塔）下按距离截断，避免覆盖层拖垮渲染线程。 */
     private static final int MAX_LABELS = 256;
 
@@ -209,7 +217,7 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             if (label == null) {
                 continue;
             }
-            draw.text(label, point.x - draw.textWidth(label) / 2f, point.y - lineHeight, 0xFFFFFFFF);
+            draw.text(label, point.x - labelWidth(label, draw) / 2f, point.y - lineHeight, 0xFFFFFFFF);
             drawn++;
             if (drawn >= MAX_LABELS) {
                 break;
@@ -225,10 +233,17 @@ public final class NameTagsModule extends Module implements WorldOverlay {
      * （现在只有 Player/Mob 两级），分组开关暂时合流——比"开关完全没人看"好得多，
      * 等 kind 面进表后再按组精确匹配。
      */
-    private static String label(GameBridge bridge, Object entity, boolean withDistance,
-                                boolean withHealth, double[] selfPos, double[] pos) {
+    private String label(GameBridge bridge, Object entity, boolean withDistance,
+                         boolean withHealth, double[] selfPos, double[] pos) {
         // getName 返回的是聊天组件而不是字符串，必须经映射表读文本（见 GameBridge#componentText）。
-        String name = bridge.componentText(bridge.callMapped(entity, ClassType.ENTITY, "getName"));
+        // 结果按实体身份缓存：名字几乎不变，而这条链每帧每实体要走两次反射。
+        String name = nameCache.get(entity);
+        if (name == null) {
+            name = bridge.componentText(bridge.callMapped(entity, ClassType.ENTITY, "getName"));
+            if (name != null) {
+                nameCache.put(entity, name);
+            }
+        }
         if (name == null) {
             return null;
         }
@@ -274,6 +289,25 @@ public final class NameTagsModule extends Module implements WorldOverlay {
         }
         return new double[]{((Number) x).doubleValue(), ((Number) y).doubleValue(),
                 ((Number) z).doubleValue()};
+    }
+
+    /**
+     * 标签渲染宽度（带缓存）。
+     *
+     * <p>`textWidth` 走 {@code MinecraftTextRenderer.width} → 反射调字体度量；标签文本每帧重拼，
+     * 但大部分内容稳定，缓存能把每条标签的反射次数从 2 次降到 1 次。
+     */
+    private float labelWidth(String label, OverlayDraw draw) {
+        Float cached = widthCache.get(label);
+        if (cached != null) {
+            return cached.floatValue();
+        }
+        float width = draw.textWidth(label);
+        if (widthCache.size() >= WIDTH_CACHE_LIMIT) {
+            widthCache.clear();
+        }
+        widthCache.put(label, Float.valueOf(width));
+        return width;
     }
 
     /** 两点距离（米）；任一端缺失时返回负数。 */

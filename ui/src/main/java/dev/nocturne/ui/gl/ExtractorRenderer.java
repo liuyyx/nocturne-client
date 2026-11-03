@@ -208,6 +208,18 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     /** 本帧绘制区宽高（逻辑像素）；未知为 0。 */
     private int width;
     private int height;
+    /** 本帧帧缓冲物理高度；RenderSystem 裁剪要把顶部坐标翻成底部坐标。 */
+    private int physicalHeightValue;
+    /** 绘制原语是否以「静态方法 + 首参绘制栈」的形状绑定（1.16–1.19）。 */
+    private final boolean poseArg;
+    /**
+     * 裁剪句柄的参数语义是否为 {@code (x, y, w, h)} 且无绘制上下文参数。
+     *
+     * <p>1.16–1.18 没有 {@code GuiComponent.enableScissor}，回退到
+     * {@code com.mojang.blaze3d.systems.RenderSystem.enableScissor(int,int,int,int)}——它是静态方法、
+     * 传的是宽高；1.19.1+ 的 GUI 版本传的是对角点 {@code (x1,y1,x2,y2)}。
+     */
+    private final boolean scissorWh;
     /*
      * GUI 缩放（物理像素 / 逻辑像素）由 {@link #guiScale} 承担：
      * 组件树按「设计单位 × scale」排版。1.20+ 的 GuiGraphics 用逻辑坐标，若 scale 恒为 1，
@@ -241,6 +253,8 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     private boolean fontMissingLogged;
     /** 是否已打过首帧尺寸日志（只打一次）。 */
     private boolean firstFrameLogged;
+    /** 是否已打过文字宽度探针（只打一次）。 */
+    private boolean widthProbeLogged;
 
     private ExtractorRenderer(Class<?> extractorType, Method fill, Method outline, Method enableScissor,
                               Method disableScissor, Method text, Method guiWidth, Method guiHeight,
@@ -250,7 +264,8 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
                               Supplier<Object> fontSource,
                               dev.nocturne.client.mapping.Mapping mapping,
                               Method poseMethod, Method pushMatrix, Method popMatrix,
-                              Method scaleMatrix, Method translateMatrix) {
+                              Method scaleMatrix, Method translateMatrix, boolean poseArg,
+                              boolean scissorWh) {
         this.fill = fill;
         this.outline = outline;
         this.enableScissor = enableScissor;
@@ -274,6 +289,8 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         this.popMatrix = popMatrix;
         this.scaleMatrix = scaleMatrix;
         this.translateMatrix = translateMatrix;
+        this.poseArg = poseArg;
+        this.scissorWh = scissorWh;
         // 句柄 0 保留为"无效"（Renderer 契约：id<=0 表示新建），因此先占一个空槽。
         textures.add(null);
         // 纹理支路：一次把 26.1–26.3 上签名一致的入口全部绑定；缺任何一项就整条支路关掉，
@@ -480,32 +497,197 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
                     + " text=" + (text != null) + " scissor=" + (enableScissor != null));
             return null;
         }
+        Method[] window = windowHandles(mapping, minecraft);
+        ExtractorRenderer renderer = new ExtractorRenderer(type, fill, null, enableScissor, disableScissor,
+                text, null, null, minecraft, window[0], window[1], window[2],
+                window[3], window[4], fontSource, mapping, pose, pushMatrix, popMatrix,
+                scaleMatrix, null, false, false);
+        // 1.20–1.21 的自定义纹理：类名在 Fabric 运行期是 intermediary（class_XXXX），
+        // 方法名也是 method_XXXXX，因此按候选名解析，而不是沿用 26.x 的 Mojang 名。
+        renderer.bindTextures(type.getClassLoader(), type);
+        return renderer;
+    }
+
+    /**
+     * 解析窗口尺寸句柄：{@code {getWindow, getGuiScaledWidth, getGuiScaledHeight, getWidth, getHeight}}。
+     *
+     * <p>1.20+ 的绘制上下文没有尺寸方法，布局尺寸只能从窗口取；解析不到的项保持 {@code null}。
+     */
+    private static Method[] windowHandles(dev.nocturne.client.mapping.Mapping mapping,
+                                          Supplier<Object> minecraft) {
         Object mc = minecraft == null ? null : minecraft.get();
         Class<?> mcType = mc == null ? null : mc.getClass();
         Method windowGetter = mcType == null ? null
                 : byCandidates(mcType, mapping, dev.nocturne.client.mapping.ClassType.MINECRAFT,
                         "getWindow");
         Class<?> windowType = windowGetter == null ? null : windowGetter.getReturnType();
-        Method scaledWidth = windowType == null ? null
-                : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
-                        "getGuiScaledWidth");
-        Method scaledHeight = windowType == null ? null
-                : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
-                        "getGuiScaledHeight");
-        Method physicalWidth = windowType == null ? null
-                : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
-                        "getWidth");
-        Method physicalHeight = windowType == null ? null
-                : byCandidates(windowType, mapping, dev.nocturne.client.mapping.ClassType.WINDOW,
-                        "getHeight");
-        ExtractorRenderer renderer = new ExtractorRenderer(type, fill, null, enableScissor, disableScissor,
-                text, null, null, minecraft, windowGetter, scaledWidth, scaledHeight,
-                physicalWidth, physicalHeight, fontSource, mapping, pose, pushMatrix, popMatrix,
-                scaleMatrix, null);
-        // 1.20–1.21 的自定义纹理：类名在 Fabric 运行期是 intermediary（class_XXXX），
-        // 方法名也是 method_XXXXX，因此按候选名解析，而不是沿用 26.x 的 Mojang 名。
-        renderer.bindTextures(type.getClassLoader(), type);
-        return renderer;
+        return new Method[]{
+                windowGetter,
+                windowType == null ? null : byCandidates(windowType, mapping,
+                        dev.nocturne.client.mapping.ClassType.WINDOW, "getGuiScaledWidth"),
+                windowType == null ? null : byCandidates(windowType, mapping,
+                        dev.nocturne.client.mapping.ClassType.WINDOW, "getGuiScaledHeight"),
+                windowType == null ? null : byCandidates(windowType, mapping,
+                        dev.nocturne.client.mapping.ClassType.WINDOW, "getWidth"),
+                windowType == null ? null : byCandidates(windowType, mapping,
+                        dev.nocturne.client.mapping.ClassType.WINDOW, "getHeight")};
+    }
+
+    /**
+     * 按签名绑定 1.16–1.19 的游戏绘制 API（{@code PoseStack} 世代）。
+     *
+     * <p>这一段没有 {@code GuiGraphics}：绘制入口是 {@code Screen.render(PoseStack,int,int,float)}，
+     * 原语是 {@code GuiComponent} 的静态 {@code fill(PoseStack,int,int,int,int,int)} 与
+     * {@code drawString(PoseStack,Font,String,int,int,int)}。方法名每代都变（vanilla 是 {@code a}/{@code b}，
+     * intermediary 是 {@code method_xxxxx}），而且 1.16.5 上 {@code fill}、{@code drawString}、
+     * {@code drawCenteredString} 的形状会互相重叠（后两者参数表完全相同），所以**先按映射名
+     * {@code ClassType.GUI_COMPONENT} 命中、再按形状兜底**；{@code enableScissor}/{@code disableScissor}
+     * 只有 1.19.1+ 存在，缺失时裁剪退化为空操作。1.16.1 的 {@code drawString} 只有实例方法
+     * （1.16.2 起才补 static），装配会失败并回到 gl-core，而不是留下「有框无字」的半残界面。
+     *
+     * <p>纹理支路不可用：这一段的 {@code blit} 只能贴当前绑定的 GL 纹理，绕开游戏的 RenderSystem
+     * 正是 1.21.11 文字黑块的根因（见 docs/PLAN.md）。界面因此退回游戏字体 + ASCII 图标。
+     *
+     * @param guiType    {@code net.minecraft.client.gui.Gui}；{@code GuiComponent} 的静态方法经继承可见
+     * @param mapping    当前映射表（解析窗口尺寸与字体类型）
+     * @param minecraft  Minecraft 实例来源（窗口尺寸）
+     * @param fontSource 字体来源
+     * @return 装配成功返回后端；这一版的形状不认识时返回 {@code null}（调用方保留 gl-core 兜底）
+     */
+    public static ExtractorRenderer bindLegacy(Class<?> guiType,
+                                               dev.nocturne.client.mapping.Mapping mapping,
+                                               Supplier<Object> minecraft,
+                                               Supplier<Object> fontSource) {
+        if (guiType == null || mapping == null) {
+            return null;
+        }
+        Method fill = null;
+        Method text = null;
+        java.util.Set<String> fillNames = mappedNames(mapping, "fill");
+        java.util.Set<String> textNames = mappedNames(mapping, "drawString");
+        for (Method candidate : guiType.getMethods()) {
+            if (!java.lang.reflect.Modifier.isStatic(candidate.getModifiers())
+                    || candidate.getReturnType() != void.class) {
+                continue;
+            }
+            Class<?>[] types = candidate.getParameterTypes();
+            if (types.length != 6 || types[0].isPrimitive()) {
+                continue;
+            }
+            if (types[1] == int.class && types[2] == int.class && types[3] == int.class
+                    && types[4] == int.class && types[5] == int.class) {
+                // fill(PoseStack, x1, y1, x2, y2, argb)
+                if (fill == null || fillNames.contains(candidate.getName())) {
+                    fill = candidate;
+                }
+                continue;
+            }
+            if (types[2] != String.class || types[3] != int.class || types[4] != int.class
+                    || types[5] != int.class || !isFontType(types[1], mapping)) {
+                continue;
+            }
+            // drawString(PoseStack, Font, text, x, y, argb)。注意 drawCenteredString 的签名完全相同
+            // （1.16.5：drawString=b、drawCenteredString=a、fill=a），只靠形状会挑错，必须用映射名；
+            // 映射表缺失时退回「先遇到的」（两代里都是无阴影版本，能画对）。
+            if (text == null || textNames.contains(candidate.getName())) {
+                text = candidate;
+            }
+        }
+        if (fill == null || text == null) {
+            System.out.println("[nocturne] gui-stack bind failed: fill=" + (fill != null)
+                    + " text=" + (text != null) + " on " + guiType.getName());
+            return null;
+        }
+        Method enableScissor = null;
+        Method disableScissor = null;
+        for (Method candidate : guiType.getMethods()) {
+            if (!java.lang.reflect.Modifier.isStatic(candidate.getModifiers())
+                    || candidate.getReturnType() != void.class) {
+                continue;
+            }
+            Class<?>[] types = candidate.getParameterTypes();
+            if (types.length == 4 && types[0] == int.class && types[1] == int.class
+                    && types[2] == int.class && types[3] == int.class) {
+                enableScissor = candidate;           // 1.19.1+ enableScissor(x1, y1, x2, y2)
+            } else if (types.length == 0 && disableScissor == null) {
+                disableScissor = candidate;          // 1.19.1+ disableScissor()
+            }
+        }
+        // 1.16–1.18 的 GuiComponent 没有裁剪原语（1.19.1 才有），但 RenderSystem 从 1.15 起
+        // 就有 enableScissor/disableScissor。缺了它 pushClip/popClip 全是空操作，滚动列表和
+        // 下拉内容会画到面板外（真机可见）。注意它收的是 (x, y, w, h)，且是静态方法。
+        boolean scissorWh = false;
+        if (enableScissor == null) {
+            Class<?> renderSystem = loadAny(guiType.getClassLoader(),
+                    "com.mojang.blaze3d.systems.RenderSystem");
+            Method rsEnable = method(renderSystem, "enableScissor",
+                    int.class, int.class, int.class, int.class);
+            if (rsEnable != null) {
+                enableScissor = rsEnable;
+                disableScissor = method(renderSystem, "disableScissor");
+                scissorWh = true;
+            }
+        }
+        Method[] window = windowHandles(mapping, minecraft);
+        // 1.16–1.19 的 PoseStack：1.16.5 混淆后 pushPose/popPose 是 a()/b()，形状完全相同，
+        // 只能按映射表区分。绑定它们才能按设计字号缩放文本；否则布局坐标已按缩放缩小、
+        // 字却按原生 9px 画，文字会挤成竖排（1.16.5 实测）。
+        Class<?> poseType = fill.getParameterTypes()[0];
+        Method pushMatrix = byCandidates(poseType, mapping,
+                dev.nocturne.client.mapping.ClassType.POSE_STACK, "pushPose");
+        Method popMatrix = byCandidates(poseType, mapping,
+                dev.nocturne.client.mapping.ClassType.POSE_STACK, "popPose");
+        Method scaleMatrix = byCandidates(poseType, mapping,
+                dev.nocturne.client.mapping.ClassType.POSE_STACK, "scale",
+                float.class, float.class, float.class);
+        if (scaleMatrix == null) {
+            scaleMatrix = methodInHierarchy(poseType, "scale",
+                    float.class, float.class, float.class);
+        }
+        System.out.println("[nocturne] gui-stack bind: " + guiType.getName()
+                + " fill=" + fill.getName() + " text=" + text.getName()
+                + " scissor=" + (enableScissor != null ? (scissorWh ? "rendersystem" : "guicomponent")
+                        : "none")
+                + " poseScale=" + (pushMatrix != null && popMatrix != null && scaleMatrix != null));
+        return new ExtractorRenderer(guiType, fill, null, enableScissor, disableScissor, text,
+                null, null, minecraft, window[0], window[1], window[2], window[3], window[4],
+                fontSource, mapping, null, pushMatrix, popMatrix, scaleMatrix, null, true,
+                scissorWh);
+    }
+
+    /** 该类型是否是字体类：先按映射表的候选名，再用 {@code width(String)} 特征兜底。 */
+    private static boolean isFontType(Class<?> type,
+                                      dev.nocturne.client.mapping.Mapping mapping) {
+        for (String name : mapping.classNameCandidates(
+                dev.nocturne.client.mapping.ClassType.FONT)) {
+            if (name.replace('/', '.').equals(type.getName())) {
+                return true;
+            }
+        }
+        return methodInHierarchy(type, "width", String.class) != null;
+    }
+
+    /**
+     * {@code GuiComponent} 上某成员的运行期候选名。
+     *
+     * <p>这几个成员在 1.16.5 上的形状会发生碰撞：{@code fill}、{@code drawString}、
+     * {@code drawCenteredString} 都是「静态 void、首参 PoseStack、后接若干 int」，其中
+     * {@code drawString} 与 {@code drawCenteredString} 连参数表都相同（`(PoseStack,Font,String,int,int,int)`）。
+     * 只有映射表能区分，因此名字优先、形状兜底。规范名本身会被剔除（它不具区分度）。
+     */
+    private static java.util.Set<String> mappedNames(dev.nocturne.client.mapping.Mapping mapping,
+                                                     String canonical) {
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        if (mapping instanceof dev.nocturne.client.mapping.ObfuscatedMapping) {
+            names.addAll(((dev.nocturne.client.mapping.ObfuscatedMapping) mapping)
+                    .methodNameCandidates(dev.nocturne.client.mapping.ClassType.GUI_COMPONENT,
+                            canonical, null));
+        } else {
+            names.add(mapping.methodName(
+                    dev.nocturne.client.mapping.ClassType.GUI_COMPONENT, canonical, null));
+        }
+        names.remove(canonical);
+        return names;
     }
 
     /**
@@ -876,7 +1058,8 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         }
         return new ExtractorRenderer(extractorType, fill, outline, enableScissor, disableScissor, text,
                 guiWidth, guiHeight, minecraft, null, null, null, null, null,
-                null, null, pose, pushMatrix, popMatrix, scaleMatrix, translateMatrix);
+                null, null, pose, pushMatrix, popMatrix, scaleMatrix, translateMatrix, false,
+                false);
     }
 
     /**
@@ -927,8 +1110,9 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     public void beginFrame() {
         Object graphics = frame;
         if (graphics == null) {
-            width = 0;
-            height = 0;
+            // 双驱动（GLFW 帧钩子 + 绘制钩子）时帧钩子那次没有绘制上下文。这里**保留**上一帧
+            // 的有效尺寸：输入层用 width/height 把像素坐标换算成 GUI 坐标，清零会让每次点击
+            // 都按 surface=0 处理（1.16.5 实测：面板能画但点不动）。
             return;
         }
         // 只在读到有效尺寸时更新：保留最近一次有效值（见 clearFrame 的说明）。
@@ -955,6 +1139,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         if (measuredHeight > 0) {
             height = measuredHeight;
         }
+        updatePhysicalHeight();
         // 上一帧若有组件没配平 push/pop（异常提前返回），裁剪矩形还挂在游戏的绘制状态上，
         // 会把游戏自己后续画的内容整片裁掉——每帧开头清掉这个残留。
         resetClipStack(graphics);
@@ -976,7 +1161,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
 
     @Override
     public String backendName() {
-        return NAME;
+        return poseArg ? "gui-stack" : NAME;
     }
 
     @Override
@@ -1078,6 +1263,25 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         return scaledWidth > 0 && scaledHeight > 0 ? new int[]{scaledWidth, scaledHeight} : null;
     }
 
+    /** 刷新帧缓冲物理高度（RenderSystem 裁剪用）；拿不到时保留上一帧值。 */
+    private void updatePhysicalHeight() {
+        if (windowHeight == null || minecraft == null || windowGetter == null) {
+            return;
+        }
+        Object mc = minecraft.get();
+        if (mc == null) {
+            return;
+        }
+        Object window = Reflect.call(windowGetter, mc);
+        if (window == null) {
+            return;
+        }
+        int value = intOf(windowHeight, window, 0);
+        if (value > 0) {
+            physicalHeightValue = value;
+        }
+    }
+
     /** 延迟解析也必须走映射；直接写 Mojmap 名在 Fabric 上只会得到 null。 */
     private Method mappedMethod(Class<?> owner, dev.nocturne.client.mapping.ClassType ownerType,
                                 String canonicalName) {
@@ -1146,7 +1350,16 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             // 取整后塌陷（亚像素矩形）：跳过，否则游戏侧拿到零宽矩形。
             return;
         }
-        call(fill, graphics, x1, y1, x2, y2, color.argb);
+        callFill(x1, y1, x2, y2, color.argb);
+    }
+
+    /** {@code fill} 的调用口径：1.20+ 是实例方法，1.16–1.19 是「静态方法 + 首参绘制栈」。 */
+    private void callFill(int x1, int y1, int x2, int y2, int argb) {
+        if (poseArg) {
+            call(fill, null, frame, x1, y1, x2, y2, argb);
+        } else {
+            call(fill, frame, x1, y1, x2, y2, argb);
+        }
     }
 
     @Override
@@ -1219,10 +1432,11 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         // 使「绘制出来的字宽」与 textWidth 返回的宽度一致（否则 1.21 的 427 逻辑空间里
         // 字体相对布局过大，标签会被 FaTheme.fit 大面积截断）。
         float factor = size > 0f ? size / NATIVE_FONT_PX : 1f;
-        boolean scaled = Math.abs(factor - 1f) > 0.01f && poseMethod != null && pushMatrix != null
-                && popMatrix != null && scaleMatrix != null;
+        boolean scaled = Math.abs(factor - 1f) > 0.01f && textScaleSupported();
         if (scaled) {
-            Object pose = Reflect.call(poseMethod, graphics);
+            // 1.16–1.19 的绘制上下文本身就是 PoseStack（没有 pose() 取矩阵这一层）。
+            Object pose = poseMethod != null ? Reflect.call(poseMethod, graphics)
+                    : (poseArg ? graphics : null);
             if (pose != null) {
                 Reflect.call(pushMatrix, pose);
                 if (scaleMatrix.getParameterCount() == 2) {
@@ -1230,13 +1444,27 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
                 } else {
                     Reflect.call(scaleMatrix, pose, factor, factor, 1.0f);
                 }
-                call(this.text, graphics, fontInstance, text,
-                        Math.round(x / factor), Math.round(y / factor), color.argb);
+                // 必须复用 callText 的分派：1.16–1.19 是静态 drawString(PoseStack,…)，
+                // 直接把 frame 当 target 传会因参数错位静默失败（真机表现：文字整屏消失）。
+                callText(fontInstance, text, Math.round(x / factor), Math.round(y / factor),
+                        color.argb);
                 Reflect.call(popMatrix, pose);
                 return;
             }
         }
-        call(this.text, graphics, fontInstance, text, Math.round(x), Math.round(y), color.argb);
+        callText(fontInstance, text, Math.round(x), Math.round(y), color.argb);
+    }
+
+    /**
+     * {@code text} 的调用口径：1.20+ 是 {@code GuiGraphics.drawString(Font,...)}（实例）；
+     * 1.16–1.19 是 {@code GuiComponent.drawString(PoseStack, Font, ...)}（静态 + 首参绘制栈）。
+     */
+    private void callText(Object fontInstance, String value, int x, int y, int argb) {
+        if (poseArg) {
+            call(this.text, null, frame, fontInstance, value, x, y, argb);
+        } else {
+            call(this.text, frame, fontInstance, value, x, y, argb);
+        }
     }
 
     @Override
@@ -1254,15 +1482,39 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         // 必须走四参重载（带实参 text）：三参重载是「无参方法 + 兜底值」，
         // 传进来会落成 intOf(fontWidth, font, fallback=length*6)，于是 Font.width(String)
         // 根本没被调用，宽度恒等于 length×6——测试里 FakeFont 对任何文本都返回同一个值，掩盖了它。
-        // 只有能缩放绘制的后端才同步缩放度量；26.x 没有 pose，保持原口径（否则度量与绘制会分叉）。
-        float factor = size > 0f && poseMethod != null ? size / NATIVE_FONT_PX : 1f;
-        return intOf(widthHandle, fontInstance, text, text.length() * 6) * factor;
+        // 只有能缩放绘制的后端才同步缩放度量；否则度量与绘制分叉：1.16.5 的 PoseStack 没有
+        // push/scale 绑定，绘制按原生 9px、度量却乘 size/9，列宽被压窄后文字叠成一团（真机实测）。
+        float factor = size > 0f && textScaleSupported() ? size / NATIVE_FONT_PX : 1f;
+        int measured = intOf(widthHandle, fontInstance, text, text.length() * 6);
+        if (!widthProbeLogged) {
+            widthProbeLogged = true;
+            System.out.println("[nocturne] extractor text width probe: text=" + text
+                    + " size=" + size + " measured=" + measured + " factor=" + factor
+                    + " scaled=" + textScaleSupported());
+        }
+        return measured * factor;
+    }
+
+    /**
+     * 本后端能否用矩阵缩放文本。
+     *
+     * <p>必须与 {@link #text} 的实际绘制分支同源：度量若比绘制多乘了一次 {@code size/9}，
+     * 布局会把标签排到彼此身上。
+     *
+     * @return 能缩放返回 {@code true}
+     */
+    private boolean textScaleSupported() {
+        return (poseMethod != null || poseArg) && pushMatrix != null && popMatrix != null
+                && scaleMatrix != null;
     }
 
     @Override
     public float textHeight(float size) {
         ensureFont();
-        return lineHeight;
+        // 与 text() 同源：能缩放时行高随字号一起缩，否则按原生行高。
+        // 不同源会让行距按 9/designScale 放大 2 倍以上（1.16.5 真机：行与行互相压住）。
+        float factor = size > 0f && textScaleSupported() ? size / NATIVE_FONT_PX : 1f;
+        return lineHeight * factor;
     }
 
     // ------------------------------------------------------------------ 纹理
@@ -1681,8 +1933,52 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         }
         int[] rect = {Math.round(x), Math.round(y),
                 Math.round(x + width), Math.round(y + height)};
+        // 嵌套必须取交集：GL 只有一个 scissor 矩形，子矩形超出父矩形时会越界显示。
+        if (!clipStack.isEmpty()) {
+            int[] outer = clipStack.peek();
+            rect[0] = Math.max(rect[0], outer[0]);
+            rect[1] = Math.max(rect[1], outer[1]);
+            rect[2] = Math.min(rect[2], outer[2]);
+            rect[3] = Math.min(rect[3], outer[3]);
+        }
         clipStack.push(rect);
-        call(enableScissor, graphics, rect[0], rect[1], rect[2], rect[3]);
+        applyScissor(graphics, rect);
+    }
+
+    /**
+     * 下发一个裁剪矩形，兼容两种句柄形态。
+     *
+     * <p>1.19.1+ 的 {@code GuiComponent.enableScissor} 收对角点且需要绘制上下文；
+     * 1.16–1.18 的 {@code RenderSystem.enableScissor} 是静态方法、收 {@code (x, y, w, h)}。
+     *
+     * @param graphics 本帧绘制上下文（{@code RenderSystem} 形态不使用）
+     * @param rect     {@code {x1, y1, x2, y2}}
+     */
+    private void applyScissor(Object graphics, int[] rect) {
+        if (enableScissor == null) {
+            return;
+        }
+        int w = rect[2] - rect[0];
+        int h = rect[3] - rect[1];
+        if (w <= 0 || h <= 0) {
+            // 空矩形：下发零面积会把后面所有内容裁掉，直接跳过。
+            return;
+        }
+        if (scissorWh) {
+            // RenderSystem.enableScissor 直接转发 GL20.glScissor：收**物理像素**、y 从帧缓冲底部算。
+            // 传 GUI 逻辑坐标会把整块内容裁掉（1.16.5 真机：面板只剩标题栏）。
+            int scale = guiScale > 0 ? guiScale : 1;
+            if (physicalHeightValue <= 0) {
+                return;
+            }
+            int px = Math.round(rect[0] * (float) scale);
+            int pw = Math.round(w * (float) scale);
+            int ph = Math.round(h * (float) scale);
+            int py = physicalHeightValue - Math.round(rect[3] * (float) scale);
+            call(enableScissor, null, px, Math.max(0, py), pw, ph);
+        } else {
+            call(enableScissor, graphics, rect[0], rect[1], rect[2], rect[3]);
+        }
     }
 
     @Override
@@ -1699,7 +1995,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         clipStack.pop();
         if (clipStack.isEmpty()) {
             if (disableScissor != null) {
-                call(disableScissor, graphics);
+                call(disableScissor, scissorWh ? null : graphics);
             } else if (enableScissor != null) {
                 if (width <= 0 || height <= 0) {
                     return;
@@ -1710,8 +2006,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             }
             return;
         }
-        int[] outer = clipStack.peek();
-        call(enableScissor, graphics, outer[0], outer[1], outer[2], outer[3]);
+        applyScissor(graphics, clipStack.peek());
     }
 
     /**
@@ -1724,7 +2019,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         }
         clipStack.clear();
         if (graphics != null && disableScissor != null) {
-            call(disableScissor, graphics);
+            call(disableScissor, scissorWh ? null : graphics);
         }
     }
 
@@ -1763,7 +2058,15 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             }
         }
         fontWidth = fontWidth != null ? fontWidth : method(candidate.getClass(), "width", String.class);
-        lineHeight = intField(candidate, "lineHeight", FALLBACK_LINE_HEIGHT);
+        // lineHeight 也要走映射：1.16–1.19 的字段名是单字母，硬编码 "lineHeight" 只能拿到兜底值。
+        lineHeight = intFieldOf(candidate, mapping,
+                dev.nocturne.client.mapping.ClassType.FONT, "lineHeight", FALLBACK_LINE_HEIGHT);
+        // 字体度量绑定结果只打一次：宽度句柄缺失会让布局按 length×6 估算，文字被压成竖排。
+        System.out.println("[nocturne] extractor font bind: class="
+                + candidate.getClass().getName()
+                + " width=" + (fontWidth == null ? "missing"
+                        : fontWidth.getName() + fontWidth.getParameterTypes().length)
+                + " lineHeight=" + lineHeight);
     }
 
     /** 调用方法；句柄为 {@code null} 时什么也不做，失败只报一次（限流）。 */
@@ -1864,6 +2167,32 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     private static int intField(Object target, String name, int fallback) {
         Object value = fieldValue(target, name);
         return value instanceof Number ? ((Number) value).intValue() : fallback;
+    }
+
+    /**
+     * 按映射表候选名读取 int 字段：混淆环境里 {@code lineHeight} 叫 {@code a}，
+     * 硬编码规范名只能拿到兜底值。
+     *
+     * @param target  字段宿主
+     * @param mapping 当前映射表（可为 {@code null}）
+     * @param type    宿主类型
+     * @param canonicalName 规范字段名
+     * @param fallback 读不到时的兜底值
+     * @return 字段值或兜底值
+     */
+    private static int intFieldOf(Object target, dev.nocturne.client.mapping.Mapping mapping,
+                                  dev.nocturne.client.mapping.ClassType type,
+                                  String canonicalName, int fallback) {
+        if (mapping != null) {
+            for (String name : mapping.fieldNameCandidates(type, canonicalName)) {
+                Object value = fieldValue(target, name);
+                if (value instanceof Number) {
+                    return ((Number) value).intValue();
+                }
+            }
+            return fallback;
+        }
+        return intField(target, canonicalName, fallback);
     }
 
     /** 取字段句柄（沿继承链找）；找不到返回 {@code null}。 */

@@ -57,6 +57,9 @@ public final class GuiDrawHook {
     /** Fabric：Gui.render 捕获、GameRenderer 后置清理之间传递的当帧上下文。 */
     private static final ThreadLocal<Object> PENDING_HUD_GRAPHICS = new ThreadLocal<Object>();
 
+    /** 1.16–1.19：Screen.render 开头捕获、末尾消费之间传递的当帧上下文。 */
+    private static final ThreadLocal<Object> PENDING_SCREEN_GRAPHICS = new ThreadLocal<Object>();
+
     /**
      * 调用 {@code NocturneRuntime} 的静态方法。
      *
@@ -161,8 +164,14 @@ public final class GuiDrawHook {
         if (hasScreen()) {
             // HUD 钩子让位给原生 Screen 时，也必须解除 MouseHandler/KeyboardHandler 的短路。
             // 否则 onFrame 根本不执行，InputBlock 会一直保持 true，连“回到游戏”都点不到。
-            dev.nocturne.client.runtime.InputBlock.setBlocked(false);
-            dev.nocturne.client.runtime.ScrollState.take(); // 原生 Screen 期间的滚轮不得留到 GUI 补发。
+            // bootstrap 桥没装上时这两个静态类不可解析（NoClassDefFoundError），而本方法运行在
+            // 游戏的绘制路径里——必须自己吞掉，不能让它冒泡成游戏崩溃。
+            try {
+                dev.nocturne.client.runtime.InputBlock.setBlocked(false);
+                dev.nocturne.client.runtime.ScrollState.take(); // 原生 Screen 期间的滚轮不得留到 GUI 补发。
+            } catch (Throwable ignored) {
+                // 桥缺失时输入本来就不归我们管，放行即可。
+            }
             return;
         }
         drive(graphics);
@@ -182,6 +191,26 @@ public final class GuiDrawHook {
     }
 
     /**
+     * 1.16–1.19 的界面入口开头捕获：形参在此处一定可用。
+     *
+     * <p>末尾注入不可行的原因见 {@link #onHudDrawCapture(Object)}。
+     *
+     * @param graphics 本帧的 {@code PoseStack}
+     */
+    public static void onScreenDrawCapture(Object graphics) {
+        PENDING_SCREEN_GRAPHICS.set(graphics);
+    }
+
+    /** 1.16–1.19 的界面入口末尾消费：只做一次无参调用，不触碰已被标成 {@code top} 的局部变量。 */
+    public static void onScreenDrawDeferred() {
+        Object graphics = PENDING_SCREEN_GRAPHICS.get();
+        PENDING_SCREEN_GRAPHICS.remove();
+        if (graphics != null) {
+            onScreenDraw(graphics);
+        }
+    }
+
+    /**
      * 驱动一帧：把本帧绘制上下文交给叠加层后端，再跑帧回调（输入轮询 + 绘制）。
      *
      * @param graphics 本帧的绘制上下文
@@ -198,6 +227,11 @@ public final class GuiDrawHook {
         } catch (Throwable t) {
             // 绝不把异常带回游戏的绘制路径。
             System.out.println("[nocturne] gui draw hook failed: " + t);
+        } finally {
+            // 目标方法若在末尾 RETURN 之前抛异常，deferred 钩子不会执行，捕获的上下文会跨帧滞留。
+            // 这里统一清一次：陈旧对象被下一帧误当成当帧上下文，会画到已失效的绘制栈上。
+            PENDING_HUD_GRAPHICS.remove();
+            PENDING_SCREEN_GRAPHICS.remove();
         }
     }
 

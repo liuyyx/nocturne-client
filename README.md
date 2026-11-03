@@ -23,17 +23,19 @@
 | `core/` | 进程发现、attach（自实现 Windows/POSIX 通道 + JDK attach 兜底）、载荷解密装载、agent 选项组装（`AgentOptions`）；免 GUI 的 CLI 入口 `dev.nocturne.core.Nocturne` |
 | `agent/` | 目标 JVM 内的入口（`agentmain`/`premain`）、ASM 子加载器、两种注入点、按版本选表、`OverlayBootstrap`（选后端 / 输入源 / 安装稳定器） |
 | `client/` | 事件总线、模块与值框架、映射层（`Mapping` / `ObfuscatedMapping` / `IdentityMapping`）、游戏桥（`GameBridge`）、世界覆盖层（ESP / Tracers / StorageEsp / Search / Trajectories …） |
-| `ui/` | **Fatality 风格 ClickGUI**（自绘）：分类 Tab / 三列瀑布流 / 侧栏 / 下拉与调色板浮层 / 底部搜索；绘制只面向 `Renderer` 抽象，三个后端同一份代码 |
+| `ui/` | **Fatality 风格 ClickGUI**（自绘）：分类 Tab / 三列瀑布流 / 侧栏 / 下拉与调色板浮层 / 底部搜索；绘制只面向 `Renderer` 抽象，各绘制后端同一份代码 |
 | `injector/` | Swing 注入器 GUI（扫描进程 → 选版本 → 注入），并作为 jar 的 Main-Class；`--list-json` / `--pid=` 走同一入口 |
 | `dist/` | 把上述模块合并成单个多入口 `nocturne-*.jar` |
 | `launcher/` | 独立 WPF(.NET 8) 启动器壳：只把 jar 当子进程驱动；不含业务逻辑，不在 Gradle 构建里 |
 
-## 三个绘制后端
+## 绘制后端
 
 | 后端 | 适用 | 绘制方式 |
 |---|---|---|
 | `gl-fixed` | 1.8.9 – 1.12.2（LWJGL2） | `GlRenderer` + `GlApi`：反射绑 `org.lwjgl.opengl.GL11`，立即模式 + **批次层**（`ensureBatch` / `flushBatch`），矩阵与能力位自己接管 |
-| `gl-core` | 1.13+（LWJGL3/GLFW） | `ModernRenderer` + `ModernGlApi`：GLSL150 + VBO |
+| `gl-core` | 1.13 – 1.15（LWJGL3/GLFW）；诊断开关 `-Dnocturne.ui.backend=gl` 与 1.21.1 attach 兼容豁免也会走它 | `ModernRenderer` + `ModernGlApi`：GLSL150 + VBO |
+| `gui-stack` | 1.16 – 1.19 | `ExtractorRenderer`（`poseArg` 分支）：静态 `GuiComponent.fill` / `drawString` + 游戏 `PoseStack`；文本按 `PoseStack.pushPose/scale/popPose` 缩放；裁剪 1.19.1+ 用 `GuiComponent.enableScissor`，1.16–1.18 回退 `RenderSystem.enableScissor(x,y,w,h)` |
+| `gui-graphics` | 1.20 – 1.21（1.21.1 attach 强制 `gl-core`） | `ExtractorRenderer`：把绘制交给游戏自己的 `GuiGraphics`；日志 `gui-graphics stack`，`backendName()` 仍报 `gui-extractor` |
 | `gui-extractor` | 26.x（SDL） | `ExtractorRenderer`：把绘制交给游戏自己的 `GuiGraphicsExtractor`，GL 与 Vulkan 都由游戏决定 |
 
 1.8.9 走的是 `gl-fixed`。这一层的两条**运行期不变量**（踩过真机事故，改代码前务必读）：
@@ -141,7 +143,7 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
 | 注入链路（attach → `agentmain` → 帧钩子 live → 叠加层装载） | **已实测**（官方 1.8.9；另有真实 LWJGL2 靶单独验证 Java 8 栈） |
 | 自实现 attach（免 `jdk.attach` / `tools.jar`） | **Windows 已实测**，含裁剪 JRE（无 `tools.jar`）；Linux/macOS 通道已实现并单测，**未实机** |
 | 1.8.9 真机 | **已复验（2026-10-19）**：`backend=gl-fixed`、`scale≈0.86`、`backendScale=1`；Fatality 界面标题/Tab/侧栏/卡片文字**全部正常显示**，`text/s=0`（图集路径），无 GL 错误；合批后批次量约为改造前的 1/5 |
-| 1.16.5 真机 | 注入 / 帧钩子 / 输入 / 叠加层当时全部正常（`gl-core`）；新界面未复验 |
+| 1.16.5 真机 | `gui-stack` 已真机验收（2026-11-03）：面板/三列布局/中文文字/开关点击全部正常；`gui-stack bind: dkv fill=a text=b scissor=rendersystem poseScale=true`。裁剪走 `RenderSystem` 回退（1.16–1.18 无 `GuiComponent.enableScissor`） |
 | 26.3 真机 | 真实 26.3 + Fabric 上 attach → 界面可见可点（`gui-extractor` / `sdl`）；SDL 栈不注册帧钩子、不碰 GL；新界面未复验 |
 | 映射表生成器（66 release × 4 命名空间） | **已完成**：`--check` 全绿；`--javap` 对每版本真实 client jar 逐成员校验；Forge 1.20.1 / NeoForge 1.21.11 另用运行产物核对 166/166 |
 | 界面：Fatality 风格 ClickGUI | 离屏光栅验证（`docs/research/fatality-ui-*.png`）+ **1.8.9 真机复验**；`ui` 模块单测覆盖字形图集、纹理上传字节序、批次顺序、Value→控件映射与布局 |
@@ -161,7 +163,7 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
 - ~~图集整张重传~~ **已修**：新增字形改为 `glTexSubImage2D` 只传变化的脏矩形；
   首秒实测 `full/s=7`（每张图集一次）+ `sub/s=136`，稳态为 0/0。
 - ~~`FontRasterizer` 的 `scale` 一帧滞后~~ **已修**：`bind()` 移到 `updateScale()` 之后，按本帧缩放绑定。
-- **`gl-core`（1.13–1.21）文字渲染为黑块**（2026-10-20 发现，**未修**）：
+- **`gl-core`（1.13–1.15；1.21.11 的旧实测路径同症状）文字渲染为黑块**（2026-10-20 发现，**未修**）：
   1.21.11 + Fabric 上界面布局/开关/滑块/色块/裁剪全部正确，但文字是纯黑矩形。
   真机证据：`atlas=true`、`backend=gl-core`、图集上传句柄 996、字形四边形
   `argb=0x35ece9e1` 与 UV 正确、上传源像素 `p0=0x0dffffff`（白 + 覆盖度）、`texImage2D` 已解析、

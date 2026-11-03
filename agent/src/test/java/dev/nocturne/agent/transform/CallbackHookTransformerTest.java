@@ -40,6 +40,12 @@ class CallbackHookTransformerTest {
             trace.add("hook");
         }
 
+        /** 末尾消费钩子本体（签名 {@code ()V}）。 */
+        public static void deferred() {
+            calls++;
+            trace.add("deferred");
+        }
+
         /** 清空记录。 */
         static void reset() {
             last = null;
@@ -236,6 +242,50 @@ class CallbackHookTransformerTest {
     }
 
     /**
+     * 双端模式：开头捕获形参、末尾消费，且顺序是 {@code hook → body → deferred}。
+     *
+     * <p>1.16–1.19 的 {@code Gui.render(PoseStack,float)} 末尾形参槽已被 StackMapTable 标成
+     * {@code top}，单点末尾注入会 {@code VerifyError}；这条路径必须两端各注入一次。
+     */
+    @Test
+    void capturesAtHeadAndDefersToTheEnd() throws Exception {
+        CallbackHookTransformer transformer = new CallbackHookTransformer(
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
+                HOOK_OWNER, "accept", false, "deferred");
+
+        byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
+                bodyClass("handle", "(Ljava/lang/Object;)V", Opcodes.ACC_PUBLIC));
+        assertNotNull(patched, "dual-end mode must patch the target method");
+
+        Object subject = define(patched).getConstructor().newInstance();
+        Object argument = new Object();
+        subject.getClass().getMethod("handle", Object.class).invoke(subject, argument);
+
+        assertEquals(java.util.Arrays.asList("hook", "body", "deferred"), Sink.trace,
+                "capture must run before the body and defer after it");
+        assertEquals(argument, Sink.last, "capture must hand over the real argument");
+        assertEquals(2, Sink.calls, "capture and defer fire exactly once each");
+    }
+
+    /** 双端模式在多返回点方法里只消费一次（否则叠加层一帧会被画多遍）。 */
+    @Test
+    void defersOnlyOnceForMultipleReturnPoints() throws Exception {
+        CallbackHookTransformer transformer = new CallbackHookTransformer(
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
+                HOOK_OWNER, "accept", false, "deferred");
+
+        byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
+                branchingClass("handle", "(Ljava/lang/Object;)V"));
+        assertNotNull(patched);
+
+        Object subject = define(patched).getConstructor().newInstance();
+        subject.getClass().getMethod("handle", Object.class).invoke(subject, (Object) null);
+
+        assertEquals(1, Sink.trace.stream().filter("deferred"::equals).count(),
+                "a method with two RETURN instructions must still defer exactly once");
+    }
+
+    /**
      * 生成"方法体有可观察副作用"的替身类：目标方法先调用 {@code Sink.body()} 再返回。
      *
      * <p>与 {@link #sampleClass} 的差别只在方法体——用它才能分辨钩子插在方法体的前面还是后面。
@@ -255,6 +305,41 @@ class CallbackHookTransformerTest {
 
         MethodVisitor method = writer.visitMethod(accessFlags, methodName, descriptor, null, null);
         method.visitCode();
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK_OWNER, "body", "()V", false);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
+    /**
+     * 生成带两个返回点的替身方法：{@code body(); if (o != null) return; body();}。
+     *
+     * <p>用 {@code COMPUTE_FRAMES} 生成合法的 StackMapTable，验证双端模式只消费一次。
+     */
+    private static byte[] branchingClass(String methodName, String descriptor) {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "dev/nocturne/agent/transform/SubjectSample",
+                null, "java/lang/Object", null);
+
+        MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        constructor.visitCode();
+        constructor.visitVarInsn(Opcodes.ALOAD, 0);
+        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        constructor.visitInsn(Opcodes.RETURN);
+        constructor.visitMaxs(0, 0);
+        constructor.visitEnd();
+
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
+                methodName, descriptor, null, null);
+        method.visitCode();
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK_OWNER, "body", "()V", false);
+        org.objectweb.asm.Label tail = new org.objectweb.asm.Label();
+        method.visitVarInsn(Opcodes.ALOAD, 0);
+        method.visitJumpInsn(Opcodes.IFNULL, tail);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitLabel(tail);
         method.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK_OWNER, "body", "()V", false);
         method.visitInsn(Opcodes.RETURN);
         method.visitMaxs(0, 0);

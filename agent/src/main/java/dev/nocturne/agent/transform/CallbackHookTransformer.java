@@ -52,6 +52,8 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
     private final String hookMethod;
     /** 注入位置：{@code false} 方法开头，{@code true} 方法末尾（首个 {@code RETURN} 之前）。 */
     private final boolean atMethodEnd;
+    /** 非 {@code null} 时启用「开头捕获、末尾消费」双端模式，值是无参钩子方法名。 */
+    private final String deferredMethod;
     /** 描述串，仅用于诊断日志。 */
     private final String label;
 
@@ -70,15 +72,40 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
     public CallbackHookTransformer(String targetClassInternalName, String targetMethod,
                                    String targetDescriptor, String hookOwner, String hookMethod,
                                    boolean atMethodEnd) {
+        this(targetClassInternalName, targetMethod, targetDescriptor, hookOwner, hookMethod,
+                atMethodEnd, null);
+    }
+
+    /**
+     * 构造「开头捕获、末尾消费」的双端转换器。
+     *
+     * <p>为什么需要双端：1.16–1.19 的 {@code Gui.render(PoseStack,float)} 在末尾的代码路径上，
+     * 局部变量 1（PoseStack 形参）已被 StackMapTable 标成 {@code top}——末尾直接 {@code aload 1}
+     * 会被 JVM 在重定义/重转换时判为 {@code VerifyError: Bad local variable type}（1.16.5 实测）。
+     * 开头注入时形参一定可用；末尾只注入无参调用，栈平衡且不引用任何局部变量。
+     *
+     * @param targetClassInternalName 目标类内部名
+     * @param targetMethod            目标方法名
+     * @param targetDescriptor        目标方法描述符
+     * @param hookOwner               钩子类内部名
+     * @param hookMethod              开头捕获钩子，签名 {@code (Ljava/lang/Object;)V}
+     * @param atMethodEnd             未使用（双端模式固定开头捕获，保留参数以统一调用形式）
+     * @param deferredMethod          末尾消费钩子，签名 {@code ()V}
+     */
+    public CallbackHookTransformer(String targetClassInternalName, String targetMethod,
+                                   String targetDescriptor, String hookOwner, String hookMethod,
+                                   boolean atMethodEnd, String deferredMethod) {
         this.targetClassInternalName = internalize(targetClassInternalName);
         this.targetMethod = targetMethod;
         this.targetDescriptor = targetDescriptor;
         this.hookOwner = internalize(hookOwner);
         this.hookMethod = hookMethod;
         this.atMethodEnd = atMethodEnd;
+        this.deferredMethod = deferredMethod;
         this.label = this.targetClassInternalName + "." + targetMethod + targetDescriptor
-                + " -> " + this.hookOwner + "." + hookMethod + HOOK_DESCRIPTOR
-                + (atMethodEnd ? " @end" : " @head");
+                + " -> " + this.hookOwner + "." + (deferredMethod == null ? hookMethod
+                        : hookMethod + " + " + deferredMethod)
+                + (deferredMethod != null ? " @head+end" : (atMethodEnd ? " @end" : " @head"));
     }
 
     /** 把点号全限定名归一化为斜杠内部名；null 原样返回。 */
@@ -106,7 +133,7 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                         return delegate;
                     }
                     final int firstArgumentSlot = firstArgumentSlot(access, descriptor);
-                    if (firstArgumentSlot < 0) {
+                    if (firstArgumentSlot < 0 && deferredMethod == null) {
                         // 没有引用形参可交出去：不是我们的目标，按原样放行。
                         return delegate;
                     }
@@ -114,7 +141,15 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                         @Override
                         public void visitCode() {
                             super.visitCode();
-                            if (!atMethodEnd) {
+                            if (deferredMethod != null) {
+                                // 双端模式：开头形参一定可用，先捕获当帧上下文。
+                                if (firstArgumentSlot >= 0) {
+                                    super.visitVarInsn(Opcodes.ALOAD, firstArgumentSlot);
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, hookMethod,
+                                            HOOK_DESCRIPTOR, false);
+                                    patched[0] = true;
+                                }
+                            } else if (!atMethodEnd) {
                                 inject();
                             }
                         }
@@ -122,10 +157,17 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                         @Override
                         public void visitInsn(int opcode) {
                             // 末尾注入：目标方法自己先画完，钩子再把叠加层画上去（否则被它盖住）。
-                            // 只在**首个** RETURN 之前插入——多返回点的方法里每个 RETURN 都插会让
-                            // 钩子一帧内被调多次，叠加层重复绘制。
-                            if (atMethodEnd && opcode == Opcodes.RETURN && !patched[0]) {
-                                inject();
+                            // 双端模式的消费钩子是幂等的（第二次取不到上下文就空转），所以**每个**
+                            // RETURN 前都插：多返回点的方法里任一返回路径都必须把当帧画完。
+                            // 单点注入仍只在首个 RETURN 前插，避免叠加层一帧画多遍。
+                            if (opcode == Opcodes.RETURN) {
+                                if (deferredMethod != null) {
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner,
+                                            deferredMethod, "()V", false);
+                                    patched[0] = true;
+                                } else if (atMethodEnd && !patched[0]) {
+                                    inject();
+                                }
                             }
                             super.visitInsn(opcode);
                         }

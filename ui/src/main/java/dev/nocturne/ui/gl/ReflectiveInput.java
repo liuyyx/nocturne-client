@@ -82,6 +82,8 @@ public final class ReflectiveInput implements InputSource {
     private final Method scrollCallbackInvoke;
     /** 累积的滚轮增量（按 double 位模式存于 {@link AtomicLong}），回调线程写入、帧线程取出后清零。 */
     private final AtomicLong pendingScrollBits = new AtomicLong(Double.doubleToRawLongBits(0d));
+    /** 已打印的滚轮事件条数（限流：滚轮"没反应"时先确认回调到底有没有被调用）。 */
+    private int scrollEventsLogged;
     /** 复用的光标坐标暂存，避免逐帧分配。 */
     private final double[] cursorOut = new double[2];
     /** y 坐标的独立暂存：GLFW 的 {@code glfwGetCursorPos} 要求 x、y 各一个数组参数。 */
@@ -473,6 +475,8 @@ public final class ReflectiveInput implements InputSource {
         glfwWindowResolved = true;
         Object context = Reflect.call(glfwGetCurrentContext, null);
         if (!(context instanceof Number)) {
+            System.out.println("[nocturne] glfwGetCurrentContext returned no window;"
+                    + " wheel and pointer readback are disabled (not on the render thread?)");
             return false;
         }
         glfwWindow = ((Number) context).longValue();
@@ -511,6 +515,11 @@ public final class ReflectiveInput implements InputSource {
                 // 保留被顶掉的旧回调引用并（在代理里）转发，而不是让它成为孤儿
                 previousScrollCallback = previous;
             }
+            // 滚轮只有这一条入径（GLFW 没有查询 API）：注册结果必须能从日志确认，
+            // 否则"滚轮没反应"和"寄存器没装上"无法区分。
+            System.out.println("[nocturne] scroll callback installed on window=0x"
+                    + Long.toHexString(glfwWindow)
+                    + (previousScrollCallback != null ? " (forwarding previous)" : ""));
         } catch (Throwable t) {
             // 注册失败只是没有滚轮，不影响键鼠操作；但不能静默——滚轮失效必须能从日志发现。
             System.out.println("[nocturne] scroll callback registration failed;"
@@ -520,6 +529,10 @@ public final class ReflectiveInput implements InputSource {
 
     /** 原子累加滚轮增量（回调线程与帧线程并发访问）。 */
     private void accumulateScroll(double delta) {
+        if (scrollEventsLogged < 3) {
+            scrollEventsLogged++;
+            System.out.println("[nocturne] scroll event seen: dy=" + delta);
+        }
         long prev;
         long next;
         do {

@@ -58,7 +58,7 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 | `core/` | 进程发现、三策略 attach 链（`jdk-api` → `windows-native` / `unix-domain`）、载荷加解密、attach 参数组装、CLI 入口 | `Nocturne`（`main`）、`Attacher`、`AgentOptions`、`PayloadPack`/`PayloadTool` | gson |
 | `agent/` | 被注入侧：`premain`/`agentmain`、ASM 子加载器、3 个转换器、bootstrap 桥 | `NocturneAgent`、`EmbeddedAsmLoader`、`transform/{FrameHook,CallbackHook,InputBlock}Transformer`、`OverlayBootstrap` | client, ui, core, ASM 9.8 |
 | `client/` | 事件总线、模块/值框架、映射层、反射桥、渲染契约、runtime | `NocturneClient`、`EventBus`、`Module`/`ModuleRegistry`、`Mapping`/`ObfuscatedMapping`、`GameBridge`、`runtime/*` | gson |
-| `ui/` | 自绘 ClickGUI + 三个绘制后端 + 字形图集 + 输入 | `Renderer`/`UiBackend`、`gl/{GlRenderer,ModernRenderer,ExtractorRenderer}`、`fatality/FaClickGui`、`text/FontRegistry` | client |
+| `ui/` | 自绘 ClickGUI + 绘制后端（`GlRenderer`/`ModernRenderer`/`ExtractorRenderer` 三形态）+ 字形图集 + 输入 | `Renderer`/`UiBackend`、`gl/{GlRenderer,ModernRenderer,ExtractorRenderer}`、`fatality/FaClickGui`、`text/FontRegistry` | client |
 | `injector/` | 注入器 Swing GUI，提供 jar 的 `Main-Class` | `InjectorApp`、`MainWindow`、`KeyCodes` | core, FlatLaf, MigLayout, gson |
 | `dist/` | 无源码的聚合模块：自定义 `distJar` 合并五者 | `dist/build.gradle.kts` | 全部 |
 
@@ -78,7 +78,9 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 | 后端 | 类 | 代际 | 版本 |
 |---|---|---|---|
 | `gl-fixed` | `GlRenderer` | LWJGL2 固定管线 | 1.8.9 – 1.12.2 |
-| `gl-core` | `ModernRenderer` | GL 3.2 core + GLSL 150 | 1.13 – 1.21.11 |
+| `gl-core` | `ModernRenderer` | GL 3.2 core + GLSL 150 | 1.13 – 1.15（诊断开关 `-Dnocturne.ui.backend=gl`、1.21.1 attach 兼容豁免也会走它） |
+| `gui-stack` | `ExtractorRenderer`（`poseArg` 分支） | 静态 `GuiComponent.fill`/`drawString` + 游戏 `PoseStack` | 1.16 – 1.19（scissor 1.19.1 起才有） |
+| `gui-graphics` | `ExtractorRenderer` | 游戏自己的 `GuiGraphics`，**零 GL**（日志 `gui-graphics stack`；`backendName()` 仍报 `gui-extractor`） | 1.20 – 1.21（1.21.1 attach 强制 gl-core） |
 | `gui-extractor` | `ExtractorRenderer` | 游戏自己的 `GuiGraphicsExtractor`，**零 GL** | 26.1 – 26.3 |
 
 ## 4. 必须知道的陷阱
@@ -182,8 +184,8 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 
 ### 5.5 新增绘制能力
 
-只能经 `Renderer` / `UiBackend` 抽象添加，并**三个后端同时实现**（`GlRenderer` / `ModernRenderer` /
-`ExtractorRenderer`）；纹理只走 `uploadTexture` / `texturedQuad` / `deleteTexture`。
+只能经 `Renderer` / `UiBackend` 抽象添加，并**各后端同时实现**（`GlRenderer` / `ModernRenderer` /
+`ExtractorRenderer` 的 `gui-graphics`、`gui-stack`、`gui-extractor` 三形态）；纹理只走 `uploadTexture` / `texturedQuad` / `deleteTexture`。
 `ExtractorRenderer` 的能力是游戏 API 的子集（没有圆角与逐顶点色），缺啥就近似。
 后端不支持纹理或 `java.desktop` 被裁剪时整体回落到游戏字体 + ASCII 图标。
 

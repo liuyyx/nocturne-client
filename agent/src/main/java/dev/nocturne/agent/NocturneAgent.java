@@ -623,6 +623,10 @@ public final class NocturneAgent {
             "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V";
     /** 钩子方法名（描述符固定 {@code (Ljava/lang/Object;)V}）。 */
     private static final String HUD_HOOK_METHOD = "onHudDraw";
+    /** 1.16–1.19 的开头捕获钩子（签名 {@code (Ljava/lang/Object;)V}）。 */
+    private static final String HUD_CAPTURE_METHOD = "onHudDrawCapture";
+    /** 1.16–1.19 的末尾消费钩子（签名 {@code ()V}）。 */
+    private static final String HUD_DEFERRED_METHOD = "onHudDrawDeferred";
 
     /**
      * 界面绘制入口：主菜单、暂停菜单、容器界面…都走它。
@@ -638,6 +642,10 @@ public final class NocturneAgent {
             "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V";
     /** 钩子方法名。 */
     private static final String SCREEN_HOOK_METHOD = "onScreenDraw";
+    /** 1.16–1.19 的界面开头捕获钩子。 */
+    private static final String SCREEN_CAPTURE_METHOD = "onScreenDrawCapture";
+    /** 1.16–1.19 的界面末尾消费钩子。 */
+    private static final String SCREEN_DEFERRED_METHOD = "onScreenDrawDeferred";
 
     /** 钩子类内部名（斜杠形式）。 */
     private static final String GUI_HOOK_OWNER = "dev/nocturne/agent/GuiDrawHook";
@@ -705,6 +713,11 @@ public final class NocturneAgent {
                         HUD_DRAW_DESCRIPTOR, HUD_HOOK_METHOD);
                 registerGuiDrawHook(instrumentation, fabricAsm, SCREEN_DRAW_CLASS,
                         SCREEN_DRAW_METHOD, SCREEN_DRAW_DESCRIPTOR, SCREEN_HOOK_METHOD);
+                // 1.16–1.21 的入口不是 extractRenderState*：按映射表找到 Screen.render / Gui.render
+                // 的真实描述符再织入（Fabric 运行期是 intermediary 名，上面的常量对不上）。
+                if (loadNoInit("net.minecraft.client.gui.GuiGraphicsExtractor", fabricLoader) == null) {
+                    installGuiGraphicsHook(instrumentation, fabricAsm, fabricLoader);
+                }
             } else {
                 log("embedded ASM unavailable; Fabric gui draw hook skipped");
             }
@@ -732,16 +745,6 @@ public final class NocturneAgent {
         }
     }
 
-    /**
-     * 为 1.20–1.21 注册 {@code Screen.render(GuiGraphics, int, int, float)} 钩子。
-     *
-     * <p>类名/方法名按映射表候选定位（vanilla 混淆名、Fabric intermediary、Forge SRG 都不同），
-     * 描述符由运行时真实方法生成——不做字符串猜测。
-     *
-     * @param instrumentation 插桩句柄
-     * @param asmLoader       内嵌 ASM 子加载器
-     * @param gameLoader      游戏类加载器
-     */
     /** 首参类型是否具备 {@code fill(int×5,void)}（GuiGraphics 的特征，PoseStack 没有）。 */
     private static boolean hasFill(Class<?> type) {
         for (java.lang.reflect.Method method : type.getMethods()) {
@@ -755,6 +758,36 @@ public final class NocturneAgent {
         return false;
     }
 
+    /**
+     * 首参是否是 1.20+ 的 {@code GuiGraphics}：优先按映射表类名，其次按 {@code fill} 特征。
+     *
+     * @param type    待判定的形参类型
+     * @param mapping 当前映射表（可为 {@code null}）
+     * @return {@code GuiGraphics} 返回 {@code true}，{@code PoseStack} 等旧栈返回 {@code false}
+     */
+    private static boolean isGuiGraphicsType(Class<?> type,
+                                             dev.nocturne.client.mapping.Mapping mapping) {
+        if (mapping != null) {
+            for (String candidate : mapping.classNameCandidates(
+                    dev.nocturne.client.mapping.ClassType.GUI_GRAPHICS)) {
+                if (candidate.replace('/', '.').equals(type.getName())) {
+                    return true;
+                }
+            }
+        }
+        return hasFill(type);
+    }
+
+    /**
+     * 为 1.20–1.21 注册 {@code Screen.render(GuiGraphics, int, int, float)} 钩子。
+     *
+     * <p>类名/方法名按映射表候选定位（vanilla 混淆名、Fabric intermediary、Forge SRG 都不同），
+     * 描述符由运行时真实方法生成——不做字符串猜测。
+     *
+     * @param instrumentation 插桩句柄
+     * @param asmLoader       内嵌 ASM 子加载器
+     * @param gameLoader      游戏类加载器
+     */
     private static void installGuiGraphicsHook(Instrumentation instrumentation,
                                                EmbeddedAsmLoader asmLoader, ClassLoader gameLoader) {
         dev.nocturne.client.mapping.Mapping mapping = currentMapping();
@@ -798,13 +831,24 @@ public final class NocturneAgent {
                     || parameters[0].isPrimitive()) {
                 continue;
             }
-            if (!hasFill(parameters[0])) {
-                // 1.13–1.19 的 render(PoseStack,...) 形状相同但不是 GuiGraphics，跳过。
+            if (parameters[0] == Object.class) {
+                // 类型擦除后的签名（某些分支把上下文声明成 Object）：织入只会把空上下文传进后端。
                 continue;
             }
             String descriptor = "(L" + parameters[0].getName().replace('.', '/') + ";IIF)V";
-            registerGuiDrawHook(instrumentation, asmLoader, screen.getName(),
-                    candidate.getName(), descriptor, SCREEN_HOOK_METHOD);
+            if (isGuiGraphicsType(parameters[0], mapping)) {
+                registerGuiDrawHook(instrumentation, asmLoader, screen.getName(),
+                        candidate.getName(), descriptor, SCREEN_HOOK_METHOD);
+                log("screen render hook: " + screen.getName() + "." + candidate.getName()
+                        + descriptor);
+            } else {
+                // 1.16–1.19 的 Screen.render(PoseStack,int,int,float)：末尾形参是 top，必须双端注入。
+                registerDeferredHook(instrumentation, asmLoader, screen.getName(),
+                        candidate.getName(), descriptor,
+                        SCREEN_CAPTURE_METHOD, SCREEN_DEFERRED_METHOD);
+                log("screen render hook (capture+defer): " + screen.getName() + "."
+                        + candidate.getName() + descriptor);
+            }
             return;
         }
         log("gui-graphics hook: no 4-arg render on " + screen.getName()
@@ -1160,6 +1204,9 @@ public final class NocturneAgent {
             instrumentation.addTransformer(capture, true);
             instrumentation.retransformClasses(target);
         } catch (Throwable t) {
+            // retransform 被 JVM 拒绝（例如注入后校验失败）时，captured 里是**未生效**的字节。
+            // 不清空会让调用方误判「钩子已应用」并跳过 redefine 回退（1.16.5 实测）。
+            captured[0] = null;
             log("current-byte capture failed for " + target.getName() + ": " + t);
         } finally {
             try {
@@ -1655,32 +1702,32 @@ public final class NocturneAgent {
             // 判定依据只有「形如 (GuiGraphics, *)V」这一条。
             Class<?>[] parameters = method.getParameterTypes();
             if (parameters.length != 2 || parameters[0] == null
+                    || parameters[0].isPrimitive()
                     || method.getReturnType() != void.class) {
                 continue;
             }
-            // 判定首参是 GuiGraphics：优先按映射表给的类名，其次退回 hasFill 特征。
-            // 1.21.1 的 class_332 不满足 hasFill（fill 全是带 RenderType 的重载），
-            // 所以类名匹配是主路径。
-            String graphicsName = parameters[0].getName();
-            boolean isGraphics = false;
-            dev.nocturne.client.mapping.Mapping hookMapping = currentMapping();
-            if (hookMapping != null) {
-                for (String candidate : hookMapping.classNameCandidates(
-                        dev.nocturne.client.mapping.ClassType.GUI_GRAPHICS)) {
-                    if (candidate.replace('/', '.').equals(graphicsName)) {
-                        isGraphics = true;
-                        break;
-                    }
-                }
-            }
-            if (!isGraphics && !hasFill(parameters[0])) {
+            // 判定首参是绘制上下文：1.20+ 是 GuiGraphics（优先按映射表类名，其次 hasFill 特征），
+            // 1.16–1.19 是 PoseStack（第二个形参为 float，即 Gui.render(PoseStack,float)）。
+            // 1.21.1 的 class_332 不满足 hasFill（fill 全是带 RenderType 的重载），所以类名匹配是主路径。
+            boolean isGraphics = isGuiGraphicsType(parameters[0], currentMapping());
+            if (!isGraphics && parameters[1] != float.class) {
                 continue;
             }
             String descriptor = "(L" + parameters[0].getName().replace('.', '/')
                     + ";" + typeDescriptor(parameters[1]) + ")V";
-            registerGuiDrawHook(instrumentation, asmLoader,
-                    hud.getName().replace('.', '/'), method.getName(), descriptor, HUD_HOOK_METHOD);
-            log("hud render hook: " + hud.getName() + ".render" + descriptor);
+            if (isGraphics) {
+                registerGuiDrawHook(instrumentation, asmLoader,
+                        hud.getName().replace('.', '/'), method.getName(), descriptor, HUD_HOOK_METHOD);
+                log("hud render hook: " + hud.getName() + "." + method.getName() + descriptor);
+            } else {
+                // 1.16–1.19：末尾路径上 PoseStack 形参已被 StackMapTable 标成 top，末尾 aload 会
+                // 触发 VerifyError（1.16.5 实测 "Bad local variable type"）。改为开头捕获、末尾消费。
+                registerDeferredHook(instrumentation, asmLoader,
+                        hud.getName().replace('.', '/'), method.getName(), descriptor,
+                        HUD_CAPTURE_METHOD, HUD_DEFERRED_METHOD);
+                log("hud render hook (capture+defer): " + hud.getName() + "." + method.getName()
+                        + descriptor);
+            }
             return;
         }
         log("hud render hook: render(GuiGraphics-like, *) not found in " + hud.getName());
@@ -2003,8 +2050,39 @@ public final class NocturneAgent {
     private static void registerGuiDrawHook(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                             String targetClass, String method, String descriptor,
                                             String hookMethod) {
-        final ClassFileTransformer transformer = asmLoader.createCallbackTransformer(
+        ClassFileTransformer transformer = asmLoader.createCallbackTransformer(
                 targetClass, method, descriptor, GUI_HOOK_OWNER, hookMethod, true);
+        registerGuiDrawHook(instrumentation, transformer, targetClass, method);
+    }
+
+    /**
+     * 注册 1.16–1.19 的绘制入口：开头捕获 {@code PoseStack}、末尾消费。
+     *
+     * <p>不能用单点末尾注入：{@code Gui.render(PoseStack,float)} / {@code Screen.render(...)}
+     * 末尾的 StackMapTable 已把形参槽标成 {@code top}，末尾 {@code aload} 会被判
+     * {@code VerifyError}（1.16.5 实测）。
+     */
+    private static void registerDeferredHook(Instrumentation instrumentation,
+                                             EmbeddedAsmLoader asmLoader,
+                                             String targetClass, String method,
+                                             String descriptor, String captureMethod,
+                                             String deferredMethod) {
+        ClassFileTransformer transformer = asmLoader.createDeferredCallbackTransformer(
+                targetClass, method, descriptor, GUI_HOOK_OWNER, captureMethod, deferredMethod);
+        registerGuiDrawHook(instrumentation, transformer, targetClass, method);
+    }
+
+    /**
+     * 注册一个已构造好的绘制钩子转换器，并对已加载的目标类立即打补丁。
+     *
+     * @param instrumentation 插桩句柄
+     * @param transformer     钩子转换器；{@code null} 时直接返回
+     * @param targetClass     目标类名（点号形式）
+     * @param method          目标方法名（仅用于日志）
+     */
+    private static void registerGuiDrawHook(Instrumentation instrumentation,
+                                            final ClassFileTransformer transformer,
+                                            String targetClass, String method) {
         if (transformer == null) {
             return;
         }
@@ -2158,57 +2236,6 @@ public final class NocturneAgent {
         } catch (Throwable t) {
             log("overlay attach failed: " + t);
         }
-    }
-
-    /**
-     * 为当前运行环境挑选绘制后端。
-     *
-     * <p>能成功绑定核心配置的入口（core profile，即 VAO 等 1.13+ 才有的一组函数），正是「游戏为
-     * 1.13+」的判据：在 1.8.9 上这些函数根本不存在，此时固定管线渲染器是唯一可选后端。
-     *
-     * @param fixed 已绑定核心类/兼容入口的 GL API（固定管线）
-     * @param gl11 游戏实际加载的 GL11 类，用于取得正确的类加载器
-     * @param font 文本渲染器，可为 null（表示无可用游戏字体）
-     * @return 绘制后端，永不为 null
-     */
-    private static dev.nocturne.ui.gl.UiBackend selectBackend(
-            dev.nocturne.ui.gl.GlApi fixed, Class<?> gl11, dev.nocturne.ui.gl.TextRenderer font) {
-        dev.nocturne.ui.gl.ModernGlApi modern =
-                dev.nocturne.ui.gl.ModernGlApi.bind(gl11.getClassLoader());
-        if (modern != null) {
-            return new dev.nocturne.ui.gl.ModernRenderer(modern, font);
-        }
-        logFallback(gl11);
-        return new dev.nocturne.ui.gl.GlRenderer(fixed, font);
-    }
-
-    /**
-     * 在「核心 profile 绑定失败、退回固定管线」时给出与版本相符的日志。
-     *
-     * <p>1.12 及更早（LWJGL2）本该走固定管线，回退是预期行为，不该用告警语气把人带偏；只有
-     * 1.13+（LWJGL3：GLFW 或 SDL）本应具备核心 profile 却绑定失败时，才保留告警——那时固定管线
-     * 确实什么都画不出来。
-     */
-    private static void logFallback(Class<?> gl11) {
-        if (isModernRenderStack(gl11)) {
-            log("core profile bind failed on a core-profile-only stack (1.13+);"
-                    + " falling back to fixed pipeline, which will render nothing");
-        } else {
-            log("no core profile in this GL stack (1.12 and earlier, LWJGL2);"
-                    + " using the fixed-pipeline renderer as expected");
-        }
-    }
-
-    /**
-     * 当前渲染栈是否为 1.13+ 的 LWJGL3（GLFW 或 26.3 的 SDL）。
-     *
-     * <p>1.13+ 只有核心 profile，固定管线已被移除，因此这是「本应具备核心 profile」的判据；
-     * LWJGL2（≤1.12）只有固定管线，回退属预期。
-     */
-    private static boolean isModernRenderStack(Class<?> gl11) {
-        ClassLoader loader = gl11.getClassLoader();
-        return loadNoInit("org.lwjgl.glfw.GLFW", loader) != null
-                || loadNoInit("org.lwjgl.sdl.SDLVideo", loader) != null;
     }
 
     /** 以不初始化方式探测类存在（K2）；失败返回 {@code null}。 */

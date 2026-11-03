@@ -143,6 +143,73 @@
             },
             "fields": {}
         },
+        "com/mojang/blaze3d/vertex/PoseStack": {
+            "names": {
+                "vanilla": "eij",
+                "fabric": "net.minecraft.class_4587",
+                "forge": "com.mojang.blaze3d.vertex.PoseStack",
+                "neoforge": "com.mojang.blaze3d.vertex.PoseStack"
+            },
+            "methods": {
+                "popPose": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_22909",
+                        "forge": "m_85849_",
+                        "neoforge": "m_85849_"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V",
+                        "neoforge": "()V"
+                    }
+                },
+                "pushPose": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_22903",
+                        "forge": "m_85836_",
+                        "neoforge": "m_85836_"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V",
+                        "neoforge": "()V"
+                    }
+                },
+                "scale": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_22905",
+                        "forge": "m_85841_",
+                        "neoforge": "m_85841_"
+                    },
+                    "signatures": {
+                        "vanilla": "(FFF)V",
+                        "fabric": "(FFF)V",
+                        "forge": "(FFF)V",
+                        "neoforge": "(FFF)V"
+                    }
+                },
+                "translate": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_22904",
+                        "forge": "m_85837_",
+                        "neoforge": "m_85837_"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)V",
+                        "fabric": "(DDD)V",
+                        "forge": "(DDD)V",
+                        "neoforge": "(DDD)V"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "enl",
@@ -726,6 +793,12 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/client/gui/GuiComponent": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/client/gui/GuiGraphics": {
             "names": {

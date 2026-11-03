@@ -125,16 +125,30 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 - 渲染抽象 `Renderer`（rect / roundedRect / outline / text / pushClip / popClip
   + **纹理原语** `uploadTexture` / `deleteTexture` / `texturedQuad` / `supportsTextures`）
   + `UiBackend`（+ beginFrame/endFrame/backendName/width/height/ready）。
-- 三个后端（都挂在 `UiBackend` 下，由 `OverlayBootstrap.selectBackend` 按栈挑选）：
+- 四个后端（都挂在 `UiBackend` 下，由 `OverlayBootstrap.tryInstall` 按栈挑选；只有三个游戏绘制入口都认不出时才落到 `selectBackend` 的 GL 后端）：
   `GlRenderer`（固定管线，`glOrtho` + `glScissor` 裁剪栈，纹理走立即模式四边形；≤1.12）、
   `ModernRenderer`（核心 profile，GLSL 150 + 单 VBO/VAO，顶点布局 `x,y,u,v`，片元按 `uTexture`
-  在「平涂」与「采样×调制色」之间切换，纯色也绑一张 1×1 白纹理；1.13–1.21.11）、
-  `ExtractorRenderer`（26.x SDL 栈：**完全不碰 GL**，把原语翻译成游戏自己的 `GuiGraphicsExtractor`
-  调用——`fill` 收左上/右下两角、`outline` 收左上+宽高、`enableScissor`/`disableScissor` 裁剪、
-  `text(Font,…)` 画字；圆角无原语，逐行内缩近似。自定义纹理走
+  在「平涂」与「采样×调制色」之间切换，纯色也绑一张 1×1 白纹理；1.13–1.15，
+  诊断开关 `-Dnocturne.ui.backend=gl` 可强制 1.20–1.21 也走它做对比）、
+  `ExtractorRenderer`（26.x SDL 栈 `gui-extractor` 与 1.20–1.21 `gui-graphics`：**完全不碰 GL**，
+  把原语翻译成游戏自己的 `GuiGraphicsExtractor` / `GuiGraphics` 调用——`fill` 收左上/右下两角、
+  `outline` 收左上+宽高、`enableScissor`/`disableScissor` 裁剪、`text(Font,…)` 画字；圆角无原语，
+  逐行内缩近似。26.x 的自定义纹理走
   `DynamicTexture` + `TextureManager.register` + `blit(RenderPipeline, Identifier, …)`，
   三个 26.x 版本的签名已用 `javap` 逐个核对；任一项解析不到就整条纹理支路关闭，
-  界面退回「游戏字体 + ASCII 图标」）。
+  界面退回「游戏字体 + ASCII 图标」）、
+  `ExtractorRenderer` 的 `gui-stack` 形态（1.16–1.19：没有 `GuiGraphics`，原语是
+  `static fill(PoseStack,int×5,int)` 与 `static drawString(PoseStack,Font,String,int,int,int)`，
+  `enableScissor`/`disableScissor` 可选、1.19.1 起才存在，缺失时裁剪降级；与 `gui-graphics`/
+  `gui-extractor` 共用同一个类，只在装配处按「静态方法 + 首参绘制栈」还是「实例方法 + 隐式 `this`」
+  分开（`poseArg` 形状分支），`backendName()` 报 `gui-stack`。命中条件是
+  `ClassType.HUD` 候选类上存在静态 6 参 `fill`（`OverlayBootstrap.resolveLegacyGui`），否则回退到
+  `ModernRenderer`）。
+  选栈顺序（`OverlayBootstrap.tryInstall`，:205-245）：`-Dnocturne.ui.backend=gl` 强制跳过前三层 →
+  `GuiGraphicsExtractor` 存在（26.x `sdl`）→ `resolveGuiGraphics()`（1.20–1.21 `gui-graphics`）→
+  `resolveLegacyGui()`（1.16–1.19 `gui-stack`）→ `selectBackend` 的 GL 后端（`ModernRenderer` / `GlRenderer`）。
+  特例：1.21.1 attach（`instrumentation != null` 且映射描述含 `1.21.1 `）强制 `forceGl = true`，
+  属兼容豁免（代码注释 :217-221）。
 - 字形与程序化纹理：`text/FontRegistry` 从资源加载 TTF，`text/GlyphAtlas` 按 `(fontId, 字号)`
   维护 1024² 白化字形图集（LRU 淘汰时释放纹理），`text/FontRasterizer` 把
   `FaFont.Provider` 接到图集并把度量换算回设计单位；`text/RasterTextures` 用解析解生成阴影与

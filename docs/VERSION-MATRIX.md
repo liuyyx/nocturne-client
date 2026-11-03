@@ -252,21 +252,47 @@
 
 ## 3. 绘制/输入能力矩阵
 
-| 能力 | 代际 A（1.8.9/1.12.2） | 代际 B（1.16.5–1.21.x） | 代际 C（26.1–26.3） |
+| 能力 | 代际 A（1.8.9/1.12.2） | 代际 B（1.13–1.21.x） | 代际 C（26.1–26.3） |
 |---|---|---|---|
-| 矩形 | `Gui.drawRect` | `DrawContext/GuiGraphics.fill` | `GuiGraphicsExtractor.fill` |
-| 文字 | `FontRenderer.drawString`（自绘） | `drawString(Font,…)` | `extractor.text(Font,…)`（字体不自绘） |
+| **UI 绘制后端** | `gl-fixed`（固定管线） | 1.13–1.15 = `gl-core`（`ModernRenderer` 兜底，`fill` 是实例方法、无 `PoseStack`）；1.16–1.19 = `gui-stack`（静态 `fill`/`drawString` + 游戏 `PoseStack`，scissor 1.19.1+ 才有）；1.20–1.21 = `gui-graphics`（D2 sink；日志 `gui-graphics stack`，`backendName()` 仍报 `gui-extractor`；1.21.1 attach 与 1.21.11 的历史实测仍是 `gl-core`） | `gui-extractor` |
+| 矩形 | `Gui.drawRect` | 1.16–1.19 `GuiComponent.fill(PoseStack,…)`；1.20–1.21 `GuiGraphics.fill` | `GuiGraphicsExtractor.fill` |
+| 文字 | `FontRenderer.drawString`（自绘） | `drawString(PoseStack,Font,…)` / `GuiGraphics.drawString(Font,…)` | `extractor.text(Font,…)`（字体不自绘） |
 | 字体度量 | `getStringWidth` / 行高 9 | `Font.width` | `Font.width` / `lineHeight` |
-| 裁剪 | 直接 GL `glScissor` | `enableScissor/disableScissor` | `enableScissor/disableScissor` |
+| 裁剪 | 直接 GL `glScissor` | 1.19.1+ `GuiComponent.enableScissor(x1,y1,x2,y2)`；1.16–1.18 无该原语，回退 `RenderSystem.enableScissor(x,y,w,h)`（静态） | `enableScissor/disableScissor` |
 | 按键 | `KeyBinding` + LWJGL2 `Keyboard` | `KeyMapping` / `InputConstants.Type.KEYSYM.getOrCreate(vk)` | `InputConstants.isKeyDown` |
 | 鼠标 | LWJGL2 `Mouse` | `MouseHandler.xpos()/ypos()` | 同左 |
+
+### 3.1 1.16–1.19 `GuiComponent` 成员可用性（映射表实测）
+
+数据直接读 `client/src/main/resources/mappings-<版本>.json` 的 `net/minecraft/client/gui/GuiComponent.methods`；
+`absent` 是生成器标注的「该版本运行时没有此成员」。`drawCenteredString` 未进 `tools/mapping/requirements.txt`，
+表里没有该项（1.16.5 实测为 `a`，与 `fill` 同名，这正是绑定必须先查映射名、不能只按签名匹配的原因）。
+
+| 版本 | `fill` | `drawString` | `drawCenteredString` | `enableScissor` | `disableScissor` |
+|---|---|---|---|---|---|
+| 1.16 | `a` | `c` | 未纳入表 | `absent` | `absent` |
+| 1.16.1 | `a` | `c` | 未纳入表 | `absent` | `absent` |
+| 1.16.2 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.16.3 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.16.4 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.16.5 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.17 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.17.1 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.18 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.18.1 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.18.2 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.19 | `a` | `b` | 未纳入表 | `absent` | `absent` |
+| 1.19.1 | `a` | `b` | 未纳入表 | `a` | `l` |
+| 1.19.2 | `a` | `b` | 未纳入表 | `a` | `l` |
+| 1.19.3 | `a` | `b` | 未纳入表 | `a` | `l` |
+| 1.19.4 | `a` | `b` | 未纳入表 | `a` | `l` |
 
 ## 4. 验收状态
 
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`（旧界面）；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
-| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3，`backend=gl-core`、`FaClickGui` 三列 + 中文标签完整，无截断/重叠；`Screen.render(PoseStack,…)` 不会被误判成 GuiGraphics） | ✅ | ✅ 已产出 | ✅ 可见（`tmp/mc1165-final.png`） |
+| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3；旧 jar 的 `backend=gl-core` 结论已过期，1.16–1.19 现走 `gui-stack`（`GuiComponent.fill`/`drawString` + 游戏 `PoseStack`），`Screen.render(PoseStack,…)` 不会被误判成 GuiGraphics；`backend=gui-stack` 的新绑定**待真机复验**） | ✅ | ✅ 已产出 | ✅ 可见（旧后端 `tmp/mc1165-final.png`、`tmp/mc-1_16_5.log`；`gui-stack` 待复验） |
 | 26.2 | ✅ **真机已实测**（修复后） | ✅ 帧钩子按设计不注册（GLFW 交换点只驱动输入轮询） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor; input=glfw`；`GuiDrawHook` 织入成功；截图 `docs/research/fatality-26.2-fixed.png`） |
 | 26.2（Vulkan） | ⏳ | 未验 | ✅ 已产出 | ⏳ 待真机（26.2 的图形 API 需在游戏设置里手动切换，本次实测的是 OpenGL 路径） |
 | 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转；2026-10-29 原版 26.3 复验浮点字形矩阵与线性采样生效） |
@@ -425,8 +451,9 @@
 > 字号正常（Skija 不分代，gl-core 画不出的问题被绕过）。`ModernGlApi.getInteger` 的余量校验
 > （`flip()` 后查 `remaining()`）已修，不再有每帧 `BufferUnderflowException`。
 > **注（后续订正）**：其后 Skija 路径因"直写外部帧缓冲会盖黑游戏"（1.8.9 与 1.16.5 真机实锤）
-> 被从 `selectBackend` 移除，1.13+ 一律走 `gl-core`。**这一行记录的是 Skija 启用当时的状态，
-> 未按当前代码在 1.16.5 上重新实测**。
+> 被从 `selectBackend` 移除。**这一行记录的是 Skija 启用当时的状态，未按当前代码在 1.16.5 上重新实测**。
+> **2026-11-02 再订正**：1.13+ 不再一律走 `gl-core` —— 1.16–1.19 已改为 `gui-stack`
+> （`GuiComponent.fill/drawString` + 游戏 `PoseStack`），只有 1.13–1.15 回落 `gl-core`；见 §3 与 §4。
 
 > **「注入」列指什么**：目前唯一跑通的是 LWJGL2 实验靶（`tmp/lab189/Fake189v5`：真实 Java 8 +
 > 真实 LWJGL2 + 真实 OpenGL 4.6，320×240 空白窗口，120 帧 `Display.update()`），**靶内没有 Minecraft**。
@@ -445,11 +472,11 @@
 |---|---|---|---|
 | 1.8.9 | 原版 / Forge | `gl-fixed` | ⏳ 待真机（旧界面在该格已验过注入链路） |
 | 1.12.2 | Forge | `gl-fixed` | ⏳ 待真机 |
-| 1.16.5 | Forge | `gl-core` | ⏳ 待真机 |
-| 1.20.1 | Forge / Fabric | `gl-core` | ⏳ 待真机 |
+| 1.16.5 | Forge | `gui-stack`（1.16–1.19） | ✅ 真机已验收 2026-11-03（面板/三列/中文/点击；`scissor=rendersystem poseScale=true`） |
+| 1.20.1 | Forge / Fabric | `gui-graphics`（1.20–1.21） | ⏳ 待真机（旧记录为 `gl-core`） |
 | 1.21.1 | Fabric mod | `gui-extractor` | ✅ **已实测**（Mixin 绘制/输入钩子织入；修复 `NativeImage` 原图写入、独立 UV 区域的 11 参 `blit`、2× 栅格密度与 alpha 混合后，文字和柔和阴影正常；滚轮走 `ScrollState`，日志确认 `view.scroll` 从 34 连续变化到 404 且物品栏不滚动。隔离实例诊断构建验证 Esc 关闭自绘 GUI、原生暂停菜单返回游戏及右 Shift 重开；原生 Screen 与自绘 GUI 同时打开时鼠标拦截为 `false`，暂停菜单上重开自绘 GUI 后，Back to Game 已实机点击返回，原生输入未被拦截；返回按压在松开前不再穿透到自绘 GUI，后续新点击正常；左 Shift（GLFW 340）不再误触发右 Shift（GLFW 344）快捷键。颜色选择器二维渐变已复验无横条；Fabric HUD 改为 Gui.render 捕获 + GameRenderer 深度清理后绘制，准星与快捷栏不再覆盖 GUI，颜色弹窗和滚轮均已复验） |
-| 1.21.8 | Fabric / NeoForge | `gl-core` | ⏳ 待真机 |
-| 1.21.11 | Fabric | `gl-core` | ✅ **已实测**（Fabric 0.19.5 + LWJGL 3.3.3 + NVIDIA 610.74：注入 → `backend=gl-core; input=glfw` → `overlay active; screen=FaClickGui`，新界面三列渲染正常、颜色 chip/滑条/图集文字都在；截图 `docs/research/fatality-1.21.11-glcore.png`。**首轮注入直接 `nvoglv64` ACCESS_VIOLATION 崩 JVM**，根因与修复见下方 P4-E） |
+| 1.21.8 | Fabric / NeoForge | `gui-graphics`（1.20–1.21） | ⏳ 待真机（旧记录为 `gl-core`） |
+| 1.21.11 | Fabric | `gui-graphics`（旧实测 `gl-core`） | ✅ **已实测（旧路径）**；新 sink **待复验**（Fabric 0.19.5 + LWJGL 3.3.3 + NVIDIA 610.74：注入 → `backend=gl-core; input=glfw` → `overlay active; screen=FaClickGui`，新界面三列渲染正常、颜色 chip/滑条/图集文字都在；截图 `docs/research/fatality-1.21.11-glcore.png`。**首轮注入直接 `nvoglv64` ACCESS_VIOLATION 崩 JVM**，根因与修复见下方 P4-E） |
 | 26.1 | Fabric / NeoForge | `gui-extractor` | ⏳ 待真机 |
 | 26.2 | Fabric / NeoForge | `gui-extractor` | ⏳ 待真机（OpenGL 与 Vulkan 各一次） |
 | 26.3 | Fabric / NeoForge | `gui-extractor` | ⏳ 待真机（OpenGL 已移除，只有 Vulkan） |

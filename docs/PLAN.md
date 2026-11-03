@@ -51,7 +51,7 @@
 | P2 注入点 | 帧交换钩子 + 绘制上下文钩子 | ✅ 已完成 |
 | P3 映射表生成器 | 66 个 release（1.8.9–26.3）四套命名空间；`--check` / `--javap` 全绿 | ✅ 已完成 |
 | P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **仍打开**（1.21.11 文字黑块/旧后端未收尾）；C（26.x extractor）✅ 真机，26.3 运行中 attach 也已复验 | B 未关闭 |
-| P4-D 绘制层重构 | D1 完成；D2 已重新接线并在 26.3 真机可见；1.20.1 HUD 钩子/末尾注入已修，但合成键盘无法验收 GUI；D3/D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
+| P4-D 绘制层重构 | D1 完成；D2 已重新接线并在 26.3 真机可见；1.20.1 HUD 钩子/末尾注入已修，但合成键盘无法验收 GUI；D3 已落地且 1.16.5 真机验收（`gui-stack` 绘制/文字/点击；双端钩子 + PoseStack 文本缩放 + RenderSystem 裁剪回退）；D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
 | P5 输入 | 1.8.9 / 26.3 真机；GUI 打开时 1.8.9 压 `inGameHasFocus`、26.3 屏蔽 `MouseHandler#grabMouse`；SDL 滚轮已落地；1.8.9/1.16.5 滚轮与真实点击仍待真人 | 部分 |
 | P6 模块 | 22 个注册模块；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
 | P7 自实现 attach | Windows 真机；Linux/macOS 已实现未实机；`PayloadPack` 已接生产 | ✅ 已完成（平台待验） |
@@ -78,12 +78,12 @@
 2. **P0 26.3 运行中 attach 的游戏事件**：已修。`LocalPlayer/Minecraft/Connection/MultiPlayerGameMode/
    KeyboardHandler/MouseHandler` 全部用当前字节注入；运行中 attach 真机 NoFall
    `motion.events=136 forcedGround=54`。产品路径确定为**运行中 attach**，不强制启动期 agent。
-3. **P4-D 绘制层重构**：D1 已完成，下一步 D2（1.20–1.21 `GuiGraphics` sink）；P4-B 才算关闭。
+3. **P4-D 绘制层重构**：D1、D3 已落地；D3 已在 1.16.5 真机验收（界面可见、文字正常、可点），下一步 D4；P4-B 才算关闭。
 4. **1.8.9 服务端命中**：已复验。服务端召唤僵尸，KillAura 范围 6、Mobs=true，血量
    `17.16 → 10.72`、`attacks=10`，攻击包到达服务端。
 5. P5 滚轮真人验收（1.8.9/LWJGL2、1.16.5/GLFW）仍未做，需要物理滚轮。
 
-下一阶段顺序：D2 → D3 → D4 → P5 滚轮真人验收。
+下一阶段顺序：D3 真机复验 → D4 → P5 滚轮真人验收。
 
 ## 工作纪律（每次开工前读一遍）
 
@@ -101,7 +101,7 @@
 ### D1 DrawPlan + DrawSink（纯 Java，先做）✅ 已完成
 
 > `ui/render/DrawPlan.java`、`DrawSink.java`、`TextSink.java` 已落地，`DrawPlanTest` 覆盖圆角降级、
-> 相邻同色矩形合并、裁剪外剔除和嵌套 scissor。当前缺口是**尚未接入三个后端**，不是接口/算法。
+> 相邻同色矩形合并、裁剪外剔除和嵌套 scissor。当前缺口是**尚未接入各绘制后端**，不是接口/算法。
 
 - `DrawSink` 接口只有三个方法：`fill / blit / scissor`（含嵌套裁剪的栈语义）。
 - `DrawPlan` 接收 `Renderer` 的 5 个原语，编译成命令序列：
@@ -133,18 +133,44 @@
   - `enableScissor/disableScissor`
 - 入口：注册 `Screen.render(GuiGraphics,int,int,float)`（1.21.11 上为 `gsb.a(gir,int,int,float)`，已核实）
   与 `Hud.render(...)`；现在注册的 `extractRenderState` 是 26.x 名字，1.20–1.21 上挂不上才会退回帧钩子。
-- `selectBackend`：能拿到 `GuiGraphics` 的版本走本 sink；`ModernRenderer` 不再用于 1.20+。
-- 验收（真机，至少 1.21.11 与 1.20.1）：界面可见、**文字正常显示**、可点；`backend=gui-graphics`；
+- `selectBackend`：能拿到 `GuiGraphics` 的版本走本 sink；`ModernRenderer` 不再用于 1.20+（例外见 `OverlayBootstrap`：1.21.1 attach 兼容豁免与 `-Dnocturne.ui.backend=gl` 仍强制 gl-core）。
+- 验收（真机，至少 1.21.11 与 1.20.1）：界面可见、**文字正常显示**、可点；日志出现 `gui-graphics stack`（现状 `backendName()` 仍报 `gui-extractor`）；
   无 GL 异常日志；commit + push。
 
-### D3 1.13–1.19：`RenderSystem` sink
+### D3 1.16–1.19：`gui-stack` sink（静态 `fill`/`drawString` + 游戏 `PoseStack`）✅ 1.16.5 真机已验收（2026-11-03）
 
-- 新类（一个，不是每版一个）：按签名装配 `fill` / `drawString` / `blit` / `enableScissor`；
-  缺成员时按 P3-R 的 absent 规则降级并打一次性日志。
-- 这一段没有 `GuiGraphics`，矩形走 `GuiGraphics.fill`（1.16+ 存在）或 `Gui.drawRect`（1.13–1.15），
-  文字走 `Font.drawString`；具体以映射表成员是否存在为准。
-- `ModernRenderer` 只在本段保留（自写 GLSL 作为最后的兜底），1.20+ 与 26.x 都不再使用。
-- 验收：1.16.5 真机界面可见、文字正常、可点；commit + push。
+落地位置（不新增后端类，复用 `ExtractorRenderer`）：
+
+- `ui/gl/ExtractorRenderer.java`：
+  - 新增 `poseArg` 形状分支——`callFill`/`callText` 按「静态方法 + 首参绘制栈」或「实例方法 + 隐式 `this`」
+    两种形状调用同一个方法句柄；`backendName()` 在 `poseArg` 时返回 `gui-stack`。
+  - 新增 `bindLegacy(guiType, mapping, minecraft, fontSource)`：装配 `fill` / `drawString` /
+    `enableScissor` / `disableScissor`；辅助 `windowHandles`（`Window.getGuiScaledWidth/Height`）、
+    `isFontType`（映射表 `FONT` 候选名 + `width(String)` 特征兜底）、
+    `mappedNames`（`ClassType.GUI_COMPONENT` 的成员候选名）。
+- `agent/OverlayBootstrap.java`：新增 `resolveLegacyGui()` / `hasStaticFill()` 与 `guiStack` 分支（1.16–1.19）。
+  判定是「映射表 `ClassType.HUD` 类名候选中，存在静态 `void fill(PoseStack,int×5,int)`」，命中才选
+  `gui-stack`；否则 `guiStack=false` 回落 gl-core。
+- `NocturneAgent`：`installGuiGraphicsHook` 的首参判定放宽为「非基本类型」（不再只认 `GuiGraphics` 类名）；
+  `installHudRenderHook` 接受 `render(PoseStack,float)`（`Gui.render` 的 1.16–1.19 形状），
+  与 `Gui.render(GuiGraphics,*)` 共用一条 HUD 入口。
+- `tools/mapping/requirements.txt` 新增 `net/minecraft/client/gui/GuiComponent` 及
+  `fill()` / `drawString()` / `enableScissor()` / `disableScissor()`；66 份 `mappings-*.json` 已重新生成，
+  `generate.py --check` 通过。
+
+**绑定规则（1.16–1.19 必须按映射名查表，不能只靠签名）**：`fill` 与 `drawString` 的签名会碰撞 ——
+1.16.5 实测 `fill=a`、`drawString=b`、`drawCenteredString=a`，后两者参数表**完全相同**。
+因此优先按映射名 `ClassType.GUI_COMPONENT` 绑定，名字缺失时才退回形状匹配。
+`enableScissor`/`disableScissor` 在 1.16–1.18 的 `GuiComponent` 上不存在（1.19.1 起才有）；这两代回退到 `com.mojang.blaze3d.systems.RenderSystem.enableScissor(int,int,int,int)`（静态、收 `(x,y,w,h)`），绑定日志记为 `scissor=rendersystem`。
+
+**能力边界（1.13–1.15 不在此段，不是待办 bug）**：1.13–1.15 没有 `PoseStack`，`AbstractGui`/`GuiComponent`
+的 `fill` 是实例方法而非 `static` → `resolveLegacyGui()` 返回 null、`guiStack=false`，
+回落 gl-core 的 `ModernRenderer`（1.13/1.14/1.15 的 LWJGL 依赖里有 GLFW 类，`isModernRenderStack` 为真）。
+`ModernRenderer` 因此只为 1.13–1.15 保留（自写 GLSL 兜底），1.20+ 与 26.x 都不再使用它。
+
+真机状态（2026-11-03，1.16.5 + LWJGL3，`gui-stack`）：面板可见、三列布局正常、中文文字正常（字号按 `size/9` 缩放）、开关点击生效。
+日志证据：`gui-stack bind: dkv fill=a text=b scissor=rendersystem poseScale=true`、`extractor backend first frame`、`text width probe: ... scaled=true`。
+两条关键修复：① 1.16–1.19 绘制入口改「开头捕获 + 末尾无参消费」（末尾 `aload` 形参槽会 VerifyError）；② `ClassType.POSE_STACK` 绑定 `pushPose/popPose/scale`，文本度量与绘制同源缩放。
 
 ### D4 收尾
 
@@ -153,7 +179,7 @@
 
 ---
 
-## P4-B 关闭条件（并入 D2）
+## P4-B 关闭条件（并入 D2/D3）
 
 1.16.5 / 1.20.1 / 1.21.4 / 1.21.10 / 1.21.11 逐台注入后：界面可见、文字显示、点击生效、
 `backend` 日志与实际通道一致。任一台不满足，P4-B 保持打开。

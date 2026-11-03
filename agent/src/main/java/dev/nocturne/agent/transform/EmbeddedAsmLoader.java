@@ -107,13 +107,39 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     }
 
     /**
-     * 创建一个已归一化类名的帧钩子转换器。
+     * 创建一个「开头捕获、末尾消费」的双端回调转换器。
      *
-     * @param targetInternalName 目标类内部名（点号或斜杠形式均可，构造器内会归一化）
-     * @param method 目标方法名
-     * @param descriptor 目标方法描述符
-     * @return 转换器实例；子加载器或类加载失败时返回 {@code null}（已打日志）
+     * <p>用于 1.16–1.19 的 {@code Gui.render(PoseStack,float)}：末尾路径上形参已被 StackMapTable
+     * 标记为 {@code top}，末尾 {@code aload} 会触发 {@code VerifyError}（1.16.5 实测）。
+     *
+     * @param targetInternalName 目标类内部名
+     * @param method             目标方法名
+     * @param descriptor         目标方法描述符
+     * @param hookOwner          钩子类内部名
+     * @param hookMethod         开头捕获钩子，签名 {@code (Ljava/lang/Object;)V}
+     * @param deferredMethod     末尾消费钩子，签名 {@code ()V}
+     * @return 转换器；内嵌 ASM 缺失或类加载失败时返回 {@code null}
      */
+    public ClassFileTransformer createDeferredCallbackTransformer(String targetInternalName,
+                                                                  String method, String descriptor,
+                                                                  String hookOwner, String hookMethod,
+                                                                  String deferredMethod) {
+        try {
+            Class<?> transformerClass = loadClass(CALLBACK_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, String.class,
+                    boolean.class, String.class);
+            Object instance = constructor.newInstance(
+                    targetInternalName, method, descriptor, hookOwner, hookMethod,
+                    Boolean.FALSE, deferredMethod);
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create deferred callback hook transformer for " + targetInternalName
+                    + "." + method + ": " + t + "; callback hook disabled");
+            return null;
+        }
+    }
+
     /**
      * 创建一个「首参回调」转换器：把目标方法的**首个引用形参**交给钩子。
      *

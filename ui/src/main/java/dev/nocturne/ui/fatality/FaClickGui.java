@@ -526,6 +526,11 @@ public final class FaClickGui implements OverlayGui {
 
     /** 保存窗口布局。 */
     private void saveLayout() {
+        if (ww <= 0f || wh <= 0f) {
+            // 窗口还没初始化（openGui 注入后立刻关界面会走到这里）。写 0 会让下次启动
+            // 用 MIN_W/MIN_H 当尺寸，面板比默认小一圈且贴边——实测踩过。
+            return;
+        }
         float rx = sw > 0f ? wx / sw : 0.5f;
         float ry = sh > 0f ? wy / sh : 0.5f;
         LayoutStore.save(rx, ry, ww, wh, category.name());

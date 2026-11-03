@@ -392,6 +392,21 @@ net/minecraft/client/gui/Gui#render()
 net/minecraft/client/gui/Font
 net/minecraft/client/gui/Font#width()
 net/minecraft/client/gui/Font#lineHeight
+# 1.16–1.19 的 GUI 原语：静态 fill(PoseStack,…) / drawString(PoseStack,Font,…) / 裁剪。
+# 由 ui 模块的 ExtractorRenderer.bindLegacy 按映射名解析（ui 不在 scan.py 的扫描范围，必须手写）。
+# 1.16.5 实测：fill=a、drawString=b、drawCenteredString=a —— 只靠签名分不开这两个，必须查表。
+net/minecraft/client/gui/GuiComponent
+net/minecraft/client/gui/GuiComponent#fill()
+net/minecraft/client/gui/GuiComponent#drawString()
+net/minecraft/client/gui/GuiComponent#enableScissor()
+net/minecraft/client/gui/GuiComponent#disableScissor()
+# 1.16–1.19 的 PoseStack：push/pop 都是「无参 void」，1.16.5 混淆成 a()/b()，
+# 形状完全相同，只能靠映射表区分（ExtractorRenderer.bindLegacy 用它缩放文本）。
+com/mojang/blaze3d/vertex/PoseStack
+com/mojang/blaze3d/vertex/PoseStack#pushPose()
+com/mojang/blaze3d/vertex/PoseStack#popPose()
+com/mojang/blaze3d/vertex/PoseStack#scale()
+com/mojang/blaze3d/vertex/PoseStack#translate()
 net/minecraft/client/KeyMapping
 net/minecraft/client/KeyMapping#isDown()
 

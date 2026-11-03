@@ -20,6 +20,7 @@ import dev.nocturne.ui.gl.TextRenderer;
 import dev.nocturne.ui.gl.UiBackend;
 
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Method;
 
 /**
  * 叠加层安装器：把「GL 就绪之后再装 GUI 叠加层」这件事做成可重试的。
@@ -78,7 +79,11 @@ public final class OverlayBootstrap implements FrameListener {
      */
     private static volatile ExtractorRenderer extractorBackend;
 
-    /** gl-core 在同一帧的 PoseStack 上提交旧代原生人物；帧末立即清空。 */
+    /**
+     * gl-core 在同一帧的游戏上下文上提交旧代原生人物；帧末立即清空。
+     *
+     * <p>1.13–1.15 是常规后端；1.20+ 只有诊断开关 / 1.21.1 兼容豁免 / 绘制 API 映射缺口时才会非空。
+     */
     private static volatile ModernRenderer modernBackend;
 
     /** 后端尚未装好时收到的绘制上下文；装好后立刻补喂，避免白丢第一帧。 */
@@ -206,10 +211,14 @@ public final class OverlayBootstrap implements FrameListener {
         // 上下文只在游戏自己的调用序列里有效，我们只能在它交给我们的绘制上下文里提交绘制。
         // 诊断开关：-Dnocturne.ui.backend=gl 强制走 GL 后端（1.20-1.21 用来对比
         // 「游戏绘制 API（无自定义纹理）」与「自带 GL 管线（有纹理/字形图集）」两条路的差异）。
+        // 仅诊断用：1.20+ 的默认路径一律走游戏绘制 API（GuiGraphics），下面的 extractor 分支会因此跳过，
+        // 最终落到 selectBackend → ModernRenderer。生产环境不要设这个属性。
         boolean forceGl = "gl".equalsIgnoreCase(System.getProperty("nocturne.ui.backend", ""));
         // 1.21.1 的注入式 GuiGraphics 路径曾实测整屏纯红；该路径保留已验的
         // gl-core。Fabric mod 没有 Instrumentation 帧钩子，绘制只在游戏交来的
         // GuiGraphics 内有效，而且现场 LWJGL native 无法从 mod 加载，不能强制 GL。
+        // 这是 1.20+ 上**唯一非诊断**的 ModernRenderer 入口，属于兼容性豁免：
+        // gui-graphics 路径在 1.21.1 真机复验通过后应删掉这段强制。
         if (!forceGl && instrumentation != null && currentMapping() != null
                 && currentMapping().describe().contains("1.21.1 ")) {
             forceGl = true;
@@ -221,6 +230,13 @@ public final class OverlayBootstrap implements FrameListener {
             // 1.20–1.21：GuiGraphics 走同一套「游戏绘制 API」后端（fill / drawString / scissor），
             // 不自己维护 GL 管线。它与 26.x 的差别只有方法名与尺寸来源，已在 ExtractorRenderer 里吸收。
             extractorType = resolveGuiGraphics();
+        }
+        // 1.16–1.19：没有 GuiGraphics，绘制入口是 Screen.render(PoseStack,int,int,float)，
+        // 原语是 Gui 从 GuiComponent 继承的静态 fill(PoseStack,...)。与 1.20+ 共用同一个后端，
+        // 只在装配处按「实例方法与静态方法 + 首参绘制栈」分开（见 ExtractorRenderer.bindLegacy）。
+        boolean guiStack = extractorType == null && !forceGl;
+        if (guiStack) {
+            extractorType = resolveLegacyGui();
         }
         boolean gameApi = extractorType != null;
         Class<?> gl11 = null;
@@ -286,16 +302,22 @@ public final class OverlayBootstrap implements FrameListener {
 
         UiBackend backend;
         if (gameApi) {
-            ExtractorRenderer extractor = sdl
-                    ? ExtractorRenderer.bind(extractorType, bridge::minecraft)
-                    : ExtractorRenderer.bindMapped(extractorType, mapping, bridge::minecraft,
-                            () -> bridge.readField(bridge.minecraft(), ClassType.MINECRAFT, "font"));
+            ExtractorRenderer extractor;
+            if (sdl) {
+                extractor = ExtractorRenderer.bind(extractorType, bridge::minecraft);
+            } else if (guiStack) {
+                extractor = ExtractorRenderer.bindLegacy(extractorType, mapping, bridge::minecraft,
+                        () -> bridge.readField(bridge.minecraft(), ClassType.MINECRAFT, "font"));
+            } else {
+                extractor = ExtractorRenderer.bindMapped(extractorType, mapping, bridge::minecraft,
+                        () -> bridge.readField(bridge.minecraft(), ClassType.MINECRAFT, "font"));
+            }
             if (extractor == null) {
-                // 绘制 API 签名不认识（这个版本的 extractor 换了形状）：报一次，之后仍按上限重试。
+                // 绘制 API 签名不认识（这个版本换了形状）：报一次，之后仍按上限重试。
                 if (!sdlReported) {
                     sdlReported = true;
-                    log("extractor stack: GuiGraphicsExtractor signatures not recognised;"
-                            + " the overlay cannot draw on this version");
+                    log("game draw API: signatures not recognised on " + extractorType.getName()
+                            + "; the overlay cannot draw on this version");
                 }
                 return;
             }
@@ -306,6 +328,9 @@ public final class OverlayBootstrap implements FrameListener {
                             + " the overlay never calls LWJGL GL"
                             + (isSdlStack() ? " (SDL-managed context)" : " (context is only current inside"
                                     + " the game's own call sequence)"));
+                } else if (guiStack) {
+                    log("gui-stack (1.16-1.19): drawing through GuiComponent.fill/drawString with"
+                            + " the game's PoseStack; the overlay never calls LWJGL GL for UI");
                 } else {
                     log("gui-graphics stack (1.20-1.21): drawing through the game's GuiGraphics;"
                             + " the overlay never calls LWJGL GL for UI");
@@ -497,6 +522,48 @@ public final class OverlayBootstrap implements FrameListener {
         return false;
     }
 
+    /**
+     * 探测 1.16–1.19 的游戏绘制入口类（{@code Gui}）。
+     *
+     * <p>这一段没有 {@code GuiGraphics}：{@code Screen.render(PoseStack,int,int,float)} 的首参是
+     * PoseStack，没有 {@code fill(int,int,int,int,int)} 特征。绘制原语是 {@code Gui} 从
+     * {@code GuiComponent} 继承的静态 {@code fill(PoseStack,int,int,int,int,int)}。这里只判「有没有这个
+     * 静态形状」，具体装配交给 {@link ExtractorRenderer#bindLegacy}。
+     *
+     * @return 可用于绘制的类；不是这一段（或形状不认识）时返回 {@code null}
+     */
+    private Class<?> resolveLegacyGui() {
+        Mapping mapping = currentMapping();
+        if (mapping == null) {
+            return null;
+        }
+        for (String name : mapping.classNameCandidates(ClassType.HUD)) {
+            Class<?> gui = resolveLoaded(name.replace('/', '.'));
+            if (gui != null && hasStaticFill(gui)) {
+                return gui;
+            }
+        }
+        return null;
+    }
+
+    /** {@code static void fill(PoseStack, int, int, int, int, int)} 的形状判定。 */
+    private static boolean hasStaticFill(Class<?> type) {
+        for (Method method : type.getMethods()) {
+            if (!java.lang.reflect.Modifier.isStatic(method.getModifiers())
+                    || method.getReturnType() != void.class) {
+                continue;
+            }
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length == 6 && !parameters[0].isPrimitive()
+                    && parameters[1] == int.class && parameters[2] == int.class
+                    && parameters[3] == int.class && parameters[4] == int.class
+                    && parameters[5] == int.class) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Class<?> resolveGl11() {
         return resolveLoaded(GL11_CLASS);
     }
@@ -600,6 +667,14 @@ public final class OverlayBootstrap implements FrameListener {
     /**
      * 挑选绘制后端：能绑定核心 profile 入口的就是 1.13+，否则用固定管线。
      *
+     * <p><b>只有拿不到游戏绘制 API 时才会走到这里</b>（{@link #tryInstall} 的 {@code gameApi == false}）：
+     * <ol>
+     *   <li>{@code -Dnocturne.ui.backend=gl} 诊断开关；</li>
+     *   <li>1.21.1 的注入式兼容豁免（历史纯红回归，见 {@code tryInstall}）；</li>
+     *   <li>26.x / 1.20–1.21 / 1.16–1.19 三个绘制入口的签名全部认不出来（映射缺口）。
+     *       此时 1.20+ 上会落到 {@link ModernRenderer}，属**降级**路径，不是默认路径。</li>
+     * </ol>
+     *
      * @param fixed 固定管线绑定
      * @param gl11  游戏实际加载的 GL11 类，用于取得正确的类加载器
      * @param font  文本渲染器，可为 null
@@ -614,6 +689,8 @@ public final class OverlayBootstrap implements FrameListener {
             return new dev.nocturne.ui.gl.GlRenderer(fixed, font);
         }
         // 1.13+（core profile）：立即模式已被移除，必须走 VBO + 着色器的 ModernRenderer。
+        // 常规消费者是 1.13–1.15：这一段既没有 GuiGraphics，bindLegacy 也装配不上（Gui.fill 是实例方法、
+        // 没有 PoseStack），所以必然落到这里。1.16+ 只在上面三个绘制入口全认不出时兜底。
         // 绑定失败说明这个 LWJGL3 栈缺核心 profile 入口，回落固定管线只会告警（见下）。
         ModernGlApi modern = ModernGlApi.bind(gl11.getClassLoader());
         if (modern != null) {

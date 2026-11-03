@@ -65,6 +65,20 @@ public enum ClassType {
     INVENTORY_SCREEN("net.minecraft.client.gui.screens.inventory.InventoryScreen"),
     /** 1.20+ 的绘制上下文；26.x 已被 {@code GuiGraphicsExtractor} 取代。 */
     GUI_GRAPHICS("net.minecraft.client.gui.GuiGraphics"),
+    /**
+     * 1.13–1.19 的 GUI 原语宿主（{@code fill} / {@code drawString} / 裁剪）。
+     *
+     * <p>1.20 起该类被删除，原语移进 {@link #GUI_GRAPHICS}；表里这些版本会把成员标成
+     * {@code absent}，运行期回退规范名（这些版本本来也不走 {@code bindLegacy}）。
+     */
+    GUI_COMPONENT("net.minecraft.client.gui.GuiComponent"),
+    /**
+     * 1.13+ 的变换栈；1.16–1.19 的 {@code fill}/{@code drawString} 以它为第一个形参。
+     *
+     * <p>它的 {@code pushPose}/{@code popPose} 在混淆表里都是无参 void（1.16.5 是 a/b），
+     * 形状无法区分，只能查表——文本缩放依赖这两个句柄。
+     */
+    POSE_STACK("com.mojang.blaze3d.vertex.PoseStack"),
     /** 字体渲染器。 */
     FONT_RENDERER("net.minecraft.client.gui.FontRenderer"),
     /** 1.13+ 的字体类（1.8.9 用 {@link #FONT_RENDERER}）。 */

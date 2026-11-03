@@ -101,6 +101,49 @@
             },
             "fields": {}
         },
+        "com/mojang/blaze3d/vertex/PoseStack": {
+            "names": {
+                "vanilla": "com.mojang.blaze3d.vertex.PoseStack",
+                "fabric": "com.mojang.blaze3d.vertex.PoseStack",
+                "forge": "com.mojang.blaze3d.vertex.PoseStack",
+                "neoforge": "com.mojang.blaze3d.vertex.PoseStack"
+            },
+            "methods": {
+                "popPose": {
+                    "names": {
+                        "vanilla": "popPose",
+                        "fabric": "popPose",
+                        "forge": "popPose",
+                        "neoforge": "popPose"
+                    }
+                },
+                "pushPose": {
+                    "names": {
+                        "vanilla": "pushPose",
+                        "fabric": "pushPose",
+                        "forge": "pushPose",
+                        "neoforge": "pushPose"
+                    }
+                },
+                "scale": {
+                    "names": {
+                        "vanilla": "scale",
+                        "fabric": "scale",
+                        "forge": "scale",
+                        "neoforge": "scale"
+                    }
+                },
+                "translate": {
+                    "names": {
+                        "vanilla": "translate",
+                        "fabric": "translate",
+                        "forge": "translate",
+                        "neoforge": "translate"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "net.minecraft.client.KeyMapping",
@@ -497,6 +540,12 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/client/gui/GuiComponent": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/client/gui/GuiGraphics": {
             "absent": true,

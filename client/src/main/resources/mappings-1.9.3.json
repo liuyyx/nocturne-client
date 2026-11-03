@@ -25,6 +25,12 @@
             "methods": {},
             "fields": {}
         },
+        "com/mojang/blaze3d/vertex/PoseStack": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/KeyMapping": {
             "absent": true,
             "names": {},
@@ -372,6 +378,12 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/client/gui/GuiComponent": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/client/gui/GuiGraphics": {
             "absent": true,

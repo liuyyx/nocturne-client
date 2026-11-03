@@ -14,6 +14,20 @@ import dev.nocturne.ui.render.Renderer;
  *
  * <p>它是三个可互换后端之一（另见 {@link GlRenderer} 与 {@link ExtractorRenderer}，
  * 由 {@code OverlayBootstrap} 按运行环境选择）。
+ *
+ * <p><b>适用版本（P4-D 之后）</b>：
+ * <ul>
+ *   <li><b>1.13–1.15</b>：主力后端。这一段没有 {@code PoseStack}，游戏绘制入口
+ *       {@code ExtractorRenderer.bindLegacy} 装配不上，只能自写 GL 管线。</li>
+ *   <li><b>1.16–1.19</b>：仅兜底。正常情况下走 extractor + {@code bindLegacy}；只有那段签名
+ *       认不出来时才回落到这里。</li>
+ *   <li><b>1.20+ 与 26.x</b>：**默认不再使用**，改为游戏自己的绘制 API（{@code GuiGraphics} /
+ *       {@code GuiGraphicsExtractor}）。唯一例外是诊断开关
+ *       {@code -Dnocturne.ui.backend=gl}（用于对比两条路的差异），见 {@code OverlayBootstrap.tryInstall}。</li>
+ * </ul>
+ *
+ * <p>结论：本类现在只服务 <b>1.13–1.15</b>（这一段没有 {@code PoseStack}，且 {@code fill} 是实例方法，
+ * 装配不进 {@code gui-stack}）与诊断开关；1.16–1.19 正常走 {@code ExtractorRenderer} 的 {@code gui-stack}。
  */
 public final class ModernRenderer implements UiBackend, PlayerModelPreview {
 
@@ -172,7 +186,12 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         return gl;
     }
 
-    /** 设置本帧的 GuiGraphics（1.20+）或 PoseStack（1.15–1.19.3）。 */
+    /**
+     * 设置本帧的游戏绘制上下文：1.13–1.19 为 PoseStack，1.20+（仅诊断/降级路径）为 GuiGraphics。
+     *
+     * <p>UI 本身只用 GL 管线，这个上下文仅供 {@link PlayerModelPreview} 在游戏自己的绘制栈上
+     * 提交原生人物模型。
+     */
     public void setDrawContext(Object context) {
         this.drawContext = context;
     }

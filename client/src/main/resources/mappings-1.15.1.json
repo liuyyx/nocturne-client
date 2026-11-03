@@ -125,6 +125,64 @@
             },
             "fields": {}
         },
+        "com/mojang/blaze3d/vertex/PoseStack": {
+            "names": {
+                "vanilla": "cyi",
+                "fabric": "net.minecraft.class_4587",
+                "forge": "com.mojang.blaze3d.matrix.MatrixStack"
+            },
+            "methods": {
+                "popPose": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_22909",
+                        "forge": "func_227865_b_"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
+                "pushPose": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_22903",
+                        "forge": "func_227860_a_"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
+                "scale": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_22905",
+                        "forge": "func_227862_a_"
+                    },
+                    "signatures": {
+                        "vanilla": "(FFF)V",
+                        "fabric": "(FFF)V",
+                        "forge": "(FFF)V"
+                    }
+                },
+                "translate": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_22904",
+                        "forge": "func_227861_a_"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDD)V",
+                        "fabric": "(DDD)V",
+                        "forge": "(DDD)V"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "dbi",
@@ -620,6 +678,46 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/client/gui/GuiComponent": {
+            "names": {
+                "vanilla": "dch",
+                "fabric": "net.minecraft.class_332",
+                "forge": "net.minecraft.client.gui.AbstractGui"
+            },
+            "methods": {
+                "disableScissor": {
+                    "absent": true
+                },
+                "drawString": {
+                    "names": {
+                        "vanilla": "drawString",
+                        "fabric": "drawString",
+                        "forge": "drawString"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ldcf;Ljava/lang/String;III)V",
+                        "fabric": "(Lnet/minecraft/class_327;Ljava/lang/String;III)V",
+                        "forge": "(Lnet/minecraft/client/gui/FontRenderer;Ljava/lang/String;III)V"
+                    }
+                },
+                "enableScissor": {
+                    "absent": true
+                },
+                "fill": {
+                    "names": {
+                        "vanilla": "fill",
+                        "fabric": "fill",
+                        "forge": "fill"
+                    },
+                    "signatures": {
+                        "vanilla": "(IIIII)V",
+                        "fabric": "(IIIII)V",
+                        "forge": "(IIIII)V"
+                    }
+                }
+            },
+            "fields": {}
         },
         "net/minecraft/client/gui/GuiGraphics": {
             "absent": true,

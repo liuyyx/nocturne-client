@@ -125,6 +125,12 @@
             },
             "fields": {}
         },
+        "com/mojang/blaze3d/vertex/PoseStack": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "cxz",
@@ -611,6 +617,46 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/client/gui/GuiComponent": {
+            "names": {
+                "vanilla": "cyw",
+                "fabric": "net.minecraft.class_332",
+                "forge": "net.minecraft.client.gui.AbstractGui"
+            },
+            "methods": {
+                "disableScissor": {
+                    "absent": true
+                },
+                "drawString": {
+                    "names": {
+                        "vanilla": "drawString",
+                        "fabric": "drawString",
+                        "forge": "drawString"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcyu;Ljava/lang/String;III)V",
+                        "fabric": "(Lnet/minecraft/class_327;Ljava/lang/String;III)V",
+                        "forge": "(Lnet/minecraft/client/gui/FontRenderer;Ljava/lang/String;III)V"
+                    }
+                },
+                "enableScissor": {
+                    "absent": true
+                },
+                "fill": {
+                    "names": {
+                        "vanilla": "fill",
+                        "fabric": "fill",
+                        "forge": "fill"
+                    },
+                    "signatures": {
+                        "vanilla": "(IIIII)V",
+                        "fabric": "(IIIII)V",
+                        "forge": "(IIIII)V"
+                    }
+                }
+            },
+            "fields": {}
         },
         "net/minecraft/client/gui/GuiGraphics": {
             "absent": true,

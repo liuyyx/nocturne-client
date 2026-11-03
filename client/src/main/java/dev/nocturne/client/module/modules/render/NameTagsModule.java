@@ -180,7 +180,14 @@ public final class NameTagsModule extends Module implements WorldOverlay {
         boolean withDistance = playersDistance.get() || animalsDistance.get() || mobsDistance.get();
         boolean withHealth = playersHealth.get() || animalsHealth.get() || mobsHealth.get();
         float lineHeight = draw.textHeight();
-        double[] selfPos = withDistance ? position(bridge, bridge.player()) : null;
+        // 自己位置总是要读：距离过滤（Max Distance）即使不显示距离也需要它。
+        double[] selfPos = position(bridge, bridge.player());
+        // Max Distance 为 0 表示不限；三个分组取最大值作为整体上限——分组精确匹配需要 Animal 等
+        // 映射面（现在只有 Player/Mob 两级），在拿到之前按最宽的那个值裁剪，至少不会把视距外的
+        // 实体也全部投影一遍。之前这三个设置**从未被读过**，视距内所有生物每帧都要做投影与排版。
+        double maxDistance = Math.max(playersMaxDistance.get(),
+                Math.max(animalsMaxDistance.get(), mobsMaxDistance.get()));
+        double maxDistanceSq = maxDistance * maxDistance;
         List<Object> entities = visibleEntities(bridge, level);
         int drawn = 0;
         for (Object entity : entities) {
@@ -188,11 +195,14 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             if (pos == null) {
                 continue;
             }
+            if (maxDistance > 0d && selfPos != null && distanceSq(selfPos, pos) > maxDistanceSq) {
+                continue;
+            }
             projection.project(pos[0], pos[1] + TAG_HEIGHT, pos[2], point);
             if (!point.visible) {
                 continue;
             }
-            String label = label(bridge, entity, withDistance, withHealth, selfPos);
+            String label = label(bridge, entity, withDistance, withHealth, selfPos, pos);
             if (label == null) {
                 continue;
             }
@@ -210,7 +220,7 @@ public final class NameTagsModule extends Module implements WorldOverlay {
      * 等 kind 面进表后再按组精确匹配。
      */
     private static String label(GameBridge bridge, Object entity, boolean withDistance,
-                                boolean withHealth, double[] selfPos) {
+                                boolean withHealth, double[] selfPos, double[] pos) {
         // getName 返回的是聊天组件而不是字符串，必须经映射表读文本（见 GameBridge#componentText）。
         String name = bridge.componentText(bridge.callMapped(entity, ClassType.ENTITY, "getName"));
         if (name == null) {
@@ -224,7 +234,8 @@ public final class NameTagsModule extends Module implements WorldOverlay {
             }
         }
         if (withDistance) {
-            double dist = distanceTo(selfPos, entity);
+            // 复用调用方已经读到的坐标：每实体每帧再反射一次 position() 纯属浪费。
+            double dist = distanceBetween(selfPos, pos);
             if (dist >= 0) {
                 text.append(' ').append(Math.round(dist)).append('m');
             }
@@ -259,17 +270,20 @@ public final class NameTagsModule extends Module implements WorldOverlay {
                 ((Number) z).doubleValue()};
     }
 
-    /** 本地玩家到实体的距离（米）；任一端坐标读不到时返回负数。 */
-    private static double distanceTo(double[] selfPos, Object entity) {
-        GameBridge bridge = bridge();
-        double[] b = bridge == null ? null : position(bridge, entity);
-        if (selfPos == null || b == null) {
+    /** 两点距离（米）；任一端缺失时返回负数。 */
+    private static double distanceBetween(double[] a, double[] b) {
+        if (a == null || b == null) {
             return -1.0;
         }
-        double dx = selfPos[0] - b[0];
-        double dy = selfPos[1] - b[1];
-        double dz = selfPos[2] - b[2];
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return Math.sqrt(distanceSq(a, b));
+    }
+
+    /** 两点距离的平方：距离裁剪只需要比值，省掉每个实体一次开方。 */
+    private static double distanceSq(double[] a, double[] b) {
+        double dx = a[0] - b[0];
+        double dy = a[1] - b[1];
+        double dz = a[2] - b[2];
+        return dx * dx + dy * dy + dz * dz;
     }
 
     /** 表驱动门日志：缺成员版本只报一次。 */

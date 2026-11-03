@@ -71,16 +71,19 @@ public final class FullBrightModule extends Module {
     /** 禁用时把亮度精确还原为启用前的原值（而非硬编码 1.0），避免覆盖玩家自己的亮度设置。 */
     @Override
     protected void onDisable() {
-        if (isNightVision()) {
+        // 两条路径都必须走到 restoreOriginal：启用时可能是 Gamma（已把模块值写进 options），
+        // 中途切成 Night Vision，禁用时若只摘药水就直接返回，gamma 会永远停在模块值上——
+        // 玩家关掉模块之后画面仍然死亮（真机复现：开 Gamma → 切 Night Vision → 关模块）。
+        // restoreOriginal 对"从未捕获"是空操作，重复调用也安全。
+        GameBridge bridge = bridge();
+        Object player = bridge == null ? null : bridge.player();
+        if (isNightVision() || lastNightVisionTick) {
             // 必须把药水摘掉：不然它会一直挂到自然到期（默认 5220 tick ≈ 4.3 分钟），
             // 玩家关掉模块之后还是夜视。
-            GameBridge bridge = bridge();
-            Object player = bridge == null ? null : bridge.player();
             if (bridge != null && player != null) {
                 removeNightVision(bridge, player);
             }
             lastNightVisionTick = false;
-            return;
         }
         restoreOriginal();
     }

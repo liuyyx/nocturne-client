@@ -810,11 +810,11 @@ class LegacyResolver:
                 entries = matching
         entries.sort(key=lambda e: (parameter_count(e[3]), e[3], e[2]))
         srg, obf_owner, obf_name, obf_desc, mcp_desc = entries[0]
-        result = {"vanilla": (obf_name, obf_desc)}
+        result = {"vanilla": (rule.get("vanilla", obf_name), obf_desc)}
         if self.intermediary is not None:
             fabric = self.intermediary.method(obf_owner, obf_name, obf_desc)
-            result["fabric"] = (fabric or name, convert_descriptor(obf_desc, self.obf_to_fabric))
-        result["forge"] = (srg, mcp_desc or obf_desc)
+            result["fabric"] = (rule.get("fabric", fabric or name), convert_descriptor(obf_desc, self.obf_to_fabric))
+        result["forge"] = (rule.get("forge", srg), mcp_desc or obf_desc)
         return result
 
     def resolve_field(self, canonical: str, name: str) -> "dict[str, tuple] | None":
@@ -832,11 +832,11 @@ class LegacyResolver:
             return None
         entries.sort(key=lambda e: (e[2], e[0]))
         srg = entries[0][0]
-        result = {"vanilla": (entries[0][2], None)}
+        result = {"vanilla": (rule.get("vanilla", entries[0][2]), None)}
         if self.intermediary is not None:
             fabric = self.intermediary.field(entries[0][1], entries[0][2], None)
-            result["fabric"] = (fabric or name, None)
-        result["forge"] = (srg, None)
+            result["fabric"] = (rule.get("fabric", fabric or name), None)
+        result["forge"] = (rule.get("forge", srg), None)
         return result
 
 

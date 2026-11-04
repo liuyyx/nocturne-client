@@ -55,6 +55,9 @@ public final class GameBridge {
     /** 已成功解析的映射类；只缓存成功结果，类晚加载时仍可重试。 */
     private final ConcurrentHashMap<ClassType, Class<?>> typeCache =
             new ConcurrentHashMap<ClassType, Class<?>>();
+    /** 构造器按真实类与实参形状缓存；不可变输入记录与 Vec2 共用。 */
+    private final ConcurrentHashMap<ConstructorKey, java.lang.reflect.Constructor<?>> constructorCache =
+            new ConcurrentHashMap<ConstructorKey, java.lang.reflect.Constructor<?>>();
     /** 日志限流计数器，避免热路径上的失败信息刷屏。 */
     private final AtomicLong logCount = new AtomicLong();
     /** 方块坐标构造器；首次使用时解析，失败不缓存。 */
@@ -283,6 +286,64 @@ public final class GameBridge {
         }
     }
 
+    /**
+     * 按实参形状构造映射对象。构造器名不受混淆影响，但参数类型会随版本变化，因此只接受唯一兼容形状。
+     * 成功句柄缓存；失败不缓存，以便类晚加载后重试。
+     */
+    public Object construct(ClassType wanted, Object... args) {
+        Class<?> type = type(wanted);
+        if (type == null) {
+            return null;
+        }
+        Object[] actual = args == null ? new Object[0] : args;
+        ConstructorKey key = new ConstructorKey(type, describeArgs(actual));
+        java.lang.reflect.Constructor<?> constructor = constructorCache.get(key);
+        if (constructor == null) {
+            java.lang.reflect.Constructor<?> compatible = null;
+            java.lang.reflect.Constructor<?> exact = null;
+            for (java.lang.reflect.Constructor<?> candidate : type.getDeclaredConstructors()) {
+                Class<?>[] parameters = candidate.getParameterTypes();
+                if (parameters.length != actual.length) {
+                    continue;
+                }
+                boolean matches = true;
+                for (int i = 0; i < parameters.length; i++) {
+                    if (!isCompatible(parameters[i], actual[i])) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (!matches) {
+                    continue;
+                }
+                if (exactMatch(parameters, actual)) {
+                    exact = candidate;
+                    break;
+                }
+                if (compatible != null) {
+                    // 有歧义时不猜构造器，避免把相邻版本的新参数静默填错。
+                    return null;
+                }
+                compatible = candidate;
+            }
+            constructor = exact != null ? exact : compatible;
+            if (constructor == null) {
+                return null;
+            }
+            try {
+                constructor.setAccessible(true);
+            } catch (Throwable t) {
+                return null;
+            }
+            constructorCache.putIfAbsent(key, constructor);
+        }
+        try {
+            return constructor.newInstance(actual);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     /** 读取指定方块坐标的方块状态；世界未就绪时返回 {@code null}。 */
     public Object blockStateAt(int x, int y, int z) {
         Object world = world();
@@ -313,6 +374,234 @@ public final class GameBridge {
         }
         Object block = callMapped(blockState, ClassType.BLOCK_STATE, "getBlock");
         return block != null && isInstance(block, ClassType.AIR_BLOCK);
+    }
+
+    /** @return 当前客户端包监听器；旧版同样从 LocalPlayer.connection/sendQueue 读取。 */
+    public Object connection() {
+        Object player = player();
+        return player == null ? null : readField(player, ClassType.LOCAL_PLAYER, "connection");
+    }
+
+    /** 判断准星结果是否为实体；旧版没有 EntityHitResult 子类时读 typeOfHit/type。 */
+    public boolean isEntityHit(Object hitResult) {
+        if (hitResult == null) {
+            return false;
+        }
+        if (isInstance(hitResult, ClassType.ENTITY_HIT_RESULT)) {
+            return true;
+        }
+        Object type = callMapped(hitResult, ClassType.HIT_RESULT, "getType");
+        if (type == null) {
+            type = readField(hitResult, ClassType.HIT_RESULT, "type");
+        }
+        return type != null && "ENTITY".equals(String.valueOf(type));
+    }
+
+    /** 命中点世界坐标；失败时返回 null。 */
+    public Object hitLocation(Object hitResult) {
+        Object location = callMapped(hitResult, ClassType.HIT_RESULT, "getLocation");
+        return location != null ? location : readField(hitResult, ClassType.HIT_RESULT, "location");
+    }
+
+    /** 实体命中的目标；旧版从 MovingObjectPosition.entityHit 字段读取。 */
+    public Object hitEntity(Object hitResult) {
+        Object entity = callMapped(hitResult, ClassType.ENTITY_HIT_RESULT, "getEntity");
+        return entity != null ? entity : readField(hitResult, ClassType.HIT_RESULT, "entity");
+    }
+
+    /** 方块命中的朝向；旧版从 sideHit 字段读取。 */
+    public Object hitDirection(Object hitResult) {
+        Object direction = callMapped(hitResult, ClassType.BLOCK_HIT_RESULT, "getDirection");
+        return direction != null ? direction : readField(hitResult, ClassType.BLOCK_HIT_RESULT, "direction");
+    }
+
+    /** 判断准星结果是否为方块；MISS 与其它未知类型均返回 false。 */
+    public boolean isBlockHit(Object hitResult) {
+        if (hitResult == null) {
+            return false;
+        }
+        Object type = callMapped(hitResult, ClassType.HIT_RESULT, "getType");
+        if (type == null) {
+            type = readField(hitResult, ClassType.HIT_RESULT, "type");
+        }
+        if (type == null) {
+            return isInstance(hitResult, ClassType.BLOCK_HIT_RESULT);
+        }
+        return "BLOCK".equals(String.valueOf(type));
+    }
+
+    /** 实体是否能通过游戏射线看见目标；缺失时保守返回 false。 */
+    public boolean hasLineOfSight(Object source, Object target) {
+        Object result = callMapped(source, ClassType.LIVING_ENTITY, "hasLineOfSight", target);
+        return result instanceof Boolean && (Boolean) result;
+    }
+
+    /** 是否同队/同阵营；无队伍时不得把两个空队伍误判为队友。 */
+    public boolean isAllied(Object first, Object second) {
+        if (first == null || second == null) {
+            return false;
+        }
+        Object firstTeam = teamOf(first);
+        Object secondTeam = teamOf(second);
+        if (firstTeam == null || secondTeam == null) {
+            return false;
+        }
+        Object result = callMapped(first, ClassType.ENTITY, "isAlliedTo", second);
+        if (!(result instanceof Boolean)) {
+            result = callMapped(first, ClassType.PLAYER, "isAlliedTo", second);
+        }
+        return result instanceof Boolean && (Boolean) result;
+    }
+
+    /** 1.8.9 的队伍方法声明在 EntityPlayer；其它版本直接走 Entity。 */
+    private Object teamOf(Object entity) {
+        Object team = callMapped(entity, ClassType.ENTITY, "getTeam");
+        return team != null ? team : callMapped(entity, ClassType.PLAYER, "getTeam");
+    }
+
+    /** 队伍 RGB；旧版返回数字、26.x 返回带 rgb 字段的 TeamColor，未知为 -1。 */
+    public int teamColor(Object entity) {
+        Object color = callMapped(entity, ClassType.ENTITY, "getTeamColor");
+        if (color == null) {
+            Object team = teamOf(entity);
+            color = callMapped(team, ClassType.PLAYER_TEAM, "getColor");
+        }
+        if (color instanceof Number) {
+            return ((Number) color).intValue();
+        }
+        Number rgb = number(callMapped(color, ClassType.TEAM_COLOR, "rgb"));
+        if (rgb == null) {
+            rgb = color == null ? null : number(readField(color, ClassType.TEAM_COLOR, "rgb"));
+        }
+        if (rgb != null) {
+            return rgb.intValue();
+        }
+        Object legacy = callMapped(color, ClassType.TEAM_COLOR, "getColorValue");
+        if (!(legacy instanceof Number)) {
+            legacy = color == null ? null : readField(color, ClassType.TEAM_COLOR, "colorValue");
+        }
+        return legacy instanceof Number ? ((Number) legacy).intValue() : -1;
+    }
+
+    /** 当前背包对象。 */
+    public Object inventory() {
+        Object player = player();
+        return player == null ? null : readField(player, ClassType.PLAYER, "inventory");
+    }
+
+    /** 读取快捷栏物品；槽位越界或背包未就绪时返回 null。 */
+    public Object hotbarStack(int slot) {
+        Object inventory = inventory();
+        return inventory == null || slot < 0 || slot > 8 ? null
+                : callMapped(inventory, ClassType.INVENTORY, "getItem", slot);
+    }
+
+    /** 读取实体主/副手物品。 */
+    public Object heldItem(Object entity, boolean offHand) {
+        return callMapped(entity, ClassType.LIVING_ENTITY,
+                offHand ? "getOffhandItem" : "getMainHandItem");
+    }
+
+    /** 掉落物携带的物品栈。 */
+    public Object droppedItem(Object itemEntity) {
+        return callMapped(itemEntity, ClassType.ITEM_ENTITY, "getItem");
+    }
+
+    /** 实体宽度；旧版没有 getter 时读取 width 字段。 */
+    public double entityWidth(Object entity) {
+        Number value = number(callMapped(entity, ClassType.ENTITY, "getBbWidth"));
+        if (value == null) {
+            value = number(readField(entity, ClassType.ENTITY, "width"));
+        }
+        return value == null ? 0.0 : value.doubleValue();
+    }
+
+    /** 实体高度；旧版没有 getter 时读取 height 字段。 */
+    public double entityHeight(Object entity) {
+        Number value = number(callMapped(entity, ClassType.ENTITY, "getBbHeight"));
+        if (value == null) {
+            value = number(readField(entity, ClassType.ENTITY, "height"));
+        }
+        return value == null ? 0.0 : value.doubleValue();
+    }
+
+    /** TNT 剩余引信刻；旧版直接读取 fuse 字段。 */
+    public int tntFuse(Object primedTnt) {
+        Number fuse = number(callMapped(primedTnt, ClassType.PRIMED_TNT, "getFuse"));
+        if (fuse == null) {
+            fuse = number(readField(primedTnt, ClassType.PRIMED_TNT, "fuse"));
+        }
+        return fuse == null ? 0 : fuse.intValue();
+    }
+
+    /** 物品数量；读取失败返回 0，调用方可与 isEmptyStack 一起判断。 */
+    public int itemCount(Object stack) {
+        Number count = number(callMapped(stack, ClassType.ITEM_STACK, "getCount"));
+        if (count == null) {
+            count = number(readField(stack, ClassType.ITEM_STACK, "count"));
+        }
+        return count == null ? 0 : count.intValue();
+    }
+
+    /** 物品最大堆叠数；缺失时返回 0。 */
+    public int itemMaxStackSize(Object stack) {
+        Number count = number(callMapped(stack, ClassType.ITEM_STACK, "getMaxStackSize"));
+        return count == null ? 0 : count.intValue();
+    }
+
+    /** 空栈判断兼容 1.8.9 的 null ItemStack/数量 0 语义。 */
+    public boolean isEmptyStack(Object stack) {
+        if (stack == null) {
+            return true;
+        }
+        Object empty = callMapped(stack, ClassType.ITEM_STACK, "isEmpty");
+        if (empty instanceof Boolean) {
+            return (Boolean) empty;
+        }
+        return itemCount(stack) <= 0 || callMapped(stack, ClassType.ITEM_STACK, "getItem") == null;
+    }
+
+    /** 方块是否可被放置替换；老版本缺少 state 级 API 时只允许空气，避免覆盖草/水等方块。 */
+    public boolean canBeReplaced(Object blockState) {
+        Object result = callMapped(blockState, ClassType.BLOCK_STATE, "canBeReplaced");
+        return result instanceof Boolean ? (Boolean) result : isAir(blockState);
+    }
+
+    /** 实体盒子是否无碰撞；现代使用 Level.noCollision，旧版组合两个检查入口。 */
+    public boolean noCollision(Object entity, Object box) {
+        Object world = world();
+        if (world == null || box == null) {
+            return false;
+        }
+        Object result = callMapped(world, ClassType.LEVEL, "noCollision", entity, box);
+        if (result instanceof Boolean) {
+            return (Boolean) result;
+        }
+        Object noEntities = callMapped(world, ClassType.LEVEL, "checkNoEntityCollision", box);
+        Object blockCollision = callMapped(world, ClassType.LEVEL, "checkBlockCollision", box);
+        return noEntities instanceof Boolean && blockCollision instanceof Boolean
+                && (Boolean) noEntities && !(Boolean) blockCollision;
+    }
+
+    /** 方块是否有碰撞形状；形状面不可用时按非空气保守处理。 */
+    public boolean hasBlockCollision(Object blockState, Object blockPos) {
+        Object shape = callMapped(blockState, ClassType.BLOCK_STATE, "getCollisionShape",
+                world(), blockPos);
+        Object empty = callMapped(shape, ClassType.VOXEL_SHAPE, "isEmpty");
+        return empty instanceof Boolean ? !(Boolean) empty : !isAir(blockState);
+    }
+
+    public Object moveBox(Object box, double x, double y, double z) {
+        return callMapped(box, ClassType.AABB, "move", x, y, z);
+    }
+
+    public Object inflateBox(Object box, double x, double y, double z) {
+        return callMapped(box, ClassType.AABB, "inflate", x, y, z);
+    }
+
+    public boolean boxesIntersect(Object first, Object second) {
+        Object result = callMapped(first, ClassType.AABB, "intersects", second);
+        return result instanceof Boolean && (Boolean) result;
     }
 
     /**
@@ -364,6 +653,34 @@ public final class GameBridge {
             }
         }
         return null;
+    }
+
+    /** 调用 void 映射方法并返回真实成功状态；候选查找规则与 callMapped 完全一致。 */
+    public boolean callMappedStatus(Object target, ClassType owner, String canonicalMethod,
+                                    Object... args) {
+        if (target == null) {
+            return false;
+        }
+        Class<?> type = target.getClass();
+        for (MethodCandidate candidate : mapping.methodCandidates(owner, canonicalMethod)) {
+            String descriptor = candidate.descriptor();
+            Class<?>[] parameters = descriptor == null ? null
+                    : descriptorParameters(type, candidate.name(), descriptor);
+            if (parameters != null && parameters.length != (args == null ? 0 : args.length)) {
+                parameters = null;
+            }
+            if (parameters == null) {
+                parameters = inferParameters(type, candidate.name(), args);
+            }
+            if (parameters == null) {
+                continue;
+            }
+            Method method = findMethodCached(type, candidate.name(), parameters);
+            if (method != null) {
+                return Reflect.callStatus(method, target, args);
+            }
+        }
+        return false;
     }
 
     /**
@@ -804,6 +1121,10 @@ public final class GameBridge {
         return sb.toString();
     }
 
+    private static Number number(Object value) {
+        return value instanceof Number ? (Number) value : null;
+    }
+
     /** 实参的人类可读描述，用于歧义/未命中的限流日志。 */
     private static String describeArgs(Object[] args) {
         if (args == null || args.length == 0) {
@@ -824,6 +1145,34 @@ public final class GameBridge {
         long count = logCount.incrementAndGet();
         if (count <= 5 || count % 600 == 0) {
             System.out.println("[nocturne] GameBridge: " + message + (cause == null ? "" : " (" + cause + ")"));
+        }
+    }
+
+    /** 构造器缓存键：真实类 + 实参形状。 */
+    private static final class ConstructorKey {
+        private final Class<?> owner;
+        private final String arguments;
+
+        ConstructorKey(Class<?> owner, String arguments) {
+            this.owner = owner;
+            this.arguments = arguments;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof ConstructorKey)) {
+                return false;
+            }
+            ConstructorKey key = (ConstructorKey) other;
+            return owner == key.owner && arguments.equals(key.arguments);
+        }
+
+        @Override
+        public int hashCode() {
+            return System.identityHashCode(owner) * 31 + arguments.hashCode();
         }
     }
 

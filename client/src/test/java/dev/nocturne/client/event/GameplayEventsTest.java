@@ -3,7 +3,9 @@ package dev.nocturne.client.event;
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.TestSupport;
 import dev.nocturne.client.bootstrap.GameplayHook;
+import dev.nocturne.client.game.FakeMinecraft;
 import dev.nocturne.client.game.GameBridge;
+import dev.nocturne.client.game.TestMapping;
 import dev.nocturne.client.mapping.IdentityMapping;
 
 import org.junit.jupiter.api.AfterEach;
@@ -81,6 +83,33 @@ class GameplayEventsTest {
         assertEquals(4.0, player.position.x);
         assertEquals(90.0f, player.yRot);
         assertTrue(player.onGround);
+    }
+
+    @Test
+    void playerTickPreCancellationReachesTheGate() {
+        NocturneClient client = NocturneClient.boot(null);
+        FakePlayer player = new FakePlayer();
+        FakeMinecraft.reset();
+        FakeMinecraft.instance.player = player;
+        client.setGameBridge(new GameBridge(null, new TestMapping(FakeMinecraft.class)));
+        client.events().subscribe(PlayerTickEvent.Pre.class, event -> event.cancelled = true);
+
+        assertFalse(GameplayHook.playerTickPre(player));
+    }
+
+    @Test
+    void playerTickPostUsesTheSharedEventType() {
+        NocturneClient client = NocturneClient.boot(null);
+        FakePlayer player = new FakePlayer();
+        FakeMinecraft.reset();
+        FakeMinecraft.instance.player = player;
+        client.setGameBridge(new GameBridge(null, new TestMapping(FakeMinecraft.class)));
+        AtomicReference<PlayerTickEvent.Post> seen = new AtomicReference<PlayerTickEvent.Post>();
+        client.events().subscribe(PlayerTickEvent.Post.class, seen::set);
+
+        GameplayHook.playerTickPost(player);
+
+        assertSame(PlayerTickEvent.Post.INSTANCE, seen.get());
     }
 
     private static final class FakeVector {

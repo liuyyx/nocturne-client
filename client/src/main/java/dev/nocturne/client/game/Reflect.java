@@ -127,6 +127,20 @@ public final class Reflect {
         }
     }
 
+    /** 调用方法并报告真实成功；用于 void 方法，不能靠 null 返回值判断。 */
+    public static boolean callStatus(Method method, Object target, Object... args) {
+        if (method == null) {
+            return false;
+        }
+        try {
+            method.invoke(target, args);
+            return true;
+        } catch (Throwable t) {
+            reportFailure(method, t, args);
+            return false;
+        }
+    }
+
     /**
      * TEMP-DIAG：在 {@code -Dnocturne.ui.debug} 打开时，把"静默失败"的调用打到日志。
      *

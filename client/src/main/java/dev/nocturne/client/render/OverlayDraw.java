@@ -92,4 +92,17 @@ public interface OverlayDraw {
 
     /** @return 绘制区高（逻辑像素）；未知时为 0 */
     int height();
+
+    /** 上传或更新一张 ARGB 纹理；返回可供 texturedQuad 使用的正句柄，失败时 ≤0。 */
+    int uploadTexture(int id, int width, int height, int[] argb);
+
+    /** 删除不再使用的纹理；无效句柄由后端忽略。 */
+    void deleteTexture(int id);
+
+    /** 绘制带 UV 与颜色调制的纹理矩形，供图标和世界 billboard 使用。 */
+    void texturedQuad(int texture, float x, float y, float width, float height,
+                      float u0, float v0, float u1, float v1, int argb);
+
+    /** 当前后端是否支持纹理；false 时模块应退回文字/几何，不上传空纹理。 */
+    boolean supportsTextures();
 }

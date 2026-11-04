@@ -850,6 +850,32 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     }
 
     @Override
+    public boolean line(float x1, float y1, float x2, float y2, float thickness, Color color) {
+        if (color == null || !ready) {
+            return false;
+        }
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float length = (float) Math.sqrt(dx * dx + dy * dy);
+        if (length < 1.0e-3f) {
+            return true;
+        }
+        float half = Math.max(1f, thickness) * 0.5f;
+        float nx = -dy / length * half;
+        float ny = dx / length * half;
+        ensureCapacity(6 * FLOATS_PER_VERTEX);
+        int i = 0;
+        i = vertex(i, x1 + nx, y1 + ny);
+        i = vertex(i, x1 - nx, y1 - ny);
+        i = vertex(i, x2 - nx, y2 - ny);
+        i = vertex(i, x1 + nx, y1 + ny);
+        i = vertex(i, x2 - nx, y2 - ny);
+        i = vertex(i, x2 + nx, y2 + ny);
+        drawSolid(scratch, i, color);
+        return true;
+    }
+
+    @Override
     public void text(String value, float x, float y, float size, Color color) {
         if (value == null || value.isEmpty()) {
             return;

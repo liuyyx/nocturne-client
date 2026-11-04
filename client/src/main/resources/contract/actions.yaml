@@ -145,6 +145,248 @@
       ]
     },
     {
+      "id": "swing",
+      "signature": "boolean swing(boolean offHand, boolean silent)",
+      "receiver": "player",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "LIVING_ENTITY",
+          "method": "swing",
+          "parameters": ["net.minecraft.world.InteractionHand"],
+          "arguments": ["hand"]
+        },
+        {
+          "owner": "LIVING_ENTITY",
+          "method": "swing",
+          "parameters": [],
+          "arguments": []
+        }
+      ]
+    },
+    {
+      "id": "swingPacket",
+      "signature": "boolean swing(boolean offHand, boolean silent)",
+      "receiver": "connection",
+      "operation": "swingFactory",
+      "degrade": "disable",
+      "candidates": []
+    },
+    {
+      "id": "selectSlot",
+      "signature": "boolean selectSlot(int slot, boolean silent)",
+      "receiver": "player",
+      "operation": "slot",
+      "degrade": "disable",
+      "candidates": []
+    },
+    {
+      "id": "clickSlot",
+      "signature": "boolean clickSlot(int slot, int button, String mode)",
+      "receiver": "gameMode",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "handleContainerInput",
+          "parameters": ["int", "int", "int", "net.minecraft.world.inventory.ContainerInput", "net.minecraft.world.entity.player.Player"],
+          "arguments": ["containerId", "slot", "button", "mode", "player"]
+        },
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "handleInventoryMouseClick",
+          "parameters": ["int", "int", "int", "net.minecraft.world.inventory.ClickType", "net.minecraft.world.entity.player.Player"],
+          "arguments": ["containerId", "slot", "button", "mode", "player"]
+        },
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "windowClick",
+          "parameters": ["int", "int", "int", "int", "net.minecraft.world.entity.player.Player"],
+          "arguments": ["containerId", "slot", "button", "mode", "player"]
+        }
+      ]
+    },
+    {
+      "id": "closeContainer",
+      "signature": "boolean closeContainer()",
+      "receiver": "player",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "LOCAL_PLAYER",
+          "method": "closeContainer",
+          "parameters": [],
+          "arguments": []
+        }
+      ]
+    },
+    {
+      "id": "sendChat",
+      "signature": "boolean sendChat(String text)",
+      "receiver": "connection",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "CLIENT_PACKET_LISTENER",
+          "method": "sendChat",
+          "parameters": ["java.lang.String"],
+          "arguments": ["text"]
+        },
+        {
+          "owner": "CLIENT_PACKET_LISTENER",
+          "method": "sendChatMessage",
+          "parameters": ["java.lang.String"],
+          "arguments": ["text"]
+        }
+      ]
+    },
+    {
+      "id": "legacyChat",
+      "signature": "boolean sendChat(String text)",
+      "receiver": "player",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "LOCAL_PLAYER",
+          "method": "sendChatMessage",
+          "parameters": ["java.lang.String"],
+          "arguments": ["text"]
+        }
+      ]
+    },
+    {
+      "id": "sendCommand",
+      "signature": "boolean sendCommand(String command)",
+      "receiver": "connection",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "CLIENT_PACKET_LISTENER",
+          "method": "sendCommand",
+          "parameters": ["java.lang.String"],
+          "arguments": ["command"]
+        }
+      ]
+    },
+    {
+      "id": "clickUse",
+      "signature": "boolean clickUse()",
+      "receiver": "minecraft",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "MINECRAFT",
+          "method": "startUseItem",
+          "parameters": [],
+          "arguments": []
+        }
+      ]
+    },
+    {
+      "id": "setSprinting",
+      "signature": "boolean setSprinting(boolean sprinting)",
+      "receiver": "player",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "ENTITY",
+          "method": "setSprinting",
+          "parameters": ["boolean"],
+          "arguments": ["sprinting"]
+        }
+      ]
+    },
+    {
+      "id": "pick",
+      "signature": "Object pick(double distance, float partialTicks)",
+      "receiver": "player",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "ENTITY",
+          "method": "pick",
+          "parameters": ["double", "float", "boolean"],
+          "arguments": ["distance", "partialTicks", "fluid"]
+        },
+        {
+          "owner": "ENTITY",
+          "method": "rayTrace",
+          "parameters": ["double", "float"],
+          "arguments": ["distance", "partialTicks"]
+        },
+        {
+          "owner": "LOCAL_PLAYER",
+          "method": "raycastHitResult",
+          "parameters": ["float", "net.minecraft.world.entity.Entity"],
+          "arguments": ["partialTicks", "player"]
+        }
+      ]
+    },
+    {
+      "id": "setMotion",
+      "signature": "boolean setMotion(double x, double y, double z)",
+      "receiver": "player",
+      "operation": "method",
+      "degrade": "disable",
+      "candidates": [
+        {
+          "owner": "ENTITY",
+          "method": "setDeltaMovement",
+          "parameters": ["net.minecraft.world.phys.Vec3"],
+          "arguments": ["motion"]
+        }
+      ]
+    },
+    {
+      "id": "setJumping",
+      "signature": "boolean setJumping(boolean jumping)",
+      "receiver": "player",
+      "operation": "jumping",
+      "degrade": "disable",
+      "candidates": []
+    },
+    {
+      "id": "sendRotation",
+      "signature": "boolean sendRotation(float yaw, float pitch, boolean onGround)",
+      "receiver": "connection",
+      "operation": "moveRotFactory",
+      "degrade": "disable",
+      "candidates": []
+    },
+    {
+      "id": "sendPositionRotation",
+      "signature": "boolean sendPositionRotation(double x, double y, double z, float yaw, float pitch, boolean onGround)",
+      "receiver": "connection",
+      "operation": "movePosRotFactory",
+      "degrade": "disable",
+      "candidates": []
+    },
+    {
+      "id": "sendGround",
+      "signature": "boolean sendGround(boolean onGround)",
+      "receiver": "connection",
+      "operation": "moveStatusFactory",
+      "degrade": "disable",
+      "candidates": []
+    },
+    {
+      "id": "sendPlayerCommand",
+      "signature": "boolean sendPlayerCommand(String action)",
+      "receiver": "connection",
+      "operation": "playerCommandFactory",
+      "degrade": "disable",
+      "candidates": []
+    },
+    {
       "id": "readState",
       "signature": "PlayerState readState()",
       "receiver": "player",

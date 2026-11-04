@@ -63,6 +63,21 @@ class PacketHookTransformerTest {
         assertEquals(java.util.Collections.singletonList("filter:drop"), Sink.calls);
     }
 
+    @Test
+    void replacementRetainsPacketTypeAcrossOriginalStackMapFrame() throws Exception {
+        String descriptor = "(JLjava/lang/String;)V";
+        byte[] patched = new PacketHookTransformer(TARGET, "send", descriptor, SINK, "filter", 1)
+                .transform(PacketHookTransformerTest.class.getClassLoader(), TARGET, null, null,
+                        framedPacketSubject());
+        Class<?> type = define(patched);
+        Object instance = type.getDeclaredConstructor().newInstance();
+        Sink.replacement = "after";
+
+        type.getMethod("send", long.class, String.class).invoke(instance, 11L, "before");
+
+        assertEquals(java.util.Arrays.asList("filter:before", "body:11:after"), Sink.calls);
+    }
+
     private static Class<?> transformedSubject() {
         String descriptor = "(JLjava/lang/String;)V";
         byte[] patched = new PacketHookTransformer(TARGET, "send", descriptor, SINK, "filter", 1)
@@ -85,6 +100,36 @@ class PacketHookTransformerTest {
 
         MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "send", descriptor, null, null);
         method.visitCode();
+        method.visitVarInsn(Opcodes.LLOAD, 1);
+        method.visitVarInsn(Opcodes.ALOAD, 3);
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "body",
+                "(JLjava/lang/Object;)V", false);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
+    private static byte[] framedPacketSubject() {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, TARGET, null, "java/lang/Object", null);
+        MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        constructor.visitCode();
+        constructor.visitVarInsn(Opcodes.ALOAD, 0);
+        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        constructor.visitInsn(Opcodes.RETURN);
+        constructor.visitMaxs(0, 0);
+        constructor.visitEnd();
+
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "send",
+                "(JLjava/lang/String;)V", null, null);
+        method.visitCode();
+        method.visitInsn(Opcodes.ICONST_0);
+        org.objectweb.asm.Label branch = new org.objectweb.asm.Label();
+        method.visitJumpInsn(Opcodes.IFEQ, branch);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitLabel(branch);
         method.visitVarInsn(Opcodes.LLOAD, 1);
         method.visitVarInsn(Opcodes.ALOAD, 3);
         method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "body",

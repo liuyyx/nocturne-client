@@ -13,6 +13,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /** 候选绑定、真实调用与一次性降级。 */
 class ActionBinderTest {
@@ -106,6 +107,65 @@ class ActionBinderTest {
         assertEquals(Arrays.asList("player", "hand"), binder.arguments("useItem"));
     }
 
+    @Test
+    void movePacketAcceptsHorizontalCollisionShape() {
+        String json = "{\"version\":1,\"actions\":[{"
+                + "\"id\":\"sendRotation\",\"signature\":\"x\",\"receiver\":\"connection\","
+                + "\"operation\":\"moveRotFactory\",\"degrade\":\"disable\",\"candidates\":[]}]}";
+        ActionBinder binder = new ActionBinder(ActionContract.parse(new StringReader(json)),
+                new FixtureMapping(), ActionBinderTest.class.getClassLoader(),
+                new java.util.ArrayList<String>()::add);
+        binder.bind();
+
+        FakeMoveRot packet = (FakeMoveRot) binder.newMoveRot(10f, 20f, true);
+        assertTrue(binder.isAvailable("sendRotation"));
+        assertEquals(10f, packet.yaw);
+        assertEquals(20f, packet.pitch);
+        assertTrue(packet.onGround);
+        assertFalse(packet.horizontalCollision);
+    }
+
+    @Test
+    void mixedMovementPacketShapesUseTheirOwnArity() {
+        String rot = "{\"id\":\"sendRotation\",\"signature\":\"x\",\"receiver\":\"connection\","
+                + "\"operation\":\"moveRotFactory\",\"degrade\":\"disable\",\"candidates\":[]},";
+        String posRot = "{\"id\":\"sendPositionRotation\",\"signature\":\"x\",\"receiver\":\"connection\","
+                + "\"operation\":\"movePosRotFactory\",\"degrade\":\"disable\",\"candidates\":[]}";
+        String json = "{\"version\":1,\"actions\":[" + rot + posRot + "]}";
+        ActionBinder binder = new ActionBinder(ActionContract.parse(new StringReader(json)),
+                new FixtureMapping(), ActionBinderTest.class.getClassLoader(),
+                new java.util.ArrayList<String>()::add);
+        binder.bind();
+
+        FakeMovePosRot packet = (FakeMovePosRot) binder.newMovePosRot(1, 2, 3, 10f, 20f, true);
+        assertNotNull(packet);
+        assertTrue(packet.onGround);
+    }
+
+    @Test
+    void noArgPunchPacketIsUsedWhenSwingClassIsAbsent() {
+        String json = "{\"version\":1,\"actions\":[{"
+                + "\"id\":\"swingPacket\",\"signature\":\"x\",\"receiver\":\"connection\","
+                + "\"operation\":\"swingFactory\",\"degrade\":\"disable\",\"candidates\":[]}]}";
+        ActionBinder binder = new ActionBinder(ActionContract.parse(new StringReader(json)),
+                new FixtureMapping(), ActionBinderTest.class.getClassLoader(),
+                new java.util.ArrayList<String>()::add);
+        binder.bind();
+
+        assertTrue(binder.isAvailable("swingPacket"));
+        assertTrue(binder.newSwing(false) instanceof FakePunch);
+    }
+
+    @Test
+    void clickModeUsesStableLegacyIntegerValues() {
+        ActionBinder binder = new ActionBinder(contract(false), new FixtureMapping(),
+                ActionBinderTest.class.getClassLoader(), new java.util.ArrayList<String>()::add);
+
+        assertEquals(5, binder.clickMode("quick_craft"));
+        assertEquals(6, binder.clickMode("pickup_all"));
+        assertTrue(binder.clickMode("unknown") == null);
+    }
+
     private static ActionContract contract(boolean includeMissingCandidate) {
         String missing = "{\"owner\":\"CONNECTION\",\"method\":\"send\","
                 + "\"parameters\":[\"net.minecraft.network.protocol.Packet\"]},";
@@ -144,6 +204,34 @@ class ActionBinderTest {
 
     public static final class FakeHand {
         public static final FakeHand PRIMARY = new FakeHand();
+        public static final FakeHand SECONDARY = new FakeHand();
+    }
+
+    public static final class FakeMoveRot {
+        private final float yaw;
+        private final float pitch;
+        private final boolean onGround;
+        private final boolean horizontalCollision;
+
+        public FakeMoveRot(float yaw, float pitch, boolean onGround, boolean horizontalCollision) {
+            this.yaw = yaw;
+            this.pitch = pitch;
+            this.onGround = onGround;
+            this.horizontalCollision = horizontalCollision;
+        }
+    }
+
+    public static final class FakeMovePosRot {
+        private final boolean onGround;
+
+        public FakeMovePosRot(double x, double y, double z, float yaw, float pitch, boolean onGround) {
+            this.onGround = onGround;
+        }
+    }
+
+    public static final class FakePunch {
+        public FakePunch() {
+        }
     }
 
     public static final class FakeLevel {
@@ -170,6 +258,15 @@ class ActionBinderTest {
             }
             if (type == ClassType.INTERACTION_HAND) {
                 return FakeHand.class.getName();
+            }
+            if (type == ClassType.SERVERBOUND_MOVE_ROT) {
+                return FakeMoveRot.class.getName();
+            }
+            if (type == ClassType.SERVERBOUND_MOVE_POS_ROT) {
+                return FakeMovePosRot.class.getName();
+            }
+            if (type == ClassType.SERVERBOUND_PUNCH) {
+                return FakePunch.class.getName();
             }
             return delegate.className(type);
         }

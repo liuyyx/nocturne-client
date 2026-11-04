@@ -79,8 +79,7 @@ public final class ActionContract {
                             arguments));
                 }
             }
-            boolean needsCandidates = !"rotation".equals(action.operation)
-                    && !"snapshot".equals(action.operation);
+            boolean needsCandidates = "method".equals(action.operation);
             if (needsCandidates && candidates.isEmpty()) {
                 throw new IllegalStateException("action has no candidates " + action.id);
             }

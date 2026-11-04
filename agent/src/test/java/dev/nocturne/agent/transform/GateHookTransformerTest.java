@@ -14,6 +14,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** {@link GateHookTransformer} 的真实字节码行为测试。 */
@@ -51,6 +52,44 @@ class GateHookTransformerTest {
 
         public static void earlyBody() {
             calls.add("earlyBody");
+        }
+
+        static Object replacement;
+        static Object moved;
+        static double moveX;
+        static double moveY;
+        static double moveZ;
+
+        public static Object moveVec(Object entity, Object motion) {
+            return replacement;
+        }
+
+        public static void moveLegacyCapture(Object entity, double x, double y, double z) {
+        }
+
+        public static void moveLegacyDispatch(Object entity) {
+        }
+
+        public static double moveLegacyX(Object entity, double value) {
+            return value + 1.0;
+        }
+
+        public static double moveLegacyY(Object entity, double value) {
+            return value + 1.0;
+        }
+
+        public static double moveLegacyZ(Object entity, double value) {
+            return value + 1.0;
+        }
+
+        public static void moved(Object motion) {
+            moved = motion;
+        }
+
+        public static void moved(double x, double y, double z) {
+            moveX = x;
+            moveY = y;
+            moveZ = z;
         }
     }
 
@@ -148,12 +187,113 @@ class GateHookTransformerTest {
     }
 
     @Test
+    void moveVecArgumentIsReplacedBeforeTheOriginalBody() throws Exception {
+        String descriptor = "(Ljava/lang/Object;Ljava/lang/Object;)V";
+        byte[] patched = new MoveHookTransformer(TARGET, "hit", descriptor, SINK, false)
+                .transform(getClass().getClassLoader(), TARGET, null, null, moveSubject(descriptor));
+        Class<?> type = define(patched);
+        Object instance = type.getDeclaredConstructor().newInstance();
+        Object replacement = new Object();
+        Sink.replacement = replacement;
+
+        type.getMethod("hit", Object.class, Object.class).invoke(instance, new Object(), new Object());
+
+        assertSame(replacement, Sink.moved);
+    }
+
+    @Test
+    void moveVecRestoresDeclaredTypeBeforeStackMapFrame() throws Exception {
+        String descriptor = "(Ljava/lang/Object;Ljava/lang/String;)V";
+        byte[] patched = new MoveHookTransformer(TARGET, "hit", descriptor, SINK, false)
+                .transform(getClass().getClassLoader(), TARGET, null, null, framedMoveSubject());
+        Class<?> type = define(patched);
+        Object instance = type.getDeclaredConstructor().newInstance();
+        Sink.replacement = "after";
+
+        type.getMethod("hit", Object.class, String.class).invoke(instance, new Object(), "before");
+
+        assertEquals("after", Sink.moved);
+    }
+
+    @Test
+    void legacyMoveRewritesThreeDoubleSlots() throws Exception {
+        assertLegacyMove("(DDD)V", 1.0, 2.0, 3.0);
+    }
+
+    @Test
+    void typedLegacyMoveUsesSlotsAfterMoverType() throws Exception {
+        assertLegacyMove("(Ljava/lang/Object;DDD)V", 1.0, 2.0, 3.0);
+    }
+
+    private void assertLegacyMove(String descriptor, double x, double y, double z) throws Exception {
+        byte[] patched = new MoveHookTransformer(TARGET, "hit", descriptor, SINK, true)
+                .transform(getClass().getClassLoader(), TARGET, null, null, moveSubject(descriptor));
+        Class<?> type = define(patched);
+        Object instance = type.getDeclaredConstructor().newInstance();
+        if (descriptor.startsWith("(L")) {
+            type.getMethod("hit", Object.class, double.class, double.class, double.class)
+                    .invoke(instance, new Object(), x, y, z);
+        } else {
+            type.getMethod("hit", double.class, double.class, double.class).invoke(instance, x, y, z);
+        }
+        assertEquals(x + 1.0, Sink.moveX);
+        assertEquals(y + 1.0, Sink.moveY);
+        assertEquals(z + 1.0, Sink.moveZ);
+    }
+
+    @Test
     void leavesOtherMethodsAndInvalidShapesUntouched() {
         byte[] original = gateSubject("()V");
         assertNull(new GateHookTransformer(TARGET, "other", "()V", SINK, "gate",
                 "Z", false, false).transform(getClass().getClassLoader(), TARGET, null, null, original));
         assertThrows(IllegalArgumentException.class, () -> new GateHookTransformer(
                 TARGET, "hit", "()V", SINK, "gate", "Z", true, false));
+    }
+
+    private static byte[] moveSubject(String descriptor) {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, TARGET, null, "java/lang/Object", null);
+        defaultConstructor(writer);
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "hit", descriptor, null, null);
+        method.visitCode();
+        if (descriptor.contains("DDD")) {
+            int first = descriptor.startsWith("(L") ? 2 : 1;
+            method.visitVarInsn(Opcodes.DLOAD, first);
+            method.visitVarInsn(Opcodes.DLOAD, first + 2);
+            method.visitVarInsn(Opcodes.DLOAD, first + 4);
+            method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "moved", "(DDD)V", false);
+        } else {
+            method.visitVarInsn(Opcodes.ALOAD, 2);
+            method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "moved",
+                    "(Ljava/lang/Object;)V", false);
+        }
+        method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
+    private static byte[] framedMoveSubject() {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, TARGET, null, "java/lang/Object", null);
+        defaultConstructor(writer);
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "hit",
+                "(Ljava/lang/Object;Ljava/lang/String;)V", null, null);
+        method.visitCode();
+        method.visitInsn(Opcodes.ICONST_0);
+        org.objectweb.asm.Label branch = new org.objectweb.asm.Label();
+        method.visitJumpInsn(Opcodes.IFEQ, branch);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitLabel(branch);
+        method.visitVarInsn(Opcodes.ALOAD, 2);
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "moved",
+                "(Ljava/lang/Object;)V", false);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
     }
 
     private static byte[] booleanSubject() {

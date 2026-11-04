@@ -59,6 +59,36 @@ public final class BackendOverlayDraw implements OverlayDraw {
     }
 
     @Override
+    public void line(float x1, float y1, float x2, float y2, float thickness, int argb) {
+        if (!renderer.line(x1, y1, x2, y2, thickness, Color.of(argb))) {
+            OverlayDraw.super.line(x1, y1, x2, y2, thickness, argb);
+        }
+        drawCalls++;
+    }
+
+    @Override
+    public int uploadTexture(int id, int width, int height, int[] argb) {
+        return renderer.uploadTexture(id, width, height, argb);
+    }
+
+    @Override
+    public void deleteTexture(int id) {
+        renderer.deleteTexture(id);
+    }
+
+    @Override
+    public void texturedQuad(int texture, float x, float y, float width, float height,
+                             float u0, float v0, float u1, float v1, int argb) {
+        renderer.texturedQuad(texture, x, y, width, height, u0, v0, u1, v1, argb);
+        drawCalls++;
+    }
+
+    @Override
+    public boolean supportsTextures() {
+        return renderer.supportsTextures();
+    }
+
+    @Override
     public void text(String text, float x, float y, int argb) {
         renderer.text(text, x, y, TEXT_SIZE, Color.of(argb));
         drawCalls++;

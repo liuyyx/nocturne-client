@@ -33,6 +33,7 @@ public final class ModuleTicker implements FrameListener {
             return;
         }
         lastTickNanos = now;
+        client.packets().noteMainThread();
         GameBridge bridge = client.gameBridge();
         boolean inWorld = bridge != null && bridge.isResolved();
         ModuleRegistry registry = client.modules();
@@ -63,6 +64,7 @@ public final class ModuleTicker implements FrameListener {
         if (world != lastWorld) {
             lastWorld = world;
             client.events().post(dev.nocturne.client.event.WorldChangeEvent.INSTANCE);
+            client.packets().onWorldChange();
         }
     }
 }

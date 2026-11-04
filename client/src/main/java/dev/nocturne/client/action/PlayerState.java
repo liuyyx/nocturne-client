@@ -9,7 +9,8 @@ package dev.nocturne.client.action;
 public final class PlayerState {
 
     private static final PlayerState EMPTY = new PlayerState(null, 0.0, 0.0, 0.0,
-            0.0f, 0.0f, false);
+            0.0f, 0.0f, false, -1, 0, 0, 0,
+            0.0f, 0.0f, 1.0f, false, false, false);
 
     private final Object player;
     private final double x;
@@ -18,9 +19,22 @@ public final class PlayerState {
     private final float yaw;
     private final float pitch;
     private final boolean onGround;
+    private final int selectedSlot;
+    private final int mainHandCount;
+    private final int mainHandMaxStack;
+    private final int offHandCount;
+    private final float health;
+    private final float absorption;
+    private final float attackStrengthScale;
+    private final boolean sprinting;
+    private final boolean shifting;
+    private final boolean moving;
 
     PlayerState(Object player, double x, double y, double z,
-                float yaw, float pitch, boolean onGround) {
+                float yaw, float pitch, boolean onGround, int selectedSlot,
+                int mainHandCount, int mainHandMaxStack, int offHandCount,
+                float health, float absorption, float attackStrengthScale,
+                boolean sprinting, boolean shifting, boolean moving) {
         this.player = player;
         this.x = x;
         this.y = y;
@@ -28,6 +42,16 @@ public final class PlayerState {
         this.yaw = yaw;
         this.pitch = pitch;
         this.onGround = onGround;
+        this.selectedSlot = selectedSlot;
+        this.mainHandCount = mainHandCount;
+        this.mainHandMaxStack = mainHandMaxStack;
+        this.offHandCount = offHandCount;
+        this.health = health;
+        this.absorption = absorption;
+        this.attackStrengthScale = attackStrengthScale;
+        this.sprinting = sprinting;
+        this.shifting = shifting;
+        this.moving = moving;
     }
 
     /** 世界未就绪时的唯一空快照。 */
@@ -65,5 +89,47 @@ public final class PlayerState {
 
     public boolean onGround() {
         return onGround;
+    }
+
+    public int selectedSlot() {
+        return selectedSlot;
+    }
+
+    public int mainHandCount() {
+        return mainHandCount;
+    }
+
+    public int mainHandMaxStack() {
+        return mainHandMaxStack;
+    }
+
+    public int offHandCount() {
+        return offHandCount;
+    }
+
+    public float health() {
+        return health;
+    }
+
+    public float absorption() {
+        return absorption;
+    }
+
+    /** 1.9+ 攻击冷却进度；没有冷却机制的旧版固定为 1。 */
+    public float attackStrengthScale() {
+        return attackStrengthScale;
+    }
+
+    public boolean sprinting() {
+        return sprinting;
+    }
+
+    public boolean shifting() {
+        return shifting;
+    }
+
+    /** 是否有水平移动输入，而不是被动击退产生的速度。 */
+    public boolean moving() {
+        return moving;
     }
 }

@@ -134,6 +134,12 @@ public final class PlannedBackend implements UiBackend, PlayerModelPreview {
     }
 
     @Override
+    public boolean line(float x1, float y1, float x2, float y2, float thickness, Color color) {
+        flushNow();
+        return delegate.line(x1, y1, x2, y2, thickness, color);
+    }
+
+    @Override
     public void text(String text, float x, float y, float size, Color color) {
         // 文本由后端立即提交，几何在 endFrame 才 flush；先冲掉之前的矩形，否则
         // 背景会盖在文字上。裁剪状态在 flush 后仍保留，文本仍受当前 scissor 约束。

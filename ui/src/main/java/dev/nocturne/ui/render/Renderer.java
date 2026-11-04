@@ -49,6 +49,16 @@ public interface Renderer {
 
 
     /**
+     * 尝试用后端原生图元画任意两点连线。
+     *
+     * @return 已绘制返回 true；false 时由 OverlayDraw 退回通用短线段填充，不在 SDL 后端触碰 GL
+     */
+    default boolean line(float x1, float y1, float x2, float y2, float thickness, Color color) {
+        return false;
+    }
+
+
+    /**
      * 绘制一行文本。
      *
      * @param text 文本内容；为 {@code null} 或空串时应跳过绘制

@@ -63,6 +63,9 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     /** 支持包替换与取消的转换器。 */
     private static final String PACKET_TRANSFORMER_CLASS =
             "dev.nocturne.agent.transform.PacketHookTransformer";
+    /** 实际位移实参改写转换器。 */
+    private static final String MOVE_TRANSFORMER_CLASS =
+            "dev.nocturne.agent.transform.MoveHookTransformer";
     /** 滚轮形参转换器：取指定的 double 形参（GLFW 世代 {@code MouseHandler#onScroll}）。 */
     private static final String SCROLL_TRANSFORMER_CLASS =
             "dev.nocturne.agent.transform.ScrollHookTransformer";
@@ -254,6 +257,24 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         } catch (Throwable t) {
             log("could not create gate hook transformer for " + targetInternalName + "." + method
                     + ": " + t + "; gameplay hook disabled");
+            return null;
+        }
+    }
+
+    /** 创建实际位移实参改写器；legacy 覆盖 (DDD) 与 (MoverType,DDD) 两种旧形状。 */
+    public ClassFileTransformer createMoveTransformer(String targetInternalName, String method,
+                                                       String descriptor, String hookOwner,
+                                                       boolean legacy) {
+        try {
+            Class<?> transformerClass = loadClass(MOVE_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, boolean.class);
+            Object instance = constructor.newInstance(targetInternalName, method, descriptor,
+                    hookOwner, legacy);
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create move hook transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; move hook disabled");
             return null;
         }
     }

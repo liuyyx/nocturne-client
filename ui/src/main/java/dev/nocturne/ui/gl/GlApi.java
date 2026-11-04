@@ -1277,6 +1277,18 @@ public final class GlApi {
     }
 
     /**
+     * 用独立线段绘制任意两点连线；恢复默认线宽由调用方负责。
+     */
+    public void strokeLine(float x1, float y1, float x2, float y2, float lineWidth,
+                           float r, float g, float b, float a) {
+        this.lineWidth(lineWidth);
+        ensureBatch(GL_LINES, 0);
+        color(r, g, b, a);
+        vertex(x1, y1);
+        vertex(x2, y2);
+    }
+
+    /**
      * 便捷方法：用 {@code GL_LINE_LOOP} 绘制一个线宽可设的描边矩形。
      *
      * <p>与 {@link #fillRect} 一样，先关闭纹理，避免描边顶点采样字体图集。

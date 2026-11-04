@@ -61,7 +61,7 @@ public final class AutoToolModule extends Module {
         }
         Object level = bridge.readField(minecraft, ClassType.MINECRAFT, "level");
         Object hit = bridge.readField(minecraft, ClassType.MINECRAFT, "hitResult");
-        boolean blockAim = hit != null && bridge.isInstance(hit, ClassType.BLOCK_HIT_RESULT);
+        boolean blockAim = bridge.isBlockHit(hit);
         long now = System.nanoTime();
         if (blockAim && onlyWhileSneaking.get()
                 && !Boolean.TRUE.equals(bridge.callMapped(player, ClassType.ENTITY, "isShiftKeyDown"))) {

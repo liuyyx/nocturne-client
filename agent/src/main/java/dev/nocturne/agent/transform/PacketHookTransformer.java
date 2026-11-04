@@ -88,6 +88,8 @@ public final class PacketHookTransformer implements ClassFileTransformer {
                             Object[] locals = localsOf(isStatic);
                             super.visitFrame(Opcodes.F_NEW, locals.length, locals,
                                     1, new Object[]{"java/lang/Object"});
+                            super.visitTypeInsn(Opcodes.CHECKCAST,
+                                    Type.getArgumentTypes(targetDescriptor)[packetArgument].getInternalName());
                             super.visitVarInsn(Opcodes.ASTORE, packetSlot);
                             patched.set(true);
                         }

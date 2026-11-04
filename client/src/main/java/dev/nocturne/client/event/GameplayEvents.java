@@ -18,6 +18,7 @@ public final class GameplayEvents implements GameplayHook.Sink {
             new ConcurrentHashMap<String, Boolean>());
 
     private final NocturneClient client;
+    private final ThreadLocal<MoveEvent> legacyMove = new ThreadLocal<MoveEvent>();
 
     private GameplayEvents(NocturneClient client) {
         this.client = client;
@@ -30,15 +31,20 @@ public final class GameplayEvents implements GameplayHook.Sink {
     }
 
     @Override
-    public void playerTickPre(Object player) {
+    public boolean playerTickPre(Object player) {
+        if (!active()) {
+            return true;
+        }
         if (!local(player)) {
-            return;
+            return true;
         }
         hit("H1");
-        client.events().post(PlayerTickEvent.Pre.INSTANCE);
-        if (!GameplayHook.isMotionDirect()) {
+        PlayerTickEvent.Pre event = new PlayerTickEvent.Pre();
+        client.events().post(event);
+        if (!GameplayHook.isMotionDirect() && !event.cancelled) {
             postMotion(player, true);
         }
+        return !event.cancelled;
     }
 
     @Override
@@ -63,6 +69,140 @@ public final class GameplayEvents implements GameplayHook.Sink {
         if (active()) {
             postMotion(player, false);
         }
+    }
+
+    @Override
+    public void inputTick(Object input) {
+        if (!active()) {
+            return;
+        }
+        MovementInputEvent event = MovementInputEvent.read(client.gameBridge(), input);
+        if (event == null) {
+            return;
+        }
+        hit("H9");
+        client.events().post(event);
+        event.apply();
+    }
+
+    @Override
+    public boolean screenOpen(Object screen) {
+        if (!active()) {
+            return true;
+        }
+        hit("H10");
+        ScreenEvent event = new ScreenEvent(screen);
+        client.events().post(event);
+        return !event.cancelled;
+    }
+
+    @Override
+    public void entityJoin(Object entity) {
+        entityJoin(-1, entity);
+    }
+
+    @Override
+    public void entityJoin(int id, Object entity) {
+        if (!active()) {
+            return;
+        }
+        hit("H11");
+        client.events().post(new EntityJoinEvent(id, entity));
+    }
+
+    @Override
+    public boolean destroyStart(Object blockPos, Object direction) {
+        return destroy(BlockEvent.Phase.START, blockPos, direction);
+    }
+
+    @Override
+    public boolean destroyContinue(Object blockPos, Object direction) {
+        return destroy(BlockEvent.Phase.CONTINUE, blockPos, direction);
+    }
+
+    private boolean destroy(BlockEvent.Phase phase, Object blockPos, Object direction) {
+        if (!active()) {
+            return true;
+        }
+        hit("H12");
+        BlockEvent event = new BlockEvent(phase, blockPos, direction);
+        client.events().post(event);
+        return !event.cancelled;
+    }
+
+    @Override
+    public void destroyStop() {
+        if (active()) {
+            client.events().post(new BlockEvent(BlockEvent.Phase.STOP, null, null));
+        }
+    }
+
+    @Override
+    public Object moveVec(Object entity, Object motion) {
+        if (motion == null || !local(entity)) {
+            return motion;
+        }
+        GameBridge bridge = client.gameBridge();
+        Number x = number(bridge.readField(motion, ClassType.VEC3, "x"));
+        Number y = number(bridge.readField(motion, ClassType.VEC3, "y"));
+        Number z = number(bridge.readField(motion, ClassType.VEC3, "z"));
+        if (x == null || y == null || z == null) {
+            return motion;
+        }
+        MoveEvent event = new MoveEvent(x.doubleValue(), y.doubleValue(), z.doubleValue());
+        hit("H13");
+        client.events().post(event);
+        if (!event.changed() || !event.finite()) {
+            return motion;
+        }
+        Object replacement = bridge.construct(ClassType.VEC3, event.x, event.y, event.z);
+        return replacement == null ? motion : replacement;
+    }
+
+    @Override
+    public void moveLegacyCapture(Object entity, double x, double y, double z) {
+        if (local(entity)) {
+            legacyMove.set(new MoveEvent(x, y, z));
+        } else {
+            legacyMove.remove();
+        }
+    }
+
+    @Override
+    public void moveLegacyDispatch(Object entity) {
+        MoveEvent event = legacyMove.get();
+        if (event != null) {
+            hit("H13");
+            client.events().post(event);
+        }
+    }
+
+    @Override
+    public double moveLegacyX(Object entity, double value) {
+        return legacyMoveValue(value, 0);
+    }
+
+    @Override
+    public double moveLegacyY(Object entity, double value) {
+        return legacyMoveValue(value, 1);
+    }
+
+    @Override
+    public double moveLegacyZ(Object entity, double value) {
+        return legacyMoveValue(value, 2);
+    }
+
+    private double legacyMoveValue(double original, int axis) {
+        MoveEvent event = legacyMove.get();
+        if (event == null || !event.finite()) {
+            legacyMove.remove();
+            return original;
+        }
+        double value = axis == 0 ? event.x : axis == 1 ? event.y : event.z;
+        if (axis == 2) {
+            legacyMove.remove();
+        }
+        return value;
     }
 
     @Override
@@ -166,6 +306,12 @@ public final class GameplayEvents implements GameplayHook.Sink {
     private Object packet(Object packet, PacketEvent.Direction direction) {
         if (!active()) {
             return packet;
+        }
+        if (client.packets().shouldBypass(packet)) {
+            return packet;
+        }
+        if (client.packets().capture(direction, packet)) {
+            return null;
         }
         hit(direction == PacketEvent.Direction.SEND ? "H3" : "H4");
         PacketEvent event = new PacketEvent(direction, packet);

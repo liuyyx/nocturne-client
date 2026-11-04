@@ -150,6 +150,29 @@ class GlRendererTest {
         assertEquals(4, FakeGl.vertexCalls);
     }
 
+    /** 任意线使用 GL_LINES，两个顶点，并恢复默认线宽避免污染游戏。 */
+    @Test
+    void lineUsesLinesAndRestoresWidth() {
+        assertTrue(renderer.line(0f, 0f, 10f, 10f, 2.5f, Color.WHITE));
+        assertEquals(GlApi.GL_LINES, FakeGl.lastBeginMode);
+        assertEquals(2, FakeGl.vertexCalls);
+        assertEquals(1f, FakeGl.lastLineWidth, 1.0e-3);
+        assertEquals(2, FakeGl.lineWidthCalls);
+    }
+
+    @Test
+    void lineWithoutMatrixControlReturnsFalse() {
+        GlRenderer bare = new GlRenderer(GlApi.bind(FakeGlNoMatrix.class), null);
+        assertFalse(bare.line(0f, 0f, 10f, 10f, 1f, Color.WHITE));
+        assertEquals(0, FakeGl.lineWidthCalls);
+    }
+
+    @Test
+    void nullColorLineReturnsFalse() {
+        assertFalse(renderer.line(0f, 0f, 10f, 10f, 1f, null));
+        assertEquals(0, FakeGl.beginCalls);
+    }
+
     /** 文本经接缝转发且宽度可计算；空字符串被跳过，不新增绘制记录 */
     @Test
     void textGoesThroughTheSeam() {

@@ -79,6 +79,11 @@ public final class FakeBackend implements UiBackend {
     }
 
     @Override
+    public boolean line(float x1, float y1, float x2, float y2, float thickness, Color color) {
+        return renderer.line(x1, y1, x2, y2, thickness, color);
+    }
+
+    @Override
     public void text(String text, float x, float y, float size, Color color) {
         renderer.text(text, x, y, size, color);
     }

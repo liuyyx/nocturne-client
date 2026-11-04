@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class ActionContractTest {
 
     @Test
-    void bundledContractDeclaresSixSemanticActions() {
+    void bundledContractDeclaresAllSemanticActions() {
         ActionContract contract = ActionContract.load();
         List<String> ids = new ArrayList<String>();
         for (ActionContract.ActionSpec action : contract.actions()) {
@@ -22,7 +22,10 @@ class ActionContractTest {
         }
 
         assertEquals(Arrays.asList("attack", "place", "useItem", "setRotation",
-                "sendPacket", "click", "readState"), ids);
+                "sendPacket", "click", "swing", "swingPacket", "selectSlot", "clickSlot",
+                "closeContainer", "sendChat", "legacyChat", "sendCommand", "clickUse", "setSprinting",
+                "pick", "setMotion", "setJumping", "sendRotation", "sendPositionRotation",
+                "sendGround", "sendPlayerCommand", "readState"), ids);
         assertEquals("MULTI_PLAYER_GAME_MODE",
                 contract.get("attack").candidates().get(0).owner());
         assertEquals("gameMode", contract.get("attack").receiver());
@@ -35,6 +38,12 @@ class ActionContractTest {
                 contract.get("useItem").candidates().get(0).arguments());
         assertEquals(Arrays.asList("player", "hand", "hitResult"),
                 contract.get("place").candidates().get(1).arguments());
+        assertEquals("swingFactory", contract.get("swingPacket").operation());
+        assertEquals(Arrays.asList("containerId", "slot", "button", "mode", "player"),
+                contract.get("clickSlot").candidates().get(0).arguments());
+        assertEquals(Arrays.asList("distance", "partialTicks", "fluid"),
+                contract.get("pick").candidates().get(0).arguments());
+        assertEquals("moveRotFactory", contract.get("sendRotation").operation());
     }
 
     @Test

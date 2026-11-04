@@ -31,6 +31,10 @@ public final class GL30 {
     public static int lastUseProgram = -1;
     public static int lastBindVertexArray = -1;
     public static int lastBindArrayBuffer = -1;
+    /** 最近一次顶点上传的 float 数与绘制顶点数。 */
+    public static int lastBufferDataFloats = -1;
+    public static int lastDrawCount = -1;
+    public static int drawArraysCalls;
     /** 模拟真实能力位，供原生模型绘制后的 UI 状态恢复断言使用。 */
     public static final java.util.Set<Integer> enabledCaps = new java.util.HashSet<Integer>();
 
@@ -53,6 +57,9 @@ public final class GL30 {
         lastUseProgram = -1;
         lastBindVertexArray = -1;
         lastBindArrayBuffer = -1;
+        lastBufferDataFloats = -1;
+        lastDrawCount = -1;
+        drawArraysCalls = 0;
         enabledCaps.clear();
     }
 
@@ -81,6 +88,7 @@ public final class GL30 {
     }
 
     public static void glBufferData(int target, FloatBuffer data, int usage) {
+        lastBufferDataFloats = data == null ? -1 : data.remaining();
     }
 
     public static void glDeleteBuffers(int[] ids) {
@@ -166,6 +174,8 @@ public final class GL30 {
     }
 
     public static void glDrawArrays(int mode, int first, int count) {
+        drawArraysCalls++;
+        lastDrawCount = count;
     }
 
     public static void glEnable(int cap) {

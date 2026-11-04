@@ -99,10 +99,17 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 - **事件总线**：`EventBus`，同步、先按优先级再按同级注册顺序、逐订阅者异常隔离。
   可取消事件默认跳过后续订阅者，`skipCancelled=true` 的订阅者仍接收；分发使用增删时重建的不可变快照。
   已有 PlayerTick / Motion / Packet / Render / Key / MouseButton / Attack / UseItem / WorldChange
-  九类事件并接生产；`GameplayEvents` 把 bootstrap 钩子装配成事件，WorldChange 由运行时跨世界检测投递。
-- **动作层**：`ActionApi` 提供 `attack / place / useItem / setRotation / sendPacket / readState`
-  六个语义动作，`PlayerState` 是不可变玩家快照。`ActionBinder` 启动时读取打进 jar 的
-  `contract/actions.yaml`，按 `Mapping` 候选绑定真实 `Method`；全部未命中或调用失败时禁用该动作并只报一次。
+  以及 MovementInput / Move / Screen / EntityJoin / Block 事件；PlayerTick.Pre 可取消整个本地玩家 tick，
+  MoveEvent 直接改写 Entity.move 的 Vec3 或旧版 double 实参，MovementInputEvent 在每 tick 输入合成后
+  修改前进/平移/跳跃/潜行/疾跑意图。26.x 的不可变 Input record 由事件层整体替换并同步 moveVector。
+- **包队列**：`PacketController` 提供双向 FIFO hold/release/clear、连接身份校验和时序敏感直发；
+  释放经 ThreadLocal 直通上下文避免嵌套 send 重入，RECEIVE 走 Packet.handle(listener) 回原版处理链。
+  世界切换与 panic 丢弃旧队列，不把积压包放进新连接。
+- **动作层**：`ActionApi` 提供攻击/点击、精确命中点放置、主副手使用与挥手、普通/静默换槽、
+  容器点击/关闭、聊天/命令、raycast、速度/跳跃/疾跑、玩家命令包、移动包与 `readState`。
+  `PlayerState` 额外携带当前槽、主副手数量、血量/吸收、攻击冷却和移动状态；单项缺失独立降级。
+  `ActionBinder` 启动时读取打进 jar 的 `contract/actions.yaml`，按 `Mapping` 候选绑定真实 `Method`
+  与构造器；全部未命中或调用失败时禁用该动作并只报一次。
   契约采用 YAML 1.2 的 JSON flow 语法，直接复用 Gson，不向游戏进程引入第二套 YAML 解析器。
   `place` 的 `BlockHitResult` 组装与 `InteractionHand.MAIN_HAND` 解析都在动作层，模块不直接反射游戏类。
 - **跨版本适配**：

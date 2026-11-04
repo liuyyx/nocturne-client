@@ -260,9 +260,9 @@ class LegacySource:
         if kind == "method":
             srg, _owner, obf_name, obf_desc, _mcp_desc = candidates[0]
             validate_signature(obf_desc)
-            return Answer.found(obf_name, obf_desc, srg=srg)
+            return Answer.found(rule.get("vanilla", obf_name), obf_desc, srg=srg)
         srg, _owner, obf_name = candidates[0]
-        return Answer.found(obf_name, srg=srg)
+        return Answer.found(rule.get("vanilla", obf_name), srg=srg)
 
     def resolve_method(self, cls: str, name: str) -> Answer:
         return self._resolve(cls, "method", name)

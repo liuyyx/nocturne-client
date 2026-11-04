@@ -40,6 +40,7 @@ version = "1.8.9"
 "net/minecraft/world/entity/player/Abilities" = "net/minecraft/entity/player/PlayerCapabilities"
 "net/minecraft/world/entity/Entity" = "net/minecraft/entity/Entity"
 "net/minecraft/world/phys/Vec3" = "net/minecraft/util/Vec3"
+"net/minecraft/client/multiplayer/ClientPacketListener" = "net/minecraft/client/network/NetHandlerPlayClient"
 "net/minecraft/client/multiplayer/MultiPlayerGameMode" = "net/minecraft/client/multiplayer/PlayerControllerMP"
 "net/minecraft/network/Connection" = "net/minecraft/network/NetworkManager"
 "net/minecraft/world/entity/Mob" = "net/minecraft/entity/monster/EntityMob"
@@ -93,6 +94,32 @@ version = "1.8.9"
 "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$StatusOnly" = "net/minecraft/network/play/client/C03PacketPlayer"
 "net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket" = "net/minecraft/network/play/server/S12PacketEntityVelocity"
 "net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket" = "net/minecraft/network/play/server/S38PacketPlayerListItem"
+"net/minecraft/world/phys/AABB" = "net/minecraft/util/AxisAlignedBB"
+"net/minecraft/client/player/Input" = "net/minecraft/util/MovementInput"
+"net/minecraft/client/player/KeyboardInput" = "net/minecraft/util/MovementInputFromOptions"
+"net/minecraft/world/phys/Vec2" = "net/minecraft/util/math/Vec2f"
+"net/minecraft/world/phys/HitResult" = "net/minecraft/util/MovingObjectPosition"
+"net/minecraft/world/scores/PlayerTeam" = "net/minecraft/scoreboard/Team"
+"net/minecraft/world/scores/TeamColor" = "net/minecraft/util/EnumChatFormatting"
+"net/minecraft/world/entity/animal/Animal" = "net/minecraft/entity/passive/EntityAnimal"
+"net/minecraft/world/entity/ambient/AmbientCreature" = "net/minecraft/entity/passive/EntityAmbientCreature"
+"net/minecraft/world/entity/decoration/ArmorStand" = "net/minecraft/entity/item/EntityArmorStand"
+"net/minecraft/world/entity/boss/enderdragon/EndCrystal" = "net/minecraft/entity/item/EntityEnderCrystal"
+"net/minecraft/world/entity/item/PrimedTnt" = "net/minecraft/entity/item/EntityTNTPrimed"
+"net/minecraft/world/scores/Scoreboard" = "net/minecraft/scoreboard/Scoreboard"
+"net/minecraft/world/scores/Objective" = "net/minecraft/scoreboard/ScoreObjective"
+"net/minecraft/world/scores/Score" = "net/minecraft/scoreboard/Score"
+"net/minecraft/client/renderer/entity/EntityRenderDispatcher" = "net/minecraft/client/renderer/entity/RenderManager"
+"net/minecraft/client/renderer/LevelRenderer" = "net/minecraft/client/renderer/RenderGlobal"
+"net/minecraft/client/KeyMapping" = "net/minecraft/client/settings/KeyBinding"
+"net/minecraft/world/level/block/Blocks" = "net/minecraft/init/Blocks"
+"net/minecraft/network/protocol/Packet" = "net/minecraft/network/Packet"
+"net/minecraft/world/InteractionResult" = "net/minecraft/util/EnumActionResult"
+"net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket" = "net/minecraft/network/play/client/C09PacketHeldItemChange"
+"net/minecraft/network/protocol/game/ServerboundSwingPacket" = "net/minecraft/network/play/client/C0APacketAnimation"
+"net/minecraft/network/protocol/game/ServerboundContainerClosePacket" = "net/minecraft/network/play/client/C0DPacketCloseWindow"
+"net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket" = "net/minecraft/network/play/client/C0BPacketEntityAction"
+"net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action" = "net/minecraft/network/play/client/C0BPacketEntityAction$Action"
 
 # java.* is never obfuscated; those classes are carried by the hand-written
 # java_mappings.json that the loader merges next to the version mapping.
@@ -126,6 +153,14 @@ version = "1.8.9"
 [methods.getInstance]
 mcp = "getMinecraft"
 scope = "net/minecraft/client/Minecraft"
+
+[methods.setScreen]
+mcp = "displayGuiScreen"
+scope = "net/minecraft/client/Minecraft"
+
+[methods.addEntity]
+mcp = "addEntityToWorld"
+scope = "net/minecraft/client/multiplayer/WorldClient"
 
 # 我们的叠加层打开时要让游戏停止处理鼠标：否则拖滑块/点按钮的同时视角也在转
 # （1.8.9 只看 Minecraft.inGameHasFocus，不看 Mouse.isGrabbed）。
@@ -420,9 +455,6 @@ scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
 [methods.mainCamera]
 unsupported = "1.8.9 EntityRenderer 不返回 Camera 对象"
 
-[methods.handle]
-unsupported = "1.8.9 没有 Window 对象/GLFW 句柄（LWJGL Display）"
-
 [methods.equals]
 skip = "MappedObject::equals 在 obf 模式下的既有行为就是不映射（1.21.10 mappings.json 同样没有 equals）—— 保持版本一致，不写死到 1.8.9"
 
@@ -437,6 +469,14 @@ scope = "net/minecraft/client/Minecraft"
 [fields.options]
 mcp = "gameSettings"
 scope = "net/minecraft/client/Minecraft"
+
+[fields.hitResult]
+mcp = "objectMouseOver"
+scope = "net/minecraft/client/Minecraft"
+
+[fields.connection]
+mcp = "sendQueue"
+scope = "net/minecraft/client/entity/EntityPlayerSP"
 
 [fields.gui]
 mcp = "ingameGUI"
@@ -634,19 +674,35 @@ screen = { unsupported = "1.8.9 GuiIngame 没有 screen()；当前界面在 Mine
 
 [overrides."net/minecraft/world/entity/player/Inventory"]
 getItem = { mcp = "getStackInSlot", scope = "net/minecraft/entity/player/InventoryPlayer" }
+getSelectedItem = { mcp = "getCurrentItem", scope = "net/minecraft/entity/player/InventoryPlayer" }
+getContainerSize = { mcp = "getSizeInventory", scope = "net/minecraft/entity/player/InventoryPlayer" }
 
 [overrides."net/minecraft/world/entity/player/Player"]
 getInventory = { unsupported = "1.8.9 EntityPlayer.getInventory() 返回 ItemStack[]；Inventory 对象是字段 inventory" }
 containerMenu = { mcp = "openContainer", scope = "net/minecraft/entity/player/EntityPlayer" }
+inventoryMenu = { mcp = "inventoryContainer", scope = "net/minecraft/entity/player/EntityPlayer" }
+getAttackStrengthScale = { mcp = "getCooledAttackStrength", scope = "net/minecraft/entity/player/EntityPlayer" }
+isSpectator = { mcp = "isSpectator", scope = "net/minecraft/entity/player/EntityPlayer" }
+getTeam = { mcp = "getTeam", scope = "net/minecraft/entity/player/EntityPlayer" }
+isAlliedTo = { mcp = "isOnSameTeam", scope = "net/minecraft/entity/player/EntityPlayer" }
 getAbilities = { unsupported = "1.8.9 是 public PlayerCapabilities capabilities 字段" }
 
 [overrides."net/minecraft/world/item/ItemStack"]
 getItem = { mcp = "getItem", scope = "net/minecraft/item/ItemStack" }
 isEmpty = { unsupported = "1.8.9 没有 isEmpty()：判断 stackSize == 0 / getItem() == null" }
+count = { mcp = "stackSize", scope = "net/minecraft/item/ItemStack" }
+getMaxStackSize = { mcp = "getMaxStackSize", scope = "net/minecraft/item/ItemStack" }
+getUseDuration = { mcp = "getMaxItemUseDuration", scope = "net/minecraft/item/ItemStack" }
+
+[overrides."net/minecraft/client/multiplayer/MultiPlayerGameMode"]
+windowClick = { mcp = "windowClick", scope = "net/minecraft/client/multiplayer/PlayerControllerMP" }
+destroyDelay = { mcp = "blockHitDelay", scope = "net/minecraft/client/multiplayer/PlayerControllerMP" }
 
 
 [overrides."net/minecraft/world/entity/LivingEntity"]
 isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer，JNI 从 EntityLivingBase 查不到" }
+hasLineOfSight = { mcp = "canEntityBeSeen", scope = "net/minecraft/entity/EntityLivingBase" }
+getAbsorptionAmount = { mcp = "getAbsorptionAmount", scope = "net/minecraft/entity/EntityLivingBase" }
 
 [overrides."net/minecraft/world/entity/Mob"]
 isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer，JNI 从 EntityMob 查不到" }
@@ -660,10 +716,96 @@ getIndex = { unsupported = "EquipmentSlot 不存在于 1.8.9" }
 
 [overrides."net/minecraft/world/phys/BlockHitResult"]
 getBlockPos = { mcp = "getBlockPos", scope = "net/minecraft/util/MovingObjectPosition" }
+direction = { mcp = "sideHit", scope = "net/minecraft/util/MovingObjectPosition" }
 
 # LocalPlayer also inherits PlayerRef/LivingEntityRef/EntityRef members; the
 # only extra ones are handled here.
+[overrides."com/mojang/blaze3d/platform/Window"]
+handle = { unsupported = "1.8.9 没有 Window 对象/GLFW 句柄（LWJGL Display）" }
+
+[overrides."net/minecraft/network/protocol/Packet"]
+handle = { mcp = "processPacket", scope = "net/minecraft/network/Packet" }
+
+[overrides."net/minecraft/world/phys/AABB"]
+move = { mcp = "offset", scope = "net/minecraft/util/AxisAlignedBB" }
+inflate = { mcp = "expand", scope = "net/minecraft/util/AxisAlignedBB" }
+intersects = { mcp = "intersectsWith", scope = "net/minecraft/util/AxisAlignedBB" }
+minX = { mcp = "minX", scope = "net/minecraft/util/AxisAlignedBB" }
+minY = { mcp = "minY", scope = "net/minecraft/util/AxisAlignedBB" }
+minZ = { mcp = "minZ", scope = "net/minecraft/util/AxisAlignedBB" }
+maxX = { mcp = "maxX", scope = "net/minecraft/util/AxisAlignedBB" }
+maxY = { mcp = "maxY", scope = "net/minecraft/util/AxisAlignedBB" }
+maxZ = { mcp = "maxZ", scope = "net/minecraft/util/AxisAlignedBB" }
+
+[overrides."net/minecraft/world/phys/HitResult"]
+type = { mcp = "typeOfHit", scope = "net/minecraft/util/MovingObjectPosition" }
+location = { mcp = "hitVec", scope = "net/minecraft/util/MovingObjectPosition" }
+entity = { mcp = "entityHit", scope = "net/minecraft/util/MovingObjectPosition" }
+
+[overrides."net/minecraft/world/entity/Entity"]
+getBoundingBox = { mcp = "getEntityBoundingBox", scope = "net/minecraft/entity/Entity" }
+rayTrace = { mcp = "rayTrace", scope = "net/minecraft/entity/Entity" }
+getTeam = { unsupported = "1.8.9 getTeam 声明在 EntityPlayer，不在 Entity" }
+isAlliedTo = { unsupported = "1.8.9 isOnSameTeam 声明在 EntityPlayer，不在 Entity" }
+getTeamColor = { unsupported = "1.8.9 通过 Team 的聊天颜色换算 RGB" }
+xo = { mcp = "prevPosX", scope = "net/minecraft/entity/Entity" }
+yo = { mcp = "prevPosY", scope = "net/minecraft/entity/Entity" }
+zo = { mcp = "prevPosZ", scope = "net/minecraft/entity/Entity" }
+move = { mcp = "moveEntity", scope = "net/minecraft/entity/Entity" }
+width = { mcp = "width", scope = "net/minecraft/entity/Entity" }
+height = { mcp = "height", scope = "net/minecraft/entity/Entity" }
+isSpectator = { unsupported = "1.8.9 isSpectator 声明在 EntityPlayer，不在 Entity" }
+
+[overrides."net/minecraft/world/entity/item/ItemEntity"]
+getItem = { mcp = "getEntityItem", scope = "net/minecraft/entity/item/EntityItem" }
+
+[overrides."net/minecraft/client/KeyMapping"]
+isDown = { mcp = "isKeyDown", scope = "net/minecraft/client/settings/KeyBinding" }
+
+[overrides."net/minecraft/core/BlockPos"]
+above = { mcp = "above", scope = "net/minecraft/util/BlockPos" }
+east = { mcp = "east", scope = "net/minecraft/util/BlockPos" }
+south = { mcp = "south", scope = "net/minecraft/util/BlockPos" }
+
+[overrides."net/minecraft/world/entity/item/PrimedTnt"]
+getFuse = { mcp = "getFuse", scope = "net/minecraft/entity/item/EntityTNTPrimed" }
+fuse = { mcp = "fuse", scope = "net/minecraft/entity/item/EntityTNTPrimed" }
+
+[overrides."net/minecraft/world/scores/PlayerTeam"]
+getColor = { unsupported = "1.8.9 ScorePlayerTeam 没有 getChatFormat()/颜色枚举" }
+
+[overrides."net/minecraft/world/scores/TeamColor"]
+getColorValue = { mcp = "getColorValue", scope = "net/minecraft/util/EnumChatFormatting" }
+colorValue = { mcp = "colorValue", scope = "net/minecraft/util/EnumChatFormatting" }
+
+[overrides."net/minecraft/world/level/Level"]
+checkNoEntityCollision = { mcp = "checkNoEntityCollision", scope = "net/minecraft/world/World" }
+checkBlockCollision = { mcp = "checkBlockCollision", scope = "net/minecraft/world/World" }
+
+[overrides."net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action"]
+START_SPRINTING = { mcp = "START_SPRINTING", scope = "net/minecraft/network/play/client/C0BPacketEntityAction$Action" }
+STOP_SPRINTING = { mcp = "STOP_SPRINTING", scope = "net/minecraft/network/play/client/C0BPacketEntityAction$Action" }
+START_SNEAKING = { mcp = "START_SNEAKING", scope = "net/minecraft/network/play/client/C0BPacketEntityAction$Action" }
+STOP_SNEAKING = { mcp = "STOP_SNEAKING", scope = "net/minecraft/network/play/client/C0BPacketEntityAction$Action" }
+PRESS_SHIFT_KEY = { mcp = "START_SNEAKING", scope = "net/minecraft/network/play/client/C0BPacketEntityAction$Action" }
+RELEASE_SHIFT_KEY = { mcp = "STOP_SNEAKING", scope = "net/minecraft/network/play/client/C0BPacketEntityAction$Action" }
+
+[overrides."net/minecraft/client/player/Input"]
+forwardImpulse = { mcp = "moveForward", scope = "net/minecraft/util/MovementInput" }
+leftImpulse = { mcp = "moveStrafe", scope = "net/minecraft/util/MovementInput" }
+jumping = { mcp = "jump", scope = "net/minecraft/util/MovementInput" }
+shiftKeyDown = { mcp = "sneak", scope = "net/minecraft/util/MovementInput" }
+
+[overrides."net/minecraft/client/player/KeyboardInput"]
+tick = { mcp = "updatePlayerMoveState", scope = "net/minecraft/util/MovementInputFromOptions" }
+
+[overrides."net/minecraft/client/multiplayer/ClientPacketListener"]
+send = { mcp = "addToSendQueue", scope = "net/minecraft/client/network/NetHandlerPlayClient" }
+
 [overrides."net/minecraft/client/player/LocalPlayer"]
+closeContainer = { mcp = "closeScreen", scope = "net/minecraft/client/entity/EntityPlayerSP" }
+sendChatMessage = { mcp = "sendChatMessage", scope = "net/minecraft/client/entity/EntityPlayerSP" }
+input = { mcp = "movementInput", scope = "net/minecraft/client/entity/EntityPlayerSP" }
 playerInfo = { mcp = "playerInfo", scope = "net/minecraft/client/entity/AbstractClientPlayer" }
 tick = { mcp = "onLivingUpdate", scope = "net/minecraft/client/entity/EntityPlayerSP" }
 sendPosition = { mcp = "onUpdateWalkingPlayer", scope = "net/minecraft/client/entity/EntityPlayerSP" }

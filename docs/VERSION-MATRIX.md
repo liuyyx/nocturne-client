@@ -3,6 +3,20 @@
 映射表现已覆盖 **1.8.9 – 26.3 的全部 66 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
 >下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
+## 跨版本移植依赖验收
+
+- 2026-11-04：公共动作、实体/物品/世界桥、移动与输入事件、双向包队列、OverlayDraw 线/纹理原语
+  已接通；映射要求扩展到 125 个规范类。旧版字段 fallback 覆盖背包、物品数量、实体尺寸、TNT 引信，
+  队伍与旁观者方法按真实 `EntityPlayer` 声明位置解析。
+- 修正 1.12.2 `Vec3i` 上游源错位：三套运行期坐标固定为 vanilla `a/b/c`、intermediary
+  `field_11175/field_11174/field_11173`、SRG `field_72450_a/field_72448_b/field_72449_c`。
+- `build test dist --rerun-tasks` 通过，共执行 447 个测试且零失败；分发 jar 包含 66 张映射表和动作契约，
+  抽查新增类均为 Java 8 字节码。
+- 带原始 StackMapTable 的 move/packet 回归样本在修复前均抛出真实 `VerifyError`，补回参数
+  `CHECKCAST` 后通过；混合 3/4 参与 6/7 参移动包构造器也有独立回归覆盖。
+- `python tools/mapping/generate.py --javap` 对 66/66 个真实 client jar 的全部已解析 vanilla 成员
+  校验通过。此处不声明 66 个版本均完成真机运行验收。
+
 ## 模块框架扩展验收
 
 - 基线有 14 个模块类、13 个已注册模块；`XrayModule` 仍未注册，没有因分包而启用未接通的渲染功能。
@@ -29,10 +43,11 @@
 
 ## 动作翻译层验收
 
-- `contract/actions.yaml` 已打入交付 jar，声明 `attack / place / useItem / setRotation / sendPacket /
-  readState` 六个动作。契约测试覆盖内容与重复 id 拒绝；绑定测试覆盖候选回退、真实 `Method`
+- `contract/actions.yaml` 已打入交付 jar；原有 `attack / place / useItem / setRotation / sendPacket /
+  readState` 六项已扩展为攻击/点击、主副手使用与挥手、容器、聊天、换槽、射线、移动与玩家命令等
+  完整移植动作面。契约测试覆盖内容与重复 id 拒绝；绑定测试覆盖候选回退、真实 `Method`/构造器
   调用、全部未命中和调用失败后的一次性禁用。
-- 2026-10-30 在 26.3 真机上六个动作均 `available=true`；`readState` 返回真实坐标、朝向与地面状态，
+- 2026-10-30 在 26.3 真机上原有六个动作均 `available=true`；`readState` 返回真实坐标、朝向与地面状态，
   `setRotation`、`place`、`useItem`、`sendPacket` 均实际调用返回 `true`。`attack` 的候选绑定与真实
   方法调用由单元测试覆盖，26.3 上绑定成功。
 - 真机曾发现 `sendPacket` 错绑 Netty `Connection`：`LocalPlayer.connection` 的实际类型是

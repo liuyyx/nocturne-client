@@ -37,6 +37,9 @@ public final class NocturneClient {
     /** 全局目标选择器；无状态，仅读当前世界。 */
     private final dev.nocturne.client.control.TargetManager targets =
             new dev.nocturne.client.control.TargetManager();
+    /** 双向包闸门；构造早于事件安装，保证首个包钩子即可安全访问。 */
+    private final dev.nocturne.client.control.PacketController packets =
+            new dev.nocturne.client.control.PacketController(this);
     /** 系统加载器上的游戏事件汇；供跨加载器 sink 桥接使用。 */
     private volatile dev.nocturne.client.event.GameplayEvents gameplayEvents;
     /** 是否已自销毁（panic）：置位后不再接受任何驱动，见 {@link #panic()}。 */
@@ -100,6 +103,11 @@ public final class NocturneClient {
     /** 全局目标选择器。 */
     public dev.nocturne.client.control.TargetManager targets() {
         return targets;
+    }
+
+    /** 包捕获、原序释放与时序敏感直发入口。 */
+    public dev.nocturne.client.control.PacketController packets() {
+        return packets;
     }
 
     /** 系统加载器上的游戏事件汇；未 boot 完成时为 {@code null}。 */
@@ -319,6 +327,7 @@ public final class NocturneClient {
             return;
         }
         panicked = true;
+        packets.onPanic();
         shutdown();
         modules.setActive(false);
         // 输入占用必须显式停：blocked 由叠加层每帧刷新，清空分发器后没人再刷新它——若那一刻界面

@@ -24,4 +24,17 @@ class PlannedBackendTest {
         assertEquals("text:A", delegate.renderer.calls.get(1),
                 "text must not be covered by the buffered rect");
     }
+
+    @Test
+    void lineFlushesPendingGeometryBeforeDelegating() {
+        FakeBackend delegate = new FakeBackend(320, 240);
+        PlannedBackend backend = new PlannedBackend(delegate);
+
+        backend.beginFrame();
+        backend.rect(1, 2, 30, 40, Color.of(0xFF112233));
+        backend.line(0, 0, 10, 10, 1.5f, Color.WHITE);
+        backend.endFrame();
+
+        assertEquals(java.util.Arrays.asList("rect", "line"), delegate.renderer.calls);
+    }
 }

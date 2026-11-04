@@ -1,5 +1,6 @@
 package dev.nocturne.ui.gl;
 
+import dev.nocturne.ui.render.Color;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL30;
@@ -84,5 +85,42 @@ class ModernGlApiTest {
 
         assertFalse(renderer.initialise(), "zero VAO/VBO ids must fail initialisation");
         assertFalse(renderer.ready(), "a half-created renderer must not advertise readiness");
+    }
+
+    @Test
+    void lineEmitsSixVertices() {
+        ModernRenderer renderer = new ModernRenderer(ModernGlApi.bind(getClass().getClassLoader()), null);
+        assertTrue(renderer.initialise());
+        renderer.beginFrame();
+        assertTrue(renderer.line(0f, 0f, 10f, 10f, 2f, Color.WHITE));
+        renderer.endFrame();
+
+        assertEquals(24, GL30.lastBufferDataFloats);
+        assertEquals(6, GL30.lastDrawCount);
+    }
+
+    @Test
+    void zeroLengthLineSkipsGeometryUpload() {
+        ModernRenderer renderer = new ModernRenderer(ModernGlApi.bind(getClass().getClassLoader()), null);
+        assertTrue(renderer.initialise());
+        renderer.beginFrame();
+        assertTrue(renderer.line(5f, 5f, 5f, 5f, 2f, Color.WHITE));
+        renderer.endFrame();
+
+        assertEquals(-1, GL30.lastBufferDataFloats);
+        assertEquals(0, GL30.drawArraysCalls);
+    }
+
+    @Test
+    void sameColorLinesShareOneBatch() {
+        ModernRenderer renderer = new ModernRenderer(ModernGlApi.bind(getClass().getClassLoader()), null);
+        assertTrue(renderer.initialise());
+        renderer.beginFrame();
+        renderer.line(0f, 0f, 10f, 10f, 2f, Color.WHITE);
+        renderer.line(10f, 10f, 20f, 0f, 2f, Color.WHITE);
+        renderer.endFrame();
+
+        assertEquals(1, GL30.drawArraysCalls);
+        assertEquals(12, GL30.lastDrawCount);
     }
 }

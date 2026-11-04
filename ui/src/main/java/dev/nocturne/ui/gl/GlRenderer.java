@@ -480,6 +480,18 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
     }
 
     @Override
+    public boolean line(float x1, float y1, float x2, float y2, float thickness, Color color) {
+        if (color == null || !ready()) {
+            return false;
+        }
+        gl.strokeLine(x1, y1, x2, y2, Math.max(1f, thickness),
+                color.rf(), color.gf(), color.bf(), color.af());
+        // 第二次 lineWidth 会先 flush 本线批次，再把全局线宽恢复到游戏默认值。
+        gl.lineWidth(1f);
+        return true;
+    }
+
+    @Override
     public void text(String value, float x, float y, float size, Color color) {
         if (value == null || value.isEmpty()) {
             return;

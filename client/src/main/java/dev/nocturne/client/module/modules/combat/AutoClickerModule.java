@@ -108,7 +108,7 @@ public final class AutoClickerModule extends Module {
         Object minecraft = bridge == null ? null : bridge.minecraft();
         Object hit = minecraft == null ? null
                 : bridge.readField(minecraft, ClassType.MINECRAFT, "hitResult");
-        return hit != null && bridge.isInstance(hit, ClassType.ENTITY_HIT_RESULT);
+        return bridge.isEntityHit(hit);
     }
 
     private void subscribeIfNeeded() {

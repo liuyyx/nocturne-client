@@ -1006,7 +1006,7 @@ public final class NocturneAgent {
         gameplayCallbacksRegistered = true;
         // H1：本地玩家 tick 前后。传 this 供事件汇过滤，避免父类钩子把其它实体当成本地玩家。
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
-                "tick", "()V", "playerTickPre", "V", false, true);
+                "tick", "()V", "playerTickPre", "Z", false, true);
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
                 "tick", "()V", "playerTickPost", "V", true, true);
         // H2：位置状态提交前后；pre 的修改由事件汇写回玩家。
@@ -1014,6 +1014,15 @@ public final class NocturneAgent {
                 "sendPosition", "()V", "motionPre", "V", false, true);
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
                 "sendPosition", "()V", "motionPost", "V", true, true);
+        // 每 tick 的物理输入已合成完毕；只传 this，尾部通知不读取可能失效的形参槽。
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.KEYBOARD_INPUT,
+                "tick", "()V", "inputTick", "V", true, true);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MINECRAFT,
+                "setScreen", "(Lnet/minecraft/client/gui/screens/Screen;)V|(Lnet/minecraft/client/gui/GuiScreen;)V",
+                "screenOpen", "Z", false, false);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.CLIENT_LEVEL,
+                "addEntity", "(Lnet/minecraft/world/entity/Entity;)V|(ILnet/minecraft/world/entity/Entity;)V",
+                "entityJoin", "V", false, false);
         // H3/H4：事件返回替换包，null 取消原发送/接收。
         registerPacket(instrumentation, asmLoader, "send",
                 "(Lnet/minecraft/network/protocol/Packet;)V", "packetSend", 0);
@@ -1029,6 +1038,18 @@ public final class NocturneAgent {
                 dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "attack",
                 "(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;)V",
                 "attack", "Z", false, false);
+        registerGate(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "startDestroyBlock",
+                "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Z",
+                "destroyStart", "Z", false, false);
+        registerGate(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "continueDestroyBlock",
+                "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Z",
+                "destroyContinue", "Z", false, false);
+        registerGate(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "stopDestroyBlock",
+                "()V", "destroyStop", "V", false, false);
+        registerMoveHooks(instrumentation, asmLoader);
         // H6：26.x 的 startAttack 返回 boolean，旧版两者均返回 void。
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MINECRAFT,
                 "startAttack", "()V|()Z", "leftClick", "Z", false, false);
@@ -1044,6 +1065,41 @@ public final class NocturneAgent {
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
                 "onButton", "(JLnet/minecraft/client/input/MouseButtonInfo;I)V",
                 "mouse", "Z", false, false);
+    }
+
+    /** 注册 Entity.move 实参改写；双倍的旧形状与 Vec3 新形状由同一转换器覆盖。 */
+    private static void registerMoveHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
+        dev.nocturne.client.mapping.ClassType owner = dev.nocturne.client.mapping.ClassType.ENTITY;
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        java.util.Set<String> classNames = new java.util.LinkedHashSet<String>(
+                mapping.classNameCandidates(owner));
+        classNames.add(owner.canonicalName());
+        boolean patched = false;
+        for (String className : classNames) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, "move")) {
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
+                            "(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V"
+                                    + "|(Lnet/minecraft/entity/MoverType;DDD)V|(DDD)V");
+                }
+                String[] descriptors = descriptor == null
+                        ? new String[]{
+                        "(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V",
+                        "(Lnet/minecraft/entity/MoverType;DDD)V", "(DDD)V"}
+                        : new String[]{descriptor};
+                for (String shape : descriptors) {
+                    ClassFileTransformer transformer = asmLoader.createMoveTransformer(className,
+                            candidate.name(), shape, GAMEPLAY_HOOK_OWNER, shape.contains("DDD"));
+                    patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                            candidate.name(), shape, "move");
+                }
+            }
+        }
+        if (!patched) {
+            log("gameplay hook pending or unavailable: " + owner.canonicalName() + "#move");
+        }
     }
 
     /** 按映射候选注册通知/门控转换器。 */

@@ -10,7 +10,8 @@ public final class GameplayHook {
 
     /** 客户端事件装配面；所有默认实现都必须是无副作用的放行行为。 */
     public interface Sink {
-        default void playerTickPre(Object player) {
+        default boolean playerTickPre(Object player) {
+            return true;
         }
 
         default void playerTickPost(Object player) {
@@ -20,6 +21,52 @@ public final class GameplayHook {
         }
 
         default void motionPost(Object player) {
+        }
+
+        default void inputTick(Object input) {
+        }
+
+        default boolean screenOpen(Object screen) {
+            return true;
+        }
+
+        default void entityJoin(Object entity) {
+        }
+
+        default void entityJoin(int id, Object entity) {
+        }
+
+        default boolean destroyStart(Object blockPos, Object direction) {
+            return true;
+        }
+
+        default boolean destroyContinue(Object blockPos, Object direction) {
+            return true;
+        }
+
+        default void destroyStop() {
+        }
+
+        default Object moveVec(Object entity, Object motion) {
+            return motion;
+        }
+
+        default void moveLegacyCapture(Object entity, double x, double y, double z) {
+        }
+
+        default void moveLegacyDispatch(Object entity) {
+        }
+
+        default double moveLegacyX(Object entity, double value) {
+            return value;
+        }
+
+        default double moveLegacyY(Object entity, double value) {
+            return value;
+        }
+
+        default double moveLegacyZ(Object entity, double value) {
+            return value;
         }
 
         default boolean attack(Object player, Object target) {
@@ -85,7 +132,7 @@ public final class GameplayHook {
         return motionDirect;
     }
 
-    public static void playerTickPre(Object player) {
+    public static boolean playerTickPre(Object player) {
         try {
             if (!tickLogged) {
                 tickLogged = true;
@@ -93,11 +140,10 @@ public final class GameplayHook {
                         + (sink != null));
             }
             Sink current = sink;
-            if (current != null) {
-                current.playerTickPre(player);
-            }
+            return current == null || current.playerTickPre(player);
         } catch (Throwable t) {
             failure("playerTickPre", t);
+            return true;
         }
     }
 
@@ -137,6 +183,131 @@ public final class GameplayHook {
         } catch (Throwable t) {
             failure("motionPost", t);
         }
+    }
+
+    public static void inputTick(Object input) {
+        try {
+            Sink current = sink;
+            if (current != null) {
+                current.inputTick(input);
+            }
+        } catch (Throwable t) {
+            failure("inputTick", t);
+        }
+    }
+
+    public static boolean screenOpen(Object screen) {
+        try {
+            Sink current = sink;
+            return current == null || current.screenOpen(screen);
+        } catch (Throwable t) {
+            failure("screenOpen", t);
+            return true;
+        }
+    }
+
+    public static void entityJoin(Object entity) {
+        entityJoin(-1, entity);
+    }
+
+    public static void entityJoin(int id, Object entity) {
+        try {
+            Sink current = sink;
+            if (current != null) {
+                current.entityJoin(id, entity);
+            }
+        } catch (Throwable t) {
+            failure("entityJoin", t);
+        }
+    }
+
+    public static boolean destroyStart(Object blockPos, Object direction) {
+        return destroy(true, blockPos, direction);
+    }
+
+    public static boolean destroyContinue(Object blockPos, Object direction) {
+        return destroy(false, blockPos, direction);
+    }
+
+    private static boolean destroy(boolean start, Object blockPos, Object direction) {
+        try {
+            Sink current = sink;
+            return current == null || (start ? current.destroyStart(blockPos, direction)
+                    : current.destroyContinue(blockPos, direction));
+        } catch (Throwable t) {
+            failure(start ? "destroyStart" : "destroyContinue", t);
+            return true;
+        }
+    }
+
+    public static void destroyStop() {
+        try {
+            Sink current = sink;
+            if (current != null) {
+                current.destroyStop();
+            }
+        } catch (Throwable t) {
+            failure("destroyStop", t);
+        }
+    }
+
+    public static Object moveVec(Object entity, Object motion) {
+        try {
+            Sink current = sink;
+            Object replacement = current == null ? motion : current.moveVec(entity, motion);
+            return replacement == null ? motion : replacement;
+        } catch (Throwable t) {
+            failure("moveVec", t);
+            return motion;
+        }
+    }
+
+    public static void moveLegacyCapture(Object entity, double x, double y, double z) {
+        try {
+            Sink current = sink;
+            if (current != null) {
+                current.moveLegacyCapture(entity, x, y, z);
+            }
+        } catch (Throwable t) {
+            failure("moveLegacyCapture", t);
+        }
+    }
+
+    public static void moveLegacyDispatch(Object entity) {
+        try {
+            Sink current = sink;
+            if (current != null) {
+                current.moveLegacyDispatch(entity);
+            }
+        } catch (Throwable t) {
+            failure("moveLegacyDispatch", t);
+        }
+    }
+
+    public static double moveLegacyX(Object entity, double value) {
+        return moveLegacyValue(entity, value, 0);
+    }
+
+    public static double moveLegacyY(Object entity, double value) {
+        return moveLegacyValue(entity, value, 1);
+    }
+
+    public static double moveLegacyZ(Object entity, double value) {
+        return moveLegacyValue(entity, value, 2);
+    }
+
+    private static double moveLegacyValue(Object entity, double value, int axis) {
+        try {
+            Sink current = sink;
+            if (current != null) {
+                return axis == 0 ? current.moveLegacyX(entity, value)
+                        : axis == 1 ? current.moveLegacyY(entity, value)
+                        : current.moveLegacyZ(entity, value);
+            }
+        } catch (Throwable t) {
+            failure("moveLegacyValue", t);
+        }
+        return value;
     }
 
     public static boolean attack(Object player, Object target) {

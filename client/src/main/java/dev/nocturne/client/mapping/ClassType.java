@@ -51,6 +51,12 @@ public enum ClassType {
     CLIENT_PACKET_LISTENER("net.minecraft.client.multiplayer.ClientPacketListener"),
     /** 客户端网络连接；发包与收包入口。 */
     CONNECTION("net.minecraft.network.Connection"),
+    /** 网络包接口；接收队列释放时调 handle(listener) 走原版处理入口。 */
+    PACKET("net.minecraft.network.protocol.Packet"),
+    /** 交互结果；consumesAction 统一判断放置/使用是否消费。 */
+    INTERACTION_RESULT("net.minecraft.world.InteractionResult"),
+    /** 队伍颜色；26.x 为带 rgb 字段的值类型。 */
+    TEAM_COLOR("net.minecraft.world.scores.TeamColor"),
     /** 键盘输入入口（{@code KeyboardHandler.keyPress}）。 */
     KEYBOARD_HANDLER("net.minecraft.client.KeyboardHandler"),
     /** 26.x 的键盘事件记录；key() 返回 SDL scancode。 */
@@ -158,6 +164,88 @@ public enum ClassType {
     CLIENT_CHUNK_STORAGE("net.minecraft.client.multiplayer.ClientChunkCache$Storage"),
     /** 区块（LevelChunk）；方块实体表挂在它上面。 */
     LEVEL_CHUNK("net.minecraft.world.level.chunk.LevelChunk"),
+    /** 客户端输入基类；26.x 持有可替换的按键记录与移动向量。 */
+    CLIENT_INPUT("net.minecraft.client.player.ClientInput"),
+    /** 旧版及 1.14–1.21 的输入基类；承载 forwardImpulse/leftImpulse 等字段。 */
+    INPUT("net.minecraft.client.player.Input"),
+    /** 每 tick 从物理键合成移动输入的入口。 */
+    KEYBOARD_INPUT("net.minecraft.client.player.KeyboardInput"),
+    /** 26.x 的不可变七键记录；事件层整体替换，不写 KeyMapping 持久状态。 */
+    PLAYER_INPUT("net.minecraft.world.entity.player.Input"),
+    /** 二维移动向量。 */
+    VEC2("net.minecraft.world.phys.Vec2"),
+    /** 准星命中基类；旧版 MovingObjectPosition 也携带命中类型。 */
+    HIT_RESULT("net.minecraft.world.phys.HitResult"),
+    /** 玩家队伍及队伍关系判定。 */
+    PLAYER_TEAM("net.minecraft.world.scores.PlayerTeam"),
+    /** 动物实体分类。 */
+    ANIMAL("net.minecraft.world.entity.animal.Animal"),
+    /** 环境生物分类（蝙蝠等）。 */
+    AMBIENT("net.minecraft.world.entity.ambient.AmbientCreature"),
+    /** 盔甲架；目标选择通常要显式排除。 */
+    ARMOR_STAND("net.minecraft.world.entity.decoration.ArmorStand"),
+    /** 末影水晶；CrystalAura 与命中特效的目标。 */
+    END_CRYSTAL("net.minecraft.world.entity.boss.enderdragon.EndCrystal"),
+    /** TNT 实体；TNTTimer 读取引信。 */
+    PRIMED_TNT("net.minecraft.world.entity.item.PrimedTnt"),
+    /** Tab 列表更新与移除包；LogoutSpots/PlayerAlarms 判型。 */
+    CLIENTBOUND_PLAYER_INFO_UPDATE("net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket"),
+    CLIENTBOUND_PLAYER_INFO_REMOVE("net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket"),
+    /** 计分板、目标与分数；血量/队伍显示读取。 */
+    SCOREBOARD("net.minecraft.world.scores.Scoreboard"),
+    OBJECTIVE("net.minecraft.world.scores.Objective"),
+    SCORE("net.minecraft.world.scores.Score"),
+    /** 方块碰撞体；isEmpty 用于放置空间和弹道近似。 */
+    VOXEL_SHAPE("net.minecraft.world.phys.shapes.VoxelShape"),
+    /** 世界射线上下文；高级搭路与伤害计算使用。 */
+    CLIP_CONTEXT("net.minecraft.world.level.ClipContext"),
+    /** 世界基类；碰撞与射线入口声明在这里。 */
+    LEVEL("net.minecraft.world.level.Level"),
+    /** 实体渲染调度器；实体渲染事件的映射宿主。 */
+    ENTITY_RENDER_DISPATCHER("net.minecraft.client.renderer.entity.EntityRenderDispatcher"),
+    /** 世界渲染入口；世界空间事件的映射宿主。 */
+    LEVEL_RENDERER("net.minecraft.client.renderer.LevelRenderer"),
+    /** 帧/ tick 插值计时器。 */
+    DELTA_TRACKER("net.minecraft.client.DeltaTracker"),
+    /** 游戏渲染器与相机宿主。 */
+    GAME_RENDERER("net.minecraft.client.renderer.GameRenderer"),
+    /** 容器菜单；背包动作需要 containerId 与物品列表。 */
+    ABSTRACT_CONTAINER_MENU("net.minecraft.world.inventory.AbstractContainerMenu"),
+    /** 现代容器点击类型；旧版使用整数 mode。 */
+    CONTAINER_INPUT("net.minecraft.world.inventory.ContainerInput"),
+    /** 1.12–1.21 的容器点击类型；26.x 改名 ContainerInput。 */
+    CLICK_TYPE("net.minecraft.world.inventory.ClickType"),
+    /** 玩家网络信息与游戏模式。 */
+    PLAYER_INFO("net.minecraft.client.multiplayer.PlayerInfo"),
+    /** 游戏模式枚举。 */
+    GAME_TYPE("net.minecraft.world.level.GameType"),
+    /** 按键映射；物理输入查询使用，不用于持久写入移动状态。 */
+    KEY_MAPPING("net.minecraft.client.KeyMapping"),
+    /** 键码与物理键查询。 */
+    INPUT_CONSTANTS("com.mojang.blaze3d.platform.InputConstants"),
+    /** 物品常量注册表。 */
+    ITEMS("net.minecraft.world.item.Items"),
+    /** 方块常量注册表。 */
+    BLOCKS("net.minecraft.world.level.block.Blocks"),
+    /** 木桶方块实体；1.14 前的版本显式 absent。 */
+    BARREL_BLOCK_ENTITY("net.minecraft.world.level.block.entity.BarrelBlockEntity"),
+    /** 位置包：只更新朝向。 */
+    SERVERBOUND_MOVE_ROT("net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Rot"),
+    /** 位置包：同时更新坐标与朝向。 */
+    SERVERBOUND_MOVE_POS_ROT("net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$PosRot"),
+    /** 位置包：只更新落地状态。 */
+    SERVERBOUND_MOVE_STATUS("net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly"),
+    /** 服务端热栏槽位切换包。 */
+    SERVERBOUND_SET_CARRIED_ITEM("net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket"),
+    /** 挥手包；类不存在的版本由动作层明确降级为普通挥手。 */
+    SERVERBOUND_SWING("net.minecraft.network.protocol.game.ServerboundSwingPacket"),
+    /** 26.3 的挥手包新名。 */
+    SERVERBOUND_PUNCH("net.minecraft.network.protocol.game.ServerboundPunchPacket"),
+    /** 关闭容器包。 */
+    SERVERBOUND_CONTAINER_CLOSE("net.minecraft.network.protocol.game.ServerboundContainerClosePacket"),
+    /** 玩家命令包及动作枚举；疾跑、潜行、鞘翅启动共用。 */
+    SERVERBOUND_PLAYER_COMMAND("net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket"),
+    PLAYER_COMMAND_ACTION("net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket$Action"),
     /**
      * 聊天组件：{@code Entity#getName} 之类的成员返回它而不是 {@code String}。
      *

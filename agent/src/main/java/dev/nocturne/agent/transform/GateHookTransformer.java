@@ -116,7 +116,8 @@ public final class GateHookTransformer implements ClassFileTransformer {
                                 // 末尾 void 钩子：带 StackMapTable 的 RETURN 常见 chop_frame，
                                 // 直接 aload 参数会 VerifyError；补帧又会触发 bad offset。
                                 // 保住方法头钩子，跳过这个末尾通知，绝不能把游戏类搞成校验失败。
-                                if ("V".equals(hookReturn) && sawFrame) {
+                                // 其它参数的槽位可能被 chop 成 TOP；this 的槽 0 始终有效，允许尾钩。
+                                if ("V".equals(hookReturn) && sawFrame && !passThis) {
                                     if (!tailSkipLogged) {
                                         tailSkipLogged = true;
                                         System.out.println("[nocturne] tail hook skipped (stack map): "

@@ -6,11 +6,17 @@ public final class PlayerTickEvent {
     private PlayerTickEvent() {
     }
 
-    /** 玩家 tick 方法体执行前。 */
-    public static final class Pre {
-        public static final Pre INSTANCE = new Pre();
+    /** 玩家 tick 方法体执行前；取消会跳过整个 LocalPlayer.tick，只供跳刻类功能使用。 */
+    public static final class Pre implements EventBus.Cancellable {
+        /** 为 true 时取消整个本地玩家 tick。 */
+        public boolean cancelled;
 
-        private Pre() {
+        public Pre() {
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return cancelled;
         }
     }
 

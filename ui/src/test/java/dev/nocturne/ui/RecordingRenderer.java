@@ -20,6 +20,8 @@ public final class RecordingRenderer implements Renderer {
     public final List<String> calls = new ArrayList<String>();
     /** 与 {@link #calls} 对齐的结构化记录，携带全部参数 */
     public final List<DrawCall> drawCalls = new ArrayList<DrawCall>();
+    /** 是否模拟后端原生线段能力。 */
+    public boolean lineResult;
 
     /** 一次绘制调用的结构化记录。 */
     public static final class DrawCall {
@@ -68,6 +70,7 @@ public final class RecordingRenderer implements Renderer {
         quadCalls = 0;
         quadTextures.clear();
         uploadedPixels.clear();
+        lineResult = false;
     }
 
     /**
@@ -151,6 +154,13 @@ public final class RecordingRenderer implements Renderer {
     public void outline(float x, float y, float width, float height, float lineWidth, Color color) {
         calls.add("outline");
         drawCalls.add(new DrawCall("outline", x, y, width, height, 0f, lineWidth, 0f, color, null));
+    }
+
+    @Override
+    public boolean line(float x1, float y1, float x2, float y2, float thickness, Color color) {
+        calls.add("line");
+        drawCalls.add(new DrawCall("line", x1, y1, 0f, 0f, 0f, thickness, 0f, color, null));
+        return lineResult;
     }
 
     /** 文本调用记录带上文本内容，其余绘制只记录类型，便于断言具体文案 */

@@ -32,12 +32,25 @@ public final class ActionBinder {
     private final Map<String, MethodBinding> bindings = new HashMap<String, MethodBinding>();
     private final Map<String, Boolean> available = new HashMap<String, Boolean>();
     private final Set<String> logged = new HashSet<String>();
+    private final Map<String, Object> clickModes = new HashMap<String, Object>();
     private String lastBindFailure;
     private Constructor<?> blockHitResultConstructor;
     private boolean blockHitResultHasInside;
     private Constructor<?> vec3Constructor;
     private Constructor<?> blockPosConstructor;
+    private Constructor<?> moveRotConstructor;
+    private Constructor<?> movePosRotConstructor;
+    private Constructor<?> moveStatusConstructor;
+    private Constructor<?> carriedItemConstructor;
+    private Constructor<?> swingConstructor;
+    private Constructor<?> punchConstructor;
+    private Constructor<?> playerCommandConstructor;
+    private boolean playerCommandHasData;
+    private final Map<String, Object> playerCommandActions = new HashMap<String, Object>();
+    private boolean swingPacketHasHand;
+    private boolean punchPacketHasHand;
     private Object mainHand;
+    private Object offHand;
 
     /** 用当前反射桥的映射与游戏类加载器装配动作。 */
     public static ActionBinder create(GameBridge bridge) {
@@ -82,6 +95,15 @@ public final class ActionBinder {
         return binding != null && binding.invoke(receiver, args);
     }
 
+    /** 调用需要真实返回值的语义动作（例如 raycast）；失败与未绑定统一返回 null。 */
+    Object result(String actionId, Object receiver, Object... args) {
+        if (!isAvailable(actionId) || receiver == null) {
+            return null;
+        }
+        MethodBinding binding = bindings.get(actionId);
+        return binding == null ? null : binding.result(receiver, args);
+    }
+
     /** 已绑定候选的语义实参顺序；旧契约未声明时为空。 */
     java.util.List<String> arguments(String actionId) {
         MethodBinding binding = bindings.get(actionId);
@@ -120,6 +142,11 @@ public final class ActionBinder {
 
     Object newVec3(double x, double y, double z) {
         if (vec3Constructor == null) {
+            Class<?> type = resolveClass(ClassType.VEC3);
+            vec3Constructor = type == null ? null
+                    : findConstructor(type, double.class, double.class, double.class);
+        }
+        if (vec3Constructor == null) {
             return null;
         }
         try {
@@ -147,6 +174,109 @@ public final class ActionBinder {
         return mainHand;
     }
 
+    Object hand(boolean offhand) {
+        return offhand ? offHand : mainHand;
+    }
+
+    /** 容器点击类型在现代是枚举，在 1.8.9 是 int mode。 */
+    Object clickMode(String mode) {
+        if (mode == null) {
+            return null;
+        }
+        String canonical = mode.trim().toUpperCase(java.util.Locale.ROOT);
+        String[] modes = {"PICKUP", "QUICK_MOVE", "SWAP", "CLONE", "THROW", "QUICK_CRAFT", "PICKUP_ALL"};
+        int legacy = -1;
+        for (int i = 0; i < modes.length; i++) {
+            if (modes[i].equals(canonical)) {
+                legacy = i;
+                break;
+            }
+        }
+        if (legacy < 0) {
+            return null;
+        }
+        Object cached = clickModes.get(canonical);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            Object modern = resolveStaticField(ClassType.CONTAINER_INPUT, canonical);
+            if (modern == null) {
+                modern = resolveStaticField(ClassType.CLICK_TYPE, canonical);
+            }
+            Object resolved = modern == null ? Integer.valueOf(legacy) : modern;
+            clickModes.put(canonical, resolved);
+            return resolved;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    Object newMoveRot(float yaw, float pitch, boolean ground) {
+        return moveRotConstructor == null ? null : instantiate(moveRotConstructor,
+                moveRotConstructor.getParameterCount() == 4
+                        ? new Object[]{yaw, pitch, ground, false}
+                        : new Object[]{yaw, pitch, ground});
+    }
+
+    Object newMovePosRot(double x, double y, double z, float yaw, float pitch, boolean ground) {
+        return movePosRotConstructor == null ? null : instantiate(movePosRotConstructor,
+                movePosRotConstructor.getParameterCount() == 7
+                        ? new Object[]{x, y, z, yaw, pitch, ground, false}
+                        : new Object[]{x, y, z, yaw, pitch, ground});
+    }
+
+    Object newMoveStatus(boolean ground) {
+        return moveStatusConstructor == null ? null : instantiate(moveStatusConstructor,
+                moveStatusConstructor.getParameterCount() == 2
+                        ? new Object[]{ground, false} : new Object[]{ground});
+    }
+
+    Object newCarriedItem(int slot) {
+        return carriedItemConstructor == null ? null
+                : instantiate(carriedItemConstructor, new Object[]{slot});
+    }
+
+    Object newPlayerCommand(Object player, String action) {
+        if (playerCommandConstructor == null || player == null || action == null) {
+            return null;
+        }
+        String canonical = action.trim().toUpperCase(java.util.Locale.ROOT);
+        Object commandAction = playerCommandActions.get(canonical);
+        if (commandAction == null) {
+            try {
+                commandAction = resolveStaticField(ClassType.PLAYER_COMMAND_ACTION, canonical);
+            } catch (Throwable t) {
+                return null;
+            }
+            if (commandAction == null) {
+                return null;
+            }
+            playerCommandActions.put(canonical, commandAction);
+        }
+        return instantiate(playerCommandConstructor, playerCommandHasData
+                ? new Object[]{player, commandAction, 0} : new Object[]{player, commandAction});
+    }
+
+    Object newSwing(boolean offhand) {
+        Constructor<?> constructor = swingConstructor == null ? punchConstructor : swingConstructor;
+        if (constructor == null) {
+            return null;
+        }
+        boolean hasHand = swingConstructor == null ? punchPacketHasHand : swingPacketHasHand;
+        Object hand = hand(offhand);
+        return hasHand && hand == null ? null
+                : instantiate(constructor, hasHand ? new Object[]{hand} : new Object[0]);
+    }
+
+    private static Object instantiate(Constructor<?> constructor, Object[] arguments) {
+        try {
+            return constructor.newInstance(arguments);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     void bind() {
         for (ActionSpec action : contract.actions()) {
             try {
@@ -163,8 +293,50 @@ public final class ActionBinder {
             available.put(action.id(), true);
             return;
         }
-        if ("rotation".equals(operation)) {
+        if ("rotation".equals(operation) || "motion".equals(operation)
+                || "jumping".equals(operation) || "slot".equals(operation)) {
             available.put(action.id(), true);
+            return;
+        }
+        if ("moveRotFactory".equals(operation)) {
+            bindMovePackets();
+            requireFactory(action.id(), moveRotConstructor, "rotation packet constructor unavailable");
+            return;
+        }
+        if ("movePosRotFactory".equals(operation)) {
+            bindMovePackets();
+            requireFactory(action.id(), movePosRotConstructor, "position rotation packet constructor unavailable");
+            return;
+        }
+        if ("moveStatusFactory".equals(operation)) {
+            bindMovePackets();
+            requireFactory(action.id(), moveStatusConstructor, "status packet constructor unavailable");
+            return;
+        }
+        if ("carriedItemFactory".equals(operation)) {
+            Class<?> type = resolveClass(ClassType.SERVERBOUND_SET_CARRIED_ITEM);
+            carriedItemConstructor = type == null ? null : findConstructor(type, int.class);
+            requireFactory(action.id(), carriedItemConstructor, "carried item packet constructor unavailable");
+            return;
+        }
+        if ("swingFactory".equals(operation)) {
+            bindSwingPackets();
+            requireFactory(action.id(), swingConstructor == null ? punchConstructor : swingConstructor,
+                    "swing packet constructor unavailable");
+            return;
+        }
+        if ("playerCommandFactory".equals(operation)) {
+            Class<?> packet = resolveClass(ClassType.SERVERBOUND_PLAYER_COMMAND);
+            Class<?> entity = resolveClass(ClassType.ENTITY);
+            Class<?> command = resolveClass(ClassType.PLAYER_COMMAND_ACTION);
+            if (packet != null && entity != null && command != null) {
+                playerCommandConstructor = findConstructor(packet, entity, command);
+                if (playerCommandConstructor == null) {
+                    playerCommandConstructor = findConstructor(packet, entity, command, int.class);
+                    playerCommandHasData = playerCommandConstructor != null;
+                }
+            }
+            requireFactory(action.id(), playerCommandConstructor, "player command constructor unavailable");
             return;
         }
         if ("place".equals(operation)) {
@@ -190,12 +362,14 @@ public final class ActionBinder {
                 return;
             }
         }
-        if ("place".equals(operation) || "useItem".equals(operation)) {
-            // 旧版没有 InteractionHand：现代候选才需要 MAIN_HAND，缺它只淘汰带 hand 的候选。
+        if ("place".equals(operation) || "useItem".equals(operation) || "swing".equals(operation)) {
+            // 旧版没有 InteractionHand：现代候选才需要手，缺它只淘汰带 hand 的候选。
             try {
                 mainHand = resolveStaticField(ClassType.INTERACTION_HAND, "MAIN_HAND");
+                offHand = resolveStaticField(ClassType.INTERACTION_HAND, "OFF_HAND");
             } catch (Throwable ignored) {
                 mainHand = null;
+                offHand = null;
             }
         }
         lastBindFailure = null;
@@ -209,6 +383,66 @@ public final class ActionBinder {
         }
         disable(action.id(), "no candidate matched"
                 + (lastBindFailure == null ? "" : ": " + lastBindFailure));
+    }
+
+    private void requireFactory(String actionId, Constructor<?> constructor, String reason) {
+        if (constructor == null) {
+            disable(actionId, reason);
+        } else {
+            available.put(actionId, true);
+        }
+    }
+
+    private void bindMovePackets() {
+        if (moveRotConstructor != null || movePosRotConstructor != null || moveStatusConstructor != null) {
+            return;
+        }
+        Class<?> rot = resolveClass(ClassType.SERVERBOUND_MOVE_ROT);
+        if (rot != null) {
+            moveRotConstructor = findConstructor(rot, float.class, float.class, boolean.class);
+            if (moveRotConstructor == null) {
+                moveRotConstructor = findConstructor(rot, float.class, float.class,
+                        boolean.class, boolean.class);
+            }
+        }
+        Class<?> posRot = resolveClass(ClassType.SERVERBOUND_MOVE_POS_ROT);
+        if (posRot != null) {
+            movePosRotConstructor = findConstructor(posRot, double.class, double.class, double.class,
+                    float.class, float.class, boolean.class);
+            if (movePosRotConstructor == null) {
+                movePosRotConstructor = findConstructor(posRot, double.class, double.class, double.class,
+                        float.class, float.class, boolean.class, boolean.class);
+            }
+        }
+        Class<?> status = resolveClass(ClassType.SERVERBOUND_MOVE_STATUS);
+        if (status != null) {
+            moveStatusConstructor = findConstructor(status, boolean.class);
+            if (moveStatusConstructor == null) {
+                moveStatusConstructor = findConstructor(status, boolean.class, boolean.class);
+            }
+        }
+    }
+
+    private void bindSwingPackets() {
+        Class<?> handType = resolveClass(ClassType.INTERACTION_HAND);
+        Class<?> swing = resolveClass(ClassType.SERVERBOUND_SWING);
+        if (swing != null) {
+            swingConstructor = handType == null ? null : findConstructor(swing, handType);
+            swingPacketHasHand = swingConstructor != null;
+            if (swingConstructor == null) {
+                swingConstructor = findConstructor(swing);
+                swingPacketHasHand = false;
+            }
+        }
+        Class<?> punch = resolveClass(ClassType.SERVERBOUND_PUNCH);
+        if (punch != null) {
+            punchConstructor = handType == null ? null : findConstructor(punch, handType);
+            punchPacketHasHand = punchConstructor != null;
+            if (punchConstructor == null) {
+                punchConstructor = findConstructor(punch);
+                punchPacketHasHand = false;
+            }
+        }
     }
 
     private MethodBinding bindCandidate(String actionId, CandidateSpec candidate) {
@@ -373,6 +607,17 @@ public final class ActionBinder {
                         && t.getCause() != null ? t.getCause() : t;
                 disable(actionId, "invocation failed: " + cause);
                 return false;
+            }
+        }
+
+        private Object result(Object receiver, Object... args) {
+            try {
+                return method.invoke(receiver, args);
+            } catch (Throwable t) {
+                Throwable cause = t instanceof java.lang.reflect.InvocationTargetException
+                        && t.getCause() != null ? t.getCause() : t;
+                disable(actionId, "invocation failed: " + cause);
+                return null;
             }
         }
     }

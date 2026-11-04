@@ -28,6 +28,23 @@
 | `dist/` | 把上述模块合并成单个多入口 `nocturne-*.jar` |
 | `launcher/` | 独立 WPF(.NET 8) 启动器壳：只把 jar 当子进程驱动；不含业务逻辑，不在 Gradle 构建里 |
 
+## 移植兼容层
+
+模块只依赖公共契约，不直接写版本名或反射细节：
+
+- `ActionApi`：攻击/点击、精确放置、主副手使用、换槽、容器、聊天、射线、移动与玩家状态；
+  实现由 `contract/actions.yaml` 和每版本映射绑定，不可用的单项动作明确降级。
+- `GameBridge`：实体、物品、背包、队伍颜色、碰撞箱、方块与世界访问；旧版字段语义（如
+  `ItemStack.stackSize`、TNT `fuse`、实体 `width/height`）在桥内统一。
+- 事件与包控制：tick、motion、move、移动输入、attack/use、packet、render、screen、entity/block；
+  `PacketController` 提供可跨连接清理的双向 FIFO hold/release。
+- `OverlayDraw` / `Renderer`：矩形、线、纹理、裁剪与世界投影共用一套绘制入口；ESP、NameTags、
+  ItemEsp、Trajectories、StorageEsp、Search 已使用该路径。
+
+这些是可复用依赖，不包含 Epsilon/OpenVape 的模块实现。66 个 release 的映射由
+`python tools/mapping/generate.py` 生成并受 `--check` 门禁约束；没有对应原版语义的成员保留
+`absent`，调用方不得把缺项当作成功。
+
 ## 绘制后端
 
 | 后端 | 适用 | 绘制方式 |

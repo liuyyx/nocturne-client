@@ -331,9 +331,11 @@ public final class StorageEspModule extends Module implements WorldOverlay {
         if (width < 1f || height < 1f) {
             return false;
         }
-        int argb = colorOf(kind);
-        draw.rect(left, top, width, height, argb);
-        draw.outline(left, top, width, height, BOX_THICKNESS, argb);
+        // 只画描边：填充色即使只有 39% alpha，相邻容器一重叠也会糊成一整片实心色块
+        // （真机截图：一面箱子墙变成一大坨绿）。配置里的颜色取 RGB，alpha 强制不透明，
+        // 保证描边在任何地形上都清晰。
+        int line = (colorOf(kind) & 0x00FFFFFF) | 0xFF000000;
+        draw.outline(left, top, width, height, BOX_THICKNESS, line);
         return true;
     }
 

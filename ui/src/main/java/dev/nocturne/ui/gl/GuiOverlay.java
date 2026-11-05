@@ -36,7 +36,8 @@ import java.awt.event.KeyEvent;
  *   <li><b>绘制时机</b>：必须在帧交换点之内完成绘制，否则画面会被游戏后续的绘制覆盖。</li>
  * </ul>
  */
-public final class GuiOverlay implements FrameListener {
+public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.HudSink,
+        dev.nocturne.client.render.RenderCapabilities {
 
     /** 右 Shift 的规范键码（AWT 数值区之外的哨兵，与 {@code KeyMap.VK_RIGHT_SHIFT} 一致）。 */
     public static final int KEY_RIGHT_SHIFT = 0x1F01;
@@ -104,6 +105,11 @@ public final class GuiOverlay implements FrameListener {
 
     /** 世界覆盖层绘制面：把当前后端包成 client 侧接口（模块只认它）。 */
     private final BackendOverlayDraw overlayDraw;
+    private final FrameEffects frameEffects = new FrameEffects();
+    /** 已注册 HUD 文本行；LinkedHashMap 保证模块注册顺序就是屏幕顺序。 */
+    private final java.util.Map<String, java.util.function.Supplier<String>> hudLines =
+            new java.util.LinkedHashMap<String, java.util.function.Supplier<String>>();
+    private int configuredScale;
     /** 相机状态读取器；每帧刷新它持有的投影。 */
     private final CameraState camera;
     /** 世界覆盖层异常是否已记录过（限流，避免每帧刷屏）。 */
@@ -151,6 +157,93 @@ public final class GuiOverlay implements FrameListener {
         this.toggleKey = toggleKey;
         this.overlayDraw = new BackendOverlayDraw(renderer);
         this.camera = new CameraState(new WorldProjection());
+        NocturneClient client = NocturneClient.get();
+        if (client != null) {
+            client.setHudSink(this);
+            client.setRenderCapabilities(this);
+        }
+    }
+
+    @Override
+    public void depthTest(boolean enabled) {
+        if (renderer instanceof GlRenderer) {
+            if (enabled) ((GlRenderer) renderer).gl().enable(0x0B71);
+            else ((GlRenderer) renderer).gl().disable(0x0B71);
+        } else if (renderer instanceof ModernRenderer) {
+            if (enabled) ((ModernRenderer) renderer).gl().enableCap(0x0B71);
+            else ((ModernRenderer) renderer).gl().disableCap(0x0B71);
+        }
+    }
+
+    @Override
+    public void texture2d(boolean enabled) {
+        if (renderer instanceof GlRenderer) {
+            if (enabled) ((GlRenderer) renderer).gl().enable(0x0DE1);
+            else ((GlRenderer) renderer).gl().disable(0x0DE1);
+        }
+    }
+
+    @Override
+    public void color(int argb) {
+        if (renderer instanceof GlRenderer) {
+            ((GlRenderer) renderer).gl().color(((argb >>> 16) & 255) / 255.0f,
+                    ((argb >>> 8) & 255) / 255.0f, (argb & 255) / 255.0f,
+                    ((argb >>> 24) & 255) / 255.0f);
+        }
+    }
+
+    @Override
+    public void polygonOffset(boolean enabled) {
+        if (renderer instanceof GlRenderer) {
+            GlApi gl = ((GlRenderer) renderer).gl();
+            if (enabled) {
+                gl.enable(32823);
+                gl.polygonOffset(1.0f, -2500000.0f);
+            } else {
+                gl.polygonOffset(1.0f, 2500000.0f);
+                gl.disable(32823);
+            }
+        }
+    }
+
+    @Override
+    public int[] frameSize() {
+        if (renderer instanceof GlRenderer) {
+            return ((GlRenderer) renderer).gl().viewport();
+        }
+        if (renderer instanceof ModernRenderer) {
+            return ((ModernRenderer) renderer).physicalSize();
+        }
+        return null;
+    }
+
+    @Override
+    public boolean readPixels(int width, int height, int[] out) {
+        if (renderer instanceof GlRenderer) {
+            return ((GlRenderer) renderer).gl().readPixels(width, height, out);
+        }
+        if (renderer instanceof ModernRenderer) {
+            return ((ModernRenderer) renderer).gl().readPixels(width, height, out);
+        }
+        return false;
+    }
+
+    /** 注册或替换一行实时 HUD 文本。 */
+    @Override
+    public void add(String id, java.util.function.Supplier<String> text) {
+        hudLines.put(id, text);
+    }
+
+    /** 移除一行 HUD 文本。 */
+    @Override
+    public void remove(String id) {
+        hudLines.remove(id);
+    }
+
+    /** @return 指定 HUD 行是否已注册。 */
+    @Override
+    public boolean has(String id) {
+        return hudLines.containsKey(id);
     }
 
     /** @return 被叠加的 GUI，供外部（如验收脚本）直接操作 */
@@ -721,8 +814,13 @@ public final class GuiOverlay implements FrameListener {
         // 世界覆盖层（ESP/Tracers/NameTags/StorageESP…）与界面无关，必须单独计入：
         // 界面关着时本方法此前直接 return，于是 beginFrame() 根本不执行、覆盖层一帧都不画——
         // 世界里什么都看不到，日志里也没有半句线索。
-        if (!guiOpen && !hasWorldOverlays()) {
+        if (!guiOpen && !hasWorldOverlays() && hudLines.isEmpty()) {
             return;
+        }
+        Integer wantedScale = Integer.getInteger("nocturne.ui.scale", 0);
+        if (wantedScale != null && wantedScale != configuredScale) {
+            renderer.setScaleOverride(wantedScale);
+            configuredScale = wantedScale;
         }
         renderer.beginFrame();
         try {
@@ -736,8 +834,10 @@ public final class GuiOverlay implements FrameListener {
             gui.setViewport(renderer.width(), renderer.height());
             // 世界覆盖物画在最底下：GUI 菜单要盖住它们，否则 ESP 的框会糊在面板上。
             long overlayStart = System.nanoTime();
+            frameEffects.render(overlayDraw, NocturneClient.get());
             drawWorldOverlays();
             lastOverlayNanos = System.nanoTime() - overlayStart;
+            drawHudLines();
             if (guiOpen) {
                 gui.render(renderer);
             }
@@ -772,6 +872,47 @@ public final class GuiOverlay implements FrameListener {
         }
     }
 
+
+    /** 在屏幕左上角按注册顺序绘制 HUD 行；单行异常不影响其它行或界面。 */
+    private void drawHudLines() {
+        if (hudLines.isEmpty()) {
+            return;
+        }
+        float y = 4f;
+        for (java.util.Map.Entry<String, java.util.function.Supplier<String>> entry
+                : new java.util.ArrayList<java.util.Map.Entry<String, java.util.function.Supplier<String>>>(
+                        hudLines.entrySet())) {
+            String text;
+            try {
+                text = entry.getValue().get();
+            } catch (Throwable t) {
+                continue;
+            }
+            if (text == null || text.isEmpty()) {
+                continue;
+            }
+            dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule textGui =
+                    "active-modules".equals(entry.getKey())
+                    ? dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule.current() : null;
+            float size = textGui == null ? 10f : textGui.fontScale();
+            float height = overlayDraw.textHeight(size);
+            int color = textGui == null ? 0xFFFFFFFF : textGui.color();
+            for (String line : text.split("\\n")) {
+                if (line.isEmpty()) {
+                    continue;
+                }
+                float width = overlayDraw.textWidth(line, size);
+                if (textGui == null || textGui.background()) {
+                    overlayDraw.roundedRect(3f, y - 1f, width + 6f, height + 3f, 2f, 0x90000000);
+                }
+                if (textGui != null && textGui.shadow()) {
+                    overlayDraw.text(line, 7f, y + 2f, size, 0x80000000);
+                }
+                overlayDraw.text(line, 6f, y + 1f, size, color);
+                y += height + 5f;
+            }
+        }
+    }
 
     /**
      * 是否存在启用中的世界覆盖层模块。

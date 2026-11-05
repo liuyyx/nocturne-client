@@ -70,6 +70,23 @@ class GuiOverlayInputTest {
     }
 
     @Test
+    void hudLinesDrawWhileClickGuiIsClosed() {
+        FakeBackend backend = new FakeBackend(320, 240);
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                backend, new FakeInput(), GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.add("test", () -> "FPS 60");
+
+        overlay.onFrame();
+
+        assertEquals(1, backend.beginCalls);
+        assertEquals(1, backend.endCalls);
+        assertEquals(1, backend.renderer.count("text:FPS 60"));
+        overlay.remove("test");
+        overlay.onFrame();
+        assertEquals(1, backend.beginCalls, "空 HUD 不应再开启多余绘制帧");
+    }
+
+    @Test
     void nativeScreenClickIsSuppressedUntilRelease() throws Exception {
         FakeInput input = new FakeInput();
         GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),

@@ -92,6 +92,7 @@ version = "1.8.9"
 # 1.8.9 has no separate "status only" class: the abstract C03PacketPlayer itself
 # carries only the on-ground flag, which is what StatusOnly adds in 1.21.
 "net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$StatusOnly" = "net/minecraft/network/play/client/C03PacketPlayer"
+"net/minecraft/network/protocol/game/ServerboundPlayerActionPacket" = "net/minecraft/network/play/client/C07PacketPlayerDigging"
 "net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket" = "net/minecraft/network/play/server/S12PacketEntityVelocity"
 "net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket" = "net/minecraft/network/play/server/S38PacketPlayerListItem"
 "net/minecraft/world/phys/AABB" = "net/minecraft/util/AxisAlignedBB"
@@ -101,6 +102,15 @@ version = "1.8.9"
 "net/minecraft/world/phys/HitResult" = "net/minecraft/util/MovingObjectPosition"
 "net/minecraft/world/scores/PlayerTeam" = "net/minecraft/scoreboard/Team"
 "net/minecraft/world/scores/TeamColor" = "net/minecraft/util/EnumChatFormatting"
+"net/minecraft/world/level/storage/LevelData" = "net/minecraft/world/storage/WorldInfo"
+"net/minecraft/world/entity/projectile/AbstractFireball" = "net/minecraft/entity/projectile/EntityFireball"
+"net/minecraft/world/entity/projectile/Snowball" = "net/minecraft/entity/projectile/EntitySnowball"
+"net/minecraft/world/entity/projectile/Egg" = "net/minecraft/entity/projectile/EntityEgg"
+"net/minecraft/world/entity/projectile/ThrownPotion" = "net/minecraft/entity/projectile/EntityPotion"
+"net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket" = "net/minecraft/network/play/server/S23PacketBlockChange"
+"net/minecraft/world/entity/projectile/ThrownEnderpearl" = "net/minecraft/entity/item/EntityEnderPearl"
+"net/minecraft/world/entity/projectile/FishingHook" = "net/minecraft/entity/projectile/EntityFishHook"
+"net/minecraft/world/entity/projectile/AbstractArrow" = "net/minecraft/entity/projectile/EntityArrow"
 "net/minecraft/world/entity/animal/Animal" = "net/minecraft/entity/passive/EntityAnimal"
 "net/minecraft/world/entity/ambient/AmbientCreature" = "net/minecraft/entity/passive/EntityAmbientCreature"
 "net/minecraft/world/entity/decoration/ArmorStand" = "net/minecraft/entity/item/EntityArmorStand"
@@ -109,6 +119,8 @@ version = "1.8.9"
 "net/minecraft/world/scores/Scoreboard" = "net/minecraft/scoreboard/Scoreboard"
 "net/minecraft/world/scores/Objective" = "net/minecraft/scoreboard/ScoreObjective"
 "net/minecraft/world/scores/Score" = "net/minecraft/scoreboard/Score"
+"net/minecraft/client/DeltaTracker" = "net/minecraft/util/Timer"
+"net/minecraft/client/renderer/block/BlockRenderDispatcher" = "net/minecraft/client/renderer/BlockRendererDispatcher"
 "net/minecraft/client/renderer/entity/EntityRenderDispatcher" = "net/minecraft/client/renderer/entity/RenderManager"
 "net/minecraft/client/renderer/LevelRenderer" = "net/minecraft/client/renderer/RenderGlobal"
 "net/minecraft/client/KeyMapping" = "net/minecraft/client/settings/KeyBinding"
@@ -660,11 +672,32 @@ note = "1.8.9 Potion.nightVision 静态字段；Mojmap MobEffects.NIGHT_VISION"
 # (or not at all) per class.
 # --------------------------------------------------------------------------
 
+[overrides."net/minecraft/client/multiplayer/ClientLevel"]
+rainLevel = { mcp = "rainingStrength", scope = "net/minecraft/world/World" }
+thunderLevel = { mcp = "thunderingStrength", scope = "net/minecraft/world/World" }
+setRainLevel = { mcp = "setRainStrength", scope = "net/minecraft/world/World" }
+setThunderLevel = { mcp = "setThunderStrength", scope = "net/minecraft/world/World" }
+levelData = { mcp = "worldInfo", scope = "net/minecraft/world/World" }
+getScoreboard = { mcp = "getScoreboard", scope = "net/minecraft/world/World" }
+
+[overrides."net/minecraft/world/level/storage/LevelData"]
+setDayTime = { mcp = "setWorldTime", scope = "net/minecraft/world/storage/WorldInfo" }
+
 [overrides."net/minecraft/client/Minecraft"]
+missTime = { mcp = "leftClickCounter", scope = "net/minecraft/client/Minecraft" }
 gameMode = { mcp = "playerController", scope = "net/minecraft/client/Minecraft" }
 startAttack = { mcp = "clickMouse", scope = "net/minecraft/client/Minecraft" }
 startUseItem = { mcp = "rightClickMouse", scope = "net/minecraft/client/Minecraft" }
+levelRenderer = { mcp = "renderGlobal", scope = "net/minecraft/client/Minecraft" }
+
+deltaTracker = { mcp = "timer", scope = "net/minecraft/client/Minecraft" }
+
+[overrides."net/minecraft/client/Options"]
+thirdPersonView = { mcp = "thirdPersonView", scope = "net/minecraft/client/settings/GameSettings" }
 getWindow = { unsupported = "1.8.9 Minecraft 没有 getWindow()（窗口是 LWJGL Display）" }
+
+[overrides."net/minecraft/client/DeltaTracker"]
+timerSpeed = { mcp = "timerSpeed", scope = "net/minecraft/util/Timer" }
 
 [overrides."net/minecraft/client/multiplayer/PlayerInfo"]
 gameMode = { mcp = "gameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
@@ -685,6 +718,7 @@ getAttackStrengthScale = { mcp = "getCooledAttackStrength", scope = "net/minecra
 isSpectator = { mcp = "isSpectator", scope = "net/minecraft/entity/player/EntityPlayer" }
 getTeam = { mcp = "getTeam", scope = "net/minecraft/entity/player/EntityPlayer" }
 isAlliedTo = { mcp = "isOnSameTeam", scope = "net/minecraft/entity/player/EntityPlayer" }
+fishing = { mcp = "fishHook", scope = "net/minecraft/entity/player/EntityPlayer" }
 getAbilities = { unsupported = "1.8.9 是 public PlayerCapabilities capabilities 字段" }
 
 [overrides."net/minecraft/world/item/ItemStack"]
@@ -693,6 +727,12 @@ isEmpty = { unsupported = "1.8.9 没有 isEmpty()：判断 stackSize == 0 / getI
 count = { mcp = "stackSize", scope = "net/minecraft/item/ItemStack" }
 getMaxStackSize = { mcp = "getMaxStackSize", scope = "net/minecraft/item/ItemStack" }
 getUseDuration = { mcp = "getMaxItemUseDuration", scope = "net/minecraft/item/ItemStack" }
+getDamageValue = { mcp = "getItemDamage", scope = "net/minecraft/item/ItemStack" }
+getMaxDamage = { mcp = "getMaxDamage", scope = "net/minecraft/item/ItemStack" }
+getDisplayName = { mcp = "getDisplayName", scope = "net/minecraft/item/ItemStack" }
+
+[overrides."net/minecraft/world/inventory/AbstractContainerMenu"]
+items = { mcp = "inventoryItemStacks", scope = "net/minecraft/inventory/Container" }
 
 [overrides."net/minecraft/client/multiplayer/MultiPlayerGameMode"]
 windowClick = { mcp = "windowClick", scope = "net/minecraft/client/multiplayer/PlayerControllerMP" }
@@ -703,6 +743,9 @@ destroyDelay = { mcp = "blockHitDelay", scope = "net/minecraft/client/multiplaye
 isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer，JNI 从 EntityLivingBase 查不到" }
 hasLineOfSight = { mcp = "canEntityBeSeen", scope = "net/minecraft/entity/EntityLivingBase" }
 getAbsorptionAmount = { mcp = "getAbsorptionAmount", scope = "net/minecraft/entity/EntityLivingBase" }
+hurtTime = { mcp = "hurtTime", scope = "net/minecraft/entity/EntityLivingBase" }
+jumpTicks = { mcp = "jumpTicks", scope = "net/minecraft/entity/EntityLivingBase" }
+getActiveEffects = { mcp = "getActivePotionEffects", scope = "net/minecraft/entity/EntityLivingBase" }
 
 [overrides."net/minecraft/world/entity/Mob"]
 isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer，JNI 从 EntityMob 查不到" }
@@ -755,6 +798,62 @@ move = { mcp = "moveEntity", scope = "net/minecraft/entity/Entity" }
 width = { mcp = "width", scope = "net/minecraft/entity/Entity" }
 height = { mcp = "height", scope = "net/minecraft/entity/Entity" }
 isSpectator = { unsupported = "1.8.9 isSpectator 声明在 EntityPlayer，不在 Entity" }
+isInWater = { mcp = "isInWater", scope = "net/minecraft/entity/Entity" }
+bb = { mcp = "boundingBox", scope = "net/minecraft/entity/Entity" }
+
+[overrides."net/minecraft/network/protocol/game/ServerboundPlayerActionPacket"]
+getAction = { mcp = "getAction", scope = "net/minecraft/network/play/client/C07PacketPlayerDigging" }
+
+[overrides."net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket"]
+getId = { mcp = "getEntityID", scope = "net/minecraft/network/play/server/S12PacketEntityVelocity" }
+getXa = { mcp = "getMotionX", scope = "net/minecraft/network/play/server/S12PacketEntityVelocity" }
+getYa = { mcp = "getMotionY", scope = "net/minecraft/network/play/server/S12PacketEntityVelocity" }
+getZa = { mcp = "getMotionZ", scope = "net/minecraft/network/play/server/S12PacketEntityVelocity" }
+id = { mcp = "entityID", scope = "net/minecraft/network/play/server/S12PacketEntityVelocity" }
+xa = { mcp = "motionX", scope = "net/minecraft/network/play/server/S12PacketEntityVelocity" }
+ya = { mcp = "motionY", scope = "net/minecraft/network/play/server/S12PacketEntityVelocity" }
+za = { mcp = "motionZ", scope = "net/minecraft/network/play/server/S12PacketEntityVelocity" }
+
+[overrides."net/minecraft/world/item/Item"]
+getDescriptionId = { mcp = "getUnlocalizedName", scope = "net/minecraft/item/Item" }
+
+[overrides."net/minecraft/world/entity/projectile/FishingHook"]
+caughtEntity = { mcp = "caughtEntity", scope = "net/minecraft/entity/projectile/EntityFishHook" }
+
+[overrides."net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket"]
+getPos = { mcp = "getBlockPosition", scope = "net/minecraft/network/play/server/S23PacketBlockChange" }
+
+[overrides."net/minecraft/world/effect/MobEffects"]
+NAUSEA = { mcp = "nausea", scope = "net/minecraft/potion/Potion" }
+BLINDNESS = { mcp = "blindness", scope = "net/minecraft/potion/Potion" }
+SLOWNESS = { mcp = "moveSlowdown", scope = "net/minecraft/potion/Potion" }
+
+[overrides."net/minecraft/world/effect/MobEffect"]
+id = { mcp = "id", scope = "net/minecraft/potion/Potion" }
+
+[overrides."net/minecraft/client/renderer/block/BlockRenderDispatcher"]
+renderBatched = { mcp = "renderBlock", scope = "net/minecraft/client/renderer/BlockRendererDispatcher" }
+
+[overrides."net/minecraft/client/renderer/LevelRenderer"]
+allChanged = { mcp = "loadRenderers", scope = "net/minecraft/client/renderer/RenderGlobal" }
+
+[overrides."net/minecraft/client/renderer/entity/EntityRenderDispatcher"]
+render = { mcp = "renderEntityStatic", scope = "net/minecraft/client/renderer/entity/RenderManager" }
+
+[overrides."net/minecraft/client/renderer/GameRenderer"]
+hurtCamera = { mcp = "hurtCameraEffect", scope = "net/minecraft/client/renderer/EntityRenderer" }
+setupFog = { mcp = "setupFog", scope = "net/minecraft/client/renderer/EntityRenderer" }
+
+[overrides."net/minecraft/world/scores/Scoreboard"]
+getDisplayObjective = { mcp = "getObjectiveInDisplaySlot", scope = "net/minecraft/scoreboard/Scoreboard" }
+getPlayerScores = { mcp = "getScores", scope = "net/minecraft/scoreboard/Scoreboard" }
+
+[overrides."net/minecraft/world/scores/Objective"]
+getDisplayName = { mcp = "getDisplayName", scope = "net/minecraft/scoreboard/ScoreObjective" }
+
+[overrides."net/minecraft/world/scores/Score"]
+getOwner = { mcp = "getPlayerName", scope = "net/minecraft/scoreboard/Score" }
+getScore = { mcp = "getScorePoints", scope = "net/minecraft/scoreboard/Score" }
 
 [overrides."net/minecraft/world/entity/item/ItemEntity"]
 getItem = { mcp = "getEntityItem", scope = "net/minecraft/entity/item/EntityItem" }

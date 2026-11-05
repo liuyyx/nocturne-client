@@ -17,6 +17,24 @@
 - `python tools/mapping/generate.py --javap` 对 66/66 个真实 client jar 的全部已解析 vanilla 成员
   校验通过。此处不声明 66 个版本均完成真机运行验收。
 
+## OpenVape 全量模块移植验收
+
+- 2026-11-05：按 `ModManager` 权威注册表覆盖 **108 个去重顶层模块**，另保留 Watermark/AutoRespawn，
+  总计 110 个注册模块。分类数量为 COMBAT 23 / MOVEMENT 9 / RENDER 38 / WORLD 11 /
+  INVENTORY 11 / PLAYER 11 / MISC 7。重复注册的 BedPlates/NoItemRelease/Timer 只保留一个实例。
+- `OpenVapeModuleRegistryTest` 验证全部模块构造、分类数量与无游戏环境启停；不可逆 Panic 单独排除。
+  完整 `build test` 通过，457 个测试零失败。
+- 所有转换器按钩子类与方法做精确幂等检查；attackPost 在头部捕获 Player/Entity、所有 RETURN
+  消费捕获，取消攻击不产生 post。真实 ASM 样本覆盖 StackMapTable、pre/post 链和重复 retransform。
+- Chams 接 `EntityRenderDispatcher` 首参回调；Xray 接 `BlockRenderDispatcher` 的
+  `BlockState + BlockPos` 双参门控并支持真实 Cave Mode；Timer 同时覆盖旧版 `timerSpeed` 与现代
+  `getGameTimeDeltaTicks` 返回缩放。新增转换器均通过 JVM verifier 行为测试。
+- `GuiOverlay` 已提供真实文本/多行 HUD、ActiveModules、后端渲染状态与帧缓冲读取；
+  InventoryBlur 使用 4× 降采样，MotionBlur 使用可配权重的历史帧混合。
+- 映射要求扩展至 137 个规范类；`python tools/mapping/generate.py --javap` 对 66/66 个真实 client jar
+  的全部已解析 vanilla 成员校验通过。复杂商业 AI、完整轨迹预测与伤害模型按 Nocturne 的公共动作/目标/
+  放置/渲染接口重写核心行为，不复制 OpenVape 实现文本，也不把该结论外推为全部版本真机通过。
+
 ## 模块框架扩展验收
 
 - 基线有 14 个模块类、13 个已注册模块；`XrayModule` 仍未注册，没有因分包而启用未接通的渲染功能。

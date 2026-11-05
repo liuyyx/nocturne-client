@@ -112,6 +112,34 @@ class GameplayEventsTest {
         assertSame(PlayerTickEvent.Post.INSTANCE, seen.get());
     }
 
+    @Test
+    void deferredAttackPostUsesCapturedTargetAndDropsCancelledAttack() {
+        NocturneClient client = NocturneClient.boot(null);
+        Object player = new Object();
+        Object target = new Object();
+        AtomicReference<AttackEvent> post = new AtomicReference<AttackEvent>();
+        java.util.concurrent.atomic.AtomicBoolean cancel = new java.util.concurrent.atomic.AtomicBoolean(true);
+        client.events().subscribe(AttackEvent.class, event -> {
+            if (event.post) {
+                post.set(event);
+            } else if (cancel.get()) {
+                event.cancelled = true;
+            }
+        });
+
+        GameplayHook.attackCapture(player, target);
+        assertFalse(GameplayHook.attack(player, target));
+        GameplayHook.attackPost();
+        assertNull(post.get());
+
+        cancel.set(false);
+        GameplayHook.attackCapture(player, target);
+        assertTrue(GameplayHook.attack(player, target));
+        GameplayHook.attackPost();
+        assertSame(target, post.get().target);
+        assertTrue(post.get().post);
+    }
+
     private static final class FakeVector {
         private double x;
         private final double y;

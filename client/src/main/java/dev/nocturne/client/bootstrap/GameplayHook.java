@@ -36,6 +36,25 @@ public final class GameplayHook {
         default void entityJoin(int id, Object entity) {
         }
 
+        default void entityRender(Object entity, boolean post) {
+        }
+
+        default boolean xrayBlock(Object blockState, Object blockPos) {
+            return true;
+        }
+
+        default float timerScale(float delta) {
+            return delta;
+        }
+
+        default boolean noFog() {
+            return true;
+        }
+
+        default boolean noHurtCamera() {
+            return true;
+        }
+
         default boolean destroyStart(Object blockPos, Object direction) {
             return true;
         }
@@ -110,6 +129,7 @@ public final class GameplayHook {
     }
 
     private static volatile Sink sink;
+    private static final ThreadLocal<Object[]> ATTACK_CONTEXT = new ThreadLocal<Object[]>();
     /** sendPosition 是否已直接织入；false 时由玩家 tick 前沿降级产生 MotionEvent。 */
     private static volatile boolean motionDirect;
     /** 首个 Motion 事件是否已记录；用于区分"钩子未织入"与"事件未投递"。 */
@@ -203,6 +223,65 @@ public final class GameplayHook {
         } catch (Throwable t) {
             failure("screenOpen", t);
             return true;
+        }
+    }
+
+    public static boolean noFog() {
+        try {
+            Sink current = sink;
+            return current == null || current.noFog();
+        } catch (Throwable t) {
+            failure("noFog", t);
+            return true;
+        }
+    }
+
+    public static boolean noHurtCamera() {
+        try {
+            Sink current = sink;
+            return current == null || current.noHurtCamera();
+        } catch (Throwable t) {
+            failure("noHurtCamera", t);
+            return true;
+        }
+    }
+
+    public static float timerScale(float delta) {
+        try {
+            Sink current = sink;
+            return current == null ? delta : current.timerScale(delta);
+        } catch (Throwable t) {
+            failure("timerScale", t);
+            return delta;
+        }
+    }
+
+    public static boolean xrayBlock(Object blockState, Object blockPos) {
+        try {
+            Sink current = sink;
+            return current == null || current.xrayBlock(blockState, blockPos);
+        } catch (Throwable t) {
+            failure("xrayBlock", t);
+            return true;
+        }
+    }
+
+    public static void chamsPre(Object entity) {
+        entityRender(entity, false);
+    }
+
+    public static void chamsPost(Object entity) {
+        entityRender(entity, true);
+    }
+
+    private static void entityRender(Object entity, boolean post) {
+        try {
+            Sink current = sink;
+            if (current != null) {
+                current.entityRender(entity, post);
+            }
+        } catch (Throwable t) {
+            failure("entityRender", t);
         }
     }
 
@@ -313,10 +392,28 @@ public final class GameplayHook {
     public static boolean attack(Object player, Object target) {
         try {
             Sink current = sink;
-            return current == null || current.attack(player, target);
+            boolean allowed = current == null || current.attack(player, target);
+            if (!allowed) {
+                ATTACK_CONTEXT.remove();
+            }
+            return allowed;
         } catch (Throwable t) {
             failure("attack", t);
             return true;
+        }
+    }
+
+    /** attack 的头部织入点；实际形参在此仍必定位于局部变量槽。 */
+    public static void attackCapture(Object player, Object target) {
+        ATTACK_CONTEXT.set(new Object[]{player, target});
+    }
+
+    /** attack 的返回点织入点；不读取可能已经失效的形参槽。 */
+    public static void attackPost() {
+        Object[] context = ATTACK_CONTEXT.get();
+        ATTACK_CONTEXT.remove();
+        if (context != null) {
+            attackPost(context[0], context[1]);
         }
     }
 

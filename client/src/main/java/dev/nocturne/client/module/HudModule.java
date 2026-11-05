@@ -40,12 +40,30 @@ public abstract class HudModule extends Module {
     @Override
     protected final synchronized void onEnable() {
         register();
+        try {
+            onHudStart();
+        } catch (RuntimeException failure) {
+            unregister();
+            throw failure;
+        } catch (Error failure) {
+            unregister();
+            throw failure;
+        }
     }
 
     /** 禁用时向 HUD 接收器注销本模块的文本行；必须与注册使用同一 id。 */
     @Override
     protected final synchronized void onDisable() {
+        onHudStop();
         unregister();
+    }
+
+    /** HUD 已注册后调用；需要事件订阅的模块在此安装。 */
+    protected void onHudStart() {
+    }
+
+    /** HUD 注销前调用；事件订阅必须在此退订。 */
+    protected void onHudStop() {
     }
 
     /**

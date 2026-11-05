@@ -1029,7 +1029,7 @@ public final class NocturneAgent {
         registerPacket(instrumentation, asmLoader, "channelRead0",
                 "(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/protocol/Packet;)V",
                 "packetReceive", 1);
-        // H5：先织尾部再织门控，取消产生的新 RETURN 不会误触发 attackPost。
+        // H5：post 在头部捕获实参、返回点消费；pre 取消时清除捕获，不产生 post。
         registerGate(instrumentation, asmLoader,
                 dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "attack",
                 "(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;)V",
@@ -1050,6 +1050,13 @@ public final class NocturneAgent {
                 dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "stopDestroyBlock",
                 "()V", "destroyStop", "V", false, false);
         registerMoveHooks(instrumentation, asmLoader);
+        registerEntityRenderHooks(instrumentation, asmLoader);
+        registerXrayHooks(instrumentation, asmLoader);
+        registerTimerHooks(instrumentation, asmLoader);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.GAME_RENDERER,
+                "setupFog", "()V", "noFog", "Z", false, true);
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.GAME_RENDERER,
+                "hurtCamera", "()V", "noHurtCamera", "Z", false, true);
         // H6：26.x 的 startAttack 返回 boolean，旧版两者均返回 void。
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MINECRAFT,
                 "startAttack", "()V|()Z", "leftClick", "Z", false, false);
@@ -1065,6 +1072,90 @@ public final class NocturneAgent {
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
                 "onButton", "(JLnet/minecraft/client/input/MouseButtonInfo;I)V",
                 "mouse", "Z", false, false);
+    }
+
+    /** 现代 DeltaTracker 的 tick 增量在返回点缩放，旧版 Timer 走 timerSpeed 字段。 */
+    private static void registerTimerHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
+        dev.nocturne.client.mapping.ClassType owner = dev.nocturne.client.mapping.ClassType.DELTA_TRACKER;
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        java.util.Set<String> classNames = new java.util.LinkedHashSet<String>(
+                mapping.classNameCandidates(owner));
+        classNames.add(owner.canonicalName());
+        boolean patched = false;
+        for (String className : classNames) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, "getGameTimeDeltaTicks")) {
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    continue;
+                }
+                ClassFileTransformer transformer = asmLoader.createFloatReturnTransformer(
+                        className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "timerScale");
+                patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                        candidate.name(), descriptor, "timerScale");
+            }
+        }
+        if (!patched) {
+            log("timer delta hook pending or unavailable: " + owner.canonicalName());
+        }
+    }
+
+    /** XRay 在真实方块渲染入口按 BlockState 决定是否剔除。 */
+    private static void registerXrayHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
+        dev.nocturne.client.mapping.ClassType owner =
+                dev.nocturne.client.mapping.ClassType.BLOCK_RENDER_DISPATCHER;
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        java.util.Set<String> classNames = new java.util.LinkedHashSet<String>(
+                mapping.classNameCandidates(owner));
+        classNames.add(owner.canonicalName());
+        boolean patched = false;
+        for (String className : classNames) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, "renderBatched")) {
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    continue;
+                }
+                ClassFileTransformer transformer = asmLoader.createFirstArgumentGateTransformer(
+                        className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "xrayBlock");
+                patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                        candidate.name(), descriptor, "xrayBlock");
+            }
+        }
+        if (!patched) {
+            log("xray block hook pending or unavailable: " + owner.canonicalName() + "#renderBatched");
+        }
+    }
+
+    /** 实体渲染入口/出口都转发第一个 Entity 形参。 */
+    private static void registerEntityRenderHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
+        dev.nocturne.client.mapping.ClassType owner =
+                dev.nocturne.client.mapping.ClassType.ENTITY_RENDER_DISPATCHER;
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        java.util.Set<String> classNames = new java.util.LinkedHashSet<String>(
+                mapping.classNameCandidates(owner));
+        classNames.add(owner.canonicalName());
+        boolean patched = false;
+        for (String className : classNames) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, "render")) {
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    continue;
+                }
+                ClassFileTransformer pre = asmLoader.createCallbackTransformer(className,
+                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "chamsPre", false);
+                ClassFileTransformer post = asmLoader.createCallbackTransformer(className,
+                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "chamsPost", true);
+                patched |= registerGameplayTransformer(instrumentation, pre, className,
+                        candidate.name(), descriptor, "chamsPre");
+                patched |= registerGameplayTransformer(instrumentation, post, className,
+                        candidate.name(), descriptor, "chamsPost");
+            }
+        }
+        if (!patched) {
+            log("entity render hook pending or unavailable: " + owner.canonicalName() + "#render");
+        }
     }
 
     /** 注册 Entity.move 实参改写；双倍的旧形状与 Vec3 新形状由同一转换器覆盖。 */
@@ -1121,14 +1212,20 @@ public final class NocturneAgent {
                             fallbackDescriptors);
                 }
                 if (descriptor != null) {
-                    ClassFileTransformer transformer = asmLoader.createGateTransformer(className,
+                    ClassFileTransformer transformer = "attackPost".equals(hookMethod)
+                            ? asmLoader.createAttackPostTransformer(className, candidate.name(), descriptor,
+                            GAMEPLAY_HOOK_OWNER)
+                            : asmLoader.createGateTransformer(className,
                             candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, hookMethod,
                             hookReturn, atMethodEnd, passThis);
                     patched |= registerGameplayTransformer(instrumentation, transformer, className,
                             candidate.name(), descriptor, hookMethod);
                 } else {
                     for (String fallback : fallbackDescriptors.split("\\|")) {
-                        ClassFileTransformer transformer = asmLoader.createGateTransformer(className,
+                        ClassFileTransformer transformer = "attackPost".equals(hookMethod)
+                                ? asmLoader.createAttackPostTransformer(className, candidate.name(), fallback,
+                                GAMEPLAY_HOOK_OWNER)
+                                : asmLoader.createGateTransformer(className,
                                 candidate.name(), fallback, GAMEPLAY_HOOK_OWNER, hookMethod,
                                 hookReturn, atMethodEnd, passThis);
                         patched |= registerGameplayTransformer(instrumentation, transformer, className,
@@ -1220,7 +1317,8 @@ public final class NocturneAgent {
             try {
                 byte[] current = captureCurrentBytes(instrumentation, loaded);
                 String internalName = loaded.getName().replace('.', '/');
-                if (current != null && containsAscii(current, GAMEPLAY_HOOK_OWNER)) {
+                if (current != null && dev.nocturne.agent.transform.TransformGuard.containsHook(
+                        current, GAMEPLAY_HOOK_OWNER, hookMethod)) {
                     log("gameplay hook already applied by retransform: " + targetClass
                             + "." + method + " -> " + hookMethod);
                     patched = true;

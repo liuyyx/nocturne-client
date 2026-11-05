@@ -178,6 +178,8 @@ public final class ModernGlApi {
     private Method bindTexture;
     /** {@code glTexImage2D(..., ByteBuffer)}。 */
     private Method texImage2D;
+    /** {@code glReadPixels(int,int,int,int,int,int,int[])}。 */
+    private Method readPixels;
     /** {@code glTexParameteri(int, int, int)}。 */
     private Method texParameteri;
     /** {@code glPixelStorei(int, int)}。 */
@@ -321,6 +323,8 @@ public final class ModernGlApi {
                 int.class, int.class, int.class, int.class, java.nio.ByteBuffer.class);
         api.texParameteri = find(loader, "glTexParameteri", int.class, int.class, int.class);
         api.pixelStorei = find(loader, "glPixelStorei", int.class, int.class);
+        api.readPixels = find(loader, "glReadPixels", int.class, int.class, int.class,
+                int.class, int.class, int.class, int[].class);
         api.activeTexture = find(loader, "glActiveTexture", int.class);
         api.uniform1i = find(loader, "glUniform1i", int.class, int.class);
         return api;
@@ -398,6 +402,15 @@ public final class ModernGlApi {
             return;
         }
         Reflect.call(uniform1i, null, location, value);
+    }
+
+    /** 读取当前帧缓冲 RGBA 像素；不支持时返回 false。 */
+    public boolean readPixels(int width, int height, int[] out) {
+        if (readPixels == null || out == null || out.length < width * height) {
+            return false;
+        }
+        Reflect.call(readPixels, null, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, out);
+        return true;
     }
 
     /** 设置纹理采样参数。 */

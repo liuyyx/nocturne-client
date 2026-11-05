@@ -93,7 +93,8 @@ public final class InputBlockTransformer implements ClassFileTransformer {
                     + className + " target=" + targetClassInternalName + " method=" + targetMethod
                     + " desc=" + targetDescriptor);
         }
-        if (className == null || !className.equals(targetClassInternalName)) {
+        if (className == null || !className.equals(targetClassInternalName)
+                || TransformGuard.containsHook(classfileBuffer, hookOwner, hookMethod)) {
             return null;
         }
         try {

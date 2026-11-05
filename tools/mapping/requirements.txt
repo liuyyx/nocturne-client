@@ -43,6 +43,11 @@ net/minecraft/client/Options
 net/minecraft/client/Options#fov
 net/minecraft/client/Options#gamma
 net/minecraft/client/Options#sensitivity
+net/minecraft/client/Options#perspective
+net/minecraft/client/Options#thirdPersonView
+net/minecraft/client/CameraType
+net/minecraft/client/CameraType#FIRST_PERSON
+net/minecraft/client/CameraType#THIRD_PERSON_BACK
 
 # FOV 从 1.16.5 起是 OptionInstance；Fabric intermediary 下 get() 需要映射。
 net/minecraft/client/OptionInstance
@@ -55,6 +60,8 @@ net/minecraft/client/gui/FontRenderer#getStringWidth()
 
 net/minecraft/client/gui/Gui
 
+net/minecraft/client/gui/screens/PauseScreen
+net/minecraft/client/gui/screens/inventory/InventoryScreen
 net/minecraft/client/gui/screens/ChatScreen
 
 net/minecraft/client/gui/screens/PauseScreen
@@ -125,7 +132,24 @@ net/minecraft/client/player/LocalPlayer#sendPosition()
 
 net/minecraft/client/player/RemotePlayer
 
-net/minecraft/client/renderer/GameRenderer
+net/minecraft/client/Minecraft#missTime
+net/minecraft/world/entity/LivingEntity#jumpTicks
+net/minecraft/client/renderer/GameRenderer#hurtCamera()
+net/minecraft/client/renderer/GameRenderer#setupFog()
+net/minecraft/client/multiplayer/ClientLevel#rainLevel
+net/minecraft/client/multiplayer/ClientLevel#thunderLevel
+net/minecraft/client/multiplayer/ClientLevel#setRainLevel()
+net/minecraft/client/multiplayer/ClientLevel#setThunderLevel()
+net/minecraft/client/multiplayer/ClientLevel#dayTime
+net/minecraft/client/multiplayer/ClientLevel#levelData
+net/minecraft/world/level/storage/LevelData
+net/minecraft/world/level/storage/LevelData#setDayTime()
+net/minecraft/client/multiplayer/ClientLevel#getScoreboard()
+net/minecraft/world/scores/Scoreboard#getDisplayObjective()
+net/minecraft/world/scores/Scoreboard#getPlayerScores()
+net/minecraft/world/scores/Objective#getDisplayName()
+net/minecraft/world/scores/Score#getOwner()
+net/minecraft/world/scores/Score#getScore()
 
 net/minecraft/core/BlockPos
 # 坐标分量走 Vec3i 的字段，不用 BlockPos#getX()：1.16.5 里 getX 同时存在实例版 (u()) 与
@@ -152,6 +176,37 @@ net/minecraft/network/chat/Component#getString()
 net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket
 
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket
+net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#getId()
+net/minecraft/network/protocol/game/ServerboundPlayerActionPacket
+net/minecraft/network/protocol/game/ServerboundPlayerActionPacket#getAction()
+net/minecraft/network/protocol/game/ServerboundMovePlayerPacket
+net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#getXa()
+net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#getYa()
+net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#getZa()
+net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#id
+net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#xa
+net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#ya
+net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#za
+net/minecraft/world/entity/Entity#isInWater()
+net/minecraft/world/entity/Entity#bb
+net/minecraft/world/entity/LivingEntity#hurtTime
+net/minecraft/world/entity/projectile/AbstractArrow
+net/minecraft/world/entity/projectile/ThrownEnderpearl
+net/minecraft/world/entity/projectile/FishingHook
+net/minecraft/world/entity/projectile/FishingHook#caughtEntity
+net/minecraft/world/entity/projectile/AbstractFireball
+net/minecraft/world/entity/projectile/Snowball
+net/minecraft/world/entity/projectile/Egg
+net/minecraft/world/entity/projectile/ThrownPotion
+net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket
+net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket#getPos()
+net/minecraft/world/effect/MobEffects#NAUSEA
+net/minecraft/world/effect/MobEffects#BLINDNESS
+net/minecraft/world/effect/MobEffects#SLOWNESS
+net/minecraft/world/effect/MobEffect#id
+net/minecraft/world/entity/LivingEntity#getActiveEffects()
+net/minecraft/world/entity/player/Player#fishing
+net/minecraft/world/item/Item#getDescriptionId()
 
 net/minecraft/network/Connection
 net/minecraft/network/Connection#send()
@@ -292,6 +347,10 @@ net/minecraft/world/entity/player/Player#swing()
 net/minecraft/world/inventory/AbstractContainerMenu
 net/minecraft/world/inventory/AbstractContainerMenu#containerId
 net/minecraft/world/inventory/AbstractContainerMenu#getItems()
+net/minecraft/world/inventory/AbstractContainerMenu#items
+net/minecraft/world/item/ItemStack#getDamageValue()
+net/minecraft/world/item/ItemStack#getMaxDamage()
+net/minecraft/world/item/ItemStack#getDisplayName()
 
 net/minecraft/world/item/Item
 
@@ -616,11 +675,17 @@ net/minecraft/network/protocol/Packet#handle()
 # 世界/实体渲染事件宿主；26.x 只观察或取消 shouldRender，不在这层调用 GL。
 net/minecraft/client/renderer/LevelRenderer
 net/minecraft/client/renderer/LevelRenderer#renderLevel()
+net/minecraft/client/renderer/LevelRenderer#allChanged()
+net/minecraft/client/Minecraft#levelRenderer
+net/minecraft/client/renderer/block/BlockRenderDispatcher
+net/minecraft/client/renderer/block/BlockRenderDispatcher#renderBatched()
 net/minecraft/client/renderer/entity/EntityRenderDispatcher
 net/minecraft/client/renderer/entity/EntityRenderDispatcher#shouldRender()
 net/minecraft/client/renderer/entity/EntityRenderDispatcher#render()
 net/minecraft/client/renderer/entity/EntityRenderDispatcher#extractEntity()
 net/minecraft/client/DeltaTracker
+net/minecraft/client/DeltaTracker#timerSpeed
+net/minecraft/client/Minecraft#deltaTracker
 net/minecraft/client/DeltaTracker#getGameTimeDeltaPartialTick()
 net/minecraft/client/DeltaTracker#getGameTimeDeltaTicks()
 

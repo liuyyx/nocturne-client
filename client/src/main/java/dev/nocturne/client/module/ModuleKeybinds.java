@@ -42,7 +42,9 @@ public final class ModuleKeybinds {
                     }
                     // 被模块消费的键不再交给游戏（例如绑到 R 时不应同时换弹）。
                     event.cancelled = true;
-                    return;
+                    if (!dev.nocturne.client.module.modules.misc.ClientSettingsModule.multiKeybinding()) {
+                        return;
+                    }
                 }
             }
         });

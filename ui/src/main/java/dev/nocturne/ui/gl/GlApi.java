@@ -92,6 +92,38 @@ public final class GlApi {
     /** {@code glPixelStorei} 的参数：解包时跳过的像素数（3316），同样必须归零。 */
     public static final int GL_UNPACK_SKIP_PIXELS = 3316;
 
+    /** 读取当前帧缓冲 RGBA 像素；不支持时返回 false。 */
+    public boolean readPixels(int width, int height, int[] out) {
+        flushBatch();
+        if (out == null || out.length < width * height) {
+            return false;
+        }
+        if (readPixelsArray != null) {
+            Reflect.call(readPixelsArray, null, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, out);
+            return true;
+        }
+        if (readPixelsBuffer != null) {
+            if (readbackBuffer == null || readbackBuffer.capacity() < out.length) {
+                readbackBuffer = java.nio.ByteBuffer.allocateDirect(out.length * Integer.BYTES)
+                        .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
+            }
+            readbackBuffer.clear();
+            Reflect.call(readPixelsBuffer, null, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE,
+                    readbackBuffer);
+            for (int i = 0; i < width * height; i++) {
+                out[i] = readbackBuffer.get(i);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /** 设置多边形深度偏移；调用前同步批次，关闭时恢复零偏移。 */
+    public void polygonOffset(float factor, float units) {
+        flushBatch();
+        Reflect.call(polygonOffsetMethod, null, factor, units);
+    }
+
     /** 已解析的 {@code glColor4f}，设置当前顶点颜色。 */
     private final Method color4f;
     /** 已解析的 {@code glBegin}，开始一个立即模式图元批次。 */
@@ -173,6 +205,12 @@ public final class GlApi {
     /** {@code glShadeModel}：GL_FLAT 会让渐变四边形塌成单色。 */
     private Method shadeModelMethod;
 
+    /** {@code glReadPixels} 的 IntBuffer/int[] 两种形态。 */
+    private Method readPixelsBuffer;
+    private Method readPixelsArray;
+    private java.nio.IntBuffer readbackBuffer;
+    /** {@code glPolygonOffset}：Chams 固定管线的非着色穿墙路径。 */
+    private Method polygonOffsetMethod;
     /** {@code glDisableClientState}：关闭客户态数组（立即模式绘制前必须关掉）。 */
     private Method disableClientStateMethod;
     /**
@@ -613,6 +651,11 @@ public final class GlApi {
         bound.disableClientStateMethod = Reflect.method(gl, "glDisableClientState", int.class);
         bound.clientActiveTextureMethod = Reflect.method(gl, "glClientActiveTexture", int.class);
         bound.shadeModelMethod = Reflect.method(gl, "glShadeModel", int.class);
+        bound.polygonOffsetMethod = Reflect.method(gl, "glPolygonOffset", float.class, float.class);
+        bound.readPixelsBuffer = Reflect.method(gl, "glReadPixels", int.class, int.class, int.class,
+                int.class, int.class, int.class, java.nio.IntBuffer.class);
+        bound.readPixelsArray = Reflect.method(gl, "glReadPixels", int.class, int.class, int.class,
+                int.class, int.class, int.class, int[].class);
         bound.isEnabledMethod = Reflect.method(gl, "glIsEnabled", int.class);
         return bound;
     }

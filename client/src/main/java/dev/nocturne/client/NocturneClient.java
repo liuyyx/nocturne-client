@@ -27,6 +27,8 @@ public final class NocturneClient {
     private volatile Instrumentation instrumentation;
     /** HUD 行输出汇，由 UI 模块注入；未安装前为 {@code null}。 */
     private volatile HudSink hudSink;
+    /** 实体渲染期间的后端状态操作；由 GuiOverlay 安装。 */
+    private volatile dev.nocturne.client.render.RenderCapabilities renderCapabilities;
     /** 指向运行中游戏的反射桥；非游戏 JVM 中为 {@code null}。 */
     private volatile dev.nocturne.client.game.GameBridge gameBridge;
     /** 模块共享的语义动作面；游戏桥安装后绑定。 */
@@ -52,6 +54,14 @@ public final class NocturneClient {
     /** 由 UI 模块提供的 HUD 行汇；未安装前为 {@code null}。 */
     public HudSink hudSink() {
         return hudSink;
+    }
+
+    public dev.nocturne.client.render.RenderCapabilities renderCapabilities() {
+        return renderCapabilities;
+    }
+
+    public void setRenderCapabilities(dev.nocturne.client.render.RenderCapabilities capabilities) {
+        this.renderCapabilities = capabilities;
     }
 
     /**
@@ -211,13 +221,46 @@ public final class NocturneClient {
 
     /** 客户端开箱即带的模块。 */
     private void registerModules() {
-        modules.register(new dev.nocturne.client.module.modules.movement.SprintModule());
+        // COMBAT
         modules.register(new dev.nocturne.client.module.modules.combat.KeepSprintModule());
         modules.register(new dev.nocturne.client.module.modules.combat.AutoClickerModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.RightClickerModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.VelocityModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.JumpResetModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.KnockbackDelayModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.ReachModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.WTapModule());
         modules.register(new dev.nocturne.client.module.modules.combat.AimAssistModule());
         modules.register(new dev.nocturne.client.module.modules.combat.KillAuraModule());
-        modules.register(new dev.nocturne.client.module.modules.world.ScaffoldModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.HitBoxesModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.HitSelectModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.BlockHitModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.SilentAuraModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.SilentAuraClickerModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.HitFlickModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.HitSwapModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.TriggerbotModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.AutoMaceModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.AutoAnchorModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.CrystalAuraModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.ShieldBreakerModule());
+        modules.register(new dev.nocturne.client.module.modules.combat.AntiFireballModule());
+        // MOVEMENT
+        modules.register(new dev.nocturne.client.module.modules.movement.SprintModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.SafeWalkModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.FlyModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.SpeedModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.NoSlowdownModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.InvWalkModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.FreecamModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.NoJumpDelayModule());
+        modules.register(new dev.nocturne.client.module.modules.movement.ParkourModule());
+        // RENDER
         modules.register(new dev.nocturne.client.module.modules.render.WatermarkModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.ClockModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.CoordinatesModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.CompassModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.FpsDisplayModule());
         modules.register(new dev.nocturne.client.module.modules.render.FullBrightModule());
         modules.register(new dev.nocturne.client.module.modules.render.StorageEspModule());
         modules.register(new dev.nocturne.client.module.modules.render.SpawnerFinderModule());
@@ -226,18 +269,75 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.render.NameTagsModule());
         modules.register(new dev.nocturne.client.module.modules.render.ItemEspModule());
         modules.register(new dev.nocturne.client.module.modules.render.TrajectoriesModule());
-        // Chams 暂不注册：它的 `onRender` 只做门检查，双 pass 重绘（取消原渲染 → 关深度绘墙后色
-        // → 绘可见色 → 恢复）需要的实体渲染拦截点还没织入。注册出去就是一个"开了没反应"的开关，
-        // 和 Xray 同样的处理——比让玩家以为是 bug 更糟。接入实体渲染挂钩后在这里重新注册。
-        // Xray 暂不注册：它尚未接入方块渲染管线（没有区块重绘拦截，Opacity / Cave Mode 两个设置
-        // 也没有任何读取点），注册出去只会是个"开了没反应"的开关——比不提供更糟。
-        // 接入渲染管线后在这里重新注册（类与门逻辑保留在 XrayModule）。
         modules.register(new dev.nocturne.client.module.modules.render.SearchModule());
-        modules.register(new dev.nocturne.client.module.modules.player.AutoRespawnModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ArrowsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ProjectilesModule());
+        modules.register(new dev.nocturne.client.module.modules.render.IndicatorsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ExplosionsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.BedPlatesModule());
+        modules.register(new dev.nocturne.client.module.modules.render.PropHuntModule());
+        modules.register(new dev.nocturne.client.module.modules.render.AntiDebuffModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ChamsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.XrayModule());
+        modules.register(new dev.nocturne.client.module.modules.render.FreeLookModule());
+        modules.register(new dev.nocturne.client.module.modules.render.BlockhitAnimationModule());
+        modules.register(new dev.nocturne.client.module.modules.render.NoFogModule());
+        modules.register(new dev.nocturne.client.module.modules.render.NoHurtCameraModule());
+        modules.register(new dev.nocturne.client.module.modules.render.BlockOverlayModule());
+        modules.register(new dev.nocturne.client.module.modules.render.BlockRenderColorOverrideModule());
+        modules.register(new dev.nocturne.client.module.modules.render.InventoryBlurModule());
+        modules.register(new dev.nocturne.client.module.modules.render.MotionBlurModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.HealthModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.PotionStatusModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.ArmorStatusModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.KeystrokesModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.ReachDisplayModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.ScoreboardModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule());
+        // WORLD
+        modules.register(new dev.nocturne.client.module.modules.world.ScaffoldModule());
+        modules.register(new dev.nocturne.client.module.modules.world.AutoLadderModule());
+        modules.register(new dev.nocturne.client.module.modules.world.ClutchModule());
+        modules.register(new dev.nocturne.client.module.modules.world.MlgModule());
+        modules.register(new dev.nocturne.client.module.modules.world.AutoFishModule());
+        modules.register(new dev.nocturne.client.module.modules.world.BedBreakerModule());
+        modules.register(new dev.nocturne.client.module.modules.world.AntiAfkModule());
+        modules.register(new dev.nocturne.client.module.modules.world.MurdererFinderModule());
+        modules.register(new dev.nocturne.client.module.modules.world.WeatherModule());
+        modules.register(new dev.nocturne.client.module.modules.world.TimeChangerModule());
+        modules.register(new dev.nocturne.client.module.modules.world.BlockInModule());
+        // INVENTORY
+        modules.register(new dev.nocturne.client.module.modules.inventory.ThrowpotModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.RefillModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.AutoArmorModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.InvCleanerModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.ThrowDebuffModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.AutoHotbarModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.ArmorSwitchModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.InventoryManagerModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.InventoryFillModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.ChestStealModule());
+        modules.register(new dev.nocturne.client.module.modules.inventory.AutoTotemModule());
+        // PLAYER
         modules.register(new dev.nocturne.client.module.modules.player.FastPlaceModule());
         modules.register(new dev.nocturne.client.module.modules.player.AutoToolModule());
         modules.register(new dev.nocturne.client.module.modules.player.NoFallModule());
+        modules.register(new dev.nocturne.client.module.modules.player.AutoRespawnModule());
+        modules.register(new dev.nocturne.client.module.modules.player.AutoHealModule());
+        modules.register(new dev.nocturne.client.module.modules.player.AutoPearlModule());
+        modules.register(new dev.nocturne.client.module.modules.player.PearlCatchModule());
+        modules.register(new dev.nocturne.client.module.modules.player.WindChargeModule());
+        modules.register(new dev.nocturne.client.module.modules.player.NoItemReleaseModule());
+        modules.register(new dev.nocturne.client.module.modules.player.NoClickDelayModule());
+        modules.register(new dev.nocturne.client.module.modules.player.MouseDelayFixModule());
+        // MISC
         modules.register(new dev.nocturne.client.module.modules.misc.PanicModule());
+        modules.register(new dev.nocturne.client.module.modules.misc.BlinkModule());
+        modules.register(new dev.nocturne.client.module.modules.misc.FakeLagModule());
+        modules.register(new dev.nocturne.client.module.modules.misc.BacktrackModule());
+        modules.register(new dev.nocturne.client.module.modules.misc.TargetFilterModule());
+        modules.register(new dev.nocturne.client.module.modules.misc.TimerModule());
+        modules.register(new dev.nocturne.client.module.modules.misc.ClientSettingsModule());
     }
 
 

@@ -116,7 +116,8 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
-        if (className == null || !className.equals(targetClassInternalName)) {
+        if (className == null || !className.equals(targetClassInternalName)
+                || TransformGuard.containsHook(classfileBuffer, hookOwner, hookMethod)) {
             return null;
         }
         try {

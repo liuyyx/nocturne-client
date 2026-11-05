@@ -39,7 +39,7 @@ public final class MoveHookTransformer implements ClassFileTransformer {
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
-        if (!targetClass.equals(className)) {
+        if (!targetClass.equals(className) || TransformGuard.containsHook(classfileBuffer, hookOwner, legacy ? "moveLegacyCapture" : "moveVec")) {
             return null;
         }
         try {

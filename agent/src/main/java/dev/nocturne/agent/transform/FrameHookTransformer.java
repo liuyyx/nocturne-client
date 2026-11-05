@@ -94,8 +94,9 @@ public final class FrameHookTransformer implements ClassFileTransformer {
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
-        if (className == null || !className.equals(targetClassInternalName)) {
-            // className 为 null 表示类在初始化中重复定义；类名不符则不是我们的目标。
+        if (className == null || !className.equals(targetClassInternalName)
+                || TransformGuard.containsHook(classfileBuffer, hookOwner, hookMethod)) {
+            // className 为 null 表示类在初始化中重复定义；已织入时保持原字节码。
             return null;
         }
         try {

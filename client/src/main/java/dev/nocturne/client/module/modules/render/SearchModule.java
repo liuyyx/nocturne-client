@@ -303,7 +303,7 @@ public final class SearchModule extends Module implements WorldOverlay {
             if (tracers) {
                 draw.line(bottomX, bottomY, point.x, point.y, LINE_THICKNESS, argb);
             }
-            draw.rect(point.x - box / 2f, point.y - box / 2f, box, box, argb);
+            // 同样只描边：矿石往往成片，实心填充会把整片地形涂成一块颜色。
             draw.outline(point.x - box / 2f, point.y - box / 2f, box, box, LINE_THICKNESS, argb);
         }
     }

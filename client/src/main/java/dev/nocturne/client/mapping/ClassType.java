@@ -14,6 +14,8 @@ public enum ClassType {
     OPTIONS("net.minecraft.client.Options"),
     /** 封装可调选项（Options#fov 在新版本中返回它）；读取值必须走映射方法 get。 */
     OPTION_INSTANCE("net.minecraft.client.OptionInstance"),
+    /** 暂停界面；InvWalk 的 Inventory Only 判定。 */
+    PAUSE_SCREEN("net.minecraft.client.gui.screens.PauseScreen"),
     /** 本地玩家。 */
     LOCAL_PLAYER("net.minecraft.client.player.LocalPlayer"),
     /** 其他玩家。 */
@@ -176,6 +178,19 @@ public enum ClassType {
     VEC2("net.minecraft.world.phys.Vec2"),
     /** 准星命中基类；旧版 MovingObjectPosition 也携带命中类型。 */
     HIT_RESULT("net.minecraft.world.phys.HitResult"),
+    /** 火焰弹、雪球、鸡蛋、喷溅药水；Indicators/Projectiles 使用。 */
+    ABSTRACT_FIREBALL("net.minecraft.world.entity.projectile.AbstractFireball"),
+    SNOWBALL("net.minecraft.world.entity.projectile.Snowball"),
+    EGG("net.minecraft.world.entity.projectile.Egg"),
+    THROWN_POTION("net.minecraft.world.entity.projectile.ThrownPotion"),
+    /** 方块更新包；PropHunt 记录近期变化位置。 */
+    CLIENTBOUND_BLOCK_UPDATE("net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket"),
+    /** 珍珠实体；AutoPearl/PearlCatch 轨迹目标。 */
+    THROWN_ENDER_PEARL("net.minecraft.world.entity.projectile.ThrownEnderpearl"),
+    /** 鱼钩实体；AutoFish 读取玩家 fishing 字段。 */
+    FISHING_HOOK("net.minecraft.world.entity.projectile.FishingHook"),
+    /** 箭实体；AntiFireball/Arrows 的目标。 */
+    ABSTRACT_ARROW("net.minecraft.world.entity.projectile.AbstractArrow"),
     /** 玩家队伍及队伍关系判定。 */
     PLAYER_TEAM("net.minecraft.world.scores.PlayerTeam"),
     /** 动物实体分类。 */
@@ -188,6 +203,12 @@ public enum ClassType {
     END_CRYSTAL("net.minecraft.world.entity.boss.enderdragon.EndCrystal"),
     /** TNT 实体；TNTTimer 读取引信。 */
     PRIMED_TNT("net.minecraft.world.entity.item.PrimedTnt"),
+    /** 全部移动包基类；Freecam 仅拦截这些包。 */
+    SERVERBOUND_MOVE_PLAYER("net.minecraft.network.protocol.game.ServerboundMovePlayerPacket"),
+    /** 玩家挖掘/释放物品动作包；NoItemRelease 读取 action。 */
+    SERVERBOUND_PLAYER_ACTION("net.minecraft.network.protocol.game.ServerboundPlayerActionPacket"),
+    /** 实体速度包；Velocity/JumpReset/KnockbackDelay 读取并重建。 */
+    CLIENTBOUND_ENTITY_VELOCITY("net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket"),
     /** Tab 列表更新与移除包；LogoutSpots/PlayerAlarms 判型。 */
     CLIENTBOUND_PLAYER_INFO_UPDATE("net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket"),
     CLIENTBOUND_PLAYER_INFO_REMOVE("net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket"),
@@ -199,12 +220,18 @@ public enum ClassType {
     VOXEL_SHAPE("net.minecraft.world.phys.shapes.VoxelShape"),
     /** 世界射线上下文；高级搭路与伤害计算使用。 */
     CLIP_CONTEXT("net.minecraft.world.level.ClipContext"),
+    /** 世界存档数据；TimeChanger 写入 dayTime。 */
+    LEVEL_DATA("net.minecraft.world.level.storage.LevelData"),
     /** 世界基类；碰撞与射线入口声明在这里。 */
     LEVEL("net.minecraft.world.level.Level"),
+    /** 方块渲染调度器；XRay 在真实渲染入口按 BlockState 剔除。 */
+    BLOCK_RENDER_DISPATCHER("net.minecraft.client.renderer.block.BlockRenderDispatcher"),
     /** 实体渲染调度器；实体渲染事件的映射宿主。 */
     ENTITY_RENDER_DISPATCHER("net.minecraft.client.renderer.entity.EntityRenderDispatcher"),
     /** 世界渲染入口；世界空间事件的映射宿主。 */
     LEVEL_RENDERER("net.minecraft.client.renderer.LevelRenderer"),
+    /** 相机人称枚举；Freelook 切换与恢复。 */
+    PERSPECTIVE("net.minecraft.client.CameraType"),
     /** 帧/ tick 插值计时器。 */
     DELTA_TRACKER("net.minecraft.client.DeltaTracker"),
     /** 游戏渲染器与相机宿主。 */

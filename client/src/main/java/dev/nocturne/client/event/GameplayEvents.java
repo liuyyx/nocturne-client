@@ -111,6 +111,41 @@ public final class GameplayEvents implements GameplayHook.Sink {
     }
 
     @Override
+    public void entityRender(Object entity, boolean post) {
+        if (active()) {
+            client.events().post(new EntityRenderEvent(entity, post));
+        }
+    }
+
+    @Override
+    public boolean xrayBlock(Object blockState, Object blockPos) {
+        dev.nocturne.client.module.Module module = client.modules().get("Xray");
+        return !(module instanceof dev.nocturne.client.module.modules.render.XrayModule)
+                || !module.isEnabled()
+                || ((dev.nocturne.client.module.modules.render.XrayModule) module)
+                .shouldRender(blockState, blockPos);
+    }
+
+    @Override
+    public float timerScale(float delta) {
+        dev.nocturne.client.module.Module module = client.modules().get("Timer");
+        return module instanceof dev.nocturne.client.module.modules.misc.TimerModule && module.isEnabled()
+                ? delta * ((dev.nocturne.client.module.modules.misc.TimerModule) module).speed() : delta;
+    }
+
+    @Override
+    public boolean noFog() {
+        dev.nocturne.client.module.Module module = client.modules().get("NoFog");
+        return module == null || !module.isEnabled();
+    }
+
+    @Override
+    public boolean noHurtCamera() {
+        dev.nocturne.client.module.Module module = client.modules().get("NoHurtCamera");
+        return module == null || !module.isEnabled();
+    }
+
+    @Override
     public boolean destroyStart(Object blockPos, Object direction) {
         return destroy(BlockEvent.Phase.START, blockPos, direction);
     }

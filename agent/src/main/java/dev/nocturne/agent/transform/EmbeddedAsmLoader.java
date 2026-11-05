@@ -261,6 +261,20 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         }
     }
 
+    /** 创建头部捕获、返回点消费的 attackPost 转换器。 */
+    public ClassFileTransformer createAttackPostTransformer(String targetInternalName,
+            String method, String descriptor, String hookOwner) {
+        try {
+            Class<?> type = loadClass("dev.nocturne.agent.transform.AttackPostHookTransformer");
+            return (ClassFileTransformer) type.getConstructor(String.class, String.class, String.class,
+                    String.class).newInstance(targetInternalName, method, descriptor, hookOwner);
+        } catch (Throwable t) {
+            log("could not create attack-post transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; attack-post hook disabled");
+            return null;
+        }
+    }
+
     /** 创建实际位移实参改写器；legacy 覆盖 (DDD) 与 (MoverType,DDD) 两种旧形状。 */
     public ClassFileTransformer createMoveTransformer(String targetInternalName, String method,
                                                        String descriptor, String hookOwner,
@@ -293,6 +307,34 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         } catch (Throwable t) {
             log("could not create packet hook transformer for " + targetInternalName + "." + method
                     + ": " + t + "; packet hook disabled");
+            return null;
+        }
+    }
+
+    /** 创建首参 boolean 门控转换器。 */
+    public ClassFileTransformer createFirstArgumentGateTransformer(String targetInternalName,
+            String method, String descriptor, String hookOwner, String hookMethod) {
+        try {
+            Class<?> type = loadClass("dev.nocturne.agent.transform.FirstArgumentGateTransformer");
+            return (ClassFileTransformer) type.getConstructor(String.class, String.class, String.class,
+                    String.class, String.class).newInstance(targetInternalName, method, descriptor,
+                    hookOwner, hookMethod);
+        } catch (Throwable t) {
+            log("could not create first-argument gate for " + targetInternalName + "." + method + ": " + t);
+            return null;
+        }
+    }
+
+    /** 创建 float 返回值缩放转换器。 */
+    public ClassFileTransformer createFloatReturnTransformer(String targetInternalName,
+            String method, String descriptor, String hookOwner, String hookMethod) {
+        try {
+            Class<?> type = loadClass("dev.nocturne.agent.transform.FloatReturnHookTransformer");
+            return (ClassFileTransformer) type.getConstructor(String.class, String.class, String.class,
+                    String.class, String.class).newInstance(targetInternalName, method, descriptor,
+                    hookOwner, hookMethod);
+        } catch (Throwable t) {
+            log("could not create float-return hook for " + targetInternalName + "." + method + ": " + t);
             return null;
         }
     }

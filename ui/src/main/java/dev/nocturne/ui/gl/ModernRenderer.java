@@ -222,6 +222,11 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         this.bridge = bridge;
     }
 
+    /** 当前物理帧缓冲尺寸。 */
+    public int[] physicalSize() {
+        return new int[]{physicalWidth, physicalHeight};
+    }
+
     /** @return 底层 GL 绑定，供调用方做低层设置或诊断 */
     public ModernGlApi gl() {
         return gl;

@@ -352,6 +352,146 @@ public final class GameBridge {
                 : callMapped(world, ClassType.CLIENT_LEVEL, "getBlockState", position);
     }
 
+    /** 设置客户端天气强度。 */
+    public boolean setWeather(float rain, float thunder) {
+        Object world = world();
+        boolean rainSet = writeField(world, ClassType.CLIENT_LEVEL, "rainLevel", rain);
+        boolean thunderSet = writeField(world, ClassType.CLIENT_LEVEL, "thunderLevel", thunder);
+        if (!rainSet) {
+            rainSet = callMappedStatus(world, ClassType.CLIENT_LEVEL, "setRainLevel", rain);
+        }
+        if (!thunderSet) {
+            thunderSet = callMappedStatus(world, ClassType.CLIENT_LEVEL, "setThunderLevel", thunder);
+        }
+        return rainSet && thunderSet;
+    }
+
+    /** 设置客户端世界时间。 */
+    public boolean setDayTime(long time) {
+        Object world = world();
+        if (writeField(world, ClassType.CLIENT_LEVEL, "dayTime", time)) {
+            return true;
+        }
+        Object data = readField(world, ClassType.CLIENT_LEVEL, "levelData");
+        return callMappedStatus(data, ClassType.LEVEL_DATA, "setDayTime", time);
+    }
+
+    /** 清除本地点击/跳跃延迟字段。 */
+    public void clearInputDelays() {
+        writeField(minecraft(), ClassType.MINECRAFT, "missTime", 0);
+        writeField(player(), ClassType.LIVING_ENTITY, "jumpTicks", 0);
+    }
+
+    /** 当前显示计分板的标题和玩家分数行。 */
+    public java.util.List<String> scoreboardLines() {
+        Object board = callMapped(world(), ClassType.CLIENT_LEVEL, "getScoreboard");
+        Object objective = callMapped(board, ClassType.SCOREBOARD, "getDisplayObjective", 1);
+        if (objective == null) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.List<String> lines = new java.util.ArrayList<String>();
+        String title = componentText(callMapped(objective, ClassType.OBJECTIVE, "getDisplayName"));
+        lines.add(title == null ? "Scoreboard" : title);
+        Object scores = callMapped(board, ClassType.SCOREBOARD, "getPlayerScores", objective);
+        if (scores instanceof Iterable<?>) {
+            for (Object score : (Iterable<?>) scores) {
+                Object owner = callMapped(score, ClassType.SCORE, "getOwner");
+                Number points = number(callMapped(score, ClassType.SCORE, "getScore"));
+                if (owner != null && points != null) {
+                    lines.add(owner + " " + points.intValue());
+                }
+            }
+        }
+        return lines;
+    }
+
+    /** 读取映射类静态字段。 */
+    public Object staticField(ClassType owner, String canonicalField) {
+        Class<?> type = type(owner);
+        if (type == null) {
+            return null;
+        }
+        try {
+            java.lang.reflect.Field field = type.getDeclaredField(mapping.fieldName(owner, canonicalField));
+            field.setAccessible(true);
+            return field.get(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 当前人称：0=第一人称，1=第三人称背面；未知为 -1。 */
+    public int perspective() {
+        Object options = readField(minecraft(), ClassType.MINECRAFT, "options");
+        Number legacy = number(readField(options, ClassType.OPTIONS, "thirdPersonView"));
+        if (legacy != null) {
+            return legacy.intValue() == 0 ? 0 : 1;
+        }
+        Object option = readField(options, ClassType.OPTIONS, "perspective");
+        Object value = callMapped(option, ClassType.OPTION_INSTANCE, "get");
+        return value != null && String.valueOf(value).contains("THIRD") ? 1 : 0;
+    }
+
+    /** 设置第一/第三人称并保留调用结果。 */
+    public boolean setPerspective(int perspective) {
+        Object options = readField(minecraft(), ClassType.MINECRAFT, "options");
+        Number legacy = number(readField(options, ClassType.OPTIONS, "thirdPersonView"));
+        if (legacy != null) {
+            return writeField(options, ClassType.OPTIONS, "thirdPersonView", perspective);
+        }
+        Object option = readField(options, ClassType.OPTIONS, "perspective");
+        Object value = staticField(ClassType.PERSPECTIVE,
+                perspective == 0 ? "FIRST_PERSON" : "THIRD_PERSON_BACK");
+        return callMappedStatus(option, ClassType.OPTION_INSTANCE, "setValue", value);
+    }
+
+    /** 旧版 Timer 的倍率字段；现代字段不存在时由 ASM delta 钩子接管。 */
+    public boolean setTimerSpeed(float speed) {
+        Object tracker = readField(minecraft(), ClassType.MINECRAFT, "deltaTracker");
+        return writeField(tracker, ClassType.DELTA_TRACKER, "timerSpeed", speed);
+    }
+
+    /** 直接把移动意图写入 Input/ClientInput；用于 GUI 打开时的 InvWalk。 */
+    public boolean applyMovementInput(Object input, float forward, float strafe,
+                                      boolean jump, boolean sneak, boolean sprint) {
+        if (input == null) {
+            return false;
+        }
+        Object keys = readField(input, ClassType.CLIENT_INPUT, "keyPresses");
+        if (keys != null) {
+            Object nextKeys = construct(ClassType.PLAYER_INPUT, forward > 0.0f, forward < 0.0f,
+                    strafe > 0.0f, strafe < 0.0f, jump, sneak, sprint);
+            Object move = construct(ClassType.VEC2, strafe, forward);
+            return nextKeys != null && move != null
+                    && writeField(input, ClassType.CLIENT_INPUT, "keyPresses", nextKeys)
+                    && writeField(input, ClassType.CLIENT_INPUT, "moveVector", move);
+        }
+        boolean written = writeField(input, ClassType.INPUT, "forwardImpulse", forward)
+                && writeField(input, ClassType.INPUT, "leftImpulse", strafe)
+                && writeField(input, ClassType.INPUT, "jumping", jump)
+                && writeField(input, ClassType.INPUT, "shiftKeyDown", sneak);
+        callMapped(player(), ClassType.ENTITY, "setSprinting", sprint);
+        return written;
+    }
+
+    /** 当前原生界面；未打开时为 null。 */
+    public Object currentScreen() {
+        Object minecraft = minecraft();
+        Object current = readField(minecraft, ClassType.MINECRAFT, "currentScreen");
+        return current != null ? current : readField(minecraft, ClassType.MINECRAFT, "screen");
+    }
+
+    /** 本地玩家 Input 对象。 */
+    public Object movementInput() {
+        return readField(player(), ClassType.LOCAL_PLAYER, "input");
+    }
+
+    /** 请求全部区块重建；XRay 状态改变后调用。 */
+    public boolean reloadChunks() {
+        Object renderer = readField(minecraft(), ClassType.MINECRAFT, "levelRenderer");
+        return callMappedStatus(renderer, ClassType.LEVEL_RENDERER, "allChanged");
+    }
+
     /** @return 当前客户端世界；未进入世界时为 {@code null} */
     public Object world() {
         Object minecraft = minecraft();
@@ -459,6 +599,180 @@ public final class GameBridge {
         return team != null ? team : callMapped(entity, ClassType.PLAYER, "getTeam");
     }
 
+    /** 方块更新包携带的位置。 */
+    public int[] blockUpdatePosition(Object packet) {
+        Object pos = callMapped(packet, ClassType.CLIENTBOUND_BLOCK_UPDATE, "getPos");
+        Number x = number(readField(pos, ClassType.VEC3_I, "x"));
+        Number y = number(readField(pos, ClassType.VEC3_I, "y"));
+        Number z = number(readField(pos, ClassType.VEC3_I, "z"));
+        return x == null || y == null || z == null ? null
+                : new int[]{x.intValue(), y.intValue(), z.intValue()};
+    }
+
+    /** 本地玩家当前药水效果集合。 */
+    public Object activeEffects() {
+        return callMapped(player(), ClassType.LIVING_ENTITY, "getActiveEffects");
+    }
+
+    /** 只移除 MobEffects 中指定的一种效果；兼容旧版 int id 与现代 Holder 参数。 */
+    public boolean removeEffect(String canonicalField) {
+        Object player = player();
+        Class<?> owner = type(ClassType.MOB_EFFECTS);
+        if (player == null || owner == null) {
+            return false;
+        }
+        try {
+            String fieldName = mapping.fieldName(ClassType.MOB_EFFECTS, canonicalField);
+            java.lang.reflect.Field field = owner.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            Object effect = field.get(null);
+            Number legacyId = number(readField(effect, ClassType.MOB_EFFECT, "id"));
+            for (java.lang.reflect.Method method : player.getClass().getMethods()) {
+                Class<?>[] parameters = method.getParameterTypes();
+                if (parameters.length != 1) {
+                    continue;
+                }
+                Object argument = parameters[0].isInstance(effect) ? effect
+                        : parameters[0] == int.class && legacyId != null ? legacyId.intValue() : null;
+                if (argument == null) {
+                    continue;
+                }
+                method.setAccessible(true);
+                method.invoke(player, argument);
+                return true;
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+        return false;
+    }
+
+    /** 鱼钩当前钓到的实体；没有时为 null。 */
+    public Object fishingCaughtEntity() {
+        return readField(fishingHook(), ClassType.FISHING_HOOK, "caughtEntity");
+    }
+
+    /** 本地玩家当前鱼钩；未抛出或字段不可用时为 null。 */
+    public Object fishingHook() {
+        return readField(player(), ClassType.PLAYER, "fishing");
+    }
+
+    /** 当前世界用于渲染的实体列表/数组；不可读取时为 null。 */
+    public Object entities() {
+        return callMapped(world(), ClassType.CLIENT_LEVEL, "entitiesForRendering");
+    }
+
+    /** 任意 BlockPos/Vec3i 对象的整数坐标。 */
+    public int[] blockCoordinates(Object pos) {
+        Number x = number(readField(pos, ClassType.VEC3_I, "x"));
+        Number y = number(readField(pos, ClassType.VEC3_I, "y"));
+        Number z = number(readField(pos, ClassType.VEC3_I, "z"));
+        return x == null || y == null || z == null ? null
+                : new int[]{x.intValue(), y.intValue(), z.intValue()};
+    }
+
+    /** 准星方块命中的整数坐标；非方块命中或坐标缺失时为 null。 */
+    public int[] hitBlockPosition(Object hit) {
+        Object pos = callMapped(hit, ClassType.BLOCK_HIT_RESULT, "getBlockPos");
+        Number x = number(readField(pos, ClassType.VEC3_I, "x"));
+        Number y = number(readField(pos, ClassType.VEC3_I, "y"));
+        Number z = number(readField(pos, ClassType.VEC3_I, "z"));
+        return x == null || y == null || z == null ? null
+                : new int[]{x.intValue(), y.intValue(), z.intValue()};
+    }
+
+    /** 准星当前命中的方块状态。 */
+    public Object hitBlockState(Object hit) {
+        int[] pos = hitBlockPosition(hit);
+        return pos == null ? null : blockStateAt(pos[0], pos[1], pos[2]);
+    }
+
+    /** 方块状态的稳定描述 id。 */
+    public String blockDescription(Object blockState) {
+        Object block = callMapped(blockState, ClassType.BLOCK_STATE, "getBlock");
+        Object id = callMapped(block, ClassType.BLOCK, "getDescriptionId");
+        return id == null ? "" : String.valueOf(id);
+    }
+
+    /** 直接设置实体位置，供 Freecam 停用恢复。 */
+    public boolean setPosition(Object entity, double x, double y, double z) {
+        return callMappedStatus(entity, ClassType.ENTITY, "setPos", x, y, z);
+    }
+
+    /** 写入实体 noPhysics，返回是否实际写入。 */
+    public boolean setNoPhysics(Object entity, boolean value) {
+        return writeField(entity, ClassType.ENTITY, "noPhysics", value);
+    }
+
+    /** 写入实体碰撞/命中盒。 */
+    public boolean setEntityBox(Object entity, Object box) {
+        return writeField(entity, ClassType.ENTITY, "bb", box);
+    }
+
+    /** 实体累计下落距离。 */
+    public float fallDistance(Object entity) {
+        Number value = number(readField(entity, ClassType.ENTITY, "fallDistance"));
+        return value == null ? 0.0f : value.floatValue();
+    }
+
+    /** 实体是否正在使用物品。 */
+    public boolean usingItem(Object entity) {
+        return Boolean.TRUE.equals(callMapped(entity, ClassType.LIVING_ENTITY, "isUsingItem"));
+    }
+
+    /** 实体纯文本名称；组件与旧版 String 均可读取。 */
+    public String entityName(Object entity) {
+        String text = componentText(callMapped(entity, ClassType.ENTITY, "getName"));
+        return text == null ? "" : text;
+    }
+
+    /** 实体网络 id；不可读取时为 -1。 */
+    public int entityId(Object entity) {
+        Number id = number(callMapped(entity, ClassType.ENTITY, "getId"));
+        return id == null ? -1 : id.intValue();
+    }
+
+    /** 活体当前血量；非活体或不可读取时为 0。 */
+    public float health(Object entity) {
+        Number health = number(callMapped(entity, ClassType.LIVING_ENTITY, "getHealth"));
+        return health == null ? 0.0f : health.floatValue();
+    }
+
+    /** 活体最大血量；不可读取时为 0。 */
+    public float maxHealth(Object entity) {
+        Number health = number(callMapped(entity, ClassType.LIVING_ENTITY, "getMaxHealth"));
+        return health == null ? 0.0f : health.floatValue();
+    }
+
+    /** 活体受伤无敌 tick；不可读取时为 0。 */
+    public int hurtTime(Object entity) {
+        Number value = number(readField(entity, ClassType.LIVING_ENTITY, "hurtTime"));
+        return value == null ? 0 : value.intValue();
+    }
+
+    /** 实体脚部世界坐标；任一轴缺失时返回 null。 */
+    public double[] entityPosition(Object entity) {
+        Object position = callMapped(entity, ClassType.ENTITY, "position");
+        Number x = number(readField(position, ClassType.VEC3, "x"));
+        Number y = number(readField(position, ClassType.VEC3, "y"));
+        Number z = number(readField(position, ClassType.VEC3, "z"));
+        return x == null || y == null || z == null ? null
+                : new double[]{x.doubleValue(), y.doubleValue(), z.doubleValue()};
+    }
+
+    /** 两实体脚部中心距离；不可读取时为正无穷。 */
+    public double distance(Object first, Object second) {
+        double[] a = entityPosition(first);
+        double[] b = entityPosition(second);
+        if (a == null || b == null) {
+            return Double.POSITIVE_INFINITY;
+        }
+        double x = a[0] - b[0];
+        double y = a[1] - b[1];
+        double z = a[2] - b[2];
+        return Math.sqrt(x * x + y * y + z * z);
+    }
+
     /** 队伍 RGB；旧版返回数字、26.x 返回带 rgb 字段的 TeamColor，未知为 -1。 */
     public int teamColor(Object entity) {
         Object color = callMapped(entity, ClassType.ENTITY, "getTeamColor");
@@ -483,6 +797,49 @@ public final class GameBridge {
         return legacy instanceof Number ? ((Number) legacy).intValue() : -1;
     }
 
+    /** 是否为 RELEASE_USE_ITEM 出栈包。 */
+    public boolean isReleaseUseItem(Object packet) {
+        Object action = callMapped(packet, ClassType.SERVERBOUND_PLAYER_ACTION, "getAction");
+        return action != null && "RELEASE_USE_ITEM".equals(String.valueOf(action));
+    }
+
+    /** 实体是否在水中；能力缺失时保守返回 false。 */
+    public boolean inWater(Object entity) {
+        return Boolean.TRUE.equals(callMapped(entity, ClassType.ENTITY, "isInWater"));
+    }
+
+    /** 速度包四元组：entityId、xa、ya、za；非速度包或字段缺失时返回 null。 */
+    public int[] velocityData(Object packet) {
+        if (!isInstance(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY)) {
+            return null;
+        }
+        Number id = number(callMapped(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY, "getId"));
+        Number x = number(callMapped(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY, "getXa"));
+        Number y = number(callMapped(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY, "getYa"));
+        Number z = number(callMapped(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY, "getZa"));
+        if (id == null) {
+            id = number(readField(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY, "id"));
+        }
+        if (x == null) {
+            x = number(readField(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY, "xa"));
+        }
+        if (y == null) {
+            y = number(readField(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY, "ya"));
+        }
+        if (z == null) {
+            z = number(readField(packet, ClassType.CLIENTBOUND_ENTITY_VELOCITY, "za"));
+        }
+        return id == null || x == null || y == null || z == null ? null
+                : new int[]{id.intValue(), x.intValue(), y.intValue(), z.intValue()};
+    }
+
+    /** 当前包是否为本地玩家的速度包。 */
+    public boolean isLocalVelocity(Object packet) {
+        int[] data = velocityData(packet);
+        Number playerId = number(callMapped(player(), ClassType.ENTITY, "getId"));
+        return data != null && playerId != null && data[0] == playerId.intValue();
+    }
+
     /** 当前背包对象。 */
     public Object inventory() {
         Object player = player();
@@ -496,6 +853,67 @@ public final class GameBridge {
                 : callMapped(inventory, ClassType.INVENTORY, "getItem", slot);
     }
 
+    /** 读取背包/装备槽；槽位非法或背包未就绪时返回 null。 */
+    public Object inventoryStack(int slot) {
+        Object inventory = inventory();
+        return inventory == null || slot < 0 ? null
+                : callMapped(inventory, ClassType.INVENTORY, "getItem", slot);
+    }
+
+    /** 当前菜单是否不是玩家自己的背包菜单。 */
+    public boolean containerOpen() {
+        Object player = player();
+        if (player == null) {
+            return false;
+        }
+        Object menu = readField(player, ClassType.PLAYER, "containerMenu");
+        Object inventoryMenu = readField(player, ClassType.PLAYER, "inventoryMenu");
+        return menu != null && menu != inventoryMenu;
+    }
+
+    /** 当前菜单的物品列表；现代读 getItems()，旧版读 inventoryItemStacks 字段。 */
+    public Object containerItems() {
+        Object player = player();
+        Object menu = player == null ? null : readField(player, ClassType.PLAYER, "containerMenu");
+        Object items = callMapped(menu, ClassType.ABSTRACT_CONTAINER_MENU, "getItems");
+        return items != null ? items : readField(menu, ClassType.ABSTRACT_CONTAINER_MENU, "items");
+    }
+
+    /** 读取当前菜单槽位物品；越界返回 null。 */
+    public Object containerStack(int slot) {
+        Object items = containerItems();
+        if (!(items instanceof java.util.List) || slot < 0) {
+            return null;
+        }
+        java.util.List<?> list = (java.util.List<?>) items;
+        return slot < list.size() ? list.get(slot) : null;
+    }
+
+    /** 当前菜单槽位数量；不可读取时为 0。 */
+    public int containerSize() {
+        Object items = containerItems();
+        return items instanceof java.util.List ? ((java.util.List<?>) items).size() : 0;
+    }
+
+    /** 物品已损耗耐久。 */
+    public int itemDamage(Object stack) {
+        Number value = number(callMapped(stack, ClassType.ITEM_STACK, "getDamageValue"));
+        return value == null ? 0 : value.intValue();
+    }
+
+    /** 物品最大耐久；不可损坏物品通常返回 0。 */
+    public int itemMaxDamage(Object stack) {
+        Number value = number(callMapped(stack, ClassType.ITEM_STACK, "getMaxDamage"));
+        return value == null ? 0 : value.intValue();
+    }
+
+    /** 物品显示名；组件与旧版 String 都统一为纯文本。 */
+    public String itemDisplayName(Object stack) {
+        Object name = callMapped(stack, ClassType.ITEM_STACK, "getDisplayName");
+        String text = componentText(name);
+        return text == null ? itemDescription(stack) : text;
+    }
+
     /** 读取实体主/副手物品。 */
     public Object heldItem(Object entity, boolean offHand) {
         return callMapped(entity, ClassType.LIVING_ENTITY,
@@ -505,6 +923,41 @@ public final class GameBridge {
     /** 掉落物携带的物品栈。 */
     public Object droppedItem(Object itemEntity) {
         return callMapped(itemEntity, ClassType.ITEM_ENTITY, "getItem");
+    }
+
+    /** 物品稳定描述 id；旧版退回 unlocalized name，无法读取时为空串。 */
+    public String itemDescription(Object stack) {
+        Object item = callMapped(stack, ClassType.ITEM_STACK, "getItem");
+        Object description = callMapped(item, ClassType.ITEM, "getDescriptionId");
+        return description == null ? "" : String.valueOf(description);
+    }
+
+    /** 按逗号/空白分隔的描述片段匹配物品；支持 OpenVape 配置中的复数类别词。 */
+    public boolean itemMatches(Object stack, String rules) {
+        String description = itemDescription(stack).toLowerCase(java.util.Locale.ROOT);
+        if (description.isEmpty() || rules == null) {
+            return false;
+        }
+        for (String part : rules.toLowerCase(java.util.Locale.ROOT).split("[,;\\s]+")) {
+            String token = part.endsWith("s") && part.length() > 1
+                    ? part.substring(0, part.length() - 1) : part;
+            if (token.equals("block")
+                    && isInstance(callMapped(stack, ClassType.ITEM_STACK, "getItem"), ClassType.BLOCK_ITEM)) {
+                return true;
+            }
+            if (token.equals("food") && (description.contains("apple") || description.contains("bread")
+                    || description.contains("pork") || description.contains("beef")
+                    || description.contains("chicken") || description.contains("mutton")
+                    || description.contains("cod") || description.contains("salmon")
+                    || description.contains("carrot") || description.contains("potato")
+                    || description.contains("stew") || description.contains("soup"))) {
+                return true;
+            }
+            if (!token.isEmpty() && description.contains(token)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 实体宽度；旧版没有 getter 时读取 width 字段。 */

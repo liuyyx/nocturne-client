@@ -99,12 +99,14 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 - **事件总线**：`EventBus`，同步、先按优先级再按同级注册顺序、逐订阅者异常隔离。
   可取消事件默认跳过后续订阅者，`skipCancelled=true` 的订阅者仍接收；分发使用增删时重建的不可变快照。
   已有 PlayerTick / Motion / Packet / Render / Key / MouseButton / Attack / UseItem / WorldChange
-  以及 MovementInput / Move / Screen / EntityJoin / Block 事件；PlayerTick.Pre 可取消整个本地玩家 tick，
+  以及 MovementInput / Move / Screen / EntityJoin / Block / EntityRender 事件；PlayerTick.Pre 可取消整个本地玩家 tick，
   MoveEvent 直接改写 Entity.move 的 Vec3 或旧版 double 实参，MovementInputEvent 在每 tick 输入合成后
   修改前进/平移/跳跃/潜行/疾跑意图。26.x 的不可变 Input record 由事件层整体替换并同步 moveVector。
 - **包队列**：`PacketController` 提供双向 FIFO hold/release/clear、连接身份校验和时序敏感直发；
   释放经 ThreadLocal 直通上下文避免嵌套 send 重入，RECEIVE 走 Packet.handle(listener) 回原版处理链。
   世界切换与 panic 丢弃旧队列，不把积压包放进新连接。
+  `BlockRenderDispatcher` 的首双参门负责 XRay 的方块剔除，`DeltaTracker` 的 float 返回钩负责 Timer，
+  `GameRenderer` 门负责 NoFog/NoHurtCamera。
 - **动作层**：`ActionApi` 提供攻击/点击、精确命中点放置、主副手使用与挥手、普通/静默换槽、
   容器点击/关闭、聊天/命令、raycast、速度/跳跃/疾跑、玩家命令包、移动包与 `readState`。
   `PlayerState` 额外携带当前槽、主副手数量、血量/吸收、攻击冷却和移动状态；单项缺失独立降级。
@@ -124,8 +126,9 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 - **运行时**：`NocturneRuntime.onFrame()` 是帧广播器，四层防御：
   ThreadLocal 重入 → `tryLock` 非阻塞 → 逐监听器 `catch(Throwable)` → 最外层兜底。
   按 50ms 折算成 20Hz 驱动 `ModuleRegistry.tick()`。状态全在 bootstrap 层的 `FrameDispatcher`（见 3.5）。
-- **HUD 接缝**：`HudSink`（`add`/`remove`/`has`）接口保留，但**当前没有实现**——旧 UI 库连同
-  `SkijaHudSink` 与 HUD/HUD 编辑器一起被删除（用户确认），`OverlayBootstrap` 不再注入汇。
+- **HUD 接缝**：`GuiOverlay` 实现 `HudSink`（`add`/`remove`/`has`），在真实帧内绘制文本、
+  多行 HUD 和 ActiveModules 列表；同时实现 `RenderCapabilities`，为实体渲染钩子提供深度、纹理、
+  颜色、polygon offset 与帧缓冲读取。InventoryBlur/MotionBlur 使用真实降采样与历史帧混合。
 
 ### 3.4 ui（自绘 ClickGUI）
 

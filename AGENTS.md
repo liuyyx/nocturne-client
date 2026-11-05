@@ -153,22 +153,24 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 
 ### 5.1 新增模块
 
-1. 在 `client/src/main/java/dev/nocturne/client/module/modules/<分类小写>/` 建类，继承 `Module`（HUD 行继承 `HudModule`）。
-2. 实现 `name()` + `category()`；分类为 `COMBAT / MOVEMENT / RENDER / WORLD / INVENTORY / PLAYER / MISC`。
+1. 在 `client/src/main/java/dev/nocturne/client/module/modules/<分类小写>/` 建类，游戏功能优先继承
+   `GameModule`（统一名称/分类与启停退订），HUD 行继承 `HudModule`。
+2. 继承 `GameModule` 时在构造器传入名称/分类；其它基类按各自契约实现 `name()` + `category()`。
 3. 值用字段初始化器 `private final BooleanValue x = add(new BooleanValue("X", true));`
    （`BooleanValue`/`NumberValue`/`ModeValue`/`ColorValue`）；子类构造器末尾必须 `normaliseDefault()`。
 4. 实现 `onTick()` 与/或 `onEnable()`/`onDisable()`；需要跨模块协作时订阅 `TickEvent`。
 5. 在 `NocturneClient.registerModules()` 里按分类连续注册。
 6. GUI 卡片自动生成：`BooleanValue→FaCheckRow`、`NumberValue→FaSliderRow`、`ModeValue→FaComboRow`、
    `ColorValue→FaColorRow`，其它 Value 类型会被跳过。
-   空分类的 Tab 会被隐藏；`XrayModule` 目前**故意未注册**（渲染 pass 未接，别顺手打开）。
+   空分类的 Tab 会被隐藏。
 
 ### 5.2 新增渲染模块
 
 实现 `WorldOverlay`，在 `onEnable` 订阅 `RenderEvent`（并在 `onTick` 里自愈重订阅），
 用 `OverlayDraw` 画、用 `WorldProjection` 把世界坐标投影成屏幕逻辑像素。
-需要实体渲染 pass / 方块渲染拦截的效果（Chams、Xray）在 2D 覆盖层下**做不了**——这是能力边界，不是没做。
-**没接入的模块不要注册**：注册出去的「开了没反应」开关比不提供更糟（Chams/Xray 都是这个处理）。
+Chams 使用 `EntityRenderDispatcher` 的实体首参回调；Xray 使用 `BlockRenderDispatcher` 的
+`BlockState + BlockPos` 双参门控。新增需要 render pass 的效果也应走真实钩子，**没接入的模块不要注册**：
+注册出去的「开了没反应」开关比不提供更糟。
 
 `ModernRenderer`（gl-core）的两条硬约束：
 1. 同色几何走合并缓冲（`batchBuffer`），任何会改 GL 状态或改变层级的调用前必须 `flushBatch()`——
@@ -238,6 +240,6 @@ SDL 世代**鼠标取游戏自己的事件态**（`MouseHandler.xpos/ypos` + `ac
 - 3D 玩家预览只有占位卡片（映射表缺实体渲染面，26.x 又不能自建离屏 framebuffer）。
 - 1.14–1.14.3 的 StorageEsp、1.9–1.14.3 的 `ClientLevel#getBlockState` 面缺失（对应功能降级）。
 - 新 Fatality 界面只有**离屏光栅**验证，真机复验未做；旧界面已整体删除，HUD/HUD 编辑器不再存在
-  （`HudSink` 接口保留、当前无实现）。
+  （`GuiOverlay` 已提供新的文本/多行 HUD，不包含旧编辑器）。
 - 世界覆盖层已铺：ESP / Tracers / NameTags / ItemEsp / Trajectories / StorageEsp / Search；
-  Chams、Xray 需要渲染 pass 钩子，属未实现。
+  Chams 已接实体渲染回调，Xray 已接方块渲染门控。

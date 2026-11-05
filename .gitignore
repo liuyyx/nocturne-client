@@ -41,3 +41,4 @@ desktop.ini
 
 # Keep the shipped mapping data (source asset, not build output)
 !client/src/main/resources/mappings-*.json
+.serena/

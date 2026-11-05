@@ -161,7 +161,8 @@ public final class TargetManager {
                 || !bridge.isInstance(entity, ClassType.LIVING_ENTITY)) {
             return;
         }
-        if (!dev.nocturne.client.module.modules.misc.TargetFilterModule.validTarget(bridge, player, entity)) {
+        if (!dev.nocturne.client.module.modules.misc.TargetFilterModule.validTarget(bridge, player, entity)
+                || dev.nocturne.client.module.modules.combat.AntiBotModule.isBot(bridge, entity)) {
             return;
         }
         boolean isPlayer = bridge.isInstance(entity, ClassType.PLAYER);

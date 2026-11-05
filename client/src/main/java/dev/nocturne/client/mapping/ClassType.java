@@ -28,6 +28,8 @@ public enum ClassType {
     INVENTORY("net.minecraft.world.entity.player.Inventory"),
     /** 玩家能力（飞行、创造模式）。 */
     ABILITIES("net.minecraft.world.entity.player.Abilities"),
+    /** 装备槽枚举；盔甲/鞘翅判断使用。 */
+    EQUIPMENT_SLOT("net.minecraft.world.entity.EquipmentSlot"),
     /** 生物实体基类。 */
     LIVING_ENTITY("net.minecraft.world.entity.LivingEntity"),
     /**
@@ -67,6 +69,9 @@ public enum ClassType {
     MOUSE_BUTTON_INFO("net.minecraft.client.input.MouseButtonInfo"),
     /** 界面基类。 */
     SCREEN("net.minecraft.client.gui.screens.Screen"),
+    /** 容器界面与槽位；HoverTotem 使用 hoveredSlot.index。 */
+    CONTAINER_SCREEN("net.minecraft.client.gui.screens.inventory.AbstractContainerScreen"),
+    SLOT("net.minecraft.world.inventory.Slot"),
     /** HUD 绘制入口（1.20–1.21 的 {@code Gui.render}）。 */
     HUD("net.minecraft.client.gui.Gui"),
     /** 物品栏界面：调用游戏原生玩家模型绘制方法。 */
@@ -185,6 +190,7 @@ public enum ClassType {
     THROWN_POTION("net.minecraft.world.entity.projectile.ThrownPotion"),
     /** 方块更新包；PropHunt 记录近期变化位置。 */
     CLIENTBOUND_BLOCK_UPDATE("net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket"),
+    CLIENTBOUND_BLOCK_EVENT("net.minecraft.network.protocol.game.ClientboundBlockEventPacket"),
     /** 珍珠实体；AutoPearl/PearlCatch 轨迹目标。 */
     THROWN_ENDER_PEARL("net.minecraft.world.entity.projectile.ThrownEnderpearl"),
     /** 鱼钩实体；AutoFish 读取玩家 fishing 字段。 */
@@ -209,9 +215,24 @@ public enum ClassType {
     SERVERBOUND_PLAYER_ACTION("net.minecraft.network.protocol.game.ServerboundPlayerActionPacket"),
     /** 实体速度包；Velocity/JumpReset/KnockbackDelay 读取并重建。 */
     CLIENTBOUND_ENTITY_VELOCITY("net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket"),
+    CLIENTBOUND_EXPLOSION("net.minecraft.network.protocol.game.ClientboundExplodePacket"),
     /** Tab 列表更新与移除包；LogoutSpots/PlayerAlarms 判型。 */
     CLIENTBOUND_PLAYER_INFO_UPDATE("net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket"),
     CLIENTBOUND_PLAYER_INFO_REMOVE("net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket"),
+    /** Epsilon 包级模块使用的聊天、位置、槽位和容器包。 */
+    CLIENTBOUND_SYSTEM_CHAT("net.minecraft.network.protocol.game.ClientboundSystemChatPacket"),
+    CLIENTBOUND_PLAYER_POSITION("net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket"),
+    SERVERBOUND_CONTAINER_CLICK("net.minecraft.network.protocol.game.ServerboundContainerClickPacket"),
+    SERVERBOUND_PLAYER_INPUT("net.minecraft.network.protocol.game.ServerboundPlayerInputPacket"),
+    CLIENTBOUND_SET_TITLE_TEXT("net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket"),
+    CLIENTBOUND_SET_SUBTITLE_TEXT("net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket"),
+    CLIENTBOUND_SET_ACTION_BAR_TEXT("net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket"),
+    /** 文本组件与可变内容；TitleReplace 在包上替换内容。 */
+    COMPONENT("net.minecraft.network.chat.Component"),
+    MUTABLE_COMPONENT("net.minecraft.network.chat.MutableComponent"),
+    STYLE("net.minecraft.network.chat.Style"),
+    /** 原版声音常量；报警和命中音效共享。 */
+    SOUND_EVENTS("net.minecraft.sounds.SoundEvents"),
     /** 计分板、目标与分数；血量/队伍显示读取。 */
     SCOREBOARD("net.minecraft.world.scores.Scoreboard"),
     OBJECTIVE("net.minecraft.world.scores.Objective"),
@@ -244,6 +265,8 @@ public enum ClassType {
     CLICK_TYPE("net.minecraft.world.inventory.ClickType"),
     /** 玩家网络信息与游戏模式。 */
     PLAYER_INFO("net.minecraft.client.multiplayer.PlayerInfo"),
+    /** 玩家资料；UUID 是 AntiBot/好友/退服记录的稳定键。 */
+    GAME_PROFILE("com.mojang.authlib.GameProfile"),
     /** 游戏模式枚举。 */
     GAME_TYPE("net.minecraft.world.level.GameType"),
     /** 按键映射；物理输入查询使用，不用于持久写入移动状态。 */

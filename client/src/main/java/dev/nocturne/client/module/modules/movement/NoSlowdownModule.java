@@ -1,19 +1,21 @@
 package dev.nocturne.client.module.modules.movement;
 
-import dev.nocturne.client.action.PlayerState;
 import dev.nocturne.client.event.MoveEvent;
 import dev.nocturne.client.event.MovementInputEvent;
-import dev.nocturne.client.game.GameBridge;
-import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.event.PacketEvent;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
 import dev.nocturne.client.value.BooleanValue;
-import dev.nocturne.client.value.TextValue;
+import dev.nocturne.client.value.ModeValue;
 
-/** 使用物品时恢复被原版压到 0.2 的移动输入和位移。 */
+/** Epsilon NoSlowdown：Vanilla/GrimBlink/Grim1_2/Grim1_3 的物品与蛛网减速处理。 */
 public final class NoSlowdownModule extends GameModule {
-    private final BooleanValue limitItems = add(new BooleanValue("Limit Items", false));
-    private final TextValue whitelisted = add(new TextValue("Whitelisted", "swords", 256));
+    private final ModeValue mode = add(new ModeValue("Mode", "Vanilla", "Vanilla", "GrimBlink", "Grim1_2", "Grim1_3"));
+    private final BooleanValue food = add(new BooleanValue("Food", true));
+    private final BooleanValue bow = add(new BooleanValue("Bow", true));
+    private final BooleanValue crossbow = add(new BooleanValue("Crossbow", true));
+    private final BooleanValue cobweb = add(new BooleanValue("Cobweb", true));
+    private boolean holding;
 
     public NoSlowdownModule() {
         super("NoSlowdown", Category.MOVEMENT);
@@ -21,41 +23,69 @@ public final class NoSlowdownModule extends GameModule {
 
     @Override
     protected void onStart() {
-        listen(MovementInputEvent.class, this::onInput);
-        listen(MoveEvent.class, this::onMove);
+        listen(MovementInputEvent.class, event -> {
+            if (!activeForHeld()) {
+                return;
+            }
+            if (event.forward != 0.0f) {
+                event.forward = Math.signum(event.forward);
+            }
+            if (event.strafe != 0.0f) {
+                event.strafe = Math.signum(event.strafe);
+            }
+        });
+        listen(MoveEvent.class, event -> {
+            if (activeForHeld()) {
+                double length = Math.hypot(event.x, event.z);
+                if (length > 1.0e-5 && length <= 0.21) {
+                    event.x *= 5.0;
+                    event.z *= 5.0;
+                }
+            }
+            if (cobweb.get() && mode.is("Vanilla") && inCobweb()) {
+                event.x *= 5.0;
+                event.z *= 5.0;
+                event.y *= 5.0;
+            }
+        });
+        listen(PacketEvent.class, event -> {
+            if (holding && event.direction == PacketEvent.Direction.SEND) {
+                event.cancelled = true;
+            }
+        });
     }
 
-    private void onInput(MovementInputEvent event) {
-        if (!usingItem()) {
-            return;
-        }
-        if (event.forward != 0.0f) {
-            event.forward = Math.signum(event.forward);
-        }
-        if (event.strafe != 0.0f) {
-            event.strafe = Math.signum(event.strafe);
-        }
-    }
-
-    private void onMove(MoveEvent event) {
-        if (!usingItem()) {
-            return;
-        }
-        double length = Math.sqrt(event.x * event.x + event.z * event.z);
-        if (length > 1.0e-5 && length <= 0.21) {
-            event.x *= 5.0;
-            event.z *= 5.0;
+    @Override
+    public void onTick() {
+        boolean blink = mode.is("GrimBlink") && bridge().usingItem(bridge().player()) && activeForHeld();
+        if (blink && !holding) {
+            holding = client().packets().hold(PacketEvent.Direction.SEND);
+        } else if (!blink && holding) {
+            holding = false;
+            client().packets().release(PacketEvent.Direction.SEND);
         }
     }
 
-    private boolean usingItem() {
-        PlayerState state = state();
-        GameBridge bridge = bridge();
-        if (!state.present() || bridge == null || !Boolean.TRUE.equals(
-                bridge.callMapped(state.player(), ClassType.LIVING_ENTITY, "isUsingItem"))) {
+    private boolean activeForHeld() {
+        if (!bridge().usingItem(bridge().player())) {
             return false;
         }
-        return !limitItems.get()
-                || bridge.itemMatches(bridge.heldItem(state.player(), false), whitelisted.get());
+        String id = bridge().itemDescription(bridge().usingItemStack(bridge().player()));
+        return food.get() && id.matches(".*(apple|bread|stew|soup|porkchop|beef|chicken|mutton|fish|cookie|melon|carrot|potato|berries|honey).*")
+                || bow.get() && id.contains("bow") && !id.contains("crossbow")
+                || crossbow.get() && id.contains("crossbow") || mode.is("GrimBlink") && food.get();
+    }
+
+    private boolean inCobweb() {
+        return bridge().blockDescription(bridge().blockStateAt((int) Math.floor(state().x()),
+                (int) Math.floor(state().y()), (int) Math.floor(state().z()))).contains("cobweb");
+    }
+
+    @Override
+    protected void onStop() {
+        if (holding) {
+            client().packets().release(PacketEvent.Direction.SEND);
+        }
+        holding = false;
     }
 }

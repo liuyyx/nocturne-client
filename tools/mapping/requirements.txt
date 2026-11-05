@@ -23,6 +23,9 @@ net/minecraft/client/Minecraft#fontRenderer
 net/minecraft/client/Minecraft#gameMode
 net/minecraft/client/Minecraft#gameRenderer
 net/minecraft/client/Minecraft#gui
+net/minecraft/client/gui/Gui#displayClientMessage
+net/minecraft/sounds/SoundEvents
+net/minecraft/world/entity/player/Player#playSound
 net/minecraft/client/Minecraft#hitResult
 net/minecraft/client/Minecraft#level
 net/minecraft/client/Minecraft#options
@@ -67,6 +70,10 @@ net/minecraft/client/gui/screens/ChatScreen
 net/minecraft/client/gui/screens/PauseScreen
 
 net/minecraft/client/gui/screens/Screen
+net/minecraft/client/gui/screens/inventory/AbstractContainerScreen
+net/minecraft/client/gui/screens/inventory/AbstractContainerScreen#hoveredSlot
+net/minecraft/world/inventory/Slot
+net/minecraft/world/inventory/Slot#index
 
 net/minecraft/client/gui/screens/inventory/AbstractContainerScreen
 
@@ -88,6 +95,7 @@ net/minecraft/client/multiplayer/ClientLevel#getChunk
 net/minecraft/client/multiplayer/ClientPacketListener
 net/minecraft/client/multiplayer/ClientPacketListener#send()
 
+net/minecraft/client/multiplayer/MultiPlayerGameMode#destroyDelay
 net/minecraft/client/multiplayer/MultiPlayerGameMode
 net/minecraft/client/multiplayer/MultiPlayerGameMode#attack()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#continueDestroyBlock()
@@ -131,6 +139,10 @@ net/minecraft/client/player/LocalPlayer#tick()
 net/minecraft/client/player/LocalPlayer#sendPosition()
 
 net/minecraft/client/player/RemotePlayer
+net/minecraft/world/entity/Entity#id
+net/minecraft/world/entity/Entity#remove
+net/minecraft/world/entity/Entity#setDead
+net/minecraft/world/entity/player/Inventory#setItem
 
 net/minecraft/client/Minecraft#missTime
 net/minecraft/world/entity/LivingEntity#jumpTicks
@@ -176,6 +188,7 @@ net/minecraft/network/chat/Component#getString()
 net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket
 
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket
+net/minecraft/network/protocol/game/ClientboundExplodePacket
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#getId()
 net/minecraft/network/protocol/game/ServerboundPlayerActionPacket
 net/minecraft/network/protocol/game/ServerboundPlayerActionPacket#getAction()
@@ -200,6 +213,8 @@ net/minecraft/world/entity/projectile/Egg
 net/minecraft/world/entity/projectile/ThrownPotion
 net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket
 net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket#getPos()
+net/minecraft/network/protocol/game/ClientboundBlockEventPacket
+net/minecraft/network/protocol/game/ClientboundBlockEventPacket#getPos
 net/minecraft/world/effect/MobEffects#NAUSEA
 net/minecraft/world/effect/MobEffects#BLINDNESS
 net/minecraft/world/effect/MobEffects#SLOWNESS
@@ -223,6 +238,13 @@ net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Rot
 net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$StatusOnly
 
 net/minecraft/world/entity/Entity
+net/minecraft/world/entity/Entity#getUUID
+net/minecraft/client/multiplayer/ClientPacketListener#getOnlinePlayers
+net/minecraft/client/multiplayer/PlayerInfo#getProfile
+net/minecraft/client/multiplayer/PlayerInfo#getGameMode
+com/mojang/authlib/GameProfile
+com/mojang/authlib/GameProfile#getId
+com/mojang/authlib/GameProfile#getName
 net/minecraft/world/entity/Entity#fallDistance
 net/minecraft/world/entity/Entity#isDead
 net/minecraft/world/entity/Entity#noPhysics
@@ -428,6 +450,10 @@ net/minecraft/world/level/block/ChestBlock
 
 # 方块身份（Search 名单匹配用）：描述 id 是跨代际最稳的面——1.8.9/1.12.2 返回 tile.oreGold，
 # 1.13 起返回 block.minecraft.gold_ore（两套字符串都由各版本 jar 的 en_us 语言文件核对过）。
+net/minecraft/world/level/block/Blocks
+net/minecraft/world/level/block/Blocks#AIR
+net/minecraft/world/level/block/Block#getDefaultState
+net/minecraft/world/level/Level#setBlock
 net/minecraft/world/level/block/Block
 net/minecraft/world/level/block/Block#getDescriptionId()
 # 区块内逐格读方块：走 LevelReader 面而不是 ClientLevel 面——后者在 1.9–1.14.3 缺（锚点学不到）。
@@ -561,7 +587,19 @@ net/minecraft/world/entity/Entity#move()
 net/minecraft/world/entity/LivingEntity#hasLineOfSight()
 net/minecraft/world/entity/LivingEntity#getAbsorptionAmount()
 net/minecraft/world/entity/LivingEntity#getUseItem()
+net/minecraft/world/entity/LivingEntity#getUsedItemHand
 net/minecraft/world/entity/LivingEntity#getUseItemRemainingTicks()
+net/minecraft/world/entity/LivingEntity#getItemBySlot
+net/minecraft/world/entity/LivingEntity#getCurrentArmor
+net/minecraft/world/entity/EquipmentSlot
+net/minecraft/world/entity/EquipmentSlot#HEAD
+net/minecraft/world/entity/EquipmentSlot#CHEST
+net/minecraft/world/entity/EquipmentSlot#LEGS
+net/minecraft/world/entity/EquipmentSlot#FEET
+net/minecraft/world/entity/Entity#isPassenger
+net/minecraft/world/entity/Entity#getScale
+net/minecraft/client/Options#keyUse
+net/minecraft/client/KeyMapping#setDown
 net/minecraft/world/entity/LivingEntity#travel()
 net/minecraft/world/entity/player/Player#inventoryMenu
 net/minecraft/world/entity/player/Player#isSpectator()
@@ -570,6 +608,7 @@ net/minecraft/world/item/ItemStack#getCount()
 net/minecraft/world/item/ItemStack#setCount()
 net/minecraft/world/item/ItemStack#isEmpty()
 net/minecraft/world/item/ItemStack#getUseDuration()
+net/minecraft/world/item/ItemStack#getEnchantments
 net/minecraft/world/item/ItemStack#getMaxStackSize()
 net/minecraft/world/item/ItemStack#count
 net/minecraft/world/entity/player/Player#getAttackStrengthScale()
@@ -594,6 +633,32 @@ net/minecraft/world/entity/item/PrimedTnt
 net/minecraft/world/entity/item/PrimedTnt#getFuse()
 net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket
 net/minecraft/network/protocol/game/ClientboundPlayerInfoRemovePacket
+net/minecraft/network/protocol/game/ClientboundSystemChatPacket
+net/minecraft/network/protocol/game/ClientboundSystemChatPacket#content
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#yRot
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#xRot
+net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket
+net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket#getSlot
+net/minecraft/network/protocol/game/ServerboundContainerClickPacket
+net/minecraft/network/protocol/game/ServerboundContainerClosePacket
+net/minecraft/network/protocol/game/ServerboundPlayerInputPacket
+net/minecraft/network/protocol/game/ClientboundSetTitleTextPacket
+net/minecraft/network/protocol/game/ClientboundSetTitleTextPacket#text
+net/minecraft/network/protocol/game/ClientboundSetSubtitleTextPacket
+net/minecraft/network/protocol/game/ClientboundSetSubtitleTextPacket#text
+net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket
+net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket#text
+net/minecraft/network/chat/MutableComponent
+net/minecraft/network/chat/MutableComponent#append
+net/minecraft/network/chat/MutableComponent#setStyle
+net/minecraft/network/chat/Style
+net/minecraft/network/chat/Style#empty
+net/minecraft/network/chat/Style#withColor
+net/minecraft/network/chat/Component#literal
+net/minecraft/network/chat/Component#empty
+net/minecraft/world/entity/player/Input#EMPTY
+net/minecraft/client/player/LocalPlayer#lastSentInput
 net/minecraft/world/scores/Scoreboard
 net/minecraft/world/scores/Objective
 net/minecraft/world/scores/Score

@@ -352,6 +352,13 @@ public final class GameBridge {
                 : callMapped(world, ClassType.CLIENT_LEVEL, "getBlockState", position);
     }
 
+    /** 客户端本地把坐标设为空气；用于 PacketMine 的预测性移除。 */
+    public boolean setAirBlock(int x, int y, int z) {
+        Object air = staticField(ClassType.BLOCKS, "AIR");
+        Object state = callMapped(air, ClassType.BLOCK, "getDefaultState");
+        return callMappedStatus(world(), ClassType.LEVEL, "setBlock", blockPos(x, y, z), state, 3);
+    }
+
     /** 设置客户端天气强度。 */
     public boolean setWeather(float rain, float thunder) {
         Object world = world();
@@ -380,6 +387,13 @@ public final class GameBridge {
     public void clearInputDelays() {
         writeField(minecraft(), ClassType.MINECRAFT, "missTime", 0);
         writeField(player(), ClassType.LIVING_ENTITY, "jumpTicks", 0);
+    }
+
+    /** 当前容器界面悬停槽的菜单 index；未悬停或不是容器界面时为 -1。 */
+    public int hoveredSlotIndex() {
+        Object hovered = readField(currentScreen(), ClassType.CONTAINER_SCREEN, "hoveredSlot");
+        Number index = number(readField(hovered, ClassType.SLOT, "index"));
+        return index == null ? -1 : index.intValue();
     }
 
     /** 当前显示计分板的标题和玩家分数行。 */
@@ -522,6 +536,19 @@ public final class GameBridge {
         return player == null ? null : readField(player, ClassType.LOCAL_PLAYER, "connection");
     }
 
+    /** 在当前 HUD 显示本地消息，不发送到服务器。 */
+    public boolean localMessage(String text) {
+        Object gui = readField(minecraft(), ClassType.MINECRAFT, "gui");
+        Object component = callStaticMapped(ClassType.COMPONENT, "literal", text);
+        return callMappedStatus(gui, ClassType.HUD, "displayClientMessage", component, false);
+    }
+
+    /** 播放原版声音常量；缺失的版本/声音返回 false。 */
+    public boolean playSound(String soundField, float volume, float pitch) {
+        Object sound = staticField(ClassType.SOUND_EVENTS, soundField);
+        return callMappedStatus(player(), ClassType.PLAYER, "playSound", sound, volume, pitch);
+    }
+
     /** 判断准星结果是否为实体；旧版没有 EntityHitResult 子类时读 typeOfHit/type。 */
     public boolean isEntityHit(Object hitResult) {
         if (hitResult == null) {
@@ -609,6 +636,31 @@ public final class GameBridge {
                 : new int[]{x.intValue(), y.intValue(), z.intValue()};
     }
 
+    /** 携带槽位包的槽号；不可读取时为 -1。 */
+    public int carriedSlot(Object packet) {
+        Number slot = number(callMapped(packet, ClassType.SERVERBOUND_SET_CARRIED_ITEM, "getSlot"));
+        return slot == null ? -1 : slot.intValue();
+    }
+
+    /** 系统聊天包纯文本。 */
+    public String systemChatText(Object packet) {
+        return componentText(callMapped(packet, ClassType.CLIENTBOUND_SYSTEM_CHAT, "content"));
+    }
+
+    /** 把位置包中的服务端朝向改回本地朝向，保留坐标与落地状态。 */
+    public boolean preserveLocalRotation(Object packet, float yaw, float pitch) {
+        boolean yawWritten = writeField(packet, ClassType.CLIENTBOUND_PLAYER_POSITION, "yRot", yaw);
+        boolean pitchWritten = writeField(packet, ClassType.CLIENTBOUND_PLAYER_POSITION, "xRot", pitch);
+        return yawWritten && pitchWritten;
+    }
+
+    /** 构造当前输入或空输入包；旧版无此包时返回 null。 */
+    public Object inputPacket(boolean empty) {
+        Object input = empty ? staticField(ClassType.PLAYER_INPUT, "EMPTY")
+                : readField(player(), ClassType.LOCAL_PLAYER, "lastSentInput");
+        return input == null ? null : construct(ClassType.SERVERBOUND_PLAYER_INPUT, input);
+    }
+
     /** 本地玩家当前药水效果集合。 */
     public Object activeEffects() {
         return callMapped(player(), ClassType.LIVING_ENTITY, "getActiveEffects");
@@ -694,6 +746,39 @@ public final class GameBridge {
         return id == null ? "" : String.valueOf(id);
     }
 
+    /** 创建并加入一个本地 RemotePlayer；失败时返回 null 且不改变世界。 */
+    public Object spawnFakePlayer(String name, boolean copyInventory) {
+        java.util.UUID uuid = java.util.UUID.nameUUIDFromBytes(
+                String.valueOf(name).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        Object profile = construct(ClassType.GAME_PROFILE, uuid, name);
+        Object entity = construct(ClassType.REMOTE_PLAYER, world(), profile);
+        if (entity == null) {
+            return null;
+        }
+        double[] position = entityPosition(player());
+        if (position == null) {
+            return null;
+        }
+        setPosition(entity, position[0], position[1], position[2]);
+        writeField(entity, ClassType.ENTITY, "id", -66123666);
+        writeField(entity, ClassType.ENTITY, "yRot", readField(player(), ClassType.ENTITY, "yRot"));
+        writeField(entity, ClassType.ENTITY, "xRot", readField(player(), ClassType.ENTITY, "xRot"));
+        if (copyInventory) {
+            for (int slot = 0; slot < 36; slot++) {
+                Object targetInventory = readField(entity, ClassType.PLAYER, "inventory");
+                callMappedStatus(targetInventory, ClassType.INVENTORY, "setItem", slot, inventoryStack(slot));
+            }
+        }
+        return callMappedStatus(world(), ClassType.CLIENT_LEVEL, "addEntity", -66123666, entity) ? entity : null;
+    }
+
+    /** 移除本地伪造实体，同时兼容现代 remove 与旧版 setDead。 */
+    public void removeFakePlayer(Object entity) {
+        if (entity != null && !callMappedStatus(entity, ClassType.ENTITY, "remove")) {
+            callMappedStatus(entity, ClassType.ENTITY, "setDead");
+        }
+    }
+
     /** 直接设置实体位置，供 Freecam 停用恢复。 */
     public boolean setPosition(Object entity, double x, double y, double z) {
         return callMappedStatus(entity, ClassType.ENTITY, "setPos", x, y, z);
@@ -724,6 +809,64 @@ public final class GameBridge {
     public String entityName(Object entity) {
         String text = componentText(callMapped(entity, ClassType.ENTITY, "getName"));
         return text == null ? "" : text;
+    }
+
+    /** 实体稳定 UUID；不可读取时为 null。 */
+    public java.util.UUID entityUuid(Object entity) {
+        Object id = callMapped(entity, ClassType.ENTITY, "getUUID");
+        return id instanceof java.util.UUID ? (java.util.UUID) id : null;
+    }
+
+    /** 当前 Tab 列表中的 UUID 集合；不可读取时为空集。 */
+    public java.util.Set<java.util.UUID> onlinePlayerUuids() {
+        Object entries = callMapped(connection(), ClassType.CLIENT_PACKET_LISTENER, "getOnlinePlayers");
+        java.util.Set<java.util.UUID> ids = new java.util.HashSet<java.util.UUID>();
+        if (!(entries instanceof Iterable)) {
+            return ids;
+        }
+        for (Object entry : (Iterable<?>) entries) {
+            Object profile = callMapped(entry, ClassType.PLAYER_INFO, "getProfile");
+            Object id = callMapped(profile, ClassType.GAME_PROFILE, "getId");
+            if (id instanceof java.util.UUID) {
+                ids.add((java.util.UUID) id);
+            }
+        }
+        return ids;
+    }
+
+    /** 当前 Tab 列表 UUID→名称快照。 */
+    public java.util.Map<java.util.UUID, String> onlinePlayerNames() {
+        java.util.Map<java.util.UUID, String> names = new java.util.HashMap<java.util.UUID, String>();
+        Object entries = callMapped(connection(), ClassType.CLIENT_PACKET_LISTENER, "getOnlinePlayers");
+        if (!(entries instanceof Iterable)) {
+            return names;
+        }
+        for (Object entry : (Iterable<?>) entries) {
+            Object profile = callMapped(entry, ClassType.PLAYER_INFO, "getProfile");
+            Object id = callMapped(profile, ClassType.GAME_PROFILE, "getId");
+            Object name = callMapped(profile, ClassType.GAME_PROFILE, "getName");
+            if (id instanceof java.util.UUID && name != null) {
+                names.put((java.util.UUID) id, String.valueOf(name));
+            }
+        }
+        return names;
+    }
+
+    /** 指定 UUID 的 Tab 游戏模式；不可读取时为空字符串。 */
+    public String playerGameMode(java.util.UUID uuid) {
+        Object entries = callMapped(connection(), ClassType.CLIENT_PACKET_LISTENER, "getOnlinePlayers");
+        if (!(entries instanceof Iterable)) {
+            return "";
+        }
+        for (Object entry : (Iterable<?>) entries) {
+            Object profile = callMapped(entry, ClassType.PLAYER_INFO, "getProfile");
+            Object id = callMapped(profile, ClassType.GAME_PROFILE, "getId");
+            if (uuid != null && uuid.equals(id)) {
+                Object gameMode = callMapped(entry, ClassType.PLAYER_INFO, "getGameMode");
+                return gameMode == null ? "" : String.valueOf(gameMode);
+            }
+        }
+        return "";
     }
 
     /** 实体网络 id；不可读取时为 -1。 */
@@ -758,6 +901,23 @@ public final class GameBridge {
         Number z = number(readField(position, ClassType.VEC3, "z"));
         return x == null || y == null || z == null ? null
                 : new double[]{x.doubleValue(), y.doubleValue(), z.doubleValue()};
+    }
+
+    /** 实体三轴速度；不可读取时返回零向量。 */
+    public double[] entityVelocity(Object entity) {
+        Object delta = callMapped(entity, ClassType.ENTITY, "getDeltaMovement");
+        Number x = number(readField(delta, ClassType.VEC3, "x"));
+        Number y = number(readField(delta, ClassType.VEC3, "y"));
+        Number z = number(readField(delta, ClassType.VEC3, "z"));
+        if (x != null && y != null && z != null) {
+            return new double[]{x.doubleValue(), y.doubleValue(), z.doubleValue()};
+        }
+        Number legacyX = number(readField(entity, ClassType.ENTITY, "motionX"));
+        Number legacyY = number(readField(entity, ClassType.ENTITY, "motionY"));
+        Number legacyZ = number(readField(entity, ClassType.ENTITY, "motionZ"));
+        return new double[]{legacyX == null ? 0.0 : legacyX.doubleValue(),
+                legacyY == null ? 0.0 : legacyY.doubleValue(),
+                legacyZ == null ? 0.0 : legacyZ.doubleValue()};
     }
 
     /** 两实体脚部中心距离；不可读取时为正无穷。 */
@@ -912,6 +1072,45 @@ public final class GameBridge {
         Object name = callMapped(stack, ClassType.ITEM_STACK, "getDisplayName");
         String text = componentText(name);
         return text == null ? itemDescription(stack) : text;
+    }
+
+    /** 实体指定装备槽物品；旧版回退 getCurrentArmor(0..3)。 */
+    public Object equipmentStack(Object entity, int armorSlot) {
+        String[] names = {"FEET", "LEGS", "CHEST", "HEAD"};
+        if (armorSlot < 0 || armorSlot >= names.length) {
+            return null;
+        }
+        Object slot = staticField(ClassType.EQUIPMENT_SLOT, names[armorSlot]);
+        Object stack = callMapped(entity, ClassType.LIVING_ENTITY, "getItemBySlot", slot);
+        return stack != null ? stack : callMapped(entity, ClassType.LIVING_ENTITY, "getCurrentArmor", armorSlot);
+    }
+
+    /** 当前使用是否副手；无法读取时按主手处理。 */
+    public boolean usingOffHand(Object entity) {
+        Object hand = callMapped(entity, ClassType.LIVING_ENTITY, "getUsedItemHand");
+        Object offHand = staticField(ClassType.INTERACTION_HAND, "OFF_HAND");
+        return hand != null && hand == offHand;
+    }
+
+    /** 当前正在使用的物品栈。 */
+    public Object usingItemStack(Object entity) {
+        return callMapped(entity, ClassType.LIVING_ENTITY, "getUseItem");
+    }
+
+    /** 已使用 tick 数；由总时长减剩余时长得到。 */
+    public int usingTicks(Object entity) {
+        Object stack = usingItemStack(entity);
+        Number duration = number(callMapped(stack, ClassType.ITEM_STACK, "getUseDuration"));
+        Number remaining = number(callMapped(entity, ClassType.LIVING_ENTITY, "getUseItemRemainingTicks"));
+        return duration == null || remaining == null ? 0
+                : Math.max(0, duration.intValue() - remaining.intValue());
+    }
+
+    /** 写入原生使用键状态；自动弩释放等模块使用，不改模块绑定。 */
+    public boolean setUseKey(boolean down) {
+        Object options = readField(minecraft(), ClassType.MINECRAFT, "options");
+        Object key = readField(options, ClassType.OPTIONS, "keyUse");
+        return callMappedStatus(key, ClassType.KEY_MAPPING, "setDown", down);
     }
 
     /** 读取实体主/副手物品。 */
@@ -1103,6 +1302,32 @@ public final class GameBridge {
             Method method = findMethodCached(type, candidate.name(), parameters);
             if (method != null) {
                 return Reflect.call(method, target, args);
+            }
+        }
+        return null;
+    }
+
+    /** 调用映射类上的静态工厂方法；用于 Component.literal 等无公开构造器的类型。 */
+    public Object callStaticMapped(ClassType owner, String canonicalMethod, Object... args) {
+        Class<?> ownerType = type(owner);
+        if (ownerType == null) {
+            return null;
+        }
+        for (MethodCandidate candidate : mapping.methodCandidates(owner, canonicalMethod)) {
+            Class<?>[] parameters = candidate.descriptor() == null ? null
+                    : descriptorParameters(ownerType, candidate.name(), candidate.descriptor());
+            if (parameters != null && parameters.length != (args == null ? 0 : args.length)) {
+                parameters = null;
+            }
+            if (parameters == null) {
+                parameters = inferParameters(ownerType, candidate.name(), args);
+            }
+            if (parameters == null) {
+                continue;
+            }
+            Method method = findMethodCached(ownerType, candidate.name(), parameters);
+            if (method != null && Modifier.isStatic(method.getModifiers())) {
+                return Reflect.call(method, null, args);
             }
         }
         return null;

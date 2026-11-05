@@ -61,7 +61,7 @@ public final class PlayerAlarmsModule extends GameModule {
     private final RingState game = new RingState();
 
     public PlayerAlarmsModule() {
-        super("PlayerAlarms", Category.PLAYER);
+        super("Player Alarms", Category.PLAYER);
     }
 
     @Override

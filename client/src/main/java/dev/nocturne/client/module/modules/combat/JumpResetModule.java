@@ -19,7 +19,7 @@ public final class JumpResetModule extends GameModule {
     private boolean release;
 
     public JumpResetModule() {
-        super("JumpReset", Category.COMBAT);
+        super("Jump Reset", Category.MOVEMENT);
     }
 
     @Override

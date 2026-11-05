@@ -140,6 +140,13 @@ public final class CameraState {
                     + " yaw=" + yaw + " pitch=" + pitch + " pt=" + partialTicks
                     + " fov=" + fov + " viewport=" + width + "x" + height);
         }
+        dev.nocturne.client.module.Module aspectModule = dev.nocturne.client.NocturneClient.get() == null ? null
+                : dev.nocturne.client.NocturneClient.get().modules().get("Aspect Ratio");
+        if (aspectModule instanceof dev.nocturne.client.module.modules.render.AspectRatioModule
+                && aspectModule.isEnabled()) {
+            float ratio = ((dev.nocturne.client.module.modules.render.AspectRatioModule) aspectModule).ratio();
+            fov = Math.max(1.0, Math.min(179.0, fov * ratio / Math.max(0.1, (double) width / height)));
+        }
         projection.update(eyeX, eyeY, eyeZ, yaw.floatValue(), pitch.floatValue(), fov.floatValue(),
                 width, height);
         return true;

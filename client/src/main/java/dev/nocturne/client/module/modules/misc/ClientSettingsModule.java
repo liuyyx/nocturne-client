@@ -13,7 +13,7 @@ public final class ClientSettingsModule extends GameModule {
     private int appliedScale = -1;
 
     public ClientSettingsModule() {
-        super("GUI", Category.MISC);
+        super("Client Setting", Category.MISC);
     }
 
     @Override

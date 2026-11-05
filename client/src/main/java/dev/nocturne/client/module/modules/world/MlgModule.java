@@ -16,10 +16,13 @@ public final class MlgModule extends GameModule {
     private final BooleanValue onLethalFall = add(new BooleanValue("On lethal fall", true));
     private final BooleanValue onDamage = add(new BooleanValue("On at least X damage", false));
     private final NumberValue health = add(new NumberValue("Health", 5, 1, 20, 1));
+    private final NumberValue interactDelay = add(new NumberValue("Interact Delay", 60, 0, 300, 5));
+    private final NumberValue collectDelayTicks = add(new NumberValue("Collect Delay Ticks", 2, 0, 10, 1));
     private long pickupAt;
+    private long nextInteract;
 
     public MlgModule() {
-        super("MLG", Category.WORLD);
+        super("Auto MLG", Category.PLAYER);
     }
 
     @Override
@@ -40,9 +43,10 @@ public final class MlgModule extends GameModule {
         float fall = bridge.fallDistance(state.player());
         boolean activate = !state.onGround() && (onLethalFall.get() && fall >= state.health() + 2.0f
                 || onDamage.get() && fall >= health.get() + 2.0f);
-        if (!activate) {
+        if (!activate || System.currentTimeMillis() < nextInteract) {
             return;
         }
+        nextInteract = System.currentTimeMillis() + interactDelay.asInt();
         for (int slot = 0; slot <= 8; slot++) {
             String id = bridge.itemDescription(bridge.hotbarStack(slot));
             if (!(useBuckets.get() && id.contains("water_bucket")
@@ -54,7 +58,7 @@ public final class MlgModule extends GameModule {
             if (PlacementSupport.placeNear(bridge, actions, (int) Math.floor(state.x()),
                     (int) Math.floor(state.y()) - 1, (int) Math.floor(state.z()))
                     && pickUpWater.get() && id.contains("water_bucket")) {
-                pickupAt = System.currentTimeMillis() + 500L;
+                pickupAt = System.currentTimeMillis() + collectDelayTicks.asInt() * 50L;
             }
             return;
         }

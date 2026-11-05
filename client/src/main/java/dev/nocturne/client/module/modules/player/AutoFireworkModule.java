@@ -21,7 +21,7 @@ public final class AutoFireworkModule extends GameModule {
     private int cooldown;
 
     public AutoFireworkModule() {
-        super("AutoFirework", Category.PLAYER);
+        super("Auto Firework", Category.PLAYER);
     }
 
     @Override

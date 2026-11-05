@@ -21,7 +21,7 @@ public final class TargetStrafeModule extends GameModule implements WorldOverlay
     private TargetManager.Target target;
 
     public TargetStrafeModule() {
-        super("TargetStrafe", Category.MOVEMENT);
+        super("Target Strafe", Category.MOVEMENT);
     }
 
     @Override

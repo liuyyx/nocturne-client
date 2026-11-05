@@ -55,7 +55,15 @@ public final class PacketController {
             return 0;
         }
         holding.get(direction).set(false);
-        return drain(direction);
+        return drain(direction, Integer.MAX_VALUE);
+    }
+
+    /** 按数量原序释放，保持捕获闸门开启。 */
+    public int releaseSome(PacketEvent.Direction direction, int maximum) {
+        if (direction == null || maximum <= 0 || direction == PacketEvent.Direction.SEND && !onMainThread()) {
+            return 0;
+        }
+        return drain(direction, maximum);
     }
 
     public int releaseAll() {
@@ -133,7 +141,7 @@ public final class PacketController {
         pendingBypass = null;
     }
 
-    private int drain(PacketEvent.Direction direction) {
+    private int drain(PacketEvent.Direction direction, int maximum) {
         synchronized (drainLock) {
             if (draining) {
                 return 0;
@@ -142,7 +150,7 @@ public final class PacketController {
             int count = 0;
             try {
                 Captured captured;
-                while ((captured = queues.get(direction).poll()) != null) {
+                while (count < maximum && (captured = queues.get(direction).poll()) != null) {
                     Object connection = currentConnection();
                     if (captured.connection != null && connection != captured.connection) {
                         clear(direction);

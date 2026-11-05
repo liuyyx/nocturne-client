@@ -15,7 +15,7 @@ public final class AutoDtapModule extends GameModule {
     private int original = -1;
 
     public AutoDtapModule() {
-        super("AutoDtap", Category.COMBAT);
+        super("Auto Dtap", Category.COMBAT);
     }
 
     @Override

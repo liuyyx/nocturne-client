@@ -6,7 +6,7 @@ import dev.nocturne.client.module.GameModule;
 /** AutoCrossbowRelease：弩达到完整蓄力后释放原生使用键。 */
 public final class AutoCrossbowReleaseModule extends GameModule {
     public AutoCrossbowReleaseModule() {
-        super("AutoCrossbowRelease", Category.PLAYER);
+        super("Auto Crossbow Release", Category.PLAYER);
     }
 
     @Override

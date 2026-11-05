@@ -21,7 +21,7 @@ public final class AutoKouZiModule extends GameModule {
     private long next;
 
     public AutoKouZiModule() {
-        super("AutoKouZi", Category.PLAYER);
+        super("Auto KouZi", Category.PLAYER);
     }
 
     @Override

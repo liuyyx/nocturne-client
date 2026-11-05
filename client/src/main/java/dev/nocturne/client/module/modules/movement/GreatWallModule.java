@@ -30,7 +30,7 @@ public final class GreatWallModule extends GameModule implements WorldOverlay {
     private int original = -1;
 
     public GreatWallModule() {
-        super("GreatWall", Category.MOVEMENT);
+        super("Great Wall", Category.MOVEMENT);
     }
 
     @Override

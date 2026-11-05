@@ -69,6 +69,7 @@ public enum ClassType {
     MOUSE_BUTTON_INFO("net.minecraft.client.input.MouseButtonInfo"),
     /** 界面基类。 */
     SCREEN("net.minecraft.client.gui.screens.Screen"),
+    CHAT_SCREEN("net.minecraft.client.gui.screens.ChatScreen"),
     /** 容器界面与槽位；HoverTotem 使用 hoveredSlot.index。 */
     CONTAINER_SCREEN("net.minecraft.client.gui.screens.inventory.AbstractContainerScreen"),
     SLOT("net.minecraft.world.inventory.Slot"),
@@ -193,6 +194,7 @@ public enum ClassType {
     CLIENTBOUND_BLOCK_EVENT("net.minecraft.network.protocol.game.ClientboundBlockEventPacket"),
     /** 珍珠实体；AutoPearl/PearlCatch 轨迹目标。 */
     THROWN_ENDER_PEARL("net.minecraft.world.entity.projectile.ThrownEnderpearl"),
+    THROWABLE_PROJECTILE("net.minecraft.world.entity.projectile.ThrowableProjectile"),
     /** 鱼钩实体；AutoFish 读取玩家 fishing 字段。 */
     FISHING_HOOK("net.minecraft.world.entity.projectile.FishingHook"),
     /** 箭实体；AntiFireball/Arrows 的目标。 */
@@ -216,6 +218,8 @@ public enum ClassType {
     /** 实体速度包；Velocity/JumpReset/KnockbackDelay 读取并重建。 */
     CLIENTBOUND_ENTITY_VELOCITY("net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket"),
     CLIENTBOUND_EXPLOSION("net.minecraft.network.protocol.game.ClientboundExplodePacket"),
+    CLIENTBOUND_ENTITY_EVENT("net.minecraft.network.protocol.game.ClientboundEntityEventPacket"),
+    CLIENTBOUND_ADD_ENTITY("net.minecraft.network.protocol.game.ClientboundAddEntityPacket"),
     /** Tab 列表更新与移除包；LogoutSpots/PlayerAlarms 判型。 */
     CLIENTBOUND_PLAYER_INFO_UPDATE("net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket"),
     CLIENTBOUND_PLAYER_INFO_REMOVE("net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket"),
@@ -257,6 +261,10 @@ public enum ClassType {
     DELTA_TRACKER("net.minecraft.client.DeltaTracker"),
     /** 游戏渲染器与相机宿主。 */
     GAME_RENDERER("net.minecraft.client.renderer.GameRenderer"),
+    CAMERA("net.minecraft.client.Camera"),
+    ITEM_IN_HAND_RENDERER("net.minecraft.client.renderer.ItemInHandRenderer"),
+    QUATERNIONF("org.joml.Quaternionf"),
+    AXIS_ANGLE4F("org.joml.AxisAngle4f"),
     /** 容器菜单；背包动作需要 containerId 与物品列表。 */
     ABSTRACT_CONTAINER_MENU("net.minecraft.world.inventory.AbstractContainerMenu"),
     /** 现代容器点击类型；旧版使用整数 mode。 */

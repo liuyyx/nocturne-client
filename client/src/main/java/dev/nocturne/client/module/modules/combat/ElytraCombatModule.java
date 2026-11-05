@@ -82,7 +82,7 @@ public final class ElytraCombatModule extends GameModule implements WorldOverlay
     private boolean inputActive;
 
     public ElytraCombatModule() {
-        super("ElytraCombat", Category.COMBAT);
+        super("Elytra Combat", Category.COMBAT);
     }
 
     @Override

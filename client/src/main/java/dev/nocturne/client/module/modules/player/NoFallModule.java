@@ -28,7 +28,8 @@ public final class NoFallModule extends GameModule {
             boolean gliding = Boolean.TRUE.equals(bridge().callMapped(player, ClassType.LIVING_ENTITY, "isFallFlying"));
             double[] velocity = bridge().entityVelocity(player);
             if (mode.is("GroundSpoof") && shouldOverride(gliding, false, false,
-                    bridge().fallDistance(player), velocity[1])) {
+                    bridge().fallDistance(player), velocity[1])
+                    && bridge().fallDistance(player) >= fallDistance.get()) {
                 event.onGround = true;
             }
         });

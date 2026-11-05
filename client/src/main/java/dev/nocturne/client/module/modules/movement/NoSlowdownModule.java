@@ -18,7 +18,7 @@ public final class NoSlowdownModule extends GameModule {
     private boolean holding;
 
     public NoSlowdownModule() {
-        super("NoSlowdown", Category.MOVEMENT);
+        super("No Slowdown", Category.MOVEMENT);
     }
 
     @Override

@@ -42,7 +42,7 @@ public final class AutoWeaponModule extends GameModule {
     private long restoreAt;
 
     public AutoWeaponModule() {
-        super("AutoWeapon", Category.COMBAT);
+        super("Auto Weapon", Category.COMBAT);
     }
 
     @Override

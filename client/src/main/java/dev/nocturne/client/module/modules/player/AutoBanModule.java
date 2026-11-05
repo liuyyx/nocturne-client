@@ -20,7 +20,7 @@ public final class AutoBanModule extends GameModule {
     private long next;
 
     public AutoBanModule() {
-        super("AutoBan", Category.PLAYER);
+        super("Auto Ban", Category.PLAYER);
     }
 
     @Override

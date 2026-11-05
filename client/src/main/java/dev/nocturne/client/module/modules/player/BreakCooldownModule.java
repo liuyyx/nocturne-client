@@ -11,7 +11,7 @@ public final class BreakCooldownModule extends GameModule {
     private final NumberValue cooldown = add(new NumberValue("Cooldown", 0, 0, 5, 1));
 
     public BreakCooldownModule() {
-        super("BreakCooldown", Category.PLAYER);
+        super("Break Cooldown", Category.PLAYER);
     }
 
     @Override

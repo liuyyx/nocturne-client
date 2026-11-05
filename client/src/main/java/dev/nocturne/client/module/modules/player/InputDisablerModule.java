@@ -10,7 +10,7 @@ public final class InputDisablerModule extends GameModule {
     private boolean sending;
 
     public InputDisablerModule() {
-        super("InputDisabler", Category.PLAYER);
+        super("Input Disabler", Category.PLAYER);
     }
 
     @Override

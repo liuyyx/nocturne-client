@@ -8,7 +8,7 @@ import dev.nocturne.client.module.GameModule;
 /** GhostHand：普通准星未指向容器时，沿视线查找并交互最近的方块实体。 */
 public final class GhostHandModule extends GameModule {
     public GhostHandModule() {
-        super("GhostHand", Category.PLAYER);
+        super("Ghost Hand", Category.PLAYER);
     }
 
     @Override

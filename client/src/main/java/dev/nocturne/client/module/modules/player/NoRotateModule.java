@@ -8,7 +8,7 @@ import dev.nocturne.client.module.GameModule;
 /** NoRotate：保留位置包的坐标，但把服务端朝向覆盖为本地朝向。 */
 public final class NoRotateModule extends GameModule {
     public NoRotateModule() {
-        super("NoRotate", Category.PLAYER);
+        super("No Rotate", Category.PLAYER);
     }
 
     @Override

@@ -18,7 +18,7 @@ public final class SprintModule extends Module {
     /** 模块名，注册表内唯一，也是 GUI 中的显示名。 */
     @Override
     public String name() {
-        return "Sprint";
+        return "Auto Sprint";
     }
 
     /** 归入“移动”分组。 */

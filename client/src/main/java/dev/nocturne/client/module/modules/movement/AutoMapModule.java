@@ -132,6 +132,8 @@ public final class AutoMapModule extends GameModule {
 
     @Override
     protected void onStop() {
-        save();
+        if (state().present()) {
+            save();
+        }
     }
 }

@@ -325,6 +325,20 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         }
     }
 
+    /** 创建实体渲染首参门控。 */
+    public ClassFileTransformer createEntityRenderGateTransformer(String targetInternalName,
+            String method, String descriptor, String hookOwner) {
+        try {
+            Class<?> type = loadClass("dev.nocturne.agent.transform.EntityRenderGateTransformer");
+            return (ClassFileTransformer) type.getConstructor(String.class, String.class, String.class,
+                    String.class).newInstance(targetInternalName, method, descriptor, hookOwner);
+        } catch (Throwable t) {
+            log("could not create entity render gate for " + targetInternalName + "." + method
+                    + ": " + t + "; entity gate disabled");
+            return null;
+        }
+    }
+
     /** 创建 float 返回值缩放转换器。 */
     public ClassFileTransformer createFloatReturnTransformer(String targetInternalName,
             String method, String descriptor, String hookOwner, String hookMethod) {

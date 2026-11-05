@@ -39,7 +39,7 @@ public final class AutoHitCrystalModule extends GameModule implements WorldOverl
     private long markedAt;
 
     public AutoHitCrystalModule() {
-        super("AutoHitCrystal", Category.COMBAT);
+        super("Auto Hit Crystal", Category.COMBAT);
     }
 
     @Override

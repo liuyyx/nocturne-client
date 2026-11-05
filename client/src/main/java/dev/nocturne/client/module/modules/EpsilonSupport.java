@@ -76,10 +76,31 @@ public final class EpsilonSupport {
         return options;
     }
 
-    public static boolean enabled(String name) {
+    public static Module module(String name) {
         NocturneClient client = NocturneClient.get();
-        Module module = client == null ? null : client.modules().get(name);
+        if (client == null) {
+            return null;
+        }
+        Module exact = client.modules().get(name);
+        if (exact != null) {
+            return exact;
+        }
+        String wanted = normalize(name);
+        for (Module candidate : client.modules().all()) {
+            if (normalize(candidate.name()).equals(wanted)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    public static boolean enabled(String name) {
+        Module module = module(name);
         return module != null && module.isEnabled();
+    }
+
+    private static String normalize(String name) {
+        return name == null ? "" : name.replace(" ", "").toLowerCase(java.util.Locale.ROOT);
     }
 
     public static Object gameMode(GameBridge bridge) {

@@ -1053,6 +1053,8 @@ public final class NocturneAgent {
         registerEntityRenderHooks(instrumentation, asmLoader);
         registerXrayHooks(instrumentation, asmLoader);
         registerTimerHooks(instrumentation, asmLoader);
+        registerCameraHooks(instrumentation, asmLoader);
+        registerHandHooks(instrumentation, asmLoader);
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.GAME_RENDERER,
                 "setupFog", "()V", "noFog", "Z", false, true);
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.GAME_RENDERER,
@@ -1072,6 +1074,41 @@ public final class NocturneAgent {
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
                 "onButton", "(JLnet/minecraft/client/input/MouseButtonInfo;I)V",
                 "mouse", "Z", false, false);
+    }
+
+    /** 第一人称手臂变换入口；参数原样交给 HandView/TotemAnimation。 */
+    private static void registerHandHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
+        dev.nocturne.client.mapping.ClassType owner = dev.nocturne.client.mapping.ClassType.ITEM_IN_HAND_RENDERER;
+        for (String className : currentMapping().classNameCandidates(owner)) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : currentMapping().methodCandidates(owner, "applyItemArmTransform")) {
+                if (candidate.descriptor() == null || candidate.descriptor().isEmpty()) {
+                    continue;
+                }
+                ClassFileTransformer transformer = asmLoader.createGateTransformer(className,
+                        candidate.name(), candidate.descriptor(), GAMEPLAY_HOOK_OWNER,
+                        "handTransform", "V", false, false);
+                registerGameplayTransformer(instrumentation, transformer, className,
+                        candidate.name(), candidate.descriptor(), "handTransform");
+            }
+        }
+    }
+
+    /** Camera#getMaxZoom 的返回点缩放；CameraClip 不依赖版本条件。 */
+    private static void registerCameraHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
+        dev.nocturne.client.mapping.ClassType owner = dev.nocturne.client.mapping.ClassType.CAMERA;
+        for (String className : currentMapping().classNameCandidates(owner)) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : currentMapping().methodCandidates(owner, "getMaxZoom")) {
+                if (candidate.descriptor() == null || candidate.descriptor().isEmpty()) {
+                    continue;
+                }
+                ClassFileTransformer transformer = asmLoader.createFloatReturnTransformer(className,
+                        candidate.name(), candidate.descriptor(), GAMEPLAY_HOOK_OWNER, "cameraZoom");
+                registerGameplayTransformer(instrumentation, transformer, className,
+                        candidate.name(), candidate.descriptor(), "cameraZoom");
+            }
+        }
     }
 
     /** 现代 DeltaTracker 的 tick 增量在返回点缩放，旧版 Timer 走 timerSpeed 字段。 */
@@ -1143,6 +1180,10 @@ public final class NocturneAgent {
                 if (descriptor == null || descriptor.isEmpty()) {
                     continue;
                 }
+                ClassFileTransformer gate = asmLoader.createEntityRenderGateTransformer(className,
+                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER);
+                patched |= registerGameplayTransformer(instrumentation, gate, className,
+                        candidate.name(), descriptor, "entityRenderGate");
                 ClassFileTransformer pre = asmLoader.createCallbackTransformer(className,
                         candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "chamsPre", false);
                 ClassFileTransformer post = asmLoader.createCallbackTransformer(className,

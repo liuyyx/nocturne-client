@@ -14,7 +14,7 @@ public final class SafeCrystalModule extends GameModule {
     private final NumberValue antiSuicide = add(new NumberValue("Anti Suicide", 2.0, 1, 20, 0.1));
 
     public SafeCrystalModule() {
-        super("SafeCrystal", Category.COMBAT);
+        super("Safe Crystal", Category.COMBAT);
     }
 
     @Override

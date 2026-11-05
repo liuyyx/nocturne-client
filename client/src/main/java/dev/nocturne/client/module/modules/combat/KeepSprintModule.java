@@ -53,12 +53,12 @@ public final class KeepSprintModule extends Module {
 
     @Override
     public String name() {
-        return "KeepSprint";
+        return "Keep Sprint";
     }
 
     @Override
     public Category category() {
-        return Category.COMBAT;
+        return Category.MOVEMENT;
     }
 
     @Override

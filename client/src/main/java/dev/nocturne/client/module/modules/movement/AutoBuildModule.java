@@ -28,7 +28,7 @@ public final class AutoBuildModule extends GameModule {
     private int original = -1;
 
     public AutoBuildModule() {
-        super("AutoBuild", Category.MOVEMENT);
+        super("Auto Build", Category.MOVEMENT);
     }
 
     @Override

@@ -44,6 +44,9 @@ net/minecraft/client/multiplayer/ClientLevel#addEntity()
 
 net/minecraft/client/Options
 net/minecraft/client/Options#fov
+net/minecraft/client/Options#fovEffectScale
+net/minecraft/client/Options#bobView
+net/minecraft/client/OptionInstance#set
 net/minecraft/client/Options#gamma
 net/minecraft/client/Options#sensitivity
 net/minecraft/client/Options#perspective
@@ -70,6 +73,7 @@ net/minecraft/client/gui/screens/ChatScreen
 net/minecraft/client/gui/screens/PauseScreen
 
 net/minecraft/client/gui/screens/Screen
+net/minecraft/client/gui/screens/Screen#getTitle
 net/minecraft/client/gui/screens/inventory/AbstractContainerScreen
 net/minecraft/client/gui/screens/inventory/AbstractContainerScreen#hoveredSlot
 net/minecraft/world/inventory/Slot
@@ -147,6 +151,20 @@ net/minecraft/world/entity/player/Inventory#setItem
 net/minecraft/client/Minecraft#missTime
 net/minecraft/world/entity/LivingEntity#jumpTicks
 net/minecraft/client/renderer/GameRenderer#hurtCamera()
+net/minecraft/client/Camera
+net/minecraft/client/Camera#getMaxZoom
+net/minecraft/client/renderer/ItemInHandRenderer
+net/minecraft/client/renderer/ItemInHandRenderer#applyItemArmTransform
+net/minecraft/client/renderer/ItemInHandRenderer#mainHandHeight
+net/minecraft/client/renderer/ItemInHandRenderer#offHandHeight
+net/minecraft/client/renderer/ItemInHandRenderer#mainHandItem
+net/minecraft/client/renderer/ItemInHandRenderer#offHandItem
+net/minecraft/client/Minecraft#itemInHandRenderer
+com/mojang/blaze3d/vertex/PoseStack#translate
+com/mojang/blaze3d/vertex/PoseStack#scale
+com/mojang/blaze3d/vertex/PoseStack#mulPose
+org/joml/Quaternionf
+org/joml/AxisAngle4f
 net/minecraft/client/renderer/GameRenderer#setupFog()
 net/minecraft/client/multiplayer/ClientLevel#rainLevel
 net/minecraft/client/multiplayer/ClientLevel#thunderLevel
@@ -189,6 +207,10 @@ net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket
 
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket
 net/minecraft/network/protocol/game/ClientboundExplodePacket
+net/minecraft/network/protocol/game/ClientboundEntityEventPacket
+net/minecraft/network/protocol/game/ClientboundEntityEventPacket#getEventId
+net/minecraft/network/protocol/game/ClientboundAddEntityPacket
+net/minecraft/network/protocol/game/ClientboundEntityEventPacket#getEntityId
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#getId()
 net/minecraft/network/protocol/game/ServerboundPlayerActionPacket
 net/minecraft/network/protocol/game/ServerboundPlayerActionPacket#getAction()
@@ -205,6 +227,8 @@ net/minecraft/world/entity/Entity#bb
 net/minecraft/world/entity/LivingEntity#hurtTime
 net/minecraft/world/entity/projectile/AbstractArrow
 net/minecraft/world/entity/projectile/ThrownEnderpearl
+net/minecraft/world/entity/projectile/ThrowableProjectile
+net/minecraft/world/entity/projectile/ThrowableProjectile#getOwner
 net/minecraft/world/entity/projectile/FishingHook
 net/minecraft/world/entity/projectile/FishingHook#caughtEntity
 net/minecraft/world/entity/projectile/AbstractFireball
@@ -454,6 +478,7 @@ net/minecraft/world/level/block/Blocks
 net/minecraft/world/level/block/Blocks#AIR
 net/minecraft/world/level/block/Block#getDefaultState
 net/minecraft/world/level/Level#setBlock
+net/minecraft/world/level/Level#playerWillDestroy
 net/minecraft/world/level/block/Block
 net/minecraft/world/level/block/Block#getDescriptionId()
 # 区块内逐格读方块：走 LevelReader 面而不是 ClientLevel 面——后者在 1.9–1.14.3 缺（锚点学不到）。
@@ -597,6 +622,8 @@ net/minecraft/world/entity/EquipmentSlot#CHEST
 net/minecraft/world/entity/EquipmentSlot#LEGS
 net/minecraft/world/entity/EquipmentSlot#FEET
 net/minecraft/world/entity/Entity#isPassenger
+net/minecraft/world/entity/Entity#eyeHeight
+net/minecraft/world/entity/Entity#refreshDimensions
 net/minecraft/world/entity/Entity#getScale
 net/minecraft/client/Options#keyUse
 net/minecraft/client/KeyMapping#setDown

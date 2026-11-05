@@ -58,7 +58,7 @@ public final class AntiBotModule extends GameModule {
     private final Set<String> duplicateNames = new HashSet<String>();
 
     public AntiBotModule() {
-        super("AntiBot", Category.COMBAT);
+        super("Anti Bot", Category.COMBAT);
     }
 
     @Override
@@ -125,7 +125,7 @@ public final class AntiBotModule extends GameModule {
 
     public static boolean isBot(GameBridge bridge, Object entity) {
         NocturneClient client = NocturneClient.get();
-        Module module = client == null ? null : client.modules().get("AntiBot");
+        Module module = dev.nocturne.client.module.modules.EpsilonSupport.module("Anti Bot");
         if (!(module instanceof AntiBotModule) || !module.isEnabled()
                 || entity == null || entity == bridge.player()) {
             return false;

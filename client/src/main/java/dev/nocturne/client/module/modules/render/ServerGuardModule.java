@@ -38,7 +38,7 @@ public final class ServerGuardModule extends GameModule implements WorldOverlay 
     private int joinTicks;
 
     public ServerGuardModule() {
-        super("ServerGuard", Category.RENDER);
+        super("Server Guard", Category.RENDER);
     }
 
     @Override

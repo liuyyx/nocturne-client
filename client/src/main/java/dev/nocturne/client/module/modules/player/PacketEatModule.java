@@ -7,7 +7,7 @@ import dev.nocturne.client.module.GameModule;
 /** PacketEat：食物使用期间拦截释放包，避免服务端提前结束进食。 */
 public final class PacketEatModule extends GameModule {
     public PacketEatModule() {
-        super("PacketEat", Category.PLAYER);
+        super("Packet Eat", Category.PLAYER);
     }
 
     @Override

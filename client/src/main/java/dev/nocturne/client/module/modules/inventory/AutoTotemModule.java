@@ -1,44 +1,47 @@
 package dev.nocturne.client.module.modules.inventory;
 
-import dev.nocturne.client.action.ActionApi;
-import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
-import dev.nocturne.client.value.BoundsNumberValue;
-import dev.nocturne.client.value.NumberBounds;
+import dev.nocturne.client.module.modules.EpsilonSupport;
+import dev.nocturne.client.value.BooleanValue;
+import dev.nocturne.client.value.NumberValue;
 
-import java.util.Random;
-
-/** 在副手没有图腾时，从背包选取图腾并执行真实 offhand swap。 */
+/** Epsilon Auto Totem：血量阈值、Gapple 检查与 Strict 双击/普通 swap。 */
 public final class AutoTotemModule extends GameModule {
-    private final BoundsNumberValue delay = add(new BoundsNumberValue(
-            "Delay", new NumberBounds(100, 120), 50, 200, 1));
-    private final Random random = new Random();
-    private long nextClick;
+    private final BooleanValue strict = add(new BooleanValue("Strict", true));
+    private final NumberValue health = add(new NumberValue("Health", 16, 0, 36, 0.5));
+    private final BooleanValue checkGapple = add(new BooleanValue("Check Gapple", true));
 
     public AutoTotemModule() {
-        super("AutoTotem", Category.INVENTORY);
+        super("Auto Totem", Category.COMBAT);
     }
 
     @Override
     public void onTick() {
-        GameBridge bridge = bridge();
-        ActionApi actions = actions();
-        if (bridge == null || actions == null || bridge.containerOpen()) {
+        if (bridge().containerOpen() || !shouldHoldTotem()) {
             return;
         }
-        long now = System.currentTimeMillis();
-        if (now < nextClick || bridge.itemDescription(bridge.inventoryStack(40)).contains("totem_of_undying")) {
+        int slot = EpsilonSupport.findInventory(bridge(), "totem_of_undying");
+        if (slot < 0) {
             return;
         }
-        for (int slot = 9; slot <= 35; slot++) {
-            if (!bridge.itemDescription(bridge.inventoryStack(slot)).contains("totem_of_undying")) {
-                continue;
-            }
-            actions.clickSlot(slot, 40, "swap");
-            NumberBounds bounds = delay.get();
-            nextClick = now + (long) (bounds.min() + random.nextDouble() * (bounds.max() - bounds.min()));
-            return;
+        if (strict.get()) {
+            actions().clickSlot(slot, 0, "pickup");
+            actions().clickSlot(40, 0, "pickup");
+        } else {
+            actions().clickSlot(slot, 40, "swap");
         }
+    }
+
+    private boolean shouldHoldTotem() {
+        String offhand = bridge().itemDescription(bridge().heldItem(bridge().player(), true));
+        if (offhand.contains("totem_of_undying")) {
+            return false;
+        }
+        if (checkGapple.get() && offhand.contains("golden_apple")
+                && state().health() > health.get() && state().y() >= -64.0) {
+            return false;
+        }
+        return state().health() <= health.get() || offhand.isEmpty() || state().y() < -64.0;
     }
 }

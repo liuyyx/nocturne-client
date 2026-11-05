@@ -11,15 +11,15 @@ import dev.nocturne.client.value.NumberValue;
 
 /** 通过实际位移事件实现水平和垂直飞行。 */
 public final class FlyModule extends GameModule {
-    private final NumberValue speed = add(new NumberValue("Speed", 0.5, 0.1, 5.0, 0.1));
-    private final NumberValue verticalSpeed = add(new NumberValue("Vertical Speed", 0.2, 0.1, 5.0, 0.1));
+    private final NumberValue horizontalSpeed = add(new NumberValue("Horizontal Speed", 3.5, 0.1, 10.0, 0.1));
+    private final NumberValue verticalSpeed = add(new NumberValue("Vertical Speed", 1.0, 0.1, 10.0, 0.1));
     private float forward;
     private float strafe;
     private boolean jump;
     private boolean sneak;
 
     public FlyModule() {
-        super("Fly", Category.MOVEMENT);
+        super("Flight", Category.MOVEMENT);
     }
 
     @Override
@@ -57,7 +57,7 @@ public final class FlyModule extends GameModule {
         double radians = Math.toRadians(state.yaw());
         double sin = Math.sin(radians);
         double cos = Math.cos(radians);
-        double magnitude = speed.get();
+        double magnitude = horizontalSpeed.get();
         event.x = (strafe * cos - forward * sin) * magnitude;
         event.z = (forward * cos + strafe * sin) * magnitude;
         event.y = jump ? verticalSpeed.get() : sneak ? -verticalSpeed.get() : 0.0;

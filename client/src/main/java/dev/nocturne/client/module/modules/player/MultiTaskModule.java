@@ -9,7 +9,7 @@ public final class MultiTaskModule extends GameModule {
     private boolean attacking;
 
     public MultiTaskModule() {
-        super("MultiTask", Category.PLAYER);
+        super("Multi Task", Category.PLAYER);
     }
 
     @Override

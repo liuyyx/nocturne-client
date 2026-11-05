@@ -17,7 +17,7 @@ public final class TitleReplaceModule extends GameModule {
     private final ColorValue endColor = add(new ColorValue("End Color", 0xFFFF85A1));
 
     public TitleReplaceModule() {
-        super("TitleReplace", Category.PLAYER);
+        super("Title Replace", Category.PLAYER);
     }
 
     @Override

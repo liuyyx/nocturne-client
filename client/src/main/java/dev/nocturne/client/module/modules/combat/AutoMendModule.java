@@ -14,7 +14,7 @@ public final class AutoMendModule extends GameModule {
     private int original = -1;
 
     public AutoMendModule() {
-        super("AutoMend", Category.COMBAT);
+        super("Auto Mend", Category.COMBAT);
     }
 
     @Override

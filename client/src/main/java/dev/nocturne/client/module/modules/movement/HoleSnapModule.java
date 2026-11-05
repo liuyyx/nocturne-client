@@ -49,7 +49,7 @@ public final class HoleSnapModule extends GameModule implements WorldOverlay {
 
     @Override
     protected void onStart() {
-        target = findHole();
+        target = bridge() != null ? findHole() : null;
         boostLeft = boost.get() ? boostTicks.asInt() : 0;
         listen(PacketEvent.class, event -> {
             if (event.direction == PacketEvent.Direction.RECEIVE
@@ -175,7 +175,9 @@ public final class HoleSnapModule extends GameModule implements WorldOverlay {
 
     @Override
     protected void onStop() {
-        bridge().setTimerSpeed(1.0f);
+        if (bridge() != null) {
+            bridge().setTimerSpeed(1.0f);
+        }
         if (toggleStep.get() && useStep.get()) {
             Module step = client().modules().get("Step");
             if (step != null) {

@@ -16,7 +16,7 @@ public final class HoverTotemModule extends GameModule {
     private int clock;
 
     public HoverTotemModule() {
-        super("HoverTotem", Category.COMBAT);
+        super("Hover Totem", Category.COMBAT);
     }
 
     @Override

@@ -434,6 +434,19 @@ public final class GameBridge {
         }
     }
 
+    /** 写 Options 中 Boolean/Number 或 OptionInstance 值。 */
+    public boolean writeOption(String canonicalField, Object value) {
+        Object options = readField(minecraft(), ClassType.MINECRAFT, "options");
+        Object field = readField(options, ClassType.OPTIONS, canonicalField);
+        if (field == null) {
+            return false;
+        }
+        if (field instanceof Boolean || field instanceof Number) {
+            return writeField(options, ClassType.OPTIONS, canonicalField, value);
+        }
+        return callMappedStatus(field, ClassType.OPTION_INSTANCE, "set", value);
+    }
+
     /** 当前人称：0=第一人称，1=第三人称背面；未知为 -1。 */
     public int perspective() {
         Object options = readField(minecraft(), ClassType.MINECRAFT, "options");
@@ -486,6 +499,11 @@ public final class GameBridge {
                 && writeField(input, ClassType.INPUT, "shiftKeyDown", sneak);
         callMapped(player(), ClassType.ENTITY, "setSprinting", sprint);
         return written;
+    }
+
+    /** 当前界面标题纯文本；无界面时为空字符串。 */
+    public String screenTitle() {
+        return componentText(callMapped(currentScreen(), ClassType.SCREEN, "getTitle"));
     }
 
     /** 当前原生界面；未打开时为 null。 */
@@ -963,6 +981,16 @@ public final class GameBridge {
         return action != null && "RELEASE_USE_ITEM".equals(String.valueOf(action));
     }
 
+    /** 实体事件包的事件 id 与实体 id；不可读取时均为 -1。 */
+    public int[] entityEventData(Object packet) {
+        if (!isInstance(packet, ClassType.CLIENTBOUND_ENTITY_EVENT)) {
+            return null;
+        }
+        Number event = number(callMapped(packet, ClassType.CLIENTBOUND_ENTITY_EVENT, "getEventId"));
+        Number id = number(callMapped(packet, ClassType.CLIENTBOUND_ENTITY_EVENT, "getEntityId"));
+        return event == null || id == null ? null : new int[]{event.intValue(), id.intValue()};
+    }
+
     /** 实体是否在水中；能力缺失时保守返回 false。 */
     public boolean inWater(Object entity) {
         return Boolean.TRUE.equals(callMapped(entity, ClassType.ENTITY, "isInWater"));
@@ -1241,6 +1269,27 @@ public final class GameBridge {
                 world(), blockPos);
         Object empty = callMapped(shape, ClassType.VOXEL_SHAPE, "isEmpty");
         return empty instanceof Boolean ? !(Boolean) empty : !isAir(blockState);
+    }
+
+    /** 对手持 PoseStack 应用平移、缩放和 XYZ 轴旋转。 */
+    public void transformPose(Object pose, double x, double y, double z,
+                              double scaleX, double scaleY, double scaleZ,
+                              double rotX, double rotY, double rotZ) {
+        callMappedStatus(pose, ClassType.POSE_STACK, "translate", (float) x, (float) y, (float) z);
+        callMappedStatus(pose, ClassType.POSE_STACK, "scale", (float) scaleX, (float) scaleY, (float) scaleZ);
+        float[] rotations = {(float) rotX, (float) rotY, (float) rotZ};
+        for (int axis = 0; axis < 3; axis++) {
+            if (rotations[axis] == 0.0f) {
+                continue;
+            }
+            float ax = axis == 0 ? 1.0f : 0.0f;
+            float ay = axis == 1 ? 1.0f : 0.0f;
+            float az = axis == 2 ? 1.0f : 0.0f;
+            Object angle = construct(ClassType.AXIS_ANGLE4F,
+                    (float) Math.toRadians(rotations[axis]), ax, ay, az);
+            Object quaternion = construct(ClassType.QUATERNIONF, angle);
+            callMappedStatus(pose, ClassType.POSE_STACK, "mulPose", quaternion);
+        }
     }
 
     public Object moveBox(Object box, double x, double y, double z) {

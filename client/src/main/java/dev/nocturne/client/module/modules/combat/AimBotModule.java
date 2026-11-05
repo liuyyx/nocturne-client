@@ -34,7 +34,7 @@ public final class AimBotModule extends GameModule implements WorldOverlay {
     private boolean attackHeld;
 
     public AimBotModule() {
-        super("AimBot", Category.COMBAT);
+        super("Aim Bot", Category.COMBAT);
     }
 
     @Override

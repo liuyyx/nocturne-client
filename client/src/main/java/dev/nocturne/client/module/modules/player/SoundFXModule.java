@@ -15,7 +15,7 @@ public final class SoundFXModule extends GameModule {
     private int pending = -1;
 
     public SoundFXModule() {
-        super("SoundFX", Category.PLAYER);
+        super("Sound FX", Category.PLAYER);
     }
 
     @Override

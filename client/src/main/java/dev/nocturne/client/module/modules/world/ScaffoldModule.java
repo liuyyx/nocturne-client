@@ -362,8 +362,12 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
     @Override
     protected void onStop() {
         restore();
-        bridge().setTimerSpeed(1.0f);
-        client().rotations().release(20);
+        if (bridge() != null) {
+            bridge().setTimerSpeed(1.0f);
+        }
+        if (client() != null && client().rotations() != null) {
+            client().rotations().release(20);
+        }
         lastPlaced = null;
     }
 

@@ -19,9 +19,9 @@ public final class AutoToolModule extends Module {
     private final BooleanValue instantSwap = add(new BooleanValue("Instant swap", true));
     private final NumberValue swapToDelay = add(new NumberValue(
             "Swap to delay", 50.0, 0.0, 500.0, 50.0));
-    private final BooleanValue swapBack = add(new BooleanValue("Swap back", false));
+    private final BooleanValue swapBack = add(new BooleanValue("Swap Back", true));
     private final NumberValue swapBackDelay = add(new NumberValue(
-            "Swap back delay", 350.0, 50.0, 1000.0, 50.0));
+            "Swap Back Delay", 0.0, 0.0, 15.0, 1.0));
     private final BooleanValue onlyWhileSneaking = add(new BooleanValue("Only while sneaking", false));
 
     private int originalSlot = -1;
@@ -31,7 +31,7 @@ public final class AutoToolModule extends Module {
 
     @Override
     public String name() {
-        return "AutoTool";
+        return "Auto Tool";
     }
 
     @Override
@@ -80,7 +80,7 @@ public final class AutoToolModule extends Module {
         }
         aimStartNanos = 0L;
         if (swapBack.get() && swapped
-                && now - swappedAtNanos >= swapBackDelay.get().longValue() * 1_000_000L) {
+                && now - swappedAtNanos >= swapBackDelay.get().longValue() * 50_000_000L) {
             restoreOriginal();
         }
     }

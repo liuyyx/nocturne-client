@@ -1,62 +1,59 @@
 package dev.nocturne.client.module.modules.misc;
 
-import dev.nocturne.client.control.PacketController;
 import dev.nocturne.client.event.PacketEvent;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
 import dev.nocturne.client.value.BooleanValue;
-import dev.nocturne.client.value.ModeValue;
 import dev.nocturne.client.value.NumberValue;
 
-/** 扣住发包并在禁用或达到阈值时原序释放。 */
+/** Epsilon Blink：Tick 阈值、慢速释放、移动释放与本地假人。 */
 public final class BlinkModule extends GameModule {
-    private final ModeValue direction = add(new ModeValue(
-            "Direction", "Outgoing only", "Outgoing only", "Bi-directional"));
-    private final BooleanValue autoSend = add(new BooleanValue("Auto send", false));
-    private final NumberValue sendThreshold = add(new NumberValue("Send threshold", 50, 0, 100, 1));
-    private boolean outbound;
-    private boolean inbound;
+    private final NumberValue tick = add(new NumberValue("Tick", 30, 5, 200, 1));
+    private final BooleanValue slowRelease = add(new BooleanValue("Slow Release", true));
+    private final BooleanValue slowMove = add(new BooleanValue("Slow Move", false));
+    private final NumberValue slowMoveTick = add(new NumberValue("Slow Move Tick", 5, 1, 20, 1));
+    private final BooleanValue fakePlayer = add(new BooleanValue("Fake Player", false));
+    private boolean holding;
+    private Object fake;
 
     public BlinkModule() {
-        super("Blink", Category.MISC);
+        super("Blink", Category.MOVEMENT);
     }
 
     @Override
     protected void onStart() {
-        PacketController packets = client().packets();
-        outbound = packets.hold(PacketEvent.Direction.SEND);
-        if (direction.is("Bi-directional")) {
-            inbound = packets.hold(PacketEvent.Direction.RECEIVE);
+        holding = client().packets().hold(PacketEvent.Direction.SEND);
+        if (fakePlayer.get()) {
+            fake = bridge().spawnFakePlayer("Blink", true);
         }
     }
 
     @Override
     public void onTick() {
-        int threshold = sendThreshold.asInt();
-        if (!autoSend.get() || threshold <= 0) {
+        if (!holding) {
             return;
         }
-        PacketController packets = client().packets();
-        if (packets.queued(PacketEvent.Direction.SEND) >= threshold) {
-            release();
-            onStart();
+        if (slowMove.get() && state().moving()) {
+            client().packets().releaseSome(PacketEvent.Direction.SEND, slowMoveTick.asInt());
+        }
+        if (slowRelease.get()) {
+            client().packets().releaseSome(PacketEvent.Direction.SEND, 1);
+        }
+        if (client().packets().queued(PacketEvent.Direction.SEND) >= tick.asInt()) {
+            client().packets().release(PacketEvent.Direction.SEND);
+            holding = client().packets().hold(PacketEvent.Direction.SEND);
         }
     }
 
     @Override
     protected void onStop() {
-        release();
-    }
-
-    private void release() {
-        PacketController packets = client().packets();
-        if (outbound) {
-            packets.release(PacketEvent.Direction.SEND);
+        if (holding) {
+            client().packets().release(PacketEvent.Direction.SEND);
         }
-        if (inbound) {
-            packets.release(PacketEvent.Direction.RECEIVE);
+        holding = false;
+        if (bridge() != null) {
+            bridge().removeFakePlayer(fake);
         }
-        outbound = false;
-        inbound = false;
+        fake = null;
     }
 }

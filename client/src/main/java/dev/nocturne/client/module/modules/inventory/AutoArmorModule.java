@@ -1,80 +1,115 @@
 package dev.nocturne.client.module.modules.inventory;
 
-import dev.nocturne.client.action.ActionApi;
-import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
 import dev.nocturne.client.value.BooleanValue;
-import dev.nocturne.client.value.BoundsNumberValue;
-import dev.nocturne.client.value.NumberBounds;
+import dev.nocturne.client.value.ModeValue;
+import dev.nocturne.client.value.NumberValue;
 
-import java.util.Random;
-
-/** 比较四类盔甲的材质与耐久，并把更优装备移入对应装备槽。 */
+/** Epsilon Auto Armor：附魔优先级、鞘翅策略、旧版装备、Strict 与移动/背包暂停。 */
 public final class AutoArmorModule extends GameModule {
-    private final BooleanValue checkDurability = add(new BooleanValue("Check durability", true));
-    private final BooleanValue dropEquipped = add(new BooleanValue("Drop equipped", false));
-    private final BoundsNumberValue delay = add(new BoundsNumberValue(
-            "Delay", new NumberBounds(100, 120), 1, 200, 1));
-    private final Random random = new Random();
+    private final ModeValue head = add(new ModeValue("Head", "Protection", "Blast", "Protection"));
+    private final ModeValue body = add(new ModeValue("Body", "Protection", "Blast", "Protection"));
+    private final ModeValue tights = add(new ModeValue("Tights", "Protection", "Blast", "Protection"));
+    private final ModeValue feet = add(new ModeValue("Feet", "Protection", "Blast", "Protection"));
+    private final ModeValue elytraPriority = add(new ModeValue("Elytra Priority", "Ignore", "None", "Always", "ElytraPlus", "Ignore"));
+    private final NumberValue delay = add(new NumberValue("Delay", 5, 0, 10, 1));
+    private final BooleanValue oldVersion = add(new BooleanValue("Old Version", false));
+    private final BooleanValue pauseInventory = add(new BooleanValue("Pause Inventory", false));
+    private final BooleanValue noMove = add(new BooleanValue("No Move", false));
+    private final BooleanValue ignoreCurse = add(new BooleanValue("Ignore Curse", true));
+    private final BooleanValue strict = add(new BooleanValue("Strict", false));
     private int armorType;
-    private long nextClick;
+    private int ticks;
 
     public AutoArmorModule() {
-        super("AutoArmor", Category.INVENTORY);
-    }
-
-    @Override
-    protected void onStart() {
-        armorType = 0;
-        nextClick = 0L;
+        super("Auto Armor", Category.PLAYER);
     }
 
     @Override
     public void onTick() {
-        GameBridge bridge = bridge();
-        ActionApi actions = actions();
-        if (bridge == null || actions == null || bridge.containerOpen()) {
+        if (pauseInventory.get() && bridge().containerOpen() || noMove.get() && state().moving()
+                || ++ticks < delay.asInt()) {
             return;
         }
-        long now = System.currentTimeMillis();
-        if (now < nextClick) {
-            return;
-        }
+        ticks = 0;
         if (armorType >= 4) {
             armorType = 0;
             return;
         }
         int currentSlot = 39 - armorType;
-        Object current = bridge.inventoryStack(currentSlot);
+        Object current = bridge().inventoryStack(currentSlot);
         int bestSlot = -1;
-        int bestScore = score(bridge, current);
-        for (int slot = 9; slot <= 35; slot++) {
-            Object candidate = bridge.inventoryStack(slot);
-            if (InventorySupport.armorType(bridge, candidate) != armorType) {
+        double bestScore = score(current, armorType);
+        for (int slot = 0; slot < 36; slot++) {
+            Object candidate = bridge().inventoryStack(slot);
+            if (InventorySupport.armorType(bridge(), candidate) != armorType
+                    && !bridge().itemDescription(candidate).contains("elytra")) {
                 continue;
             }
-            int score = score(bridge, candidate);
+            double score = score(candidate, armorType);
             if (score > bestScore) {
                 bestScore = score;
                 bestSlot = slot;
             }
         }
         if (bestSlot >= 0) {
-            int equipmentMenuSlot = 5 + armorType;
-            if (dropEquipped.get() && !bridge.isEmptyStack(current)) {
-                actions.clickSlot(equipmentMenuSlot, 0, "pickup");
-                actions.clickSlot(-999, 0, "pickup");
+            if (strict.get()) {
+                actions().sendPlayerCommand("STOP_SPRINTING");
             }
-            actions.clickSlot(bestSlot, 0, "quick_move");
-            NumberBounds bounds = delay.get();
-            nextClick = now + (long) (bounds.min() + random.nextDouble() * (bounds.max() - bounds.min()));
+            if (oldVersion.get() && bestSlot < 9) {
+                int original = state().selectedSlot();
+                actions().selectSlot(bestSlot, false);
+                actions().useItem();
+                actions().selectSlot(original, false);
+            } else {
+                actions().clickSlot(bestSlot, 0, "quick_move");
+            }
+            actions().closeContainer();
         }
         armorType++;
     }
 
-    private int score(GameBridge bridge, Object stack) {
-        int score = InventorySupport.armorScore(bridge, stack);
-        return checkDurability.get() ? score : score / 1000;
+    private double score(Object stack, int type) {
+        if (bridge().isEmptyStack(stack)) {
+            return Double.NEGATIVE_INFINITY;
+        }
+        String id = bridge().itemDescription(stack);
+        boolean elytra = id.contains("elytra");
+        if (elytra) {
+            if (elytraPriority.is("Ignore") || type != 1) return Double.NEGATIVE_INFINITY;
+            if (elytraPriority.is("None")) return -1000.0;
+            if (elytraPriority.is("Always")) return 100000.0;
+            return 50000.0 + durability(stack);
+        }
+        if (ignoreCurse.get() && enchantments(stack).contains("binding_curse")) {
+            return Double.NEGATIVE_INFINITY;
+        }
+        ModeValue priority = type == 0 ? head : type == 1 ? body : type == 2 ? tights : feet;
+        double score = InventorySupport.armorScore(bridge(), stack) + durability(stack) * 0.01;
+        if (priority.is("Protection") && enchantments(stack).contains("protection")) {
+            score += 2000.0;
+        }
+        if (priority.is("Blast") && enchantments(stack).contains("blast_protection")) {
+            score += 4000.0;
+        }
+        return score;
+    }
+
+    private double durability(Object stack) {
+        int max = bridge().itemMaxDamage(stack);
+        return max <= 0 ? 0.0 : (max - bridge().itemDamage(stack)) * 100.0 / max;
+    }
+
+    private String enchantments(Object stack) {
+        return String.valueOf(bridge().callMapped(stack,
+                dev.nocturne.client.mapping.ClassType.ITEM_STACK, "getEnchantments"))
+                .toLowerCase(java.util.Locale.ROOT);
+    }
+
+    @Override
+    protected void onStart() {
+        armorType = 0;
+        ticks = 0;
     }
 }

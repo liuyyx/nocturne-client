@@ -1,31 +1,37 @@
 package dev.nocturne.client.module.modules.combat;
 
-import dev.nocturne.client.action.ActionApi;
-import dev.nocturne.client.game.GameBridge;
-import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
-import dev.nocturne.client.value.BooleanValue;
+import dev.nocturne.client.module.modules.EpsilonSupport;
+import dev.nocturne.client.value.NumberValue;
 
-/** 准星指向实体且冷却就绪时触发真实攻击。 */
+/** Trigger Bot：随机延迟、攻击冷却与暴击下落窗口。 */
 public final class TriggerbotModule extends GameModule {
-    private final BooleanValue waitForCooldown = add(new BooleanValue("Wait for cooldown", true));
+    private final NumberValue range = add(new NumberValue("Range", 3, 1, 7, 0.1));
+    private final NumberValue delayMin = add(new NumberValue("Random Delay Min", 2, 0, 20, 1));
+    private final NumberValue delayMax = add(new NumberValue("Random Delay Max", 13, 0, 20, 1));
+    private final NumberValue attackCooldown = add(new NumberValue("Attack Cooldown", 0.9, 0.5, 1, 0.05));
+    private final NumberValue critFallDistance = add(new NumberValue("Crit Fall Distance", 0, 0, 1, 0.01));
+    private long nextAttack;
 
     public TriggerbotModule() {
-        super("Triggerbot", Category.COMBAT);
+        super("Trigger Bot", Category.COMBAT);
     }
 
     @Override
     public void onTick() {
-        ActionApi actions = actions();
-        GameBridge bridge = bridge();
-        if (actions == null || bridge == null
-                || waitForCooldown.get() && state().attackStrengthScale() < 1.0f) {
+        long now = System.currentTimeMillis();
+        if (now < nextAttack || state().attackStrengthScale() < attackCooldown.get()) {
             return;
         }
-        Object hit = actions.pick(3.0, 1.0f);
-        if (bridge.isEntityHit(hit)) {
-            actions.attack(bridge.callMapped(hit, ClassType.ENTITY_HIT_RESULT, "getEntity"));
+        float fall = bridge().fallDistance(bridge().player());
+        if (fall >= 1.0f && fall <= 1.14f && critFallDistance.get() > 0.0f
+                && fall < critFallDistance.get()) {
+            return;
+        }
+        Object target = bridge().hitEntity(actions().pick(range.get(), 1.0f));
+        if (target != null && actions().attack(target)) {
+            nextAttack = now + EpsilonSupport.randomInt(delayMin.asInt(), delayMax.asInt()) * 50L;
         }
     }
 }

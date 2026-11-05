@@ -7,7 +7,7 @@ import dev.nocturne.client.module.GameModule;
 /** MovementFix：把实际位移从客户端朝向旋转到当前托管朝向。 */
 public final class MovementFixModule extends GameModule {
     public MovementFixModule() {
-        super("MovementFix", Category.MOVEMENT);
+        super("Movement Fix", Category.MOVEMENT);
     }
 
     @Override

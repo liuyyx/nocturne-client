@@ -21,12 +21,12 @@ public final class FakePlayerModule extends GameModule {
     private int deadTicks;
 
     public FakePlayerModule() {
-        super("FakePlayer", Category.PLAYER);
+        super("Fake Player", Category.PLAYER);
     }
 
     @Override
     protected void onStart() {
-        fake = bridge().spawnFakePlayer(name.get(), copyInventory.get());
+        fake = bridge() != null ? bridge().spawnFakePlayer(name.get(), copyInventory.get()) : null;
         positions.clear();
         playbackIndex = 0;
         deadTicks = 0;

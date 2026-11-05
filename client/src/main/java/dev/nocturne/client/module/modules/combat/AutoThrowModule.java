@@ -18,7 +18,7 @@ public final class AutoThrowModule extends GameModule {
     private long nextThrow;
 
     public AutoThrowModule() {
-        super("AutoThrow", Category.COMBAT);
+        super("Auto Throw", Category.COMBAT);
     }
 
     @Override

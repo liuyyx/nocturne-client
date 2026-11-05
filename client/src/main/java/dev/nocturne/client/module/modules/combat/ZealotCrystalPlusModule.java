@@ -103,7 +103,7 @@ public final class ZealotCrystalPlusModule extends GameModule implements WorldOv
     private int restoreTicks;
 
     public ZealotCrystalPlusModule() {
-        super("ZealotCrystalPlus", Category.COMBAT);
+        super("Zealot Crystal Plus", Category.COMBAT);
     }
 
     @Override

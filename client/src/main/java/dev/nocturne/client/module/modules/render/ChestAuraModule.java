@@ -31,7 +31,7 @@ public final class ChestAuraModule extends GameModule {
     private long next;
 
     public ChestAuraModule() {
-        super("ChestAura", Category.PLAYER);
+        super("Chest Aura", Category.PLAYER);
     }
 
     @Override

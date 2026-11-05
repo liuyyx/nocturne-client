@@ -111,6 +111,12 @@ public final class GameplayEvents implements GameplayHook.Sink {
     }
 
     @Override
+    public boolean entityRenderGate(Object entity) {
+        return dev.nocturne.client.module.modules.render.NoRenderModule.shouldRender(entity)
+                && dev.nocturne.client.module.modules.render.YsmModelModule.originalAllowed(entity);
+    }
+
+    @Override
     public void entityRender(Object entity, boolean post) {
         if (active()) {
             client.events().post(new EntityRenderEvent(entity, post));
@@ -127,6 +133,25 @@ public final class GameplayEvents implements GameplayHook.Sink {
     }
 
     @Override
+    public void handTransform(Object pose, Object arm, float inverseHeight) {
+        dev.nocturne.client.module.Module hand = client.modules().get("Hand View");
+        if (hand instanceof dev.nocturne.client.module.modules.render.HandViewModule && hand.isEnabled()) {
+            ((dev.nocturne.client.module.modules.render.HandViewModule) hand).apply(pose, arm, inverseHeight);
+        }
+        dev.nocturne.client.module.Module totem = client.modules().get("Totem Animation");
+        if (totem instanceof dev.nocturne.client.module.modules.render.TotemAnimationModule && totem.isEnabled()) {
+            ((dev.nocturne.client.module.modules.render.TotemAnimationModule) totem).apply(pose);
+        }
+    }
+
+    @Override
+    public float cameraZoom(float distance) {
+        dev.nocturne.client.module.Module module = client.modules().get("Camera Clip");
+        return module instanceof dev.nocturne.client.module.modules.render.CameraClipModule && module.isEnabled()
+                ? ((dev.nocturne.client.module.modules.render.CameraClipModule) module).zoom(distance) : distance;
+    }
+
+    @Override
     public float timerScale(float delta) {
         dev.nocturne.client.module.Module module = client.modules().get("Timer");
         return module instanceof dev.nocturne.client.module.modules.misc.TimerModule && module.isEnabled()
@@ -136,7 +161,8 @@ public final class GameplayEvents implements GameplayHook.Sink {
     @Override
     public boolean noFog() {
         dev.nocturne.client.module.Module module = client.modules().get("NoFog");
-        return module == null || !module.isEnabled();
+        return (module == null || !module.isEnabled())
+                && !dev.nocturne.client.module.modules.render.NoRenderModule.fog();
     }
 
     @Override

@@ -36,11 +36,22 @@ public final class GameplayHook {
         default void entityJoin(int id, Object entity) {
         }
 
+        default boolean entityRenderGate(Object entity) {
+            return true;
+        }
+
         default void entityRender(Object entity, boolean post) {
         }
 
         default boolean xrayBlock(Object blockState, Object blockPos) {
             return true;
+        }
+
+        default void handTransform(Object pose, Object arm, float inverseHeight) {
+        }
+
+        default float cameraZoom(float distance) {
+            return distance;
         }
 
         default float timerScale(float delta) {
@@ -226,6 +237,27 @@ public final class GameplayHook {
         }
     }
 
+    public static void handTransform(Object pose, Object arm, float inverseHeight) {
+        try {
+            Sink current = sink;
+            if (current != null) {
+                current.handTransform(pose, arm, inverseHeight);
+            }
+        } catch (Throwable t) {
+            failure("handTransform", t);
+        }
+    }
+
+    public static float cameraZoom(float distance) {
+        try {
+            Sink current = sink;
+            return current == null ? distance : current.cameraZoom(distance);
+        } catch (Throwable t) {
+            failure("cameraZoom", t);
+            return distance;
+        }
+    }
+
     public static boolean noFog() {
         try {
             Sink current = sink;
@@ -262,6 +294,16 @@ public final class GameplayHook {
             return current == null || current.xrayBlock(blockState, blockPos);
         } catch (Throwable t) {
             failure("xrayBlock", t);
+            return true;
+        }
+    }
+
+    public static boolean entityRenderGate(Object entity) {
+        try {
+            Sink current = sink;
+            return current == null || current.entityRenderGate(entity);
+        } catch (Throwable t) {
+            failure("entityRenderGate", t);
             return true;
         }
     }

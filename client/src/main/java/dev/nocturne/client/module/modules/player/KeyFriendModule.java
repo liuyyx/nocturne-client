@@ -12,7 +12,7 @@ public final class KeyFriendModule extends GameModule {
     private final KeyValue activate = add(new KeyValue("Activate Key", 2));
 
     public KeyFriendModule() {
-        super("KeyFriend", Category.PLAYER);
+        super("Key Friend", Category.PLAYER);
     }
 
     @Override

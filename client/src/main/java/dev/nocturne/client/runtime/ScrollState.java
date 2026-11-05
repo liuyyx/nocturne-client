@@ -25,6 +25,10 @@ public final class ScrollState {
      */
     public static void accumulate(double delta) {
         KeySink.accumulateScroll(delta);
+        dev.nocturne.client.NocturneClient client = dev.nocturne.client.NocturneClient.get();
+        if (client != null) {
+            client.events().post(new dev.nocturne.client.event.ScrollEvent(delta));
+        }
     }
 
     /**

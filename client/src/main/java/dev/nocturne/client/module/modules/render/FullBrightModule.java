@@ -29,9 +29,9 @@ public final class FullBrightModule extends Module {
 
     /** 用户可调的亮度设置项，取值范围 1.0–15.0，步进 0.5。 */
     private final NumberValue gamma = add(new NumberValue("Gamma", 10.0, 1.0, 15.0, 0.5));
-    /** 模式：Gamma 写亮度 / Night Vision 上夜视药水（对齐 OpenVape Fullbright 行为）。 */
-    private final ModeValue mode = add(new ModeValue("Mode", "Gamma", "Gamma", "Night Vision"));
-    /** Gamma 模式下亮度渐变过渡；Night Vision 模式下无意义。 */
+    /** 模式：Gamma 写亮度 / Potion 上夜视药水（对齐 OpenVape Fullbright 行为）。 */
+    private final ModeValue mode = add(new ModeValue("Mode", "Gamma", "Gamma", "Potion"));
+    /** Gamma 模式下亮度渐变过渡；Potion 模式下无意义。 */
     private final BooleanValue fade = add(new BooleanValue("Fade", false));
     /** 启用前 gamma 的数值快照；未记录（客户端未就绪/字段缺失）时为 {@code null}。 */
     private Object savedGamma;
@@ -41,13 +41,13 @@ public final class FullBrightModule extends Module {
     private double fadeCurrent = -1.0;
     /** 夜视药水不可用是否已打过日志（表驱动门：缺成员版本只报一次）。 */
     private boolean nightVisionLogged;
-    /** 上一 tick 是否处于 Night Vision 模式：用于在切回 Gamma 时撤掉已加的夜视药水。 */
+    /** 上一 tick 是否处于 Potion 模式：用于在切回 Gamma 时撤掉已加的夜视药水。 */
     private boolean lastNightVisionTick;
 
     /** 模块名，注册表内唯一，也是 GUI 中的显示名。 */
     @Override
     public String name() {
-        return "FullBright";
+        return "Fullbright";
     }
 
     /** 归入“渲染”分组。 */
@@ -72,8 +72,8 @@ public final class FullBrightModule extends Module {
     @Override
     protected void onDisable() {
         // 两条路径都必须走到 restoreOriginal：启用时可能是 Gamma（已把模块值写进 options），
-        // 中途切成 Night Vision，禁用时若只摘药水就直接返回，gamma 会永远停在模块值上——
-        // 玩家关掉模块之后画面仍然死亮（真机复现：开 Gamma → 切 Night Vision → 关模块）。
+        // 中途切成 Potion，禁用时若只摘药水就直接返回，gamma 会永远停在模块值上——
+        // 玩家关掉模块之后画面仍然死亮（真机复现：开 Gamma → 切 Potion → 关模块）。
         // restoreOriginal 对"从未捕获"是空操作，重复调用也安全。
         GameBridge bridge = bridge();
         Object player = bridge == null ? null : bridge.player();
@@ -89,7 +89,7 @@ public final class FullBrightModule extends Module {
     }
 
     /**
-     * 每 tick 按模式驱动：Gamma 写亮度（Fade 开启时渐变），Night Vision 续药水。
+     * 每 tick 按模式驱动：Gamma 写亮度（Fade 开启时渐变），Potion 续药水。
      *
      * <p>必须重复应用：游戏在载入世界时会用存档中的 options 覆盖当前值，若只在启用时
      * 设置一次，切图后亮度就会失效；药水同理（时长耗尽前续杯）。
@@ -102,7 +102,7 @@ public final class FullBrightModule extends Module {
             return;
         }
         if (lastNightVisionTick) {
-            // 刚从 Night Vision 切到 Gamma：先把药水摘掉，否则"切成 Gamma 模式"之后画面还是夜视的。
+            // 刚从 Potion 切到 Gamma：先把药水摘掉，否则"切成 Gamma 模式"之后画面还是夜视的。
             lastNightVisionTick = false;
             GameBridge bridge = bridge();
             Object player = bridge == null ? null : bridge.player();
@@ -131,9 +131,9 @@ public final class FullBrightModule extends Module {
         apply(fadeCurrent);
     }
 
-    /** @return 当前是否为 Night Vision 模式 */
+    /** @return 当前是否为 Potion 模式 */
     private boolean isNightVision() {
-        return mode.is("Night Vision");
+        return mode.is("Potion");
     }
 
     /**
@@ -156,7 +156,7 @@ public final class FullBrightModule extends Module {
     }
 
     /**
-     * Night Vision 模式：给本地玩家续夜视药水。
+     * Potion 模式：给本地玩家续夜视药水。
      *
      * <p>表驱动门：addEffect / NIGHT_VISION 任一缺成员（映射表 absent）就只打一次日志
      * 并跳过——错版本上干净禁用，不断 tick 刷屏也不抛异常。
@@ -172,22 +172,22 @@ public final class FullBrightModule extends Module {
         }
         Object effectType = readStaticField(bridge, ClassType.MOB_EFFECTS, "NIGHT_VISION");
         if (effectType == null) {
-            logGateOnce("夜视药水类型缺失（版本无该成员），Night Vision 模式已禁用");
+            logGateOnce("夜视药水类型缺失（版本无该成员），Potion 模式已禁用");
             return;
         }
         Object instance = newEffectInstance(bridge, effectType);
         if (instance == null) {
-            logGateOnce("夜视药水实例构造失败，Night Vision 模式已禁用");
+            logGateOnce("夜视药水实例构造失败，Potion 模式已禁用");
             return;
         }
         Object result = bridge.callMapped(player, ClassType.LIVING_ENTITY, "addEffect", instance);
         if (result == null) {
-            logGateOnce("addEffect 调用失败，Night Vision 模式已禁用");
+            logGateOnce("addEffect 调用失败，Potion 模式已禁用");
         }
     }
 
     /**
-     * 移除玩家身上的夜视药水（Night Vision 模式退出/切换时用）。
+     * 移除玩家身上的夜视药水（Potion 模式退出/切换时用）。
      *
      * <p>不查映射表：{@code removeEffect} 在表里没有条目，按<b>形状</b>找——单参、参数类型能接受
      * 我们构造出的那个效果实例、返回 void 的方法。{@code removeAllEffects()} 虽然更简单，

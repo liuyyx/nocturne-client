@@ -27,7 +27,7 @@ public final class CrystalBlockerModule extends GameModule implements WorldOverl
     private int[] last;
 
     public CrystalBlockerModule() {
-        super("CrystalBlocker", Category.COMBAT);
+        super("Crystal Blocker", Category.COMBAT);
     }
 
     @Override

@@ -38,7 +38,7 @@ public final class ElytraFlyModule extends GameModule {
     private int restoreTicks;
 
     public ElytraFlyModule() {
-        super("ElytraFly", Category.MOVEMENT);
+        super("Elytra Fly", Category.MOVEMENT);
     }
 
     @Override

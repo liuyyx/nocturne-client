@@ -22,7 +22,7 @@ public final class InvWalkModule extends GameModule {
     private boolean shift;
 
     public InvWalkModule() {
-        super("InvWalk", Category.MOVEMENT);
+        super("GUI Move", Category.MOVEMENT);
     }
 
     @Override

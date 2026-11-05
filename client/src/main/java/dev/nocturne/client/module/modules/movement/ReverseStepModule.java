@@ -13,7 +13,7 @@ public final class ReverseStepModule extends GameModule {
     private final BooleanValue vehicles = add(new BooleanValue("Vehicles", false));
 
     public ReverseStepModule() {
-        super("ReverseStep", Category.MOVEMENT);
+        super("Reverse Step", Category.MOVEMENT);
     }
 
     @Override

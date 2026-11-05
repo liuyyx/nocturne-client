@@ -29,7 +29,7 @@ public final class SpearKillModule extends GameModule {
     private int original = -1;
 
     public SpearKillModule() {
-        super("SpearKill", Category.COMBAT);
+        super("Spear Kill", Category.COMBAT);
     }
 
     @Override

@@ -1,158 +1,107 @@
 package dev.nocturne.client.module.modules.combat;
 
-import dev.nocturne.client.NocturneClient;
-import dev.nocturne.client.action.ActionApi;
-import dev.nocturne.client.event.EventBus;
-import dev.nocturne.client.event.MouseButtonEvent;
-import dev.nocturne.client.game.GameBridge;
-import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
-import dev.nocturne.client.module.Module;
+import dev.nocturne.client.module.GameModule;
+import dev.nocturne.client.module.modules.EpsilonSupport;
 import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.ModeValue;
 import dev.nocturne.client.value.NumberValue;
 
-import java.util.Random;
+/** Epsilon Auto Clicker：左右键独立 CPS、抖动、Burst/Decay、双击与 Miss。 */
+public final class AutoClickerModule extends GameModule {
+    private final ModeValue button = add(new ModeValue("Button", "Both", "Left", "Right", "Both"));
+    private final NumberValue leftMin = add(new NumberValue("Left Min CPS", 8, 1, 520, 1));
+    private final NumberValue leftMax = add(new NumberValue("Left Max CPS", 12, 1, 520, 1));
+    private final BooleanValue leftJitter = add(new BooleanValue("Left Jitter", false));
+    private final NumberValue rightMin = add(new NumberValue("Right Min CPS", 8, 1, 520, 1));
+    private final NumberValue rightMax = add(new NumberValue("Right Max CPS", 12, 1, 520, 1));
+    private final BooleanValue rightJitter = add(new BooleanValue("Right Jitter", false));
+    private final BooleanValue enableBurst = add(new BooleanValue("Enable Burst", true));
+    private final NumberValue burstChance = add(new NumberValue("Burst Chance", 15, 1, 100, 1));
+    private final NumberValue burstDuration = add(new NumberValue("Burst Duration", 800, 100, 3000, 50));
+    private final NumberValue burstMultiplier = add(new NumberValue("Burst CPS Multiplier", 1.8, 1.1, 3, 0.1));
+    private final NumberValue decayDuration = add(new NumberValue("Decay Duration", 1200, 500, 5000, 50));
+    private final NumberValue decayCurve = add(new NumberValue("Decay Curve", 1.5, 1, 3, 0.1));
+    private final BooleanValue enableDouble = add(new BooleanValue("Enable Double Click", true));
+    private final NumberValue doubleChance = add(new NumberValue("Double Click Chance", 8, 1, 50, 1));
+    private final NumberValue doubleDelay = add(new NumberValue("Double Click Delay", 40, 10, 100, 1));
+    private final BooleanValue enableMiss = add(new BooleanValue("Enable Miss", true));
+    private final NumberValue missChance = add(new NumberValue("Miss Chance", 5, 1, 30, 1));
+    private final ButtonState left = new ButtonState();
+    private final ButtonState right = new ButtonState();
 
-/** 按 CPS 触发游戏左键入口的自动点击器。 */
-public final class AutoClickerModule extends Module {
-
-    private static final String NORMAL = "Normal";
-    private static final String EXTRA = "Extra";
-    private static final String EXTRA_PLUS = "Extra+";
-
-    private final NumberValue cps = add(new NumberValue("CPS", 8.0, 1.0, 20.0, 0.1));
-    private final ModeValue randomization = add(new ModeValue(
-            "Randomization", NORMAL, NORMAL, EXTRA, EXTRA_PLUS));
-    private final BooleanValue jitter = add(new BooleanValue("Jitter", false));
-    private final BooleanValue holdToClick = add(new BooleanValue("Hold to click", true));
-    private final BooleanValue triggerMode = add(new BooleanValue("Trigger mode", false));
-
-    private final Random random = new Random();
-    private volatile EventBus.Subscription mouseSubscription;
-    private volatile boolean leftHeld;
-    private volatile long nextClickNanos;
-    private volatile int clickCount;
-
-    @Override
-    public String name() {
-        return "AutoClicker";
-    }
-
-    @Override
-    public Category category() {
-        return Category.COMBAT;
-    }
-
-    @Override
-    protected void onEnable() {
-        leftHeld = false;
-        nextClickNanos = 0L;
-        clickCount = 0;
-        subscribe();
-    }
-
-    @Override
-    protected void onDisable() {
-        unsubscribe();
-        leftHeld = false;
-        nextClickNanos = 0L;
+    public AutoClickerModule() {
+        super("Auto Clicker", Category.COMBAT);
     }
 
     @Override
     public void onTick() {
-        subscribeIfNeeded();
-        if (holdToClick.get() && !leftHeld) {
-            nextClickNanos = 0L;
-            return;
+        if (button.is("Left") || button.is("Both")) {
+            tick(left, true, leftMin.get(), leftMax.get(), leftJitter.get());
         }
-        if (triggerMode.get() && !entityUnderCrosshair()) {
-            return;
+        if (button.is("Right") || button.is("Both")) {
+            tick(right, false, rightMin.get(), rightMax.get(), rightJitter.get());
         }
-        NocturneClient client = NocturneClient.get();
-        ActionApi actions = client == null ? null : client.actions();
-        if (actions == null || !actions.isAvailable("click")) {
-            return;
-        }
+    }
+
+    private void tick(ButtonState state, boolean left, double min, double max, boolean jitter) {
         long now = System.nanoTime();
-        if (nextClickNanos != 0L && now < nextClickNanos) {
-            return;
-        }
-        if (actions.click()) {
-            clickCount++;
-        }
-        // 失败也推进节拍：动作不可用（GUI 打开、无焦点）时不能每 tick 重试。
-        nextClickNanos = now + delayNanos();
-    }
-
-    /** @return 本次启用以来成功触发的左键次数（诊断/验收用） */
-    public int clickCount() {
-        return clickCount;
-    }
-
-    private long delayNanos() {
-        double base = 1_000_000_000.0 / Math.max(1.0, cps.get());
-        if (randomization.is(EXTRA)) {
-            base *= 0.85 + random.nextDouble() * 0.3;
-        } else if (randomization.is(EXTRA_PLUS)) {
-            base *= 0.7 + random.nextDouble() * 0.6;
-        }
-        if (jitter.get()) {
-            base += (random.nextDouble() - 0.5) * 10_000_000.0;
-        }
-        return Math.max(20_000_000L, (long) base);
-    }
-
-    private boolean entityUnderCrosshair() {
-        GameBridge bridge = bridge();
-        Object minecraft = bridge == null ? null : bridge.minecraft();
-        Object hit = minecraft == null ? null
-                : bridge.readField(minecraft, ClassType.MINECRAFT, "hitResult");
-        return bridge.isEntityHit(hit);
-    }
-
-    private void subscribeIfNeeded() {
-        if (!isEnabled() || mouseSubscription != null) {
-            return;
-        }
-        subscribe();
-    }
-
-    private void subscribe() {
-        NocturneClient client = NocturneClient.get();
-        if (client == null || mouseSubscription != null) {
-            return;
-        }
-        try {
-            mouseSubscription = client.events().subscribe(MouseButtonEvent.class, this::onMouse);
-        } catch (Throwable t) {
-            mouseSubscription = null;
-        }
-    }
-
-    private void unsubscribe() {
-        EventBus.Subscription subscription = mouseSubscription;
-        mouseSubscription = null;
-        if (subscription == null) {
-            return;
-        }
-        NocturneClient client = NocturneClient.get();
-        if (client != null) {
-            client.events().unsubscribe(subscription);
-        }
-    }
-
-    private void onMouse(MouseButtonEvent event) {
-        if (event.button == 0) {
-            leftHeld = event.pressed;
-            if (!event.pressed) {
-                nextClickNanos = 0L;
+        if (now < state.next) {
+            if (state.doubleAt != 0L && now >= state.doubleAt) {
+                click(left);
+                state.doubleAt = 0L;
             }
+            return;
+        }
+        double cps = EpsilonSupport.randomLong((long) min, (long) max);
+        if (enableBurst.get() && state.burstEnd == 0L
+                && EpsilonSupport.RANDOM.nextDouble() * 100.0 < burstChance.get()) {
+            state.burstEnd = now + (long) (burstDuration.get() * 1_000_000.0);
+            state.decayEnd = state.burstEnd + (long) (decayDuration.get() * 1_000_000.0);
+        }
+        if (now < state.burstEnd) {
+            cps *= burstMultiplier.get();
+        } else if (now < state.decayEnd) {
+            double progress = (state.decayEnd - now) / (double) (state.decayEnd - state.burstEnd);
+            cps *= 1.0 + (burstMultiplier.get() - 1.0) * Math.pow(progress, decayCurve.get());
+        } else {
+            state.burstEnd = 0L;
+            state.decayEnd = 0L;
+        }
+        if (enableMiss.get() && EpsilonSupport.RANDOM.nextDouble() * 100.0 < missChance.get()) {
+            state.next = now + (long) (1_000_000_000.0 / cps);
+            return;
+        }
+        click(left);
+        if (enableDouble.get() && EpsilonSupport.RANDOM.nextDouble() * 100.0 < doubleChance.get()) {
+            state.doubleAt = now + doubleDelay.asInt() * 1_000_000L;
+        }
+        double delay = 1_000_000_000.0 / Math.max(1.0, cps);
+        if (jitter) {
+            delay *= 0.85 + EpsilonSupport.RANDOM.nextDouble() * 0.3;
+        }
+        state.next = now + (long) delay;
+    }
+
+    private void click(boolean left) {
+        if (left) {
+            actions().click();
+        } else {
+            actions().clickUse();
         }
     }
 
-    private static GameBridge bridge() {
-        NocturneClient client = NocturneClient.get();
-        return client == null ? null : client.gameBridge();
+    @Override
+    protected void onStop() {
+        left.next = right.next = 0L;
+        left.doubleAt = right.doubleAt = 0L;
+        left.burstEnd = right.burstEnd = 0L;
+    }
+
+    private static final class ButtonState {
+        private long next;
+        private long doubleAt;
+        private long burstEnd;
+        private long decayEnd;
     }
 }

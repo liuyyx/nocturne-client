@@ -10,7 +10,7 @@ public final class UseCooldownModule extends GameModule {
     private final NumberValue cooldown = add(new NumberValue("Cooldown", 0, 0, 4, 1));
 
     public UseCooldownModule() {
-        super("UseCooldown", Category.PLAYER);
+        super("Use Cooldown", Category.PLAYER);
     }
 
     @Override

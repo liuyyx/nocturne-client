@@ -1,6 +1,12 @@
 {
     "version": "26.2",
     "classes": {
+        "com/mojang/authlib/GameProfile": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "com/mojang/blaze3d/platform/InputConstants": {
             "names": {
                 "vanilla": "com.mojang.blaze3d.platform.InputConstants",
@@ -142,7 +148,31 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "mulPose": {
+                    "absent": true
+                },
+                "scale": {
+                    "absent": true
+                },
+                "translate": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/client/Camera": {
+            "names": {
+                "vanilla": "net.minecraft.client.Camera",
+                "fabric": "net.minecraft.client.Camera",
+                "forge": "net.minecraft.client.Camera",
+                "neoforge": "net.minecraft.client.Camera"
+            },
+            "methods": {},
+            "fields": {
+                "getMaxZoom": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/CameraType": {
             "names": {
@@ -219,7 +249,11 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "setDown": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/KeyboardHandler": {
             "names": {
@@ -368,6 +402,9 @@
                     }
                 },
                 "inGameHasFocus": {
+                    "absent": true
+                },
+                "itemInHandRenderer": {
                     "absent": true
                 },
                 "level": {
@@ -529,7 +566,14 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "get": {
+                    "absent": true
+                },
+                "set": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/Options": {
             "names": {
@@ -540,6 +584,14 @@
             },
             "methods": {},
             "fields": {
+                "bobView": {
+                    "names": {
+                        "vanilla": "bobView",
+                        "fabric": "bobView",
+                        "forge": "bobView",
+                        "neoforge": "bobView"
+                    }
+                },
                 "fov": {
                     "names": {
                         "vanilla": "fov",
@@ -548,12 +600,28 @@
                         "neoforge": "fov"
                     }
                 },
+                "fovEffectScale": {
+                    "names": {
+                        "vanilla": "fovEffectScale",
+                        "fabric": "fovEffectScale",
+                        "forge": "fovEffectScale",
+                        "neoforge": "fovEffectScale"
+                    }
+                },
                 "gamma": {
                     "names": {
                         "vanilla": "gamma",
                         "fabric": "gamma",
                         "forge": "gamma",
                         "neoforge": "gamma"
+                    }
+                },
+                "keyUse": {
+                    "names": {
+                        "vanilla": "keyUse",
+                        "fabric": "keyUse",
+                        "forge": "keyUse",
+                        "neoforge": "keyUse"
                     }
                 },
                 "perspective": {
@@ -633,6 +701,9 @@
                 }
             },
             "fields": {
+                "displayClientMessage": {
+                    "absent": true
+                },
                 "hud": {
                     "names": {
                         "vanilla": "hud",
@@ -745,11 +816,23 @@
                 "neoforge": "net.minecraft.client.gui.screens.Screen"
             },
             "methods": {
+                "getTitle": {
+                    "names": {
+                        "vanilla": "getTitle",
+                        "fabric": "getTitle",
+                        "forge": "getTitle",
+                        "neoforge": "getTitle"
+                    }
+                },
                 "render": {
                     "absent": true
                 }
             },
-            "fields": {}
+            "fields": {
+                "getTitle": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/gui/screens/inventory/AbstractContainerScreen": {
             "names": {
@@ -759,7 +842,16 @@
                 "neoforge": "net.minecraft.client.gui.screens.inventory.AbstractContainerScreen"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "hoveredSlot": {
+                    "names": {
+                        "vanilla": "hoveredSlot",
+                        "fabric": "hoveredSlot",
+                        "forge": "hoveredSlot",
+                        "neoforge": "hoveredSlot"
+                    }
+                }
+            }
         },
         "net/minecraft/client/gui/screens/inventory/CraftingScreen": {
             "names": {
@@ -909,6 +1001,14 @@
                         "neoforge": "entitiesForRendering"
                     }
                 },
+                "getBlockEntity": {
+                    "names": {
+                        "vanilla": "getBlockEntity",
+                        "fabric": "getBlockEntity",
+                        "forge": "getBlockEntity",
+                        "neoforge": "getBlockEntity"
+                    }
+                },
                 "getBlockState": {
                     "names": {
                         "vanilla": "getBlockState",
@@ -991,6 +1091,14 @@
                 "neoforge": "net.minecraft.client.multiplayer.ClientPacketListener"
             },
             "methods": {
+                "getOnlinePlayers": {
+                    "names": {
+                        "vanilla": "getOnlinePlayers",
+                        "fabric": "getOnlinePlayers",
+                        "forge": "getOnlinePlayers",
+                        "neoforge": "getOnlinePlayers"
+                    }
+                },
                 "send": {
                     "names": {
                         "vanilla": "send",
@@ -1019,7 +1127,11 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "getOnlinePlayers": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
             "names": {
@@ -1116,7 +1228,24 @@
                 "forge": "net.minecraft.client.multiplayer.PlayerInfo",
                 "neoforge": "net.minecraft.client.multiplayer.PlayerInfo"
             },
-            "methods": {},
+            "methods": {
+                "getGameMode": {
+                    "names": {
+                        "vanilla": "getGameMode",
+                        "fabric": "getGameMode",
+                        "forge": "getGameMode",
+                        "neoforge": "getGameMode"
+                    }
+                },
+                "getProfile": {
+                    "names": {
+                        "vanilla": "getProfile",
+                        "fabric": "getProfile",
+                        "forge": "getProfile",
+                        "neoforge": "getProfile"
+                    }
+                }
+            },
             "fields": {
                 "gameMode": {
                     "names": {
@@ -1125,6 +1254,12 @@
                         "forge": "gameMode",
                         "neoforge": "gameMode"
                     }
+                },
+                "getGameMode": {
+                    "absent": true
+                },
+                "getProfile": {
+                    "absent": true
                 }
             }
         },
@@ -1373,6 +1508,14 @@
                         "neoforge": "jumping"
                     }
                 },
+                "lastSentInput": {
+                    "names": {
+                        "vanilla": "lastSentInput",
+                        "fabric": "lastSentInput",
+                        "forge": "lastSentInput",
+                        "neoforge": "lastSentInput"
+                    }
+                },
                 "noPhysics": {
                     "names": {
                         "vanilla": "noPhysics",
@@ -1457,6 +1600,52 @@
                 }
             },
             "fields": {}
+        },
+        "net/minecraft/client/renderer/ItemInHandRenderer": {
+            "names": {
+                "vanilla": "net.minecraft.client.renderer.ItemInHandRenderer",
+                "fabric": "net.minecraft.client.renderer.ItemInHandRenderer",
+                "forge": "net.minecraft.client.renderer.ItemInHandRenderer",
+                "neoforge": "net.minecraft.client.renderer.ItemInHandRenderer"
+            },
+            "methods": {},
+            "fields": {
+                "applyItemArmTransform": {
+                    "absent": true
+                },
+                "mainHandHeight": {
+                    "names": {
+                        "vanilla": "mainHandHeight",
+                        "fabric": "mainHandHeight",
+                        "forge": "mainHandHeight",
+                        "neoforge": "mainHandHeight"
+                    }
+                },
+                "mainHandItem": {
+                    "names": {
+                        "vanilla": "mainHandItem",
+                        "fabric": "mainHandItem",
+                        "forge": "mainHandItem",
+                        "neoforge": "mainHandItem"
+                    }
+                },
+                "offHandHeight": {
+                    "names": {
+                        "vanilla": "offHandHeight",
+                        "fabric": "offHandHeight",
+                        "forge": "offHandHeight",
+                        "neoforge": "offHandHeight"
+                    }
+                },
+                "offHandItem": {
+                    "names": {
+                        "vanilla": "offHandItem",
+                        "fabric": "offHandItem",
+                        "forge": "offHandItem",
+                        "neoforge": "offHandItem"
+                    }
+                }
+            }
         },
         "net/minecraft/client/renderer/LevelRenderer": {
             "names": {
@@ -1691,7 +1880,74 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "empty": {
+                    "absent": true
+                },
+                "literal": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/network/chat/MutableComponent": {
+            "names": {
+                "vanilla": "net.minecraft.network.chat.MutableComponent",
+                "fabric": "net.minecraft.network.chat.MutableComponent",
+                "forge": "net.minecraft.network.chat.MutableComponent",
+                "neoforge": "net.minecraft.network.chat.MutableComponent"
+            },
+            "methods": {
+                "append": {
+                    "names": {
+                        "vanilla": "append",
+                        "fabric": "append",
+                        "forge": "append",
+                        "neoforge": "append"
+                    }
+                },
+                "setStyle": {
+                    "names": {
+                        "vanilla": "setStyle",
+                        "fabric": "setStyle",
+                        "forge": "setStyle",
+                        "neoforge": "setStyle"
+                    }
+                }
+            },
+            "fields": {
+                "append": {
+                    "absent": true
+                },
+                "setStyle": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/network/chat/Style": {
+            "names": {
+                "vanilla": "net.minecraft.network.chat.Style",
+                "fabric": "net.minecraft.network.chat.Style",
+                "forge": "net.minecraft.network.chat.Style",
+                "neoforge": "net.minecraft.network.chat.Style"
+            },
+            "methods": {
+                "withColor": {
+                    "names": {
+                        "vanilla": "withColor",
+                        "fabric": "withColor",
+                        "forge": "withColor",
+                        "neoforge": "withColor"
+                    }
+                }
+            },
+            "fields": {
+                "empty": {
+                    "absent": true
+                },
+                "withColor": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/network/protocol/Packet": {
             "names": {
@@ -1712,6 +1968,39 @@
             },
             "fields": {}
         },
+        "net/minecraft/network/protocol/game/ClientboundAddEntityPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundAddEntityPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundAddEntityPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundAddEntityPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundAddEntityPacket"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ClientboundBlockEventPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundBlockEventPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundBlockEventPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundBlockEventPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundBlockEventPacket"
+            },
+            "methods": {
+                "getPos": {
+                    "names": {
+                        "vanilla": "getPos",
+                        "fabric": "getPos",
+                        "forge": "getPos",
+                        "neoforge": "getPos"
+                    }
+                }
+            },
+            "fields": {
+                "getPos": {
+                    "absent": true
+                }
+            }
+        },
         "net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket": {
             "names": {
                 "vanilla": "net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket",
@@ -1729,6 +2018,45 @@
                     }
                 }
             },
+            "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ClientboundEntityEventPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundEntityEventPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundEntityEventPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundEntityEventPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundEntityEventPacket"
+            },
+            "methods": {
+                "getEntityId": {
+                    "absent": true
+                },
+                "getEventId": {
+                    "names": {
+                        "vanilla": "getEventId",
+                        "fabric": "getEventId",
+                        "forge": "getEventId",
+                        "neoforge": "getEventId"
+                    }
+                }
+            },
+            "fields": {
+                "getEntityId": {
+                    "absent": true
+                },
+                "getEventId": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/network/protocol/game/ClientboundExplodePacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundExplodePacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundExplodePacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundExplodePacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundExplodePacket"
+            },
+            "methods": {},
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ClientboundPlayerInfoRemovePacket": {
@@ -1750,6 +2078,42 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket"
+            },
+            "methods": {},
+            "fields": {
+                "xRot": {
+                    "absent": true
+                },
+                "yRot": {
+                    "absent": true
+                }
+            }
+        },
+        "net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket"
+            },
+            "methods": {},
+            "fields": {
+                "text": {
+                    "names": {
+                        "vanilla": "text",
+                        "fabric": "text",
+                        "forge": "text",
+                        "neoforge": "text"
+                    }
+                }
+            }
         },
         "net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket": {
             "names": {
@@ -1791,6 +2155,82 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/network/protocol/game/ClientboundSetSubtitleTextPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket"
+            },
+            "methods": {},
+            "fields": {
+                "text": {
+                    "names": {
+                        "vanilla": "text",
+                        "fabric": "text",
+                        "forge": "text",
+                        "neoforge": "text"
+                    }
+                }
+            }
+        },
+        "net/minecraft/network/protocol/game/ClientboundSetTitleTextPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket"
+            },
+            "methods": {},
+            "fields": {
+                "text": {
+                    "names": {
+                        "vanilla": "text",
+                        "fabric": "text",
+                        "forge": "text",
+                        "neoforge": "text"
+                    }
+                }
+            }
+        },
+        "net/minecraft/network/protocol/game/ClientboundSystemChatPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ClientboundSystemChatPacket",
+                "fabric": "net.minecraft.network.protocol.game.ClientboundSystemChatPacket",
+                "forge": "net.minecraft.network.protocol.game.ClientboundSystemChatPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ClientboundSystemChatPacket"
+            },
+            "methods": {
+                "content": {
+                    "names": {
+                        "vanilla": "content",
+                        "fabric": "content",
+                        "forge": "content",
+                        "neoforge": "content"
+                    }
+                }
+            },
+            "fields": {
+                "content": {
+                    "names": {
+                        "vanilla": "content",
+                        "fabric": "content",
+                        "forge": "content",
+                        "neoforge": "content"
+                    }
+                }
+            }
+        },
+        "net/minecraft/network/protocol/game/ServerboundContainerClickPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundContainerClickPacket",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundContainerClickPacket",
+                "forge": "net.minecraft.network.protocol.game.ServerboundContainerClickPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundContainerClickPacket"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundContainerClosePacket": {
             "names": {
@@ -1928,6 +2368,16 @@
                 }
             }
         },
+        "net/minecraft/network/protocol/game/ServerboundPlayerInputPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundPlayerInputPacket",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundPlayerInputPacket",
+                "forge": "net.minecraft.network.protocol.game.ServerboundPlayerInputPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundPlayerInputPacket"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/network/protocol/game/ServerboundPunchPacket": {
             "absent": true,
             "names": {},
@@ -1941,8 +2391,21 @@
                 "forge": "net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket",
                 "neoforge": "net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket"
             },
-            "methods": {},
-            "fields": {}
+            "methods": {
+                "getSlot": {
+                    "names": {
+                        "vanilla": "getSlot",
+                        "fabric": "getSlot",
+                        "forge": "getSlot",
+                        "neoforge": "getSlot"
+                    }
+                }
+            },
+            "fields": {
+                "getSlot": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/network/protocol/game/ServerboundSwingPacket": {
             "names": {
@@ -1950,6 +2413,16 @@
                 "fabric": "net.minecraft.network.protocol.game.ServerboundSwingPacket",
                 "forge": "net.minecraft.network.protocol.game.ServerboundSwingPacket",
                 "neoforge": "net.minecraft.network.protocol.game.ServerboundSwingPacket"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/sounds/SoundEvents": {
+            "names": {
+                "vanilla": "net.minecraft.sounds.SoundEvents",
+                "fabric": "net.minecraft.sounds.SoundEvents",
+                "forge": "net.minecraft.sounds.SoundEvents",
+                "neoforge": "net.minecraft.sounds.SoundEvents"
             },
             "methods": {},
             "fields": {}
@@ -2147,6 +2620,9 @@
                         "neoforge": "getName"
                     }
                 },
+                "getScale": {
+                    "absent": true
+                },
                 "getTeam": {
                     "names": {
                         "vanilla": "getTeam",
@@ -2161,6 +2637,14 @@
                         "fabric": "getTeamColor",
                         "forge": "getTeamColor",
                         "neoforge": "getTeamColor"
+                    }
+                },
+                "getUUID": {
+                    "names": {
+                        "vanilla": "getUUID",
+                        "fabric": "getUUID",
+                        "forge": "getUUID",
+                        "neoforge": "getUUID"
                     }
                 },
                 "isAlliedTo": {
@@ -2185,6 +2669,14 @@
                         "fabric": "isInvisible",
                         "forge": "isInvisible",
                         "neoforge": "isInvisible"
+                    }
+                },
+                "isPassenger": {
+                    "names": {
+                        "vanilla": "isPassenger",
+                        "fabric": "isPassenger",
+                        "forge": "isPassenger",
+                        "neoforge": "isPassenger"
                     }
                 },
                 "isShiftKeyDown": {
@@ -2272,6 +2764,14 @@
                         "neoforge": "bb"
                     }
                 },
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "eyeHeight",
+                        "fabric": "eyeHeight",
+                        "forge": "eyeHeight",
+                        "neoforge": "eyeHeight"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "fallDistance",
@@ -2279,6 +2779,12 @@
                         "forge": "fallDistance",
                         "neoforge": "fallDistance"
                     }
+                },
+                "getScale": {
+                    "absent": true
+                },
+                "getUUID": {
+                    "absent": true
                 },
                 "height": {
                     "absent": true
@@ -2291,7 +2797,18 @@
                         "neoforge": "horizontalCollision"
                     }
                 },
+                "id": {
+                    "names": {
+                        "vanilla": "id",
+                        "fabric": "id",
+                        "forge": "id",
+                        "neoforge": "id"
+                    }
+                },
                 "isDead": {
+                    "absent": true
+                },
+                "isPassenger": {
                     "absent": true
                 },
                 "motionX": {
@@ -2318,6 +2835,15 @@
                         "forge": "onGround",
                         "neoforge": "onGround"
                     }
+                },
+                "refreshDimensions": {
+                    "absent": true
+                },
+                "remove": {
+                    "absent": true
+                },
+                "setDead": {
+                    "absent": true
                 },
                 "tickCount": {
                     "names": {
@@ -2388,6 +2914,49 @@
                 }
             }
         },
+        "net/minecraft/world/entity/EquipmentSlot": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.EquipmentSlot",
+                "fabric": "net.minecraft.world.entity.EquipmentSlot",
+                "forge": "net.minecraft.world.entity.EquipmentSlot",
+                "neoforge": "net.minecraft.world.entity.EquipmentSlot"
+            },
+            "methods": {},
+            "fields": {
+                "CHEST": {
+                    "names": {
+                        "vanilla": "CHEST",
+                        "fabric": "CHEST",
+                        "forge": "CHEST",
+                        "neoforge": "CHEST"
+                    }
+                },
+                "FEET": {
+                    "names": {
+                        "vanilla": "FEET",
+                        "fabric": "FEET",
+                        "forge": "FEET",
+                        "neoforge": "FEET"
+                    }
+                },
+                "HEAD": {
+                    "names": {
+                        "vanilla": "HEAD",
+                        "fabric": "HEAD",
+                        "forge": "HEAD",
+                        "neoforge": "HEAD"
+                    }
+                },
+                "LEGS": {
+                    "names": {
+                        "vanilla": "LEGS",
+                        "fabric": "LEGS",
+                        "forge": "LEGS",
+                        "neoforge": "LEGS"
+                    }
+                }
+            }
+        },
         "net/minecraft/world/entity/LivingEntity": {
             "names": {
                 "vanilla": "net.minecraft.world.entity.LivingEntity",
@@ -2428,6 +2997,9 @@
                         "neoforge": "getActiveEffects"
                     }
                 },
+                "getCurrentArmor": {
+                    "absent": true
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "getEyePosition",
@@ -2450,6 +3022,14 @@
                         "fabric": "getId",
                         "forge": "getId",
                         "neoforge": "getId"
+                    }
+                },
+                "getItemBySlot": {
+                    "names": {
+                        "vanilla": "getItemBySlot",
+                        "fabric": "getItemBySlot",
+                        "forge": "getItemBySlot",
+                        "neoforge": "getItemBySlot"
                     }
                 },
                 "getMainHandItem": {
@@ -2506,6 +3086,14 @@
                         "fabric": "getUseItemRemainingTicks",
                         "forge": "getUseItemRemainingTicks",
                         "neoforge": "getUseItemRemainingTicks"
+                    }
+                },
+                "getUsedItemHand": {
+                    "names": {
+                        "vanilla": "getUsedItemHand",
+                        "fabric": "getUsedItemHand",
+                        "forge": "getUsedItemHand",
+                        "neoforge": "getUsedItemHand"
                     }
                 },
                 "hasLineOfSight": {
@@ -2597,6 +3185,15 @@
                         "forge": "fallDistance",
                         "neoforge": "fallDistance"
                     }
+                },
+                "getCurrentArmor": {
+                    "absent": true
+                },
+                "getItemBySlot": {
+                    "absent": true
+                },
+                "getUsedItemHand": {
+                    "absent": true
                 },
                 "hurtTime": {
                     "names": {
@@ -3045,7 +3642,16 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "EMPTY": {
+                    "names": {
+                        "vanilla": "EMPTY",
+                        "fabric": "EMPTY",
+                        "forge": "EMPTY",
+                        "neoforge": "EMPTY"
+                    }
+                }
+            }
         },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
@@ -3104,6 +3710,9 @@
                         "forge": "selected",
                         "neoforge": "selected"
                     }
+                },
+                "setItem": {
+                    "absent": true
                 }
             }
         },
@@ -3320,6 +3929,9 @@
                         "neoforge": "noPhysics"
                     }
                 },
+                "playSound": {
+                    "absent": true
+                },
                 "tickCount": {
                     "names": {
                         "vanilla": "tickCount",
@@ -3399,6 +4011,29 @@
             "names": {},
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/ThrowableProjectile": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.projectile.ThrowableProjectile",
+                "fabric": "net.minecraft.world.entity.projectile.ThrowableProjectile",
+                "forge": "net.minecraft.world.entity.projectile.ThrowableProjectile",
+                "neoforge": "net.minecraft.world.entity.projectile.ThrowableProjectile"
+            },
+            "methods": {
+                "getOwner": {
+                    "names": {
+                        "vanilla": "getOwner",
+                        "fabric": "getOwner",
+                        "forge": "getOwner",
+                        "neoforge": "getOwner"
+                    }
+                }
+            },
+            "fields": {
+                "getOwner": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/world/entity/projectile/ThrownEnderpearl": {
             "absent": true,
@@ -3516,6 +4151,25 @@
                 }
             }
         },
+        "net/minecraft/world/inventory/Slot": {
+            "names": {
+                "vanilla": "net.minecraft.world.inventory.Slot",
+                "fabric": "net.minecraft.world.inventory.Slot",
+                "forge": "net.minecraft.world.inventory.Slot",
+                "neoforge": "net.minecraft.world.inventory.Slot"
+            },
+            "methods": {},
+            "fields": {
+                "index": {
+                    "names": {
+                        "vanilla": "index",
+                        "fabric": "index",
+                        "forge": "index",
+                        "neoforge": "index"
+                    }
+                }
+            }
+        },
         "net/minecraft/world/item/BlockItem": {
             "names": {
                 "vanilla": "net.minecraft.world.item.BlockItem",
@@ -3595,6 +4249,14 @@
                         "neoforge": "getDisplayName"
                     }
                 },
+                "getEnchantments": {
+                    "names": {
+                        "vanilla": "getEnchantments",
+                        "fabric": "getEnchantments",
+                        "forge": "getEnchantments",
+                        "neoforge": "getEnchantments"
+                    }
+                },
                 "getItem": {
                     "names": {
                         "vanilla": "getItem",
@@ -3652,6 +4314,9 @@
                         "forge": "count",
                         "neoforge": "count"
                     }
+                },
+                "getEnchantments": {
+                    "absent": true
                 }
             }
         },
@@ -3757,7 +4422,14 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "playerWillDestroy": {
+                    "absent": true
+                },
+                "setBlock": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/world/level/LevelReader": {
             "names": {
@@ -3796,6 +4468,9 @@
                 "neoforge": "net.minecraft.world.level.block.Block"
             },
             "methods": {
+                "getDefaultState": {
+                    "absent": true
+                },
                 "getDescriptionId": {
                     "names": {
                         "vanilla": "getDescriptionId",
@@ -3805,7 +4480,11 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "getDefaultState": {
+                    "absent": true
+                }
+            }
         },
         "net/minecraft/world/level/block/Blocks": {
             "names": {
@@ -3815,7 +4494,16 @@
                 "neoforge": "net.minecraft.world.level.block.Blocks"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "AIR": {
+                    "names": {
+                        "vanilla": "AIR",
+                        "fabric": "AIR",
+                        "forge": "AIR",
+                        "neoforge": "AIR"
+                    }
+                }
+            }
         },
         "net/minecraft/world/level/block/ChestBlock": {
             "names": {
@@ -4388,6 +5076,18 @@
                     "absent": true
                 }
             }
+        },
+        "org/joml/AxisAngle4f": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "org/joml/Quaternionf": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
         }
     }
 }

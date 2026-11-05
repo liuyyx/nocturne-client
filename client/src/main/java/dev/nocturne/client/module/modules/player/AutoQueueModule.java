@@ -18,7 +18,7 @@ public final class AutoQueueModule extends GameModule {
     private final List<Rule> rules = new ArrayList<Rule>();
 
     public AutoQueueModule() {
-        super("AutoQueue", Category.PLAYER);
+        super("Auto Queue", Category.PLAYER);
     }
 
     @Override

@@ -23,7 +23,7 @@ public final class ElytraSwapModule extends GameModule {
     private int original = -1;
 
     public ElytraSwapModule() {
-        super("ElytraSwap", Category.PLAYER);
+        super("Elytra Swap", Category.PLAYER);
     }
 
     @Override

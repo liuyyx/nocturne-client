@@ -249,6 +249,8 @@ public enum ClassType {
     LEVEL_DATA("net.minecraft.world.level.storage.LevelData"),
     /** 世界基类；碰撞与射线入口声明在这里。 */
     LEVEL("net.minecraft.world.level.Level"),
+    /** 1.14.4 的客户端世界名；该版本没有 ClientLevel。 */
+    MULTIPLAYER_LEVEL("net.minecraft.client.multiplayer.MultiPlayerLevel"),
     /** 方块渲染调度器；XRay 在真实渲染入口按 BlockState 剔除。 */
     BLOCK_RENDER_DISPATCHER("net.minecraft.client.renderer.block.BlockRenderDispatcher"),
     /** 实体渲染调度器；实体渲染事件的映射宿主。 */

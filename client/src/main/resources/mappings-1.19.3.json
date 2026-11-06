@@ -259,6 +259,18 @@
                 "forge": "net.minecraft.client.KeyMapping"
             },
             "methods": {
+                "click": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1420",
+                        "forge": "m_90835_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lecy$a;)V",
+                        "fabric": "(Lnet/minecraft/class_3675$class_306;)V",
+                        "forge": "(Lcom/mojang/blaze3d/platform/InputConstants$Key;)V"
+                    }
+                },
                 "isDown": {
                     "names": {
                         "vanilla": "d",
@@ -269,6 +281,30 @@
                         "vanilla": "()Z",
                         "fabric": "()Z",
                         "forge": "()Z"
+                    }
+                },
+                "set": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1416",
+                        "forge": "m_90837_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lecy$a;Z)V",
+                        "fabric": "(Lnet/minecraft/class_3675$class_306;Z)V",
+                        "forge": "(Lcom/mojang/blaze3d/platform/InputConstants$Key;Z)V"
+                    }
+                },
+                "setAll": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1424",
+                        "forge": "m_90829_"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
                     }
                 }
             },
@@ -1477,6 +1513,12 @@
                     }
                 }
             }
+        },
+        "net/minecraft/client/multiplayer/MultiPlayerLevel": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/client/multiplayer/PlayerInfo": {
             "names": {
@@ -3244,6 +3286,18 @@
                         "forge": "()Lnet/minecraft/world/phys/AABB;"
                     }
                 },
+                "getCustomName": {
+                    "names": {
+                        "vanilla": "ac",
+                        "fabric": "getCustomName",
+                        "forge": "m_7770_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lss;",
+                        "fabric": "()Lnet/minecraft/class_2561;",
+                        "forge": "()Lnet/minecraft/network/chat/Component;"
+                    }
+                },
                 "getDeltaMovement": {
                     "names": {
                         "vanilla": "di",
@@ -3254,6 +3308,18 @@
                         "vanilla": "()Leae;",
                         "fabric": "()Lnet/minecraft/class_243;",
                         "forge": "()Lnet/minecraft/world/phys/Vec3;"
+                    }
+                },
+                "getDisplayName": {
+                    "names": {
+                        "vanilla": "C_",
+                        "fabric": "getDisplayName",
+                        "forge": "m_5446_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lss;",
+                        "fabric": "()Lnet/minecraft/class_2561;",
+                        "forge": "()Lnet/minecraft/network/chat/Component;"
                     }
                 },
                 "getEyePosition": {
@@ -5606,6 +5672,21 @@
                         "vanilla": "(Lcjf;)Leaa;",
                         "fabric": "(Lnet/minecraft/class_3959;)Lnet/minecraft/class_3965;",
                         "forge": "(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;"
+                    }
+                },
+                "entitiesForRendering": {
+                    "absent": true
+                },
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "a_",
+                        "fabric": "getBlockState",
+                        "forge": "m_8055_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lgp;)Lcyt;",
+                        "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_2680;",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
                     }
                 },
                 "noCollision": {

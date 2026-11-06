@@ -74,6 +74,9 @@
                 "fabric": "net.minecraft.class_304"
             },
             "methods": {
+                "click": {
+                    "absent": true
+                },
                 "isDown": {
                     "names": {
                         "vanilla": "e",
@@ -83,6 +86,12 @@
                         "vanilla": "()Z",
                         "fabric": "()Z"
                     }
+                },
+                "set": {
+                    "absent": true
+                },
+                "setAll": {
+                    "absent": true
                 }
             },
             "fields": {
@@ -782,7 +791,14 @@
             },
             "methods": {
                 "getOnlinePlayers": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_2880"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/Collection;",
+                        "fabric": "()Ljava/util/Collection;"
+                    }
                 },
                 "send": {
                     "absent": true
@@ -898,6 +914,12 @@
                 }
             }
         },
+        "net/minecraft/client/multiplayer/MultiPlayerLevel": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/multiplayer/PlayerInfo": {
             "names": {
                 "vanilla": "bks",
@@ -905,10 +927,24 @@
             },
             "methods": {
                 "getGameMode": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_2958"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lahw$a;",
+                        "fabric": "()Lnet/minecraft/class_1940$class_1934;"
+                    }
                 },
                 "getProfile": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2966"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lcom/mojang/authlib/GameProfile;",
+                        "fabric": "()Lcom/mojang/authlib/GameProfile;"
+                    }
                 }
             },
             "fields": {
@@ -2108,7 +2144,13 @@
                         "fabric": "()Lnet/minecraft/class_238;"
                     }
                 },
+                "getCustomName": {
+                    "absent": true
+                },
                 "getDeltaMovement": {
+                    "absent": true
+                },
+                "getDisplayName": {
                     "absent": true
                 },
                 "getEyePosition": {
@@ -2151,7 +2193,14 @@
                     "absent": true
                 },
                 "getUUID": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "bc",
+                        "fabric": "method_5667"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/UUID;",
+                        "fabric": "()Ljava/util/UUID;"
+                    }
                 },
                 "isAlliedTo": {
                     "names": {
@@ -2562,7 +2611,14 @@
                     }
                 },
                 "getItemBySlot": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_6118"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lrw;)Ladq;",
+                        "fabric": "(Lnet/minecraft/class_1304;)Lnet/minecraft/class_1799;"
+                    }
                 },
                 "getMainHandItem": {
                     "names": {
@@ -2588,7 +2644,14 @@
                     "absent": true
                 },
                 "getOffhandItem": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "cc",
+                        "fabric": "method_6079"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ladq;",
+                        "fabric": "()Lnet/minecraft/class_1799;"
+                    }
                 },
                 "getSpeed": {
                     "names": {
@@ -2601,13 +2664,34 @@
                     }
                 },
                 "getUseItem": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "cv",
+                        "fabric": "method_6030"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ladq;",
+                        "fabric": "()Lnet/minecraft/class_1799;"
+                    }
                 },
                 "getUseItemRemainingTicks": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "cw",
+                        "fabric": "method_6014"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I"
+                    }
                 },
                 "getUsedItemHand": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "ct",
+                        "fabric": "method_6058"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lqm;",
+                        "fabric": "()Lnet/minecraft/class_1268;"
+                    }
                 },
                 "hasLineOfSight": {
                     "names": {
@@ -2650,7 +2734,14 @@
                     }
                 },
                 "isUsingItem": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "cs",
+                        "fabric": "method_6115"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z"
+                    }
                 },
                 "position": {
                     "names": {
@@ -3830,6 +3921,19 @@
                     }
                 },
                 "clip": {
+                    "absent": true
+                },
+                "entitiesForRendering": {
+                    "names": {
+                        "vanilla": "J",
+                        "fabric": "method_0_244"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/List;",
+                        "fabric": "()Ljava/util/List;"
+                    }
+                },
+                "getBlockState": {
                     "absent": true
                 },
                 "noCollision": {

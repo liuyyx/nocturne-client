@@ -95,6 +95,9 @@ net/minecraft/client/multiplayer/ClientLevel
 net/minecraft/client/multiplayer/ClientLevel#entitiesForRendering()
 net/minecraft/client/multiplayer/ClientLevel#getBlockState()
 net/minecraft/client/multiplayer/ClientLevel#getChunk
+# 1.14.4 的客户端世界类名；其余版本 absent，运行时只作为回退候选。
+net/minecraft/client/multiplayer/MultiPlayerLevel
+net/minecraft/client/multiplayer/MultiPlayerLevel#entitiesForRendering()
 
 net/minecraft/client/multiplayer/ClientPacketListener
 net/minecraft/client/multiplayer/ClientPacketListener#send()
@@ -285,6 +288,8 @@ net/minecraft/world/entity/Entity#distanceToSqr()
 net/minecraft/world/entity/Entity#getEyePosition()
 net/minecraft/world/entity/Entity#getId()
 net/minecraft/world/entity/Entity#getName()
+net/minecraft/world/entity/Entity#getDisplayName()
+net/minecraft/world/entity/Entity#getCustomName()
 net/minecraft/world/entity/Entity#isShiftKeyDown()
 net/minecraft/world/entity/Entity#isSprinting()
 net/minecraft/world/entity/Entity#position()
@@ -467,6 +472,7 @@ net/minecraft/world/level/BaseSpawner#getOrCreateDisplayEntity()
 # 陷阱箱与普通箱共用方块实体类，只能看方块：ClientLevel#getBlockState(pos) → BlockState#getBlock()
 # 再比类层次（陷阱箱是箱子方块的子类；1.8.9/1.12.2 是 BlockChest / BlockTrappedChest）。
 net/minecraft/world/level/Level
+net/minecraft/world/level/Level#getBlockState()
 net/minecraft/world/level/block/AirBlock
 net/minecraft/world/level/block/state/BlockState#isAir()
 net/minecraft/world/level/block/state/BlockState#getBlock()
@@ -526,6 +532,9 @@ com/mojang/blaze3d/vertex/PoseStack#scale()
 com/mojang/blaze3d/vertex/PoseStack#translate()
 net/minecraft/client/KeyMapping
 net/minecraft/client/KeyMapping#isDown()
+net/minecraft/client/KeyMapping#setAll()
+net/minecraft/client/KeyMapping#set()
+net/minecraft/client/KeyMapping#click()
 
 # 代际 C/D：26.1 / 26.2 / 26.3 —— 抽取式上下文
 net/minecraft/client/gui/GuiGraphicsExtractor

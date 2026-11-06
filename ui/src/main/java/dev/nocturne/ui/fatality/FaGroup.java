@@ -171,7 +171,8 @@ final class FaGroup extends FaBox {
             java.util.Arrays.fill(matched, true);
             return true;
         }
-        boolean titleMatch = title().toLowerCase(Locale.ROOT).contains(query);
+        boolean titleMatch = title().toLowerCase(Locale.ROOT).contains(query)
+                || FaStrings.t(title()).toLowerCase(Locale.ROOT).contains(query);
         boolean any = titleMatch;
         for (int i = 0; i < rows.size(); i++) {
             matched[i] = titleMatch || i == 0 || rows.get(i).matches(query);

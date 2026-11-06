@@ -270,6 +270,22 @@ note = "1.8.9 只有 getPositionEyes(float partialTicks)（1 参）；Rust 调�
 mcp = "getHeldItem"
 scope = "net/minecraft/entity/EntityLivingBase"
 
+[methods.getUUID]
+mcp = "getUniqueID"
+scope = "net/minecraft/entity/Entity"
+
+[methods.getCurrentArmor]
+mcp = "getEquipmentInSlot"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[methods.getUseItem]
+mcp = "getItemInUse"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[methods.getUseItemRemainingTicks]
+mcp = "getItemInUseCount"
+scope = "net/minecraft/entity/EntityLivingBase"
+
 # 已加载区块表（StorageEsp 遍历方块实体用）：1.8.9 是 ChunkProviderClient.chunkListing（List），
 # 现代是 ClientChunkCache.storage（LevelChunk[]）——类型不同，遍历代码两种都要认。
 [fields.storage]
@@ -701,6 +717,8 @@ timerSpeed = { mcp = "timerSpeed", scope = "net/minecraft/util/Timer" }
 
 [overrides."net/minecraft/client/multiplayer/PlayerInfo"]
 gameMode = { mcp = "gameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
+getProfile = { mcp = "getGameProfile", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
+getGameMode = { mcp = "getGameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
 
 [overrides."net/minecraft/client/gui/Gui"]
 screen = { unsupported = "1.8.9 GuiIngame 没有 screen()；当前界面在 Minecraft.currentScreen" }
@@ -740,7 +758,7 @@ destroyDelay = { mcp = "blockHitDelay", scope = "net/minecraft/client/multiplaye
 
 
 [overrides."net/minecraft/world/entity/LivingEntity"]
-isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer，JNI 从 EntityLivingBase 查不到" }
+isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer；GameBridge 对玩家回退到 PLAYER 映射" }
 hasLineOfSight = { mcp = "canEntityBeSeen", scope = "net/minecraft/entity/EntityLivingBase" }
 getAbsorptionAmount = { mcp = "getAbsorptionAmount", scope = "net/minecraft/entity/EntityLivingBase" }
 hurtTime = { mcp = "hurtTime", scope = "net/minecraft/entity/EntityLivingBase" }
@@ -900,6 +918,7 @@ tick = { mcp = "updatePlayerMoveState", scope = "net/minecraft/util/MovementInpu
 
 [overrides."net/minecraft/client/multiplayer/ClientPacketListener"]
 send = { mcp = "addToSendQueue", scope = "net/minecraft/client/network/NetHandlerPlayClient" }
+getOnlinePlayers = { mcp = "getPlayerInfoMap", scope = "net/minecraft/client/network/NetHandlerPlayClient" }
 
 [overrides."net/minecraft/client/player/LocalPlayer"]
 closeContainer = { mcp = "closeScreen", scope = "net/minecraft/client/entity/EntityPlayerSP" }

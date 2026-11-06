@@ -115,6 +115,9 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
   SDL 滚轮：`SDLEventHandler#handleMouseWheelEvent`。
 - `ClassWriter(reader, COMPUTE_MAXS)` + `reader.accept(visitor, 0)` 保留原 `StackMapTable`；
   插入**分支**的转换器（`InputBlockTransformer`）必须手写一条 `F_NEW` 完整 frame。
+- 末尾钩子**不得读取局部变量**：带 `StackMapTable` 的 `RETURN` 可能把 `this`/形参槽裁成 `top`
+  （1.16.5 `KeyboardInput#tick` 实测）。需要 `this` 或形参时一律改成「方法头捕获 + 末尾无参消费」，
+  参考 `InputTickHookTransformer`、`GameplayHook.chamsPre/chamsPost`。
 - **SDL 栈（26.x）不注册帧钩子、不碰 GL**：LWJGL GL 绑定在 SDL 下不可用，native abort 接不住。
   绘制由绘制钩子驱动。
 - 输入短路**不要**拦 `MouseHandler#onButton`——那是我们自己点击的来源。

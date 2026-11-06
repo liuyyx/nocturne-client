@@ -261,6 +261,22 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         }
     }
 
+    /** 创建头部捕获 this、返回点无参消费的输入 tick 转换器。 */
+    public ClassFileTransformer createInputTickTransformer(String targetInternalName,
+            String method, String descriptor, String hookOwner, String captureMethod,
+            String deferredMethod) {
+        try {
+            Class<?> type = loadClass("dev.nocturne.agent.transform.InputTickHookTransformer");
+            return (ClassFileTransformer) type.getConstructor(String.class, String.class, String.class,
+                    String.class, String.class, String.class).newInstance(targetInternalName, method,
+                    descriptor, hookOwner, captureMethod, deferredMethod);
+        } catch (Throwable t) {
+            log("could not create input tick transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; input tick hook disabled");
+            return null;
+        }
+    }
+
     /** 创建头部捕获、返回点消费的 attackPost 转换器。 */
     public ClassFileTransformer createAttackPostTransformer(String targetInternalName,
             String method, String descriptor, String hookOwner) {

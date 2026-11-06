@@ -11,7 +11,7 @@ import org.objectweb.asm.Type;
 import java.lang.instrument.ClassFileTransformer;
 import java.security.ProtectionDomain;
 
-/** 用前两个引用形参决定是否让 boolean 方法继续；false 时返回 false。 */
+/** 用前两个引用形参决定是否让目标方法继续；false 时 boolean 返回 false、void 直接返回。 */
 public final class FirstArgumentGateTransformer implements ClassFileTransformer {
     private final String targetClass;
     private final String method;
@@ -21,8 +21,9 @@ public final class FirstArgumentGateTransformer implements ClassFileTransformer 
 
     public FirstArgumentGateTransformer(String targetClass, String method, String descriptor,
                                         String hookOwner, String hookMethod) {
-        if (Type.getReturnType(descriptor).getSort() != Type.BOOLEAN) {
-            throw new IllegalArgumentException("target must return boolean");
+        int returnSort = Type.getReturnType(descriptor).getSort();
+        if (returnSort != Type.BOOLEAN && returnSort != Type.VOID) {
+            throw new IllegalArgumentException("target must return boolean or void");
         }
         Type[] arguments = Type.getArgumentTypes(descriptor);
         if (arguments.length < 2 || arguments[0].getSort() != Type.OBJECT
@@ -64,8 +65,12 @@ public final class FirstArgumentGateTransformer implements ClassFileTransformer 
                                     "(Ljava/lang/Object;Ljava/lang/Object;)Z", false);
                             Label proceed = new Label();
                             super.visitJumpInsn(Opcodes.IFNE, proceed);
-                            super.visitInsn(Opcodes.ICONST_0);
-                            super.visitInsn(Opcodes.IRETURN);
+                            if (Type.getReturnType(descriptor).getSort() == Type.VOID) {
+                                super.visitInsn(Opcodes.RETURN);
+                            } else {
+                                super.visitInsn(Opcodes.ICONST_0);
+                                super.visitInsn(Opcodes.IRETURN);
+                            }
                             super.visitLabel(proceed);
                             Object[] locals = locals(access);
                             super.visitFrame(Opcodes.F_NEW, locals.length, locals, 0, null);

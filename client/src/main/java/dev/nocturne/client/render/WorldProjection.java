@@ -133,6 +133,51 @@ public final class WorldProjection {
         return viewportHeight;
     }
 
+    /** @return 相机右向量的 x 分量；供 billboard/光环在 CPU 侧算四角。 */
+    public double rightX() {
+        return rightX;
+    }
+
+    /** @return 相机右向量的 y 分量 */
+    public double rightY() {
+        return rightY;
+    }
+
+    /** @return 相机右向量的 z 分量 */
+    public double rightZ() {
+        return rightZ;
+    }
+
+    /** @return 相机上向量的 x 分量 */
+    public double upX() {
+        return upX;
+    }
+
+    /** @return 相机上向量的 y 分量 */
+    public double upY() {
+        return upY;
+    }
+
+    /** @return 相机上向量的 z 分量 */
+    public double upZ() {
+        return upZ;
+    }
+
+    /** @return 相机视线向量的 x 分量 */
+    public double lookX() {
+        return lookX;
+    }
+
+    /** @return 相机视线向量的 y 分量 */
+    public double lookY() {
+        return lookY;
+    }
+
+    /** @return 相机视线向量的 z 分量 */
+    public double lookZ() {
+        return lookZ;
+    }
+
     /**
      * 把一个世界点投影到屏幕。
      *

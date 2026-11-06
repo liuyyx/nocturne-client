@@ -869,16 +869,6 @@ public final class NocturneAgent {
     private static final String KEY_PRESS_METHOD = "keyPress";
     /** 键盘入口描述符。 */
     private static final String KEY_PRESS_DESCRIPTOR = "(JILnet/minecraft/client/input/KeyEvent;)V";
-    /** 按键绑定入口（游戏按它把"按住状态"变成动作：移动、攻击、使用）。 */
-    private static final String KEY_MAPPING_CLASS = "net.minecraft.client.KeyMapping";
-    /** 每刻轮询所有按键绑定。 */
-    private static final String KEY_MAPPING_SET_ALL = "setAll";
-    /** 按键绑定「按住状态」写入（鼠标攻击/使用走这条）。 */
-    private static final String KEY_MAPPING_SET_DESCRIPTOR =
-            "(Lcom/mojang/blaze3d/platform/InputConstants$Key;Z)V";
-    /** 按键绑定「单次触发」（点一下生效的动作走这条）。 */
-    private static final String KEY_MAPPING_CLICK_DESCRIPTOR =
-            "(Lcom/mojang/blaze3d/platform/InputConstants$Key;)V";
 
     /** 输入短路钩子类内部名（bootstrap 层，游戏类与叠加层看到的是同一份）。 */
     private static final String INPUT_BLOCK_OWNER = "dev/nocturne/client/runtime/InputBlock";
@@ -902,22 +892,19 @@ public final class NocturneAgent {
             return;
         }
         // 键盘与按键绑定：界面开着时游戏不该再响应按键（移动、攻击、使用、打字、Esc 开菜单）。
-        // 运行期类名：Fabric 是 intermediary（class_309），必须查映射表，写死 Mojang 名会
-        // "注册成功但 patched=false"（1.21.1 实测）。
-        String keyHandler = mappedClassName(dev.nocturne.client.mapping.ClassType.KEYBOARD_HANDLER);
-        // 方法名同理：Fabric 运行期是 method_1466，写死 keyPress 会让 transform 不命中（patched=false）。
-        String keyPressName = mappedMethodName(dev.nocturne.client.mapping.ClassType.KEYBOARD_HANDLER,
-                "keyPress", "keyPress");
-        registerInputBlock(instrumentation, asmLoader, keyHandler, keyPressName,
-                KEY_PRESS_DESCRIPTOR);
-        // 1.13–1.21 的签名是 keyPress(long, int, int, int, int)：这条同时负责记录按键事件
-        // （InputBlock.recordKey），叠加层的键盘输入改为事件驱动。
-        registerInputBlock(instrumentation, asmLoader, keyHandler, keyPressName, "(JIIII)V");
-        registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, KEY_MAPPING_SET_ALL, "()V");
-        registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, "set",
-                KEY_MAPPING_SET_DESCRIPTOR);
-        registerInputBlock(instrumentation, asmLoader, KEY_MAPPING_CLASS, "click",
-                KEY_MAPPING_CLICK_DESCRIPTOR);
+        // 映射表同时给出原版混淆名、Fabric intermediary 与 Forge SRG 名；逐个注册，
+        // 运行期在哪个命名空间都能命中，避免只认第一个名字导致 patched=false。
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.KEYBOARD_HANDLER, "keyPress",
+                "(JIIII)V", KEY_PRESS_DESCRIPTOR);
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.KEY_MAPPING, "setAll", "()V");
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.KEY_MAPPING, "set",
+                "(Lcom/mojang/blaze3d/platform/InputConstants$Key;Z)V");
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.KEY_MAPPING, "click",
+                "(Lcom/mojang/blaze3d/platform/InputConstants$Key;)V");
         // 鼠标：屏蔽 vanilla 屏幕的点击入口（屏幕背后的一切都不该被点到）。
         // 为什么不屏蔽 MouseHandler#onButton：那个方法同时负责记录 activeButton/isLeftPressed，
         // 而我们的鼠标按钮正是从那里读的（MouseButtonInfo 里没有按下/抬起信息，另起事件源代价更大）。
@@ -927,14 +914,12 @@ public final class NocturneAgent {
         // 26.x：点击自绘界面会走 MouseHandler#onButton → grabMouse（把光标拽回中心）。
         // onButton 不能整条屏蔽，因为 activeButton 正是界面的按钮来源；改为屏蔽 grabMouse，
         // 既保留按钮记录，又阻止游戏重新捕获/居中。关闭界面后 shouldBlock=false，正常抓取。
-        String mouseHandler = mappedClassName(dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER);
-        String grabMouse = mappedMethodName(dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
-                "grabMouse", "grabMouse");
-        registerInputBlock(instrumentation, asmLoader, mouseHandler, grabMouse, "()V");
-        // 滚轮：界面开着时游戏不该再自己处理（否则滚轮会顺带切快捷栏），同时把增量交给界面。
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER, "grabMouse", "()V");
         // GLFW 世代只从这里拿得到滚轮——没有轮询接口，SDLEventHandler 那条路也不存在。
         // 顺序有意义：先注册短路（入口判定），再挂累加钩子（后注册的插在 visitCode 更前面，
         // 先拿到增量再决定是否短路）。
+        String mouseHandler = mappedClassName(dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER);
         String onScroll = mappedMethodName(dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER,
                 "onScroll", "onScroll");
         registerInputBlock(instrumentation, asmLoader, mouseHandler, onScroll, MOUSE_SCROLL_DESCRIPTOR);
@@ -947,6 +932,73 @@ public final class NocturneAgent {
         for (String owner : LEGACY_FOCUS_CLASSES) {
             for (String method : LEGACY_FOCUS_METHODS) {
                 registerInputBlockIfLoaded(instrumentation, asmLoader, owner, method, "()V");
+            }
+        }
+    }
+
+    /**
+     * 按映射表把所有命名空间组合都注册成输入短路。
+     *
+     * <p>类名、方法名、描述符必须来自同一命名空间；这里把表里的候选逐个组合注册，
+     * 未命中的组合在转换器里原样返回 {@code null}，不会产生副作用。
+     */
+    private static void registerMappedInputBlocks(Instrumentation instrumentation,
+                                                   EmbeddedAsmLoader asmLoader,
+                                                   dev.nocturne.client.mapping.ClassType owner,
+                                                   String canonicalMethod,
+                                                   String... fallbackDescriptors) {
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        java.util.Set<String> classNames = new java.util.LinkedHashSet<String>();
+        if (mapping != null) {
+            classNames.addAll(mapping.classNameCandidates(owner));
+        }
+        classNames.add(owner.canonicalName());
+
+        java.util.Set<String> methodNames = new java.util.LinkedHashSet<String>();
+        java.util.Set<String> descriptors = new java.util.LinkedHashSet<String>();
+        if (mapping != null) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, canonicalMethod)) {
+                methodNames.add(candidate.name());
+                if (candidate.descriptor() != null && !candidate.descriptor().isEmpty()) {
+                    descriptors.add(candidate.descriptor());
+                }
+            }
+        }
+        if (methodNames.isEmpty()) {
+            methodNames.add(canonicalMethod);
+        }
+        for (String fallback : fallbackDescriptors) {
+            descriptors.add(fallback);
+        }
+
+        java.util.Set<String> loadedNames = new java.util.HashSet<String>();
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            loadedNames.add(loaded.getName());
+        }
+        boolean anyLoaded = false;
+        for (String className : classNames) {
+            if (!loadedNames.contains(className)) {
+                continue;
+            }
+            anyLoaded = true;
+            for (String methodName : methodNames) {
+                for (String descriptor : descriptors) {
+                    registerInputBlock(instrumentation, asmLoader, className, methodName,
+                            descriptor);
+                }
+            }
+        }
+        if (anyLoaded) {
+            return;
+        }
+        // 目标类都还没加载（极早 attach）：仍注册转换器，等首次加载时命中。
+        for (String className : classNames) {
+            for (String methodName : methodNames) {
+                for (String descriptor : descriptors) {
+                    registerInputBlock(instrumentation, asmLoader, className, methodName,
+                            descriptor);
+                }
             }
         }
     }
@@ -974,6 +1026,9 @@ public final class NocturneAgent {
     /** 目标类 → 已注册转换器；重定义时必须重放完整链，避免后一个钩子覆盖前一个。 */
     private static final java.util.Map<String, java.util.List<ClassFileTransformer>> GAMEPLAY_TRANSFORMERS =
             new java.util.HashMap<String, java.util.List<ClassFileTransformer>>();
+    /** 每个已加载目标类最近一次成功写入的字节；后续钩子据此链式修改，避免 redefine 后再 retransform。 */
+    private static final java.util.Map<Class<?>, byte[]> GAMEPLAY_BYTES =
+            new java.util.WeakHashMap<Class<?>, byte[]>();
     /** 游戏事件转换器是否已注册；premain 提前注册后不得重复挂链。 */
     private static volatile boolean gameplayCallbacksRegistered;
 
@@ -1004,17 +1059,13 @@ public final class NocturneAgent {
             return;
         }
         gameplayCallbacksRegistered = true;
-        // H1：本地玩家 tick 前后。传 this 供事件汇过滤，避免父类钩子把其它实体当成本地玩家。
+        // H1：本地玩家 tick 前置。传 this 供事件汇过滤，避免父类钩子把其它实体当成本地玩家。
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
                 "tick", "()V", "playerTickPre", "Z", false, true);
-        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
-                "tick", "()V", "playerTickPost", "V", true, true);
-        // H2：位置状态提交前后；pre 的修改由事件汇写回玩家。
+        // H2：位置状态提交前；pre 的修改由事件汇写回玩家。
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
                 "sendPosition", "()V", "motionPre", "V", false, true);
-        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.LOCAL_PLAYER,
-                "sendPosition", "()V", "motionPost", "V", true, true);
-        // 每 tick 的物理输入已合成完毕；只传 this，尾部通知不读取可能失效的形参槽。
+        // 每 tick 的物理输入已合成完毕；头部捕获 this，末尾无参消费，不读取被裁掉的形参槽。
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.KEYBOARD_INPUT,
                 "tick", "()V", "inputTick", "V", true, true);
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MINECRAFT,
@@ -1184,14 +1235,10 @@ public final class NocturneAgent {
                         candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER);
                 patched |= registerGameplayTransformer(instrumentation, gate, className,
                         candidate.name(), descriptor, "entityRenderGate");
-                ClassFileTransformer pre = asmLoader.createCallbackTransformer(className,
-                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "chamsPre", false);
-                ClassFileTransformer post = asmLoader.createCallbackTransformer(className,
-                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "chamsPost", true);
-                patched |= registerGameplayTransformer(instrumentation, pre, className,
-                        candidate.name(), descriptor, "chamsPre");
-                patched |= registerGameplayTransformer(instrumentation, post, className,
-                        candidate.name(), descriptor, "chamsPost");
+                ClassFileTransformer chams = asmLoader.createDeferredCallbackTransformer(className,
+                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "chamsPre", "chamsPost");
+                patched |= registerGameplayTransformer(instrumentation, chams, className,
+                        candidate.name(), descriptor, "chams");
             }
         }
         if (!patched) {
@@ -1253,22 +1300,16 @@ public final class NocturneAgent {
                             fallbackDescriptors);
                 }
                 if (descriptor != null) {
-                    ClassFileTransformer transformer = "attackPost".equals(hookMethod)
-                            ? asmLoader.createAttackPostTransformer(className, candidate.name(), descriptor,
-                            GAMEPLAY_HOOK_OWNER)
-                            : asmLoader.createGateTransformer(className,
-                            candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, hookMethod,
-                            hookReturn, atMethodEnd, passThis);
+                    ClassFileTransformer transformer = createGateTransformer(asmLoader, className,
+                            candidate.name(), descriptor, hookMethod, hookReturn, atMethodEnd,
+                            passThis);
                     patched |= registerGameplayTransformer(instrumentation, transformer, className,
                             candidate.name(), descriptor, hookMethod);
                 } else {
                     for (String fallback : fallbackDescriptors.split("\\|")) {
-                        ClassFileTransformer transformer = "attackPost".equals(hookMethod)
-                                ? asmLoader.createAttackPostTransformer(className, candidate.name(), fallback,
-                                GAMEPLAY_HOOK_OWNER)
-                                : asmLoader.createGateTransformer(className,
-                                candidate.name(), fallback, GAMEPLAY_HOOK_OWNER, hookMethod,
-                                hookReturn, atMethodEnd, passThis);
+                        ClassFileTransformer transformer = createGateTransformer(asmLoader, className,
+                                candidate.name(), fallback, hookMethod, hookReturn, atMethodEnd,
+                                passThis);
                         patched |= registerGameplayTransformer(instrumentation, transformer, className,
                                 candidate.name(), fallback, hookMethod);
                     }
@@ -1279,6 +1320,24 @@ public final class NocturneAgent {
             log("gameplay hook pending or unavailable: " + owner.canonicalName() + "#"
                     + canonicalMethod + " -> " + hookMethod);
         }
+    }
+
+    /** 按钩子语义选择转换器；输入 tick 必须走捕获/无参消费，不能尾读 this。 */
+    private static ClassFileTransformer createGateTransformer(EmbeddedAsmLoader asmLoader,
+                                                              String className, String method,
+                                                              String descriptor, String hookMethod,
+                                                              String hookReturn, boolean atMethodEnd,
+                                                              boolean passThis) {
+        if ("attackPost".equals(hookMethod)) {
+            return asmLoader.createAttackPostTransformer(className, method, descriptor,
+                    GAMEPLAY_HOOK_OWNER);
+        }
+        if ("inputTick".equals(hookMethod)) {
+            return asmLoader.createInputTickTransformer(className, method, descriptor,
+                    GAMEPLAY_HOOK_OWNER, "inputTickCapture", "inputTick");
+        }
+        return asmLoader.createGateTransformer(className, method, descriptor, GAMEPLAY_HOOK_OWNER,
+                hookMethod, hookReturn, atMethodEnd, passThis);
     }
 
     /** 按映射候选注册包转换器。 */
@@ -1356,10 +1415,14 @@ public final class NocturneAgent {
                 continue;
             }
             try {
-                byte[] current = captureCurrentBytes(instrumentation, loaded);
+                byte[] current = GAMEPLAY_BYTES.get(loaded);
+                if (current == null) {
+                    current = captureCurrentBytes(instrumentation, loaded);
+                }
                 String internalName = loaded.getName().replace('.', '/');
                 if (current != null && dev.nocturne.agent.transform.TransformGuard.containsHook(
                         current, GAMEPLAY_HOOK_OWNER, hookMethod)) {
+                    GAMEPLAY_BYTES.put(loaded, current);
                     log("gameplay hook already applied by retransform: " + targetClass
                             + "." + method + " -> " + hookMethod);
                     patched = true;
@@ -1371,6 +1434,7 @@ public final class NocturneAgent {
                         : patchBytes(loaded, composite, targetClass, method);
                 if (bytes != null) {
                     instrumentation.redefineClasses(new java.lang.instrument.ClassDefinition(loaded, bytes));
+                    GAMEPLAY_BYTES.put(loaded, bytes);
                     patched = true;
                     log("gameplay hook woven: " + targetClass + "." + method + descriptor
                             + " -> " + hookMethod);
@@ -1605,8 +1669,10 @@ public final class NocturneAgent {
         } catch (Throwable ignored) {
             // 别的 transformer 没有 patched()，不影响注册结果。
         }
-        log("input block registered on " + targetClass + "." + method
-                + " patched=" + patched + " desc=" + descriptor);
+        if (patched) {
+            log("input block registered on " + targetClass + "." + method
+                    + " patched=true desc=" + descriptor);
+        }
     }
 
     /**
@@ -2317,8 +2383,14 @@ public final class NocturneAgent {
     private static void registerGuiDrawHook(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                             String targetClass, String method, String descriptor,
                                             String hookMethod) {
-        ClassFileTransformer transformer = asmLoader.createCallbackTransformer(
-                targetClass, method, descriptor, GUI_HOOK_OWNER, hookMethod, true);
+        // 单点末尾注入会 aload 已被 StackMapTable 裁成 top 的形参槽（1.16.5 实测 VerifyError）。
+        // 所有绘制入口统一改为开头捕获、末尾无参消费；HUD 与 Screen 各有一套现成钩子。
+        String captureMethod = HUD_HOOK_METHOD.equals(hookMethod)
+                ? HUD_CAPTURE_METHOD : SCREEN_CAPTURE_METHOD;
+        String deferredMethod = HUD_HOOK_METHOD.equals(hookMethod)
+                ? HUD_DEFERRED_METHOD : SCREEN_DEFERRED_METHOD;
+        ClassFileTransformer transformer = asmLoader.createDeferredCallbackTransformer(
+                targetClass, method, descriptor, GUI_HOOK_OWNER, captureMethod, deferredMethod);
         registerGuiDrawHook(instrumentation, transformer, targetClass, method);
     }
 

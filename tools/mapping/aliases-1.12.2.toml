@@ -478,6 +478,30 @@ scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
 mcp = "getHeldItemMainhand"
 scope = "net/minecraft/entity/EntityLivingBase"
 
+[methods.getOffhandItem]
+mcp = "getHeldItemOffhand"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[methods.getUUID]
+mcp = "getUniqueID"
+scope = "net/minecraft/entity/Entity"
+
+[methods.getItemBySlot]
+mcp = "getItemStackFromSlot"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[methods.getUseItem]
+mcp = "getActiveItemStack"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[methods.getUseItemRemainingTicks]
+mcp = "getItemInUseCount"
+scope = "net/minecraft/entity/EntityLivingBase"
+
+[methods.getUsedItemHand]
+mcp = "getActiveHand"
+scope = "net/minecraft/entity/EntityLivingBase"
+
 [methods.mainCamera]
 unsupported = "1.8.9 EntityRenderer 不返回 Camera 对象"
 
@@ -715,6 +739,8 @@ timerSpeed = { mcp = "timerSpeed", scope = "net/minecraft/util/Timer" }
 
 [overrides."net/minecraft/client/multiplayer/PlayerInfo"]
 gameMode = { mcp = "gameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
+getProfile = { mcp = "getGameProfile", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
+getGameMode = { mcp = "getGameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
 
 [overrides."net/minecraft/client/gui/Gui"]
 screen = { unsupported = "1.8.9 GuiIngame 没有 screen()；当前界面在 Minecraft.currentScreen" }
@@ -752,7 +778,7 @@ destroyDelay = { mcp = "blockHitDelay", scope = "net/minecraft/client/multiplaye
 
 
 [overrides."net/minecraft/world/entity/LivingEntity"]
-isUsingItem = { unsupported = "1.8.9 isUsingItem() 只声明在 EntityPlayer，JNI 从 EntityLivingBase 查不到" }
+isUsingItem = { mcp = "isHandActive", scope = "net/minecraft/entity/EntityLivingBase" }
 hasLineOfSight = { mcp = "canEntityBeSeen", scope = "net/minecraft/entity/EntityLivingBase" }
 getAbsorptionAmount = { mcp = "getAbsorptionAmount", scope = "net/minecraft/entity/EntityLivingBase" }
 hurtTime = { mcp = "hurtTime", scope = "net/minecraft/entity/EntityLivingBase" }
@@ -917,6 +943,7 @@ tick = { mcp = "updatePlayerMoveState", scope = "net/minecraft/util/MovementInpu
 
 [overrides."net/minecraft/client/multiplayer/ClientPacketListener"]
 send = { mcp = "addToSendQueue", scope = "net/minecraft/client/network/NetHandlerPlayClient" }
+getOnlinePlayers = { mcp = "getPlayerInfoMap", scope = "net/minecraft/client/network/NetHandlerPlayClient" }
 
 [overrides."net/minecraft/client/player/LocalPlayer"]
 closeContainer = { mcp = "closeScreen", scope = "net/minecraft/client/entity/EntityPlayerSP" }

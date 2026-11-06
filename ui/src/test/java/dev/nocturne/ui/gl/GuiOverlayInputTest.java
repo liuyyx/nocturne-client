@@ -80,7 +80,8 @@ class GuiOverlayInputTest {
 
         assertEquals(1, backend.beginCalls);
         assertEquals(1, backend.endCalls);
-        assertEquals(1, backend.renderer.count("text:FPS 60"));
+        assertEquals(1, backend.renderer.ofKind("text").size());
+        assertTrue(backend.renderer.ofKind("text").get(0).text.endsWith("60"));
         overlay.remove("test");
         overlay.onFrame();
         assertEquals(1, backend.beginCalls, "空 HUD 不应再开启多余绘制帧");

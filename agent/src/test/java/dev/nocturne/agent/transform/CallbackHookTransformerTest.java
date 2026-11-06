@@ -223,6 +223,37 @@ class CallbackHookTransformerTest {
                 "with atMethodEnd the hook must run after the method's own body");
     }
 
+    @Test
+    void singleEndTailOnFramedMethodNeverProducesInvalidBytecode() throws Exception {
+        CallbackHookTransformer transformer = new CallbackHookTransformer(
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
+                HOOK_OWNER, "accept", true);
+
+        byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample",
+                null, null, branchingClass("handle", "(Ljava/lang/Object;)V"));
+        // 有帧时可能安全跳过（返回 null），也可能只在不丢槽的直线块注入；
+        // 两种结果都必须能通过 JVM 校验，绝不能把读取 top 槽的字节码交给游戏。
+        if (patched != null) {
+            define(patched).getMethod("handle", Object.class).invoke(null, new Object());
+        }
+    }
+
+    @Test
+    void deferredModeStillWorksOnFramedMethods() throws Exception {
+        CallbackHookTransformer transformer = new CallbackHookTransformer(
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
+                HOOK_OWNER, "accept", false, "deferred");
+
+        byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample",
+                null, null, branchingClass("handle", "(Ljava/lang/Object;)V"));
+        assertNotNull(patched);
+
+        Object argument = new Object();
+        define(patched).getMethod("handle", Object.class).invoke(null, argument);
+        assertEquals(java.util.Arrays.asList("hook", "body", "deferred"), Sink.trace);
+        assertEquals(argument, Sink.last);
+    }
+
     /** 对照：不要求末尾注入时，钩子在方法**开头**触发（先画叠加层，随后被目标方法盖住）。 */
     @Test
     void injectsAtTheHeadByDefault() throws Exception {

@@ -5,6 +5,10 @@
 
 ## 跨版本移植依赖验收
 
+- 2026-11-06：映射要求扩至 **160 个规范类**；补 `KeyMapping#setAll/set/click`、`Entity#getDisplayName/getCustomName`、
+  `Level#getBlockState` 与 1.14.4 的 `MultiPlayerLevel#entitiesForRendering`。`GameBridge` 增加
+  `ClientLevel → MultiPlayerLevel → Level`、`ClientLevel → LevelReader → Level` 的方块/实体回退；
+  输入短路按映射表所有类名/方法名/描述符组合注册，Fabric/Forge 命名空间不再只试原版混淆名。
 - 2026-11-04：公共动作、实体/物品/世界桥、移动与输入事件、双向包队列、OverlayDraw 线/纹理原语
   已接通；映射要求扩展到 125 个规范类。旧版字段 fallback 覆盖背包、物品数量、实体尺寸、TNT 引信，
   队伍与旁观者方法按真实 `EntityPlayer` 声明位置解析。
@@ -31,7 +35,7 @@
   `getGameTimeDeltaTicks` 返回缩放。新增转换器均通过 JVM verifier 行为测试。
 - `GuiOverlay` 已提供真实文本/多行 HUD、ActiveModules、后端渲染状态与帧缓冲读取；
   InventoryBlur 使用 4× 降采样，MotionBlur 使用可配权重的历史帧混合。
-- 映射要求扩展至 137 个规范类；`python tools/mapping/generate.py --javap` 对 66/66 个真实 client jar
+- 映射要求扩展至 160 个规范类；`python tools/mapping/generate.py --javap` 对 66/66 个真实 client jar
   的全部已解析 vanilla 成员校验通过。复杂商业 AI、完整轨迹预测与伤害模型按 Nocturne 的公共动作/目标/
   放置/渲染接口重写核心行为，不复制 OpenVape 实现文本，也不把该结论外推为全部版本真机通过。
 
@@ -320,12 +324,21 @@
 | 1.19.3 | `a` | `b` | 未纳入表 | `a` | `l` |
 | 1.19.4 | `a` | `b` | 未纳入表 | `a` | `l` |
 
+### 3.2 输入钩子矩阵
+
+| 目标 | 织入方式 | 关键约束 |
+|---|---|---|
+| `KeyboardInput#tick()V` | 头部 `inputTickCapture(Object)` + 末尾无参 `inputTick()`（`InputTickHookTransformer`） | 1.16.5 的 `RETURN` 处 StackMapTable 会把槽 0 裁成 `top`；末尾 `aload 0` 会触发 `VerifyError: Bad local variable type`。多返回点重复消费为空操作。 |
+| `EntityRenderDispatcher#render(...)` | 头部 `chamsPre(Object)` 捕获实体 + 末尾无参 `chamsPost()`（双端 `CallbackHookTransformer`） | 实体形参在末尾可能被裁成 `top`；禁止单点末尾 `aload`。 |
+| `Hud` / `Screen` 绘制入口 | 头部捕获绘制上下文 + 末尾无参消费 | 1.16–1.19 的 `PoseStack` 与 26.x 的 `GuiGraphicsExtractor` 同一规则；单点末尾注入已从注册路径移除。 |
+| `KeyMapping#setAll/set/click` | `InputBlockTransformer` | 映射表必须带 `setAll()V`、`set(InputConstants$Key,boolean)`、`click(InputConstants$Key)` 的三命名空间描述符；注册按所有类名/方法名/描述符组合尝试。 |
+
 ## 4. 验收状态
 
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
 | 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`（旧界面）；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
-| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3；**默认 `backend=gl-core`**；D3.1 性能收尾后：同色几何合批 `draw/s=1056`、相机按 partialTicks 插值、类解析走桥缓存、陷阱箱判定按方块实体缓存）（2026-11-03 起：`gui-stack` 观感明显粗糙——圆角 1px 阶梯、位图字体缩放方块字，因此降为 gl-core 不可用时的兜底，`-Dnocturne.ui.backend=game` 可强制）；`gui-stack` 绑定亦已验收（`dkv fill=a text=b scissor=rendersystem poseScale=true`）） | ✅ | ✅ 已产出 | ✅ 可见可点（`backend=gl-core`；滚轮经 `MouseHandler#onScroll` 织入 `ScrollState`，界面开着时物品栏不再跟着滚；点击不再穿透挥手臂） |
+| 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3；**默认 `backend=gl-core`**；D3.1 性能收尾后：同色几何合批 `draw/s=1056`、相机按 partialTicks 插值、类解析走桥缓存、陷阱箱判定按方块实体缓存）（2026-11-03 起：`gui-stack` 观感明显粗糙——圆角 1px 阶梯、位图字体缩放方块字，因此降为 gl-core 不可用时的兜底，`-Dnocturne.ui.backend=game` 可强制）；`gui-stack` 绑定亦已验收（`dkv fill=a text=b scissor=rendersystem poseScale=true`）） | ✅ | ✅ 已产出 | ✅ 可见可点（`backend=gl-core`；滚轮经 `MouseHandler#onScroll` 织入 `ScrollState`，界面开着时物品栏不再跟着滚；点击不再穿透挥手臂；2026-11-06 复验：`KeyboardInput#tick` 改为头捕获/尾无参后进世界不再 `VerifyError`，INSERT 可开中文面板） |
 | 26.2 | ✅ **真机已实测**（修复后） | ✅ 帧钩子按设计不注册（GLFW 交换点只驱动输入轮询） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor; input=glfw`；`GuiDrawHook` 织入成功；截图 `docs/research/fatality-26.2-fixed.png`） |
 | 26.2（Vulkan） | ⏳ | 未验 | ✅ 已产出 | ⏳ 待真机（26.2 的图形 API 需在游戏设置里手动切换，本次实测的是 OpenGL 路径） |
 | 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转；2026-10-29 原版 26.3 复验浮点字形矩阵与线性采样生效） |

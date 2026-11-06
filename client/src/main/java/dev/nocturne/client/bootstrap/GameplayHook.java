@@ -141,6 +141,10 @@ public final class GameplayHook {
 
     private static volatile Sink sink;
     private static final ThreadLocal<Object[]> ATTACK_CONTEXT = new ThreadLocal<Object[]>();
+    /** KeyboardInput#tick 的头部捕获值；末尾无参消费，避开 RETURN 处被裁掉的 this 槽。 */
+    private static final ThreadLocal<Object> INPUT_TICK = new ThreadLocal<Object>();
+    /** 实体渲染头部捕获值；末尾无参消费，避开 RETURN 处被裁掉的实体形参槽。 */
+    private static final ThreadLocal<Object> CHAMS_ENTITY = new ThreadLocal<Object>();
     /** sendPosition 是否已直接织入；false 时由玩家 tick 前沿降级产生 MotionEvent。 */
     private static volatile boolean motionDirect;
     /** 首个 Motion 事件是否已记录；用于区分"钩子未织入"与"事件未投递"。 */
@@ -216,7 +220,25 @@ public final class GameplayHook {
         }
     }
 
-    public static void inputTick(Object input) {
+    /** 头部捕获 KeyboardInput 实例；末尾只调用无参 {@link #inputTick()}。 */
+    public static void inputTickCapture(Object input) {
+        if (input == null) {
+            INPUT_TICK.remove();
+        } else {
+            INPUT_TICK.set(input);
+        }
+    }
+
+    /** 末尾消费捕获值；多返回点时第二次调用为空操作。 */
+    public static void inputTick() {
+        Object input = INPUT_TICK.get();
+        INPUT_TICK.remove();
+        if (input != null) {
+            inputTick(input);
+        }
+    }
+
+    private static void inputTick(Object input) {
         try {
             Sink current = sink;
             if (current != null) {
@@ -309,11 +331,21 @@ public final class GameplayHook {
     }
 
     public static void chamsPre(Object entity) {
+        if (entity == null) {
+            CHAMS_ENTITY.remove();
+        } else {
+            CHAMS_ENTITY.set(entity);
+        }
         entityRender(entity, false);
     }
 
-    public static void chamsPost(Object entity) {
-        entityRender(entity, true);
+    /** 末尾无参消费；多返回点第二次调用为空操作。 */
+    public static void chamsPost() {
+        Object entity = CHAMS_ENTITY.get();
+        CHAMS_ENTITY.remove();
+        if (entity != null) {
+            entityRender(entity, true);
+        }
     }
 
     private static void entityRender(Object entity, boolean post) {

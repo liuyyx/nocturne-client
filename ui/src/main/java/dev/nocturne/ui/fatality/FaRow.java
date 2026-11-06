@@ -118,7 +118,8 @@ abstract class FaRow {
 
     /** @return 标签或控件内容是否匹配搜索词（{@code query} 已小写） */
     boolean matches(String query) {
-        return label.toLowerCase(Locale.ROOT).contains(query);
+        return label.toLowerCase(Locale.ROOT).contains(query)
+                || FaStrings.t(label).toLowerCase(Locale.ROOT).contains(query);
     }
 
     /** 右侧深色输入框左边缘。 */

@@ -141,7 +141,9 @@ final class FaComboRow extends FaRow {
             return true;
         }
         for (int i = 0; i < model.size(); i++) {
-            if (model.label(i).toLowerCase(java.util.Locale.ROOT).contains(query)) {
+            String label = model.label(i);
+            if (label.toLowerCase(java.util.Locale.ROOT).contains(query)
+                    || FaStrings.t(label).toLowerCase(java.util.Locale.ROOT).contains(query)) {
                 return true;
             }
         }

@@ -139,6 +139,18 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                         return delegate;
                     }
                     return new MethodVisitor(ASM_API, delegate) {
+                        /** 该方法是否出现过 StackMapTable 帧。 */
+                        private boolean sawFrame;
+                        /** 是否已记录“带帧末尾钩子跳过”日志。 */
+                        private boolean tailSkipLogged;
+
+                        @Override
+                        public void visitFrame(int type, int numLocal, Object[] local,
+                                               int numStack, Object[] stack) {
+                            sawFrame = true;
+                            super.visitFrame(type, numLocal, local, numStack, stack);
+                        }
+
                         @Override
                         public void visitCode() {
                             super.visitCode();
@@ -167,7 +179,18 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                                             deferredMethod, "()V", false);
                                     patched[0] = true;
                                 } else if (atMethodEnd && !patched[0]) {
-                                    inject();
+                                    // 单点末尾注入要 aload 首个形参；带 StackMapTable 的 RETURN
+                                    // 可能已把该槽裁成 top（1.16.5 KeyboardInput#tick 实测）。
+                                    // 新代码一律用双端模式；这里只作为未来误用的安全网。
+                                    if (sawFrame) {
+                                        if (!tailSkipLogged) {
+                                            tailSkipLogged = true;
+                                            System.out.println("[nocturne] callback tail skipped "
+                                                    + "(stack map): " + label);
+                                        }
+                                    } else {
+                                        inject();
+                                    }
                                 }
                             }
                             super.visitInsn(opcode);

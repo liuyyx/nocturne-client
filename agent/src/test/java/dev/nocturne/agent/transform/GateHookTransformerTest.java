@@ -38,6 +38,11 @@ class GateHookTransformerTest {
             return allow;
         }
 
+        public static boolean gateInstance(Object instance) {
+            calls.add("gateInstance:" + instance.getClass().getSimpleName());
+            return allow;
+        }
+
         public static void body(long window, Object value, int action) {
             calls.add("body:" + window + ":" + value + ":" + action);
         }
@@ -52,6 +57,14 @@ class GateHookTransformerTest {
 
         public static void earlyBody() {
             calls.add("earlyBody");
+        }
+
+        public static void captureInput(Object instance) {
+            calls.add("captureInput:" + instance.getClass().getSimpleName());
+        }
+
+        public static void deferredInput() {
+            calls.add("deferredInput");
         }
 
         static Object replacement;
@@ -154,6 +167,26 @@ class GateHookTransformerTest {
     }
 
     @Test
+    void framedTailHookIsSkippedInsteadOfReadingInvalidatedLocals() throws Exception {
+        byte[] original = framedEarlyReturnSubject();
+        byte[] tail = new GateHookTransformer(TARGET, "hit", "(Z)V", SINK, "after",
+                "V", true, true).transform(getClass().getClassLoader(), TARGET, null, null, original);
+        byte[] both = new GateHookTransformer(TARGET, "hit", "(Z)V", SINK, "gateInstance",
+                "Z", false, true).transform(getClass().getClassLoader(), TARGET, null, null, tail);
+        Class<?> type = define(both);
+        Object instance = type.getDeclaredConstructor().newInstance();
+
+        type.getMethod("hit", boolean.class).invoke(instance, false);
+        // 带 StackMapTable 的末尾帧可能已把 this 裁成 top；尾钩必须安全跳过。
+        assertEquals(java.util.Arrays.asList("gateInstance:GateSubject", "earlyBody"), Sink.calls);
+
+        Sink.calls.clear();
+        Sink.allow = false;
+        type.getMethod("hit", boolean.class).invoke(instance, false);
+        assertEquals(java.util.Collections.singletonList("gateInstance:GateSubject"), Sink.calls);
+    }
+
+    @Test
     void gateInstalledAfterTailSkipsTailOnCancellation() throws Exception {
         String descriptor = "(JLjava/lang/String;I)V";
         byte[] original = gateSubject(descriptor);
@@ -168,6 +201,25 @@ class GateHookTransformerTest {
         type.getMethod("hit", long.class, String.class, int.class).invoke(instance, 1L, "x", 0);
 
         assertEquals(java.util.Collections.singletonList("gate:1:x:0"), Sink.calls);
+    }
+
+    @Test
+    void inputTickCaptureDispatchesOnceWithoutReadingTailLocals() throws Exception {
+        byte[] patched = new InputTickHookTransformer(TARGET, "hit", "(Z)V", SINK,
+                "captureInput", "deferredInput").transform(getClass().getClassLoader(), TARGET,
+                null, null, framedEarlyReturnSubject());
+        assertNotNull(patched);
+        Class<?> type = define(patched);
+        Object instance = type.getDeclaredConstructor().newInstance();
+
+        type.getMethod("hit", boolean.class).invoke(instance, true);
+        assertEquals(java.util.Arrays.asList("captureInput:GateSubject", "deferredInput"),
+                Sink.calls);
+
+        Sink.calls.clear();
+        type.getMethod("hit", boolean.class).invoke(instance, false);
+        assertEquals(java.util.Arrays.asList("captureInput:GateSubject", "earlyBody", "deferredInput"),
+                Sink.calls);
     }
 
     @Test
@@ -305,6 +357,25 @@ class GateHookTransformerTest {
         method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "earlyBody", "()V", false);
         method.visitInsn(Opcodes.ICONST_1);
         method.visitInsn(Opcodes.IRETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
+    private static byte[] framedEarlyReturnSubject() {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, TARGET, null, "java/lang/Object", null);
+        defaultConstructor(writer);
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, "hit", "(Z)V", null, null);
+        method.visitCode();
+        method.visitVarInsn(Opcodes.ILOAD, 1);
+        Label body = new Label();
+        method.visitJumpInsn(Opcodes.IFEQ, body);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitLabel(body);
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "earlyBody", "()V", false);
+        method.visitInsn(Opcodes.RETURN);
         method.visitMaxs(0, 0);
         method.visitEnd();
         writer.visitEnd();

@@ -169,6 +169,18 @@
                 "forge": "net.minecraft.client.settings.KeyBinding"
             },
             "methods": {
+                "click": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1420",
+                        "forge": "func_197981_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcue$a;)V",
+                        "fabric": "(Lnet/minecraft/class_3675$class_306;)V",
+                        "forge": "(Lnet/minecraft/client/util/InputMappings$Input;)V"
+                    }
+                },
                 "isDown": {
                     "names": {
                         "vanilla": "d",
@@ -179,6 +191,30 @@
                         "vanilla": "()Z",
                         "fabric": "()Z",
                         "forge": "()Z"
+                    }
+                },
+                "set": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1416",
+                        "forge": "func_197980_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcue$a;Z)V",
+                        "fabric": "(Lnet/minecraft/class_3675$class_306;Z)V",
+                        "forge": "(Lnet/minecraft/client/util/InputMappings$Input;Z)V"
+                    }
+                },
+                "setAll": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1424",
+                        "forge": "func_186704_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
                     }
                 }
             },
@@ -1176,6 +1212,28 @@
                     }
                 }
             }
+        },
+        "net/minecraft/client/multiplayer/MultiPlayerLevel": {
+            "names": {
+                "vanilla": "dkf",
+                "fabric": "net.minecraft.class_638",
+                "forge": "net.minecraft.client.world.ClientWorld"
+            },
+            "methods": {
+                "entitiesForRendering": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_18112",
+                        "forge": "func_217416_b"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/lang/Iterable;",
+                        "fabric": "()Ljava/lang/Iterable;",
+                        "forge": "()Ljava/lang/Iterable;"
+                    }
+                }
+            },
+            "fields": {}
         },
         "net/minecraft/client/multiplayer/PlayerInfo": {
             "names": {
@@ -2768,6 +2826,18 @@
                         "forge": "()Lnet/minecraft/util/math/AxisAlignedBB;"
                     }
                 },
+                "getCustomName": {
+                    "names": {
+                        "vanilla": "Q",
+                        "fabric": "getCustomName",
+                        "forge": "func_200201_e"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljo;",
+                        "fabric": "()Lnet/minecraft/class_2561;",
+                        "forge": "()Lnet/minecraft/util/text/ITextComponent;"
+                    }
+                },
                 "getDeltaMovement": {
                     "names": {
                         "vanilla": "cj",
@@ -2778,6 +2848,18 @@
                         "vanilla": "()Lcsi;",
                         "fabric": "()Lnet/minecraft/class_243;",
                         "forge": "()Lnet/minecraft/util/math/Vec3d;"
+                    }
+                },
+                "getDisplayName": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_5654",
+                        "forge": "func_145748_c_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljo;",
+                        "fabric": "()Lnet/minecraft/class_2561;",
+                        "forge": "()Lnet/minecraft/util/text/ITextComponent;"
                     }
                 },
                 "getEyePosition": {
@@ -5060,6 +5142,21 @@
                         "vanilla": "(Lbhf;)Lcsd;",
                         "fabric": "(Lnet/minecraft/class_3959;)Lnet/minecraft/class_3965;",
                         "forge": "(Lnet/minecraft/util/math/RayTraceContext;)Lnet/minecraft/util/math/BlockRayTraceResult;"
+                    }
+                },
+                "entitiesForRendering": {
+                    "absent": true
+                },
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "e_",
+                        "fabric": "getBlockState",
+                        "forge": "func_180495_p"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lew;)Lbvt;",
+                        "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_2680;",
+                        "forge": "(Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/block/BlockState;"
                     }
                 },
                 "noCollision": {

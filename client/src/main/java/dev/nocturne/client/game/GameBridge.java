@@ -348,8 +348,17 @@ public final class GameBridge {
     public Object blockStateAt(int x, int y, int z) {
         Object world = world();
         Object position = blockPos(x, y, z);
-        return world == null || position == null ? null
-                : callMapped(world, ClassType.CLIENT_LEVEL, "getBlockState", position);
+        if (world == null || position == null) {
+            return null;
+        }
+        Object state = callMapped(world, ClassType.CLIENT_LEVEL, "getBlockState", position);
+        if (state == null) {
+            state = callMapped(world, ClassType.LEVEL_READER, "getBlockState", position);
+        }
+        if (state == null) {
+            state = callMapped(world, ClassType.LEVEL, "getBlockState", position);
+        }
+        return state;
     }
 
     /** 客户端本地把坐标设为空气；用于 PacketMine 的预测性移除。 */
@@ -729,7 +738,15 @@ public final class GameBridge {
 
     /** 当前世界用于渲染的实体列表/数组；不可读取时为 null。 */
     public Object entities() {
-        return callMapped(world(), ClassType.CLIENT_LEVEL, "entitiesForRendering");
+        Object world = world();
+        Object result = callMapped(world, ClassType.CLIENT_LEVEL, "entitiesForRendering");
+        if (result == null) {
+            result = callMapped(world, ClassType.MULTIPLAYER_LEVEL, "entitiesForRendering");
+        }
+        if (result == null) {
+            result = callMapped(world, ClassType.LEVEL, "entitiesForRendering");
+        }
+        return result;
     }
 
     /** 任意 BlockPos/Vec3i 对象的整数坐标。 */
@@ -820,12 +837,22 @@ public final class GameBridge {
 
     /** 实体是否正在使用物品。 */
     public boolean usingItem(Object entity) {
-        return Boolean.TRUE.equals(callMapped(entity, ClassType.LIVING_ENTITY, "isUsingItem"));
+        Object result = callMapped(entity, ClassType.LIVING_ENTITY, "isUsingItem");
+        if (!(result instanceof Boolean)) {
+            result = callMapped(entity, ClassType.PLAYER, "isUsingItem");
+        }
+        return Boolean.TRUE.equals(result);
     }
 
     /** 实体纯文本名称；组件与旧版 String 均可读取。 */
     public String entityName(Object entity) {
         String text = componentText(callMapped(entity, ClassType.ENTITY, "getName"));
+        if (text == null || text.isEmpty()) {
+            text = componentText(callMapped(entity, ClassType.ENTITY, "getDisplayName"));
+        }
+        if (text == null || text.isEmpty()) {
+            text = componentText(callMapped(entity, ClassType.ENTITY, "getCustomName"));
+        }
         return text == null ? "" : text;
     }
 
@@ -1259,8 +1286,49 @@ public final class GameBridge {
         }
         Object noEntities = callMapped(world, ClassType.LEVEL, "checkNoEntityCollision", box);
         Object blockCollision = callMapped(world, ClassType.LEVEL, "checkBlockCollision", box);
-        return noEntities instanceof Boolean && blockCollision instanceof Boolean
-                && (Boolean) noEntities && !(Boolean) blockCollision;
+        if (noEntities instanceof Boolean && blockCollision instanceof Boolean) {
+            return (Boolean) noEntities && !(Boolean) blockCollision;
+        }
+        // 1.13+ 的 Level 只剩 noCollision(Entity)，旧的两个检查入口被移除；
+        // 用已映射的方块状态逐格采样盒体覆盖的方块，避免边缘检测整代失效。
+        return blockBoxFree(box);
+    }
+
+    /** 盒体覆盖的方块是否全部无碰撞；读不到 AABB 字段时保守返回 false。 */
+    private boolean blockBoxFree(Object box) {
+        Number minX = number(readField(box, ClassType.AABB, "minX"));
+        Number minY = number(readField(box, ClassType.AABB, "minY"));
+        Number minZ = number(readField(box, ClassType.AABB, "minZ"));
+        Number maxX = number(readField(box, ClassType.AABB, "maxX"));
+        Number maxY = number(readField(box, ClassType.AABB, "maxY"));
+        Number maxZ = number(readField(box, ClassType.AABB, "maxZ"));
+        if (minX == null || minY == null || minZ == null
+                || maxX == null || maxY == null || maxZ == null) {
+            return false;
+        }
+        int x0 = (int) Math.floor(minX.doubleValue() + 1.0E-7);
+        int y0 = (int) Math.floor(minY.doubleValue() + 1.0E-7);
+        int z0 = (int) Math.floor(minZ.doubleValue() + 1.0E-7);
+        int x1 = (int) Math.floor(maxX.doubleValue() - 1.0E-7);
+        int y1 = (int) Math.floor(maxY.doubleValue() - 1.0E-7);
+        int z1 = (int) Math.floor(maxZ.doubleValue() - 1.0E-7);
+        boolean readAny = false;
+        for (int x = x0; x <= x1; x++) {
+            for (int y = y0; y <= y1; y++) {
+                for (int z = z0; z <= z1; z++) {
+                    Object state = blockStateAt(x, y, z);
+                    if (state == null) {
+                        continue;
+                    }
+                    readAny = true;
+                    if (hasBlockCollision(state, blockPos(x, y, z))) {
+                        return false;
+                    }
+                }
+            }
+        }
+        // 一格都读不到说明映射面缺失；此时不能把"未知"当成"安全"。
+        return readAny;
     }
 
     /** 方块是否有碰撞形状；形状面不可用时按非空气保守处理。 */

@@ -240,12 +240,36 @@
                 "neoforge": "net.minecraft.client.KeyMapping"
             },
             "methods": {
+                "click": {
+                    "names": {
+                        "vanilla": "click",
+                        "fabric": "click",
+                        "forge": "click",
+                        "neoforge": "click"
+                    }
+                },
                 "isDown": {
                     "names": {
                         "vanilla": "isDown",
                         "fabric": "isDown",
                         "forge": "isDown",
                         "neoforge": "isDown"
+                    }
+                },
+                "set": {
+                    "names": {
+                        "vanilla": "set",
+                        "fabric": "set",
+                        "forge": "set",
+                        "neoforge": "set"
+                    }
+                },
+                "setAll": {
+                    "names": {
+                        "vanilla": "setAll",
+                        "fabric": "setAll",
+                        "forge": "setAll",
+                        "neoforge": "setAll"
                     }
                 }
             },
@@ -1220,6 +1244,12 @@
                     }
                 }
             }
+        },
+        "net/minecraft/client/multiplayer/MultiPlayerLevel": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/client/multiplayer/PlayerInfo": {
             "names": {
@@ -2548,12 +2578,28 @@
                         "neoforge": "getBoundingBox"
                     }
                 },
+                "getCustomName": {
+                    "names": {
+                        "vanilla": "getCustomName",
+                        "fabric": "getCustomName",
+                        "forge": "getCustomName",
+                        "neoforge": "getCustomName"
+                    }
+                },
                 "getDeltaMovement": {
                     "names": {
                         "vanilla": "getDeltaMovement",
                         "fabric": "getDeltaMovement",
                         "forge": "getDeltaMovement",
                         "neoforge": "getDeltaMovement"
+                    }
+                },
+                "getDisplayName": {
+                    "names": {
+                        "vanilla": "getDisplayName",
+                        "fabric": "getDisplayName",
+                        "forge": "getDisplayName",
+                        "neoforge": "getDisplayName"
                     }
                 },
                 "getEyePosition": {
@@ -4371,6 +4417,17 @@
                         "fabric": "clip",
                         "forge": "clip",
                         "neoforge": "clip"
+                    }
+                },
+                "entitiesForRendering": {
+                    "absent": true
+                },
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "getBlockState",
+                        "fabric": "getBlockState",
+                        "forge": "getBlockState",
+                        "neoforge": "getBlockState"
                     }
                 },
                 "noCollision": {

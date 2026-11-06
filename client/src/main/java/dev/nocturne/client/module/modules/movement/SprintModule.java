@@ -71,17 +71,12 @@ public final class SprintModule extends Module {
 
     /** 水平速度是否明显非零（说明玩家正朝某个方向移动）。 */
     private static boolean isMovingHorizontally(GameBridge bridge, Object player) {
-        Object delta = bridge.callMapped(player, ClassType.ENTITY, "getDeltaMovement");
-        if (delta == null) {
+        double[] velocity = bridge.entityVelocity(player);
+        if (velocity == null) {
             return false;
         }
-        Object x = bridge.readField(delta, ClassType.VEC3, "x");
-        Object z = bridge.readField(delta, ClassType.VEC3, "z");
-        if (!(x instanceof Number) || !(z instanceof Number)) {
-            return false;
-        }
-        double dx = ((Number) x).doubleValue();
-        double dz = ((Number) z).doubleValue();
+        double dx = velocity[0];
+        double dz = velocity[2];
         return dx * dx + dz * dz > MOVING_EPSILON;
     }
 

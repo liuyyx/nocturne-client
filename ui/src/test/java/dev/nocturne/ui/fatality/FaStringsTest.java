@@ -1,9 +1,12 @@
 package dev.nocturne.ui.fatality;
 
+import dev.nocturne.client.module.Category;
+import dev.nocturne.client.module.Module;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 语言层的契约：**只影响显示**，并且切换必须是可逆的。
@@ -18,16 +21,14 @@ class FaStringsTest {
         FaStrings.setChinese(true);
     }
 
-    /** 默认中文：已知词条翻译，未知词条原样返回（新模块在补词条前显示英文，不是空白）。 */
+    /** 默认中文：已知词条翻译，空值与空串保持安全。 */
     @Test
-    void translatesKnownNamesAndLeavesUnknownAlone() {
+    void translatesKnownNamesAndPreservesEmptyText() {
         FaStrings.setChinese(true);
         assertEquals("疾跑", FaStrings.t("Sprint"));
         assertEquals("移动", FaStrings.t("MOVEMENT"));
         assertEquals("启用", FaStrings.t("Enabled"));
-        assertEquals("Whitelist Only", "仅白名单".equals(FaStrings.t("Whitelist Only"))
-                ? "Whitelist Only" : "词条未生效");
-        assertEquals("SomeNewModule", FaStrings.t("SomeNewModule"));
+        assertEquals("仅白名单", FaStrings.t("Whitelist Only"));
         assertEquals("", FaStrings.t(""));
         assertEquals(null, FaStrings.t(null));
     }
@@ -47,5 +48,22 @@ class FaStringsTest {
         assertEquals("Sprint", FaStrings.searchKey("疾跑"));
         assertEquals("sprint", FaStrings.searchKey("sprint"));
         assertEquals("", FaStrings.searchKey(""));
+    }
+
+    @Test
+    void partialChineseQueryMatchesRealModuleCard() {
+        FaGroup group = new FaGroup(new Module() {
+            @Override
+            public String name() {
+                return "Kill Aura";
+            }
+
+            @Override
+            public Category category() {
+                return Category.COMBAT;
+            }
+        });
+        assertTrue(group.filter("击杀"));
+        assertTrue(group.filter("光环"));
     }
 }

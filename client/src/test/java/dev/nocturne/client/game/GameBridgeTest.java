@@ -236,6 +236,58 @@ class GameBridgeTest {
         assertNull(bridge.callMapped(null, ClassType.LOCAL_PLAYER, "pick", 1));
     }
 
+    static final class LegacyEntity {
+        @SuppressWarnings("unused")
+        private double motionX = 0.25;
+        @SuppressWarnings("unused")
+        private double motionY = -0.5;
+        @SuppressWarnings("unused")
+        private double motionZ = 0.75;
+
+        boolean isUsingItem() {
+            return true;
+        }
+    }
+
+    @Test
+    void legacyVelocityFallsBackToMotionFields() {
+        GameBridge bridge = new GameBridge(null, new IdentityMapping());
+        assertArrayEquals(new double[]{0.25, -0.5, 0.75}, bridge.entityVelocity(new LegacyEntity()));
+    }
+
+    @Test
+    void playerItemUseFallsBackToPlayerOwner() {
+        Mapping mapping = new Mapping() {
+            @Override
+            public String describe() {
+                return "legacy-player-item-use";
+            }
+
+            @Override
+            public String className(ClassType type) {
+                return type.canonicalName();
+            }
+
+            @Override
+            public String methodName(ClassType owner, String canonicalName, String descriptor) {
+                return owner == ClassType.LIVING_ENTITY && "isUsingItem".equals(canonicalName)
+                        ? "missingOnLivingEntity" : canonicalName;
+            }
+
+            @Override
+            public String fieldName(ClassType owner, String canonicalName) {
+                return canonicalName;
+            }
+
+            @Override
+            public boolean isIdentity() {
+                return false;
+            }
+        };
+        GameBridge bridge = new GameBridge(null, mapping);
+        assertTrue(bridge.usingItem(new LegacyEntity()));
+    }
+
     /** 通过替身游戏类验证解析链路：resolve 成功、player 读取经映射、带参调用可命中 */
     @Test
     void resolvesAgainstAFakeGameClassAndReadsItsFields() {

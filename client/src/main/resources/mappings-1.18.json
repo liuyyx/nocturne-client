@@ -708,6 +708,18 @@
                         "forge": "()V"
                     }
                 },
+                "turnPlayer": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1606",
+                        "forge": "m_91523_"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
                 "xpos": {
                     "names": {
                         "vanilla": "e",
@@ -3016,6 +3028,12 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/util/MouseHelper": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/InteractionHand": {
             "names": {
                 "vanilla": "avp",
@@ -4625,6 +4643,9 @@
                 "forge": "net.minecraft.world.entity.player.Inventory"
             },
             "methods": {
+                "changeCurrentItem": {
+                    "absent": true
+                },
                 "getContainerSize": {
                     "names": {
                         "vanilla": "b",

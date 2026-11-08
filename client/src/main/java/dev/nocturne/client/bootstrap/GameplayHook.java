@@ -290,6 +290,11 @@ public final class GameplayHook {
         }
     }
 
+    /** 1.8.9–1.12.2 的 {@code GameRenderer#setupFog(int,float)} 形参版本。 */
+    public static boolean noFog(int fogType, float partialTicks) {
+        return noFog();
+    }
+
     public static boolean noHurtCamera() {
         try {
             Sink current = sink;
@@ -298,6 +303,11 @@ public final class GameplayHook {
             failure("noHurtCamera", t);
             return true;
         }
+    }
+
+    /** 1.8.9–1.14.3 的 {@code GameRenderer#hurtCamera(float)} 形参版本。 */
+    public static boolean noHurtCamera(float partialTicks) {
+        return noHurtCamera();
     }
 
     public static float timerScale(float delta) {

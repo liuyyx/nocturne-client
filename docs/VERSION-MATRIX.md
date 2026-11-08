@@ -5,10 +5,13 @@
 
 ## 跨版本移植依赖验收
 
-- 2026-11-06：映射要求扩至 **160 个规范类**；补 `KeyMapping#setAll/set/click`、`Entity#getDisplayName/getCustomName`、
+- 2026-11-06：映射要求扩至 **161 个规范类**；补 `KeyMapping#setAll/set/click`、`Entity#getDisplayName/getCustomName`、
   `Level#getBlockState` 与 1.14.4 的 `MultiPlayerLevel#entitiesForRendering`。`GameBridge` 增加
   `ClientLevel → MultiPlayerLevel → Level`、`ClientLevel → LevelReader → Level` 的方块/实体回退；
   输入短路按映射表所有类名/方法名/描述符组合注册，Fabric/Forge 命名空间不再只试原版混淆名。
+- 2026-11-08：GUI 打开时阻断真实输入链——26.x `MouseHandler#turnPlayer(D)V`、`MouseHandler#onScroll(JDD)V`；
+  1.8.9/1.12.2 `MouseHelper#mouseXYChange()V` 与 `Inventory#changeCurrentItem(I)V`。前两者防止视角旋转/快捷栏滚动，
+  后者配合 `Minecraft.inGameHasFocus=false` 锁住 1.8.9 相机。
 - 2026-11-04：公共动作、实体/物品/世界桥、移动与输入事件、双向包队列、OverlayDraw 线/纹理原语
   已接通；映射要求扩展到 125 个规范类。旧版字段 fallback 覆盖背包、物品数量、实体尺寸、TNT 引信，
   队伍与旁观者方法按真实 `EntityPlayer` 声明位置解析。
@@ -35,7 +38,7 @@
   `getGameTimeDeltaTicks` 返回缩放。新增转换器均通过 JVM verifier 行为测试。
 - `GuiOverlay` 已提供真实文本/多行 HUD、ActiveModules、后端渲染状态与帧缓冲读取；
   InventoryBlur 使用 4× 降采样，MotionBlur 使用可配权重的历史帧混合。
-- 映射要求扩展至 160 个规范类；`python tools/mapping/generate.py --javap` 对 66/66 个真实 client jar
+- 映射要求扩展至 161 个规范类；`python tools/mapping/generate.py --javap` 对 66/66 个真实 client jar
   的全部已解析 vanilla 成员校验通过。复杂商业 AI、完整轨迹预测与伤害模型按 Nocturne 的公共动作/目标/
   放置/渲染接口重写核心行为，不复制 OpenVape 实现文本，也不把该结论外推为全部版本真机通过。
 
@@ -337,11 +340,11 @@
 
 | 版本 | 注入 | 帧钩子 | 表 | 界面可见（真机） |
 |---|---|---|---|---|
-| 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`（旧界面）；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）） |
+| 1.8.9 | ✅ **真机已实测**（官方 1.8.9 + LWJGL2：attach → `agentmain` → 帧钩子 live → 叠加层 attach → 右 Shift 开/关，四个分类面板与模块名正常显示；`tmp/mc189*.log`） | ✅ | ✅ 已有表 | ✅ 可见（`backend=gl-fixed` 固定管线、`screen=ClickGui`（旧界面）；P5 输入：右 Shift 唤出 ✅ / Esc 关闭 ✅ / 鼠标点选 ✅ / 滚轮 ⏳（合成事件进不了 LWJGL2 队列，待真人验收；派发链已走读无断点）；2026-11-08 复验：`openGui=true` 进世界后 `inGameHasFocus=false`，`MouseHelper#mouseXYChange` 与 `Inventory#changeCurrentItem` 均 `patched=true`，视角/快捷栏输入链已短路） |
 | 1.16.5 | ✅ **真机已实测**（官方 1.16.5 + LWJGL3；**默认 `backend=gl-core`**；D3.1 性能收尾后：同色几何合批 `draw/s=1056`、相机按 partialTicks 插值、类解析走桥缓存、陷阱箱判定按方块实体缓存）（2026-11-03 起：`gui-stack` 观感明显粗糙——圆角 1px 阶梯、位图字体缩放方块字，因此降为 gl-core 不可用时的兜底，`-Dnocturne.ui.backend=game` 可强制）；`gui-stack` 绑定亦已验收（`dkv fill=a text=b scissor=rendersystem poseScale=true`）） | ✅ | ✅ 已产出 | ✅ 可见可点（`backend=gl-core`；滚轮经 `MouseHandler#onScroll` 织入 `ScrollState`，界面开着时物品栏不再跟着滚；点击不再穿透挥手臂；2026-11-06 复验：`KeyboardInput#tick` 改为头捕获/尾无参后进世界不再 `VerifyError`，INSERT 可开中文面板） |
 | 26.2 | ✅ **真机已实测**（修复后） | ✅ 帧钩子按设计不注册（GLFW 交换点只驱动输入轮询） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor; input=glfw`；`GuiDrawHook` 织入成功；截图 `docs/research/fatality-26.2-fixed.png`） |
 | 26.2（Vulkan） | ⏳ | 未验 | ✅ 已产出 | ⏳ 待真机（26.2 的图形 API 需在游戏设置里手动切换，本次实测的是 OpenGL 路径） |
-| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转；2026-10-29 原版 26.3 复验浮点字形矩阵与线性采样生效） |
+| 26.3 | ✅ 已实测（真实 26.3 + Fabric：attach → agentmain → 引导完成，游戏稳定不崩） | ⏳ 字节码级已验证（SDL 目标；SDL 栈下按设计不注册帧钩子，绘制由 GUI 绘制钩子驱动） | ✅ 已产出 | ✅ 可见可点（`backend=gui-extractor`、`input=game`、`screen=ClickGui`；三列面板与模块名正常，点击 `FullBright` 行状态翻转；2026-10-29 原版 26.3 复验浮点字形矩阵与线性采样生效；2026-11-08 已补 `MouseHandler#turnPlayer(D)V`/`onScroll(JDD)V` 输入短路，待真机复验鼠标视角与快捷栏） |
 
 ✅ 已完成 · ⏳ 进行中/待验证。此表只写实测结论，不写「应该能行」。
 

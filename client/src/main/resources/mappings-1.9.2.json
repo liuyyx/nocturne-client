@@ -2233,6 +2233,28 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/util/MouseHelper": {
+            "names": {
+                "vanilla": "bcd",
+                "fabric": "net.minecraft.class_0_672",
+                "forge": "net.minecraft.util.MouseHelper"
+            },
+            "methods": {
+                "mouseXYChange": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_0_2329",
+                        "forge": "func_74374_c"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/InteractionHand": {
             "absent": true,
             "names": {},
@@ -3626,6 +3648,18 @@
                 "forge": "net.minecraft.entity.player.InventoryPlayer"
             },
             "methods": {
+                "changeCurrentItem": {
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "method_7373",
+                        "forge": "func_70453_c"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)V",
+                        "fabric": "(I)V",
+                        "forge": "(I)V"
+                    }
+                },
                 "getContainerSize": {
                     "absent": true
                 },

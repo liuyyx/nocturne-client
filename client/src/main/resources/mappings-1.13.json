@@ -2151,6 +2151,12 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/util/MouseHelper": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/InteractionHand": {
             "absent": true,
             "names": {},
@@ -3544,6 +3550,18 @@
                 "forge": "net.minecraft.entity.player.InventoryPlayer"
             },
             "methods": {
+                "changeCurrentItem": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_7373",
+                        "forge": "func_195409_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(D)V",
+                        "fabric": "(D)V",
+                        "forge": "(D)V"
+                    }
+                },
                 "getContainerSize": {
                     "absent": true
                 },

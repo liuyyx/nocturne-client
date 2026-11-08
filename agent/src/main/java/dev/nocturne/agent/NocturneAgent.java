@@ -916,6 +916,15 @@ public final class NocturneAgent {
         // 既保留按钮记录，又阻止游戏重新捕获/居中。关闭界面后 shouldBlock=false，正常抓取。
         registerMappedInputBlocks(instrumentation, asmLoader,
                 dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER, "grabMouse", "()V");
+        // 相机旋转入口：26.x 的 MouseHandler#turnPlayer(D)V；1.8.9/1.12.2 的 MouseHelper#mouseXYChange()V。
+        // 只挡“应用增量”，不挡 onMove，界面仍然能读到 xpos/ypos。
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MOUSE_HANDLER, "turnPlayer", "(D)V");
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MOUSE_HELPER, "mouseXYChange", "()V");
+        // 1.8.9/1.12.2 的滚轮最终走 InventoryPlayer#changeCurrentItem(I)V；GUI 打开时不许切快捷栏。
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.INVENTORY, "changeCurrentItem", "(I)V");
         // GLFW 世代只从这里拿得到滚轮——没有轮询接口，SDLEventHandler 那条路也不存在。
         // 顺序有意义：先注册短路（入口判定），再挂累加钩子（后注册的插在 visitCode 更前面，
         // 先拿到增量再决定是否短路）。
@@ -1107,9 +1116,9 @@ public final class NocturneAgent {
         registerCameraHooks(instrumentation, asmLoader);
         registerHandHooks(instrumentation, asmLoader);
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.GAME_RENDERER,
-                "setupFog", "()V", "noFog", "Z", false, true);
+                "setupFog", "()V", "noFog", "Z", false, false);
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.GAME_RENDERER,
-                "hurtCamera", "()V", "noHurtCamera", "Z", false, true);
+                "hurtCamera", "()V", "noHurtCamera", "Z", false, false);
         // H6：26.x 的 startAttack 返回 boolean，旧版两者均返回 void。
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MINECRAFT,
                 "startAttack", "()V|()Z", "leftClick", "Z", false, false);

@@ -76,6 +76,7 @@ version = "1.12.2"
 "net/minecraft/world/level/GameType" = "net/minecraft/world/GameType"
 "net/minecraft/client/Options" = "net/minecraft/client/settings/GameSettings"
 "net/minecraft/world/entity/player/Inventory" = "net/minecraft/entity/player/InventoryPlayer"
+"net/minecraft/util/MouseHelper" = "net/minecraft/util/MouseHelper"
 "net/minecraft/world/item/ItemStack" = "net/minecraft/item/ItemStack"
 "net/minecraft/world/item/Item" = "net/minecraft/item/Item"
 "net/minecraft/world/item/BlockItem" = "net/minecraft/item/ItemBlock"
@@ -749,6 +750,11 @@ screen = { unsupported = "1.8.9 GuiIngame 没有 screen()；当前界面在 Mine
 getItem = { mcp = "getStackInSlot", scope = "net/minecraft/entity/player/InventoryPlayer" }
 getSelectedItem = { mcp = "getCurrentItem", scope = "net/minecraft/entity/player/InventoryPlayer" }
 getContainerSize = { mcp = "getSizeInventory", scope = "net/minecraft/entity/player/InventoryPlayer" }
+changeCurrentItem = { mcp = "changeCurrentItem", scope = "net/minecraft/entity/player/InventoryPlayer" }
+
+[methods.mouseXYChange]
+mcp = "mouseXYChange"
+scope = "net/minecraft/util/MouseHelper"
 
 [overrides."net/minecraft/world/entity/player/Player"]
 getInventory = { unsupported = "1.8.9 EntityPlayer.getInventory() 返回 ItemStack[]；Inventory 对象是字段 inventory" }

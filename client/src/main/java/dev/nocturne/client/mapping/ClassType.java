@@ -117,6 +117,8 @@ public enum ClassType {
     WINDOW("com.mojang.blaze3d.platform.Window"),
     /** 鼠标处理器（1.14.4+）：抓取/释放鼠标、玩家朝向的鼠标输入都在这里。 */
     MOUSE_HANDLER("net.minecraft.client.MouseHandler"),
+    /** 1.8.9/1.12.2 的 MouseHelper：mouseXYChange 是相机旋转的唯一增量入口。 */
+    MOUSE_HELPER("net.minecraft.util.MouseHelper"),
     /** 三维向量：相机眼位、实体坐标都从它上面读 x/y/z（世界覆盖层投影用）。 */
     VEC3("net.minecraft.world.phys.Vec3"),
     /**

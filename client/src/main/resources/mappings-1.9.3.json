@@ -2015,6 +2015,25 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/util/MouseHelper": {
+            "names": {
+                "vanilla": "bce",
+                "fabric": "net.minecraft.class_0_672"
+            },
+            "methods": {
+                "mouseXYChange": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_0_2329"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/world/InteractionHand": {
             "absent": true,
             "names": {},
@@ -3243,6 +3262,16 @@
                 "fabric": "net.minecraft.class_1661"
             },
             "methods": {
+                "changeCurrentItem": {
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "method_7373"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)V",
+                        "fabric": "(I)V"
+                    }
+                },
                 "getContainerSize": {
                     "absent": true
                 },

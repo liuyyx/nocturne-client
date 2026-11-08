@@ -564,6 +564,14 @@
                         "neoforge": "releaseMouse"
                     }
                 },
+                "turnPlayer": {
+                    "names": {
+                        "vanilla": "turnPlayer",
+                        "fabric": "turnPlayer",
+                        "forge": "turnPlayer",
+                        "neoforge": "turnPlayer"
+                    }
+                },
                 "xpos": {
                     "names": {
                         "vanilla": "xpos",
@@ -2459,6 +2467,12 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/util/MouseHelper": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/InteractionHand": {
             "names": {
                 "vanilla": "net.minecraft.world.InteractionHand",
@@ -3709,6 +3723,9 @@
                 "neoforge": "net.minecraft.world.entity.player.Inventory"
             },
             "methods": {
+                "changeCurrentItem": {
+                    "absent": true
+                },
                 "getContainerSize": {
                     "names": {
                         "vanilla": "getContainerSize",

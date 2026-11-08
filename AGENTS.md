@@ -111,7 +111,9 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 - 目标类/方法名**硬编码在 `NocturneAgent` 常量里**，不是运行期查表——加注入点要改那里。
   帧钩子：`Display.update()V` / `GLFW.glfwSwapBuffers(J)V` / `SDLVideo.SDL_GL_SwapWindow(J)Z`；
   绘制钩子：`Hud.extractRenderState` / `Screen.extractRenderStateWithTooltipAndSubtitles`；
-  输入短路：`KeyboardHandler#keyPress`、`KeyMapping#setAll|set|click`、`ContainerEventHandler#mouseClicked`；
+  输入短路：`KeyboardHandler#keyPress`、`KeyMapping#setAll|set|click`、`ContainerEventHandler#mouseClicked`、
+  `MouseHandler#grabMouse|turnPlayer|onScroll`、1.8.9/1.12.2 的 `MouseHelper#mouseXYChange` 与
+  `Inventory#changeCurrentItem`；
   SDL 滚轮：`SDLEventHandler#handleMouseWheelEvent`。
 - `ClassWriter(reader, COMPUTE_MAXS)` + `reader.accept(visitor, 0)` 保留原 `StackMapTable`；
   插入**分支**的转换器（`InputBlockTransformer`）必须手写一条 `F_NEW` 完整 frame。

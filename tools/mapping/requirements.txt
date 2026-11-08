@@ -565,6 +565,10 @@ net/minecraft/client/MouseHandler#releaseMouse()
 net/minecraft/client/MouseHandler#isMouseGrabbed()
 # 滚轮：GLFW 世代唯一能拿到增量的入口（没有轮询接口）。
 net/minecraft/client/MouseHandler#onScroll()
+net/minecraft/client/MouseHandler#turnPlayer()
+net/minecraft/util/MouseHelper
+net/minecraft/util/MouseHelper#mouseXYChange()
+net/minecraft/world/entity/player/Inventory#changeCurrentItem()
 com/mojang/blaze3d/platform/InputConstants
 com/mojang/blaze3d/platform/InputConstants#isKeyDown()
 com/mojang/blaze3d/platform/InputConstants$Type#getOrCreate()

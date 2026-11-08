@@ -1160,6 +1160,12 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     }
 
     @Override
+    public boolean reliableAlphaBlend() {
+        // 绘制交给游戏自己的提取器：合成顺序由游戏决定，不存在我们把遮罩叠加两次的问题。
+        return true;
+    }
+
+    @Override
     public String backendName() {
         return poseArg ? "gui-stack" : NAME;
     }

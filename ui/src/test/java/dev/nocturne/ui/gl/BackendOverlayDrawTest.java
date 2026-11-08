@@ -4,6 +4,7 @@ import dev.nocturne.ui.FakeBackend;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** OverlayDraw 到实际后端的原生与退化路径测试。 */
@@ -32,9 +33,14 @@ class BackendOverlayDrawTest {
     }
 
     @Test
-    void fixedPipelineBackendReportsUnreliableAlphaBlend() {
-        // FakeBackend 在 ui 测试里代表现代后端：默认允许整帧遮罩。
-        assertTrue(new BackendOverlayDraw(new FakeBackend(320, 240)).reliableAlphaBlend());
+    void backendCapabilityDecidesFullScreenBlend() {
+        FakeBackend backend = new FakeBackend(320, 240);
+        BackendOverlayDraw draw = new BackendOverlayDraw(backend);
+        assertFalse(draw.reliableAlphaBlend(),
+                "未知/未声明能力的后端必须 fail-closed：不许画整帧遮罩");
+
+        backend.reliableAlphaBlend = true;
+        assertTrue(draw.reliableAlphaBlend(), "声明可靠的后端才允许整帧遮罩");
     }
 
     @Test

@@ -215,9 +215,12 @@ class ObfuscatedMappingTest {
     /**
      * 成员级 {@code absent}：该版本没有这个成员时回退为规范名，并且**只提示一次**。
      *
-     * <p>用真实生成的 26.3 表：{@code Entity#isDead} 与 {@code LocalPlayer#respawnPlayer} 在 26.x 已被改名，
-     * 生成器把它们标成 {@code "absent": true}。旧实现只写标记不打日志，模块会静默失效（例如自动重生）；
-     * 这里钉住「回退 + 一次诊断 + 描述符按不存在处理」。
+     * <p>用真实生成的 26.3 表：{@code Entity#isDead} 与 {@code LocalPlayer#sendChatMessage}
+     * 在 26.x 已被改名/移除，生成器把它们标成 {@code "absent": true}。旧实现只写标记不打日志，
+     * 模块会静默失效（例如自动重生）；这里钉住「回退 + 一次诊断 + 描述符按不存在处理」。
+     *
+     * <p>{@code LocalPlayer#respawnPlayer} 不再是 absent：`member-aliases.txt` 把它接到 26.x 的
+     * {@code respawn()}，所以这里也钉住别名链确实生效（否则自动重生在 26.x 永远找不到入口）。
      */
     @Test
     void absentMembersFallBackToCanonicalNameAndAreReportedOnce() throws Exception {
@@ -231,10 +234,12 @@ class ObfuscatedMappingTest {
             assertEquals("isDead", mapping.fieldName(ClassType.ENTITY, "isDead"));
             assertEquals("isDead", mapping.fieldName(ClassType.ENTITY, "isDead"));
             // 方法：回退为规范名；描述符按「该版本不存在」处理
-            assertEquals("respawnPlayer",
-                    mapping.methodName(ClassType.LOCAL_PLAYER, "respawnPlayer", "()V"));
-            assertFalse(mapping.hasMethodDescriptor(ClassType.LOCAL_PLAYER, "respawnPlayer"));
-            assertEquals(null, mapping.methodDescriptor(ClassType.LOCAL_PLAYER, "respawnPlayer"));
+            assertEquals("sendChatMessage",
+                    mapping.methodName(ClassType.LOCAL_PLAYER, "sendChatMessage", "()V"));
+            assertFalse(mapping.hasMethodDescriptor(ClassType.LOCAL_PLAYER, "sendChatMessage"));
+            assertEquals(null, mapping.methodDescriptor(ClassType.LOCAL_PLAYER, "sendChatMessage"));
+            // 别名链：respawnPlayer 在 26.x 就是 respawn()
+            assertEquals("respawn", mapping.methodName(ClassType.LOCAL_PLAYER, "respawnPlayer", "()V"));
         } finally {
             System.setOut(original);
             log = captured.toString("UTF-8");

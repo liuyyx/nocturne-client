@@ -73,6 +73,22 @@ public interface UiBackend extends Renderer {
     }
 
     /**
+     * 本后端的 alpha 混合是否可靠到可以画**整帧遮罩**（雾色/后期滤镜）。
+     *
+     * <p>默认 {@code false}：只有明确知道自己状态干净的现代后端才该承诺。固定管线
+     * （{@link GlRenderer}，1.8.9–1.12.2）实测同一帧内遮罩被应用多次（25% 落成 ~44%），
+     * 雾色接近黑时整帧就是一幕黑屏，因此它必须留在 {@code false}。
+     *
+     * <p>契约方向是 fail-closed：新的后端实现要显式 {@code return true} 才会被允许画整帧遮罩，
+     * "忘了实现"不会把世界涂黑。
+     *
+     * @return true 表示可以安全地画半透明整帧遮罩
+     */
+    default boolean reliableAlphaBlend() {
+        return false;
+    }
+
+    /**
      * 覆盖 UI 缩放系数；{@code 0} 或负数表示恢复"按屏幕高度自动"。
      *
      * <p>给"用 {@code =} / {@code -} 手动调整界面大小"用：自动值只能按屏幕高度取整，用户在高 DPI

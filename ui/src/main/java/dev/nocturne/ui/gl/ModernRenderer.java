@@ -446,6 +446,12 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     }
 
     @Override
+    public boolean reliableAlphaBlend() {
+        // 核心 profile：每帧状态自己设置/还原，整帧遮罩不会被游戏层重复叠加。
+        return true;
+    }
+
+    @Override
     public String backendName() {
         return "gl-core";
     }

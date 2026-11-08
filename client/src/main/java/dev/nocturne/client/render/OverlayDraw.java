@@ -114,9 +114,11 @@ public interface OverlayDraw {
      * 整个世界就是一块黑幕——只剩 HUD 与准星。因此这类后端必须显式返回 {@code false}，
      * 需要整帧混合的模块（雾色/后期滤镜）据此跳过自己，而不是把世界涂黑。
      *
-     * @return true 表示可以安全地画半透明整帧遮罩；未知实现默认 true（不改变既有行为）
+     * @return true 表示可以安全地画半透明整帧遮罩；**未知实现默认 false**
+     *    （fail-closed：整帧混合是不可逆的全屏效果，猜错的代价是世界变黑，
+     *    猜"不支持"只是少一层滤镜）
      */
     default boolean reliableAlphaBlend() {
-        return true;
+        return false;
     }
 }

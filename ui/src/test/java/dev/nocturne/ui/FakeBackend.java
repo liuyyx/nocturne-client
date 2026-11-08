@@ -63,6 +63,14 @@ public final class FakeBackend implements UiBackend {
         return ready;
     }
 
+    /** {@link #reliableAlphaBlend()} 的返回值；默认 false（与未知后端一致）。 */
+    public boolean reliableAlphaBlend;
+
+    @Override
+    public boolean reliableAlphaBlend() {
+        return reliableAlphaBlend;
+    }
+
     @Override
     public void rect(float x, float y, float w, float h, Color color) {
         renderer.rect(x, y, w, h, color);

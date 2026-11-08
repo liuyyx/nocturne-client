@@ -591,7 +591,14 @@ public final class GameBridge {
      * 稳定序号 1（LIST=0、SIDEBAR=1 自 1.8.9 起未变）。非枚举形参返回 {@code null}。
      */
     static Object sidebarSlot(Class<?> parameterType) {
-        if (parameterType == null || !parameterType.isEnum()) {
+        if (parameterType == null) {
+            return null;
+        }
+        // 1.8.9–1.12：getObjectiveInDisplaySlot(int)，0 = SIDEBAR（枚举是 1.13+ 才有的形态）。
+        if (parameterType == int.class || parameterType == Integer.class) {
+            return Integer.valueOf(0);
+        }
+        if (!parameterType.isEnum()) {
             return null;
         }
         Object[] constants = parameterType.getEnumConstants();
@@ -717,7 +724,11 @@ public final class GameBridge {
         if (input == null) {
             return false;
         }
-        Object keys = readField(input, ClassType.CLIENT_INPUT, "keyPresses");
+        // 1.8.9–1.20.1 的 ClientInput 整类不存在：先查表判定，别每 tick 再走一遍
+        // 注定失败的反射解析（MovementInputEvent 每 tick 都会调到这里）。
+        Object keys = mapping.isClassAbsent(ClassType.CLIENT_INPUT)
+                ? null
+                : readField(input, ClassType.CLIENT_INPUT, "keyPresses");
         if (keys != null) {
             Object nextKeys = construct(ClassType.PLAYER_INPUT, forward > 0.0f, forward < 0.0f,
                     strafe > 0.0f, strafe < 0.0f, jump, sneak, sprint);
@@ -880,8 +891,25 @@ public final class GameBridge {
      * 两条路都不可用时返回 null，由调用方明确降级而不是假装发出去。
      */
     private Object messageComponent(String text) {
+        if (text == null) {
+            return null;
+        }
         Object literal = callStaticMapped(ClassType.COMPONENT, "literal", text);
-        return literal != null ? literal : construct(ClassType.TEXT_COMPONENT, text);
+        if (literal != null) {
+            return literal;
+        }
+        // 1.8.9–1.12：IChatComponent 是接口，new 具体实现 ChatComponentText(String)。
+        Object constructed = construct(ClassType.TEXT_COMPONENT, text);
+        if (constructed != null) {
+            return constructed;
+        }
+        // 1.19+/1.20.1：表里缺 literal 时的最后回退——Component.empty().append(text)。
+        Object empty = callStaticMapped(ClassType.COMPONENT, "empty");
+        if (empty != null) {
+            Object appended = callMapped(empty, ClassType.MUTABLE_COMPONENT, "append", text);
+            return appended != null ? appended : empty;
+        }
+        return null;
     }
 
     /** 播放原版声音常量；缺失的版本/声音返回 false。 */
@@ -1149,8 +1177,27 @@ public final class GameBridge {
         return value == null ? 0.0f : value.floatValue();
     }
 
-    /** 实体是否正在使用物品。 */
+    /**
+     * 实体是否正在使用物品。
+     *
+     * <p>1.8.9 没有 {@code isUsingItem}（映射表 absent），逐 tick 反射只会换来一行行
+     * "no overload"。这里先看映射表：明确缺失就只读一次本地回退（1.8.9 的
+     * {@code getItemInUse}/{@code getItemInUseCount}），两者都不可用时返回 false 并只提示一次。
+     */
     public boolean usingItem(Object entity) {
+        boolean livingAbsent = mapping.isMemberAbsent(ClassType.LIVING_ENTITY, "isUsingItem");
+        boolean playerAbsent = mapping.isMemberAbsent(ClassType.PLAYER, "isUsingItem");
+        if (livingAbsent && playerAbsent) {
+            Object inUse = methodAny(entity, new Object[0], "getItemInUse", "getActiveItem");
+            if (inUse != null) {
+                return true;
+            }
+            Number count = number(methodAny(entity, new Object[0], "getItemInUseCount"));
+            warnOnce("usingItem",
+                    "LivingEntity#isUsingItem is unavailable on this version; using-item checks"
+                            + " fall back to getItemInUse (false when absent)");
+            return count != null && count.intValue() > 0;
+        }
         Object result = callMapped(entity, ClassType.LIVING_ENTITY, "isUsingItem");
         if (!(result instanceof Boolean)) {
             result = callMapped(entity, ClassType.PLAYER, "isUsingItem");
@@ -1496,8 +1543,11 @@ public final class GameBridge {
         return hand != null && hand == offHand;
     }
 
-    /** 当前正在使用的物品栈。 */
+    /** 当前正在使用的物品栈；该版本没有 getUseItem 时回退旧入口，都没有则为 null。 */
     public Object usingItemStack(Object entity) {
+        if (mapping.isMemberAbsent(ClassType.LIVING_ENTITY, "getUseItem")) {
+            return methodAny(entity, new Object[0], "getItemInUse", "getActiveItem");
+        }
         return callMapped(entity, ClassType.LIVING_ENTITY, "getUseItem");
     }
 
@@ -1517,8 +1567,16 @@ public final class GameBridge {
         return callMappedStatus(key, ClassType.KEY_MAPPING, "setDown", down);
     }
 
-    /** 读取实体主/副手物品。 */
+    /**
+     * 读取实体主/副手物品。
+     *
+     * <p>1.8.9 没有副手（{@code getOffhandItem} 在表里 absent）：直接返回 null，不每 tick
+     * 反射一次去换一条 "no overload" 日志。
+     */
     public Object heldItem(Object entity, boolean offHand) {
+        if (offHand && mapping.isMemberAbsent(ClassType.LIVING_ENTITY, "getOffhandItem")) {
+            return null;
+        }
         return callMapped(entity, ClassType.LIVING_ENTITY,
                 offHand ? "getOffhandItem" : "getMainHandItem");
     }
@@ -2356,6 +2414,13 @@ public final class GameBridge {
     }
 
     /** 限流日志：前若干次与之后每 {@code 600} 次打印一条，避免热路径刷屏。 */
+    /** 打印一次带 key 的告警（同 key 只打一次），用于「该版本能力缺失」这类静态事实。 */
+    private static void warnOnce(String key, String message) {
+        if (REPORTED_MESSAGES.add(key)) {
+            System.out.println("[nocturne] GameBridge: " + message);
+        }
+    }
+
     private void logThrottled(String message, Throwable cause) {
         long count = logCount.incrementAndGet();
         // 同一条消息只打印一次：映射缺失是**静态事实**，热路径上每个 tick 重试同一次调用会把

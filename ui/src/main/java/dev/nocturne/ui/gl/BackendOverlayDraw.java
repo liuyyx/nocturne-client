@@ -89,13 +89,13 @@ public final class BackendOverlayDraw implements OverlayDraw {
     }
 
     /**
-     * 固定管线（1.8.9–1.12）的整帧 alpha 混合不可靠：真机实测同一帧内遮罩被叠加两次
-     * （25% 落成 ~44%），且状态失效时按不透明绘制，世界会变成一块黑幕。只有现代后端
-     * （gl-core / extractor）才允许模块画整帧遮罩。
+     * 能力位由后端自己声明（{@link UiBackend#reliableAlphaBlend()}），适配器不再按
+     * {@code instanceof GlRenderer} 猜：以前那种写法对任何**未知**后端都是 fail-open，
+     * 新后端一上线就默认拿到"可以画整帧遮罩"的许可。
      */
     @Override
     public boolean reliableAlphaBlend() {
-        return !(backend instanceof GlRenderer);
+        return backend.reliableAlphaBlend();
     }
 
     @Override

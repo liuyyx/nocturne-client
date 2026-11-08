@@ -84,6 +84,11 @@ public final class PlannedBackend implements UiBackend, PlayerModelPreview {
     }
 
     @Override
+    public boolean reliableAlphaBlend() {
+        return delegate.reliableAlphaBlend();
+    }
+
+    @Override
     public String backendName() {
         return delegate.backendName();
     }

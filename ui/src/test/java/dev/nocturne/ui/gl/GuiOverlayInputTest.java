@@ -117,12 +117,50 @@ class GuiOverlayInputTest {
         assertEquals(1, recording.clicks, "松开后的全新点击必须恢复");
     }
 
+    @Test
+    void scaleKeysAreLeftToFocusedTextInput() throws Exception {
+        FakeInput input = new FakeInput();
+        FakeBackend backend = new FakeBackend(0, 0);
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                backend, input, GuiOverlay.KEY_RIGHT_SHIFT);
+        RecordingGui recording = new RecordingGui();
+        Field gui = GuiOverlay.class.getDeclaredField("gui");
+        gui.setAccessible(true);
+        gui.set(overlay, recording);
+        overlay.setOpen(true);
+
+        // 文本输入占用键盘时 = 是输入内容。
+        recording.blockScaleKeys = true;
+        input.keys.add(61); // '='
+        overlay.onFrame();
+        assertEquals(0, backend.scaleOverrideCalls, "输入框聚焦时 = 不得改缩放");
+
+        // 松开输入后按键仍按着：只更新按下沿，不能在交还焦点时补一档。
+        recording.blockScaleKeys = false;
+        overlay.onFrame();
+        assertEquals(0, backend.scaleOverrideCalls, "一直按住的键不能补一档");
+
+        input.keys.remove(61);
+        overlay.onFrame();
+        input.keys.add(61);
+        overlay.onFrame();
+        assertEquals(1, backend.scaleOverrideCalls, "新的按下沿才应缩放");
+        assertEquals(2, backend.scaleValue);
+    }
+
     /** 只记录 OverlayGui 收到的事件，避免把点击坐标和实际模块布局耦合进交接测试。 */
     private static final class RecordingGui implements OverlayGui {
         private boolean open;
         private int clicks;
         private int drags;
         private int releases;
+        /** 模拟"搜索框/绑定行占用键盘"。 */
+        private boolean blockScaleKeys;
+
+        @Override
+        public boolean blocksScaleKeys() {
+            return blockScaleKeys;
+        }
 
         @Override
         public boolean isOpen() {

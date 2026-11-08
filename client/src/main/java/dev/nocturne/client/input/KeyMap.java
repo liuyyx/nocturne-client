@@ -249,12 +249,13 @@ public final class KeyMap {
             case 145: return 71;                  // SCROLLLOCK
             case 157: return 228;                 // RCTRL
             case 184: return 230;                 // RALT
+            case 65406: return NONE;              // ALTGRAPH：SDL 里与 RALT 同一个 scancode，
+                                                  // 猜 230 会让 Right Alt 的绑定永远读不到
             case 192: return 53;                  // GRAVE
             case 220: return 231;                 // RWIN（契约值，AWT 无对应）
             case 222: return 52;                  // APOSTROPHE
             case 524: return 227;                 // WIN（AWT VK_WINDOWS）
             case 525: return 101;                 // APPLICATION（AWT VK_CONTEXT_MENU）
-            case 65406: return 230;               // ALTGRAPH
             default: break;
         }
         // AWT 的 F1..F12 是 112..123，SDL 的 F1..F12 是 58..69（两段都连续，差 54）

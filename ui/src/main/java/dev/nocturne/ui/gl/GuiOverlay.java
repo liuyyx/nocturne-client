@@ -280,8 +280,10 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         // 「关着按住缩放键、再打开界面」会在第一帧被误判成新按下，界面一开就跳一档。
         boolean upRaw = input.keyDown(KEY_SCALE_UP) || input.keyDown(KEY_SCALE_UP_KEYPAD);
         boolean downRaw = input.keyDown(KEY_SCALE_DOWN) || input.keyDown(KEY_SCALE_DOWN_KEYPAD);
-        boolean up = open && upRaw;
-        boolean down = open && downRaw;
+        // 搜索框/绑定行有焦点时，= 与 - 是打字内容；此时只记边沿，不改缩放。
+        boolean usable = open && !gui.blocksScaleKeys();
+        boolean up = usable && upRaw;
+        boolean down = usable && downRaw;
         if (up && !scaleUpWasDown) {
             stepScale(1);
         }

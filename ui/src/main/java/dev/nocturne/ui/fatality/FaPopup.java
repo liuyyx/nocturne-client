@@ -87,7 +87,10 @@ abstract class FaPopup {
 
     /** @return 指针是否在浮层内（已请求关闭的浮层不再接输入） */
     boolean contains(double mx, double my) {
-        return !closing && FaContext.inside(mx, my, x, y, w, h);
+        // 绘制时整层按出现动画上移了 (1 - open) * -4，命中测试必须用同一个矩形，
+        // 否则浮层还在淡入/淡出时点击会落到旁边。
+        float shift = (1.0f - open.value()) * -4.0f;
+        return !closing && FaContext.inside(mx, my, x, y + shift, w, h);
     }
 
     /** @return 是否已完全淡出、可以从列表里移除 */

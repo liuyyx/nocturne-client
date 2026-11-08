@@ -96,6 +96,21 @@ class KeyMapTest {
         assertEquals(KeyMap.NONE, KeyMap.fromSdl(-999));
     }
 
+    /**
+     * AltGr 与右 Alt 在 SDL 里是同一个 scancode（230）。
+     *
+     * <p>表里若把 AWT 的 AltGr 哨兵（65406）也翻译成 230，{@code fromSdl(230)} 会先命中它
+     * （规范表升序，184 在前，但仍会互相冒充）：右 Alt 的绑定读不到，或被 AltGr 顶替。
+     * SDL 无法区分两者，只能让 Right Alt 独占 230，AltGr 在 SDL 侧返回 {@link KeyMap#NONE}。
+     */
+    @Test
+    void altGraphDoesNotStealRightAltInSdl() {
+        assertEquals(230, KeyMap.sdl(KeyMap.VK_RIGHT_ALT), "Right Alt → SDL_SCANCODE_RALT");
+        assertEquals(KeyMap.NONE, KeyMap.sdl(KeyMap.VK_ALT_GRAPH),
+                "SDL 无法区分 AltGr，不能猜同一个 scancode");
+        assertEquals(KeyMap.VK_RIGHT_ALT, KeyMap.fromSdl(230), "scancode 230 只能还原成 Right Alt");
+    }
+
     /** 绑定界面必须能拿到字母、F 键、Insert 与右侧修饰键，而不只是可打印字符。 */
     @Test
     void bindableKeysCoverNonPrintableKeys() {

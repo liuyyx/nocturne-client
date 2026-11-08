@@ -24,6 +24,15 @@ public interface OverlayGui {
         return false;
     }
 
+    /**
+     * 是否应把 {@code =} / {@code -} 让给当前焦点（搜索框、绑定行正在键入）。
+     *
+     * @return 为 true 时输入层不得用这两个键调整缩放
+     */
+    default boolean blocksScaleKeys() {
+        return false;
+    }
+
     /** 在打开与关闭之间切换。 */
     void toggle();
 

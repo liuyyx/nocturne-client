@@ -9,6 +9,8 @@ final class FaKeyRow extends FaRow implements FaKeySink {
 
     private final KeyValue key;
     private boolean listening;
+    /** 拥有本行的界面；绑定结束后用来清掉键盘焦点。 */
+    private FaClickGui gui;
 
     FaKeyRow(KeyValue key) {
         super(key, key.name());
@@ -33,6 +35,7 @@ final class FaKeyRow extends FaRow implements FaKeySink {
             return false;
         }
         listening = true;
+        gui = ctx.gui;
         ctx.gui.focus(this);
         return true;
     }
@@ -43,13 +46,21 @@ final class FaKeyRow extends FaRow implements FaKeySink {
             return false;
         }
         if (keyCode == KeyEvent.VK_ESCAPE) {
-            listening = false;
+            stopListening();
             return true;
         }
         key.set(keyCode == KeyEvent.VK_BACK_SPACE || keyCode == KeyEvent.VK_DELETE
                 ? KeyValue.NONE : keyCode);
-        listening = false;
+        stopListening();
         return true;
+    }
+
+    /** 结束捕获并交还键盘焦点：不清焦点的话同一按键仍会被这行继续吞掉（缩放键也调不了）。 */
+    private void stopListening() {
+        listening = false;
+        if (gui != null) {
+            gui.focus(null);
+        }
     }
 
     @Override

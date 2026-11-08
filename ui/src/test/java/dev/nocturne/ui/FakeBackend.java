@@ -66,6 +66,22 @@ public final class FakeBackend implements UiBackend {
     /** {@link #reliableAlphaBlend()} 的返回值；默认 false（与未知后端一致）。 */
     public boolean reliableAlphaBlend;
 
+    /** {@link #scale()} 的返回值。 */
+    public int scaleValue = 1;
+    /** {@link #setScaleOverride(int)} 被调用的次数。 */
+    public int scaleOverrideCalls;
+
+    @Override
+    public int scale() {
+        return scaleValue;
+    }
+
+    @Override
+    public void setScaleOverride(int scale) {
+        scaleValue = scale;
+        scaleOverrideCalls++;
+    }
+
     @Override
     public boolean reliableAlphaBlend() {
         return reliableAlphaBlend;

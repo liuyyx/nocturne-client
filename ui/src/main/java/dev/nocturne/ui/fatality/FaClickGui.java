@@ -90,6 +90,10 @@ public final class FaClickGui implements OverlayGui {
     private int viewportWidth;
     /** 最近一次 setViewport 收到的设备逻辑高。 */
     private int viewportHeight;
+    /** 上一次真正重算 sw/sh 时用的视口宽；视口变了必须重算，否则分辨率变化后布局仍按旧尺寸。 */
+    private int lastViewportW;
+    /** 上一次真正重算 sw/sh 时用的视口高。 */
+    private int lastViewportH;
     /** 逻辑像素 → 物理像素（用于字形栅格密度）。 */
     private int backendScale = 1;
     /** 字形与光栅纹理的独立密度；可与实际 GUI 逻辑倍率不同。 */
@@ -262,6 +266,16 @@ public final class FaClickGui implements OverlayGui {
         return focus != null && focus.capturing();
     }
 
+    /**
+     * 文本输入或绑定行占用键盘时，{@code =} / {@code -} 属于输入内容，不能拿去改界面缩放。
+     *
+     * @return 是否应把缩放键让给当前焦点
+     */
+    @Override
+    public boolean blocksScaleKeys() {
+        return focus != null || searchActive;
+    }
+
     @Override
     public void setOpen(boolean state) {
         if (this.open == state) {
@@ -331,10 +345,13 @@ public final class FaClickGui implements OverlayGui {
 
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
-        mouseDown = false;
-        if (drag != 0) {
-            drag = 0;
-            saveLayout();
+        if (button == 0) {
+            mouseDown = false;
+            // 只有左键松开才结束拖动：右键松开会打断正在拖的窗口，且每次点击都写盘。
+            if (drag != 0) {
+                drag = 0;
+                saveLayout();
+            }
         }
         for (FaPopup popup : popups) {
             popup.mouseReleased();
@@ -548,7 +565,10 @@ public final class FaClickGui implements OverlayGui {
         float fit = Math.min(1.0f, Math.min((viewportWidth - 16.0f) / FaTheme.DEFAULT_W,
                 (viewportHeight - 16.0f) / FaTheme.DEFAULT_H));
         float next = Math.max(0.3f, fit);
-        if (next == scale && sw > 0.0f) {
+        // 只看 scale 会漏掉"分辨率变了、缩放没变"（例如 1142x700 → 980x600）：
+        // sw/sh 还是旧值，窗口夹取与保存的布局都按旧画布算，看起来就是窗口跑到了屏幕外。
+        boolean viewportChanged = viewportWidth != lastViewportW || viewportHeight != lastViewportH;
+        if (next == scale && sw > 0.0f && !viewportChanged) {
             return;
         }
         if (placed) {
@@ -560,6 +580,8 @@ public final class FaClickGui implements OverlayGui {
         scale = next;
         sw = viewportWidth / scale;
         sh = viewportHeight / scale;
+        lastViewportW = viewportWidth;
+        lastViewportH = viewportHeight;
         if (placed) {
             fitWindow();
         }

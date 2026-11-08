@@ -110,7 +110,9 @@ final class FaListPopup extends FaPopup {
         if (my < y + PAD || my > y + h - PAD) {
             return true;
         }
-        int index = (int) Math.floor((my - y - PAD + scroll) / ITEM_H);
+        // 高亮与文字都画在 scrollMotion 的当前值上；命中必须用同一个偏移，
+        // 否则滚轮后立刻点击会选中目标位置的那一项（比看到的差好几行）。
+        int index = (int) Math.floor((my - y - PAD + scrollMotion.value()) / ITEM_H);
         if (index < 0 || index >= model.size()) {
             return true;
         }

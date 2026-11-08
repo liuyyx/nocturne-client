@@ -7,64 +7,78 @@
 ## 0. 这是什么
 
 JVM **注入式** Minecraft 客户端：同一个 jar 既是注入器（Swing GUI / CLI），也是被注入进游戏的 agent。
+Fabric 形态由同一个 jar 里的 `fabric.mod.json` + `nocturne.mixins.json` 提供（1.21.1 已真机验收）。
 
-- 覆盖 `1.8.9 – 26.3` 共 **66 个 release**，但那是**映射表覆盖**；真机跑过的只有 **1.8.9 / 1.16.5 / 26.3**。
-- 没有模组形态：不产出 `fabric.mod.json` / `mods.toml`，不支持放进 `mods/`。
+- 覆盖 `1.8.9 – 26.3` 共 **66 个 release**，但那是**映射表覆盖**。真机跑过的版本与逐版本验收状态
+  **只**看 `docs/VERSION-MATRIX.md`（历史上跑过 1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.1 / 1.21.4 /
+  1.21.10 / 1.21.11 / 26.2 / 26.3；当前构建的验收格子以该文件的表为准）。
+- 交付 jar 同时带 `fabric.mod.json`（Fabric 通道，1.21.1 真机验收）；**不产出** Forge/NeoForge 元数据。
 - 代码全部中文注释；新代码保持同样风格。
 
 ## 1. 硬规则（违反即错）
 
 | # | 规则 | 为什么 |
 |---|---|---|
-| 1 | 只有注入一条路径，不做模组入口 | 模组路径拿不到 `Instrumentation` 就没有帧钩子，而帧回调是整个客户端的驱动源 |
+| 1 | 主路径是注入（attach / `-javaagent`）；Fabric 模组入口是第二条通道，**只**靠 Mixin 插件手写 ASM 拿钩子。不做 Forge/NeoForge 入口 | 模组路径拿不到 `Instrumentation`；Knot 用 `defineClass` 定义游戏类，`retransform/redefine` 不可靠，Mixin 是唯一能在类定义前拿到字节码的通道 |
 | 2 | 客户端代码只写 **Mojmap 规范名**，**禁止版本分支**（`if (version >= …)`、`instanceof` 分代） | 版本差异全部下沉到每版本一份映射表 JSON |
 | 3 | **运行时零探测**：目标版本由注入器判定并随 attach 参数传入（`mcVersion=`），加载器靠候选名字顺序试 | 探测在隔离类加载器下极不可靠 |
 | 4 | `core/ agent/ client/ ui/ injector/` 一律 **Java 8 字节码**（根脚本 `options.release = 8`），且只用 Java 8 API | 要注入 JVM 8 的 1.8.9；高版本字节码会被 `UnsupportedClassVersionError` 拒 |
-| 5 | 不用 Mixin；ASM 变换**不得** `COMPUTE_FRAMES` | 隔离加载器下 `getCommonSuperClass` 会崩 |
+| 5 | ASM 变换**不得** `COMPUTE_FRAMES`；Mixin 只用于 Fabric 通道，且走 `IMixinConfigPlugin#postApply` 手写 ASM（不用 `@Inject`） | 隔离加载器下 `getCommonSuperClass` 会崩；`@Inject` 必须绑定版本专属形参类型（`GuiGraphics` / `class_332`），`postApply` 只按类名+方法名+描述符匹配 |
 | 6 | 注入进游戏方法的代码**绝不把异常外泄**：转换器失败 `return null`（沿用原字节码），钩子内部 `catch(Throwable)` | 未捕获异常会让游戏崩在任意位置 |
 | 7 | 反射解析游戏类必须走 `GameBridge` / `gameLoader()`，绝不用本模块的类加载器 | Fabric Knot / Forge 用隔离加载器重新加载每份 jar |
 
 ## 2. 构建与验证（下列命令已在本机实测通过）
 
 ```bash
-export JAVA_HOME="C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot"        # 必须 JDK 21
-GRADLE="C:/Users/liuyyx/.gradle/wrapper/dists/gradle-9.2.1-bin/9fgc9dy84duywbml6zqd0l4mo/gradle-9.2.1/bin/gradle.bat"
-
-"$GRADLE" build --console=plain --no-daemon    # 编译 + 单测 + 打包 dist（实测 BUILD SUCCESSFUL）
-"$GRADLE" test  --console=plain --no-daemon    # 仅单测（--rerun-tasks 实测 554 项 = agent 71 /
-                                               # client 225 / ui 147 / core 65 / injector 46）
-python tools/mapping/generate.py --check       # 映射表门禁：陈旧 **或** 描述符与 jar 不符 → exit 1
+export JAVA_HOME="C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot"   # 必须 JDK 21
+gradlew.bat build --console=plain --no-daemon    # 编译 + 单测 + 打包（实测 BUILD SUCCESSFUL）
+gradlew.bat test  --console=plain --no-daemon    # 仅单测（--rerun-tasks 实测 617 项 = agent 79 /
+                                                 # client 269 / ui 153 / core 70 / injector 46，0 失败）
+python tools/mapping/generate.py --check         # 映射表门禁：陈旧 **或** 描述符与 jar 不符 → exit 1
 python tools/mapping/generate.py --check --fast  # 只比文本的快速路径（没装 javap 的机器用）
-python tools/mapping/generate.py --javap       # 只做逐版本 jar 交叉校验
+python tools/mapping/generate.py --javap         # 只做逐版本 jar 交叉校验
 ```
 
-- **没有 gradle wrapper**：`gradlew` / `gradlew.bat` / `gradle/wrapper/` 都不存在，`gradle` 也不在 PATH。
-  上面是本机已解包的 Gradle 9.2.1 发行版；注意 `~/.gradle/wrapper/dists/gradle-9.2.1-bin/` 下
-  **另有一个只有 `.part` 的残缺目录**（`2t0n5ozl…`），用 `*` 通配时可能命中它——写成具体路径最稳。
+- **有 gradle wrapper**：`gradlew` / `gradlew.bat` / `gradle/wrapper/`（Gradle 9.2.1）。但本机 wrapper 缓存
+  只有一个残缺的 `.part`（`~/.gradle/wrapper/dists/gradle-9.2.1-bin/2t0n5ozl…`），`gradlew.bat` 会先联网下载；
+  离线时直接用已解包的发行版：
+  - cmd：`"C:\Users\liuyyx\.gradle\wrapper\dists\gradle-9.2.1-bin\9fgc9dy84duywbml6zqd0l4mo\gradle-9.2.1\bin\gradle.bat" <task>`
+  - Git-Bash：`java -classpath "…/gradle-9.2.1/lib/gradle-launcher-9.2.1.jar" org.gradle.launcher.GradleMain <task>`
+  `gradle` 不在 PATH。
 - 必须先设 `JAVA_HOME=JDK 21`：Gradle 9 自身要求 17+，而本机默认 `JAVA_HOME` 指向
   `C:\Java\jdk8u432-b06`。toolchain 固定 21，靠 `release = 8` 输出旧字节码。
-- 产物：`dist/build/libs/nocturne-<version>.jar`（约 8.4 MB）；`build` 会另拷一份到根 `build/libs/`。
-  双击 `nocturne.bat` 从 `dist/build/libs/` 取**最新** jar（`dir /o-d`），所以别在源码树里散落旧 jar。
-- 运行：`java -jar dist/build/libs/nocturne-*.jar --list-json`（列进程）/
+- 产物是**两个** jar（`dist/build/libs/`）：
+  - `nocturne-<version>.jar`：agent/注入面，全部类 `major ≤ 52`（约 9.4 MB）。
+  - `nocturne-launcher-<version>.jar`：同一份内容 + 37 个 `net/miginfocom/**`（MigLayout，major 55），
+    双击 GUI 用这个；`build` 会把两者拷到根 `build/libs/`。
+  双击 `nocturne.bat` 时**优先取最新 launcher jar**，找不到才退回 agent jar（`dir /o-d`），
+  所以别在源码树里散落旧 jar。
+- 官方二进制：`gradlew.bat :dist:randomizedJar` 调 `tools/randomize/randomize.py` 随机化类名，
+  产出 `nocturne-<version>-randomized.jar`（`-PclassSalt=<seed>` 可复现）。该任务不在默认 `build` 里。
+- 打包闸门：`distJar` 的 `doLast` 硬校验「有 `dev/nocturne/agent/asm.pack`、无展开 ASM」；
+  `verifyJarBytecode`（挂在 `check`，`distJar` 完成后自动跑）再校验「无 major > 52」和
+  「五个模块编译出的每个类都在 jar 里」。任何一条失败都直接让构建红。
+- 运行：`java -jar dist/build/libs/nocturne-launcher-*.jar --list-json`（列进程）/
   `java -jar … --pid=<n>`（注入）。GUI 与 CLI 是同一个入口。
 - 映射表生成器（`tools/mapping/`）：`generate.py` 重写全部表；`--check` 陈旧即 exit 1；
   `--check` 默认已包含 jar 交叉校验（`--fast` 退回只比文本）；`--only <ver>` + `--report` 打 absent 清单。
-  absent 条目现在带 `absentReason`（`verified` / `ambiguous` / `unverified`）：只有 `verified` 才算
+  absent 条目带 `absentReason`（`verified` / `ambiguous` / `unverified`）：只有 `verified` 才算
   "本版本确实没有"，`ambiguous`（生成器择优失败）会让 `--check --javap` 直接失败。
-  只用 Python 3.12 stdlib；`tools/mapping/cache/` 已含 66 个 client jar，**离线可跑**。
-- **不在 Gradle 构建内**：`launcher/`（.NET 8 WPF，`dotnet build`）、`tools/mapping/`（Python）、
-  `vendor/`（参考快照）。改它们不影响 `gradle build`。
+  `member-aliases.txt` 处理「改名」而不写 absent；`requirements.txt` 的 `#成员!field` 强制按字段登记。
+  只用 Python 3.12 stdlib；`tools/mapping/cache/` 已含全部 66 个 client jar，**离线可跑**。
+- **不在 Gradle 构建内**：`launcher/`（.NET 8 WPF，`dotnet build`）、`tools/mapping/`、
+  `tools/randomize/`（Python）、`vendor/`（参考快照）。改它们不影响 `gradlew build`。
 
 ## 3. 模块地图
 
 | 模块 | 职责 | 关键类 | 依赖 |
 |---|---|---|---|
 | `core/` | 进程发现、三策略 attach 链（`jdk-api` → `windows-native` / `unix-domain`）、载荷加解密、attach 参数组装、CLI 入口 | `Nocturne`（`main`）、`Attacher`、`AgentOptions`、`PayloadPack`/`PayloadTool` | gson |
-| `agent/` | 被注入侧：`premain`/`agentmain`、ASM 子加载器、3 个转换器、bootstrap 桥 | `NocturneAgent`、`EmbeddedAsmLoader`、`transform/{FrameHook,CallbackHook,InputBlock}Transformer`、`OverlayBootstrap` | client, ui, core, ASM 9.8 |
+| `agent/` | 被注入侧：`premain`/`agentmain`/`startAsMod`、ASM 子加载器、12 个转换器、Mixin 插件、bootstrap 桥 | `NocturneAgent`、`EmbeddedAsmLoader`、`transform/*Transformer`、`mixin/NocturneMixinPlugin`、`OverlayBootstrap` | client, ui, core, ASM 9.8（Mixin / Fabric loader / MC intermediary 仅 compileOnly） |
 | `client/` | 事件总线、模块/值框架、映射层、反射桥、渲染契约、runtime | `NocturneClient`、`EventBus`、`Module`/`ModuleRegistry`、`Mapping`/`ObfuscatedMapping`、`GameBridge`、`runtime/*` | gson |
 | `ui/` | 自绘 ClickGUI + 绘制后端（`GlRenderer`/`ModernRenderer`/`ExtractorRenderer` 三形态）+ 字形图集 + 输入 | `Renderer`/`UiBackend`、`gl/{GlRenderer,ModernRenderer,ExtractorRenderer}`、`fatality/FaClickGui`、`text/FontRegistry` | client |
 | `injector/` | 注入器 Swing GUI，提供 jar 的 `Main-Class` | `InjectorApp`、`MainWindow`、`KeyCodes` | core, FlatLaf, MigLayout, gson |
-| `dist/` | 无源码的聚合模块：自定义 `distJar` 合并五者 | `dist/build.gradle.kts` | 全部 |
+| `dist/` | 无源码的聚合模块：`distJar` + `launcherJar` + `randomizedJar` + `verifyJarBytecode` | `dist/build.gradle.kts` | 全部 |
 
 依赖是**森林**：`injector → core`；`agent → client, ui, core`；`ui → client`；`dist → 全部`。
 方向恒为 `ui → client`，**client 不得 import ui 的类型**（UI 通过 `OverlayDraw`/`HudSink`/`FrameListener` 反向实现）。
@@ -75,6 +89,7 @@ python tools/mapping/generate.py --javap       # 只做逐版本 jar 交叉校�
 |---|---|
 | attach / `-javaagent` | `MANIFEST: Premain-Class` = `Agent-Class` = `dev.nocturne.agent.NocturneAgent` |
 | 双击 / `java -jar` | `Main-Class: dev.nocturne.injector.InjectorApp`；参数含 `--list-json` / `--pid=` 时**在启动 Swing 之前**转发给 `dev.nocturne.core.Nocturne` |
+| Fabric mod | `fabric.mod.json` 的 `client` entrypoint = `dev.nocturne.agent.mod.NocturneModEntry`；`mixins` = `nocturne.mixins.json`（`NocturneMixinPlugin#postApply` 手写 ASM）。版本从 Fabric 的 Minecraft 元数据取，转交 `NocturneAgent.startAsMod` |
 | WPF 壳 | `launcher/`，只把 jar 当子进程驱动（`--list-json` / `--pid=`），不链接 jar 内任何类型 |
 
 绘制后端按栈选择（逻辑在 `agent/OverlayBootstrap`）：
@@ -91,8 +106,16 @@ python tools/mapping/generate.py --javap       # 只做逐版本 jar 交叉校�
 
 ### 4.1 bootstrap 层（本仓库最容易踩、症状最迷惑的坑）
 
-- 只有 4 个类被放进 **bootstrap** 搜索路径：`client/.../runtime/{FrameDispatcher,FrameListener,InputBlock,ScrollState}`，
-  由 `NocturneAgent.installBootstrapBridge` 写临时 jar + `appendToBootstrapClassLoaderSearch` 导出。
+- bootstrap 搜索路径里的类由 `NocturneAgent.installBootstrapBridge` 写临时 jar +
+  `appendToBootstrapClassLoaderSearch` 导出，共 10 个条目：
+  - `client/.../runtime/{FrameDispatcher,FrameListener,InputBlock,ScrollState}`；
+  - `dev/nocturne/agent/GuiDrawHook`（普通类，绘制钩子）；
+  - `dev/nocturne/bootstrap/{KeySink,GameplaySink,LegacyMouse}` 与
+    `dev/nocturne/client/bootstrap/GameplayHook`（含内部 `Sink`）——这 5 个以**资源**形式随 jar
+    （`nocturne-bootstrap/`，由 dist 的 `bridgeKeySink` 生成），交付 jar 里同名类被显式排除。
+  任何一份被 Knot 再定义一次，静态字段就分裂。
+- 桥 jar 内嵌 `nocturne-bootstrap/bridge.version`：安装前比对**已生效**的桥版本，不一致直接拒绝安装
+  （bootstrap 是 first-wins，旧类会留着，混装两份构建必炸），并提示重启游戏。
 - 它们**必须只依赖 JDK**（一旦 import gson/ASM 就会和游戏自带版本打架），且**只能**用
   `Class.forName(name, true, null)` 取用。
 - 症状：Fabric 的 `KnotClassLoader` 会把每份 jar 各加载一遍，静态字段各存一份——
@@ -119,8 +142,15 @@ python tools/mapping/generate.py --javap       # 只做逐版本 jar 交叉校�
   绘制钩子：`Hud.extractRenderState` / `Screen.extractRenderStateWithTooltipAndSubtitles`；
   输入短路：`KeyboardHandler#keyPress`、`KeyMapping#setAll|set|click`、`ContainerEventHandler#mouseClicked`、
   `MouseHandler#grabMouse|turnPlayer|onScroll`、1.8.9/1.12.2 的 `MouseHelper#mouseXYChange` 与
-  `Inventory#changeCurrentItem`；
+  `Inventory#changeCurrentItem`、`Minecraft#startAttack|startUseItem`；
+  世界钩子：`EntityRenderDispatcher#shouldRender|render`、`BlockRenderDispatcher#renderBatched`、
+  `Camera#getMaxZoom`、`LocalPlayer`/`Connection` 的 tick/发包入口；
   SDL 滚轮：`SDLEventHandler#handleMouseWheelEvent`。
+- **Fabric 通道**走 Mixin：`nocturne.mixins.json` 声明 4 个空壳 mixin（Screen/Hud/KeyboardInput/MouseInput），
+  真正改写由 `NocturneMixinPlugin#postApply` 用 ASM 完成；agent 形态下由 `Mixins.addConfiguration`
+  （`MixinEnvironment.addConfiguration` 作兜底）注册，mod 形态下由 `fabric.mod.json` 在 `DEFAULT` 阶段前交给 loader。
+  Mixin **不处理已加载的类**：agent 形态只在 `-javaagent` 启动期生效，运行中 attach 会静默跳过。
+  `@Inject` 不要用——它的方法签名绑定版本专属形参类型。
 - `ClassWriter(reader, COMPUTE_MAXS)` + `reader.accept(visitor, 0)` 保留原 `StackMapTable`；
   插入**分支**的转换器（`InputBlockTransformer`）必须手写一条 `F_NEW` 完整 frame。
 - 末尾钩子**不得读取局部变量**：带 `StackMapTable` 的 `RETURN` 可能把 `this`/形参槽裁成 `top`
@@ -135,7 +165,12 @@ python tools/mapping/generate.py --javap       # 只做逐版本 jar 交叉校�
 - `dist` jar **不得**出现展开的 `org/objectweb/asm/**`（Knot 会加载出第二份 ASM → `VerifyError`）；
   ASM 只以加密载荷 `dev/nocturne/agent/asm.pack` 存在，由 `dist` 的 `packAsmPayload` 调用
   `dev.nocturne.core.pack.PayloadTool asm-pack` 生成，`distJar.doLast` 会**硬失败**校验这两条。
-- `module-info.class` 必须排除，否则以该 jar 为 classpath 的编译会报「程序包不存在」。
+- `module-info.class` 与 `META-INF/versions/**` 必须排除，否则以该 jar 为 classpath 的编译会报
+  「程序包不存在」，且 Java 8 目标会撞上高版本类。
+- `net/miginfocom/**`（MigLayout，major 55）只进 `nocturne-launcher-*.jar`，**不进** agent jar：
+  注入进 1.8.9 的类必须全部 ≤ 52。
+- `fabric.mod.json` 与 `nocturne.mixins.json` **随交付 jar**（Fabric 通道）；`verifyJarBytecode`
+  另外校验「五个模块编译出的每个类都在 jar 里」，漏包会在构建期红。
 - 载荷密钥（`PayloadKey` 的种子）写在代码里，只提高零成本静态扫描门槛，**不是**对抗定向逆向的防护。
 
 ### 4.5 每帧执行的东西
@@ -201,9 +236,11 @@ Chams 使用 `EntityRenderDispatcher` 的实体首参回调；Xray 使用 `Block
 2. `python tools/mapping/generate.py --report` 看 absent 清单。
 3. legacy 版本（1.8.9 / 1.12.2）改 `aliases-<version>.toml` 的桥接规则；
    modern 版本以官方映射为准——真改名就保持 absent，只有**移动了命名空间**才改 `namespaces.py`。
+   已知的改名链写 `member-aliases.txt`；同名方法/字段并存时在 `requirements.txt` 用 `#成员!field`
+   强制按字段登记。
 4. 重跑 `--check` / `--javap`，并确认 `--report` 里你关心的成员干净。
    `--check` 现在会连 jar 校验一起跑（`--fast` 才是纯文本比较）；只比文本时它**不保证名字真的存在**，
-改过别名或需求后不要用 `--fast` 当门禁。
+   改过别名或需求后不要用 `--fast` 当门禁。
 5. 静态常量必须映射到真实持有类：效果常量使用 `MOB_EFFECTS`，不能挂到 `MOB_EFFECT` 上；
    旧映射可以把两种规范类映射到同一运行时类，但不能把别的类的字段名写进效果类型。
 
@@ -211,6 +248,8 @@ Chams 使用 `EntityRenderDispatcher` 的实体首参回调；Xray 使用 `Block
 
 目标方法名在 `NocturneAgent` 里硬编码；同时要考虑：描述符、插入位置（开头/末尾）、
 失败语义（未命中返回 `null`）、以及是否需要新的 bootstrap 层状态。
+Fabric 通道的钩子还要在 `nocturne.mixins.json` / `NocturneMixinPlugin` 里加目标（或复用 `autoApply`），
+并确认 `shouldApplyMixin` 不会把它在 agent 形态下误启用。
 
 ### 5.5 新增绘制能力
 
@@ -231,7 +270,8 @@ SDL 世代**鼠标取游戏自己的事件态**（`MouseHandler.xpos/ypos` + `ac
 
 - 单测：JUnit 5，位置 `<module>/src/test/java/…`；`ui` 用手写假后端（`FakeBackend` / `FakeGl`）跑，不需要真 GL。
 - 结论只有两种状态：**实测通过** / **未验证**。禁止写「应该能行」「大概率可用」。
-- 真机验收（1.8.9 / 1.16.5 / 26.3）的结论记进 `docs/VERSION-MATRIX.md`，涉及的日志放 `tmp/`（已 gitignore）。
+- 真机验收的版本、结论与证据记进 `docs/VERSION-MATRIX.md`（每格要求：注入成功 → 日志行 + 截图），
+  涉及的日志放 `tmp/`（已 gitignore）。
 - **每做完一个大项立刻 `git commit` + `git push`**：真机验证的结论只认已 push 的提交。
 - `tmp/` 是草稿区（launch 脚本、探针、现场日志），不是产品代码。
 
@@ -249,9 +289,13 @@ SDL 世代**鼠标取游戏自己的事件态**（`MouseHandler.xpos/ypos` + `ac
 ## 8. 当前缺口（不要假装已实现）
 
 - Linux/macOS 的 attach 通道（`PosixAttachStrategy` + `attach_unix.c`）只做过编译校验与单测，**未实机**。
-- 3D 玩家预览只有占位卡片（映射表缺实体渲染面，26.x 又不能自建离屏 framebuffer）。
+- 模组形态只有 Fabric 一条（`fabric.mod.json` + Mixin）；Forge/NeoForge 入口不存在。
+- 3D 玩家预览已接游戏原生库存人物渲染入口（1.8.9–1.14.4 固定管线、1.15–1.19.3 PoseStack、1.20+ GuiGraphics），
+  但**未逐版本真机验收**；SDL 仍只走游戏绘制队列。
 - 1.14–1.14.3 的 StorageEsp、1.9–1.14.3 的 `ClientLevel#getBlockState` 面缺失（对应功能降级）。
-- 新 Fatality 界面只有**离屏光栅**验证，真机复验未做；旧界面已整体删除，HUD/HUD 编辑器不再存在
-  （`GuiOverlay` 已提供新的文本/多行 HUD，不包含旧编辑器）。
+- 1.21.5–26.3 的 Chams / 部分 Xray：`EntityRenderDispatcher#render`、`BlockRenderDispatcher#renderBatched`
+  找不到可织入的描述符时显示 `unavailable`，Xray 只画矿框（日志显式打印，不静默假装生效）。
+- 新 Fatality 界面已删除旧 UI 库；HUD/HUD 编辑器不再存在（`GuiOverlay` 提供新的文本/多行 HUD，
+  不包含旧编辑器）。逐版本真机验收格子见 `docs/VERSION-MATRIX.md`。
 - 世界覆盖层已铺：ESP / Tracers / NameTags / ItemEsp / Trajectories / StorageEsp / Search；
-  Chams 已接实体渲染回调，Xray 已接方块渲染门控。
+  Chams 已接实体渲染回调，Xray 已接方块渲染门控（26.1+ 见上）。

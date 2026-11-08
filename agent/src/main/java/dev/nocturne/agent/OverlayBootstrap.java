@@ -54,6 +54,9 @@ public final class OverlayBootstrap implements FrameListener {
      */
     private static final int MAX_ATTEMPTS = 600;
 
+    /** bootstrap 层的一次性安装令牌：同一个 JVM 只允许注册一个 OverlayBootstrap。 */
+    private static final String INSTALL_CLAIM = "overlay-bootstrap";
+
     /**
      * 等"游戏主类实例可用"的尝试上限（按 60fps 约 2 秒）。
      *
@@ -132,6 +135,13 @@ public final class OverlayBootstrap implements FrameListener {
      */
     public static void install(ClassLoader gameLoader, Instrumentation instrumentation, int toggleKey,
                                boolean openGuiOnInstall) {
+        // 连续两次注入（CLI 一次、GUI 再一次；或 Fabric 把 agent jar 重新定义一份）会各注册一个
+        // OverlayBootstrap：两套 onFrame 抢着安装、两套监听器重复绘制。令牌放在 bootstrap 层的
+        // FrameDispatcher 里，两份 OverlayBootstrap 看到的是同一个。
+        if (!NocturneRuntime.claimInstall(INSTALL_CLAIM)) {
+            log("overlay bootstrap already registered in this JVM; skipping duplicate install");
+            return;
+        }
         // 绘制上下文汇必须注册到 **bootstrap 层**（见 FrameDispatcher 的说明）：26.x 的绘制钩子由
         // 游戏的隔离加载器解析，而本类由 agent 的加载器加载——同一个类有两份，静态字段互不可见。
         // 早先钩子直接调 setDrawContext，写进的是空副本，界面"已打开"却一个像素都不画（实测）。
@@ -775,6 +785,7 @@ public final class OverlayBootstrap implements FrameListener {
 
     /** 统一的日志输出，带 {@code [nocturne]} 前缀便于在游戏日志中检索。 */
     private static void log(String message) {
-        System.out.println("[nocturne] " + message);
+        // 1.8.9 的 stdout 不进 logs/latest.log：走 AgentLog（优先 Log4j2，失败回退 stdout）。
+        AgentLog.info(message);
     }
 }

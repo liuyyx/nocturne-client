@@ -182,7 +182,14 @@ public final class NocturneAgent {
         // 帧钩子注入的调用由**游戏的类加载器**解析，它看不到 agent jar：不先把最小类集推到
         // bootstrap 层，钩子一触发就是 NoClassDefFoundError 崩游戏（26.3 实测如此）。
         activeInstrumentation = instrumentation;
-        installBootstrapBridge(instrumentation);
+        if (!installBootstrapBridge(instrumentation)) {
+            // fail-closed：没有 bootstrap 桥，注册转换器等于把必然 NoClassDefFoundError 的调用
+            // 织进游戏。撤回 STARTED 让下一次（修好环境后）注入仍能重试，本次就此停手。
+            STARTED.set(false);
+            log("bootstrap bridge unavailable; aborting startup without registering any"
+                    + " transformer (fix the cause, restart the game, re-attach)");
+            return;
+        }
         // Fabric 的隔离加载器会**拦截**来自未"暴露" jar 的类加载请求（直接抛 NoClassDefFoundError，
         // 而不是委托父加载器），因此还要把 agent jar 交给它——否则帧钩子一触发就崩游戏。
         exposeAgentJarToGameLoader(instrumentation);
@@ -311,14 +318,38 @@ public final class NocturneAgent {
      *
      * <p>只导出这两个类：它们不引用 ASM/gson 等第三方库，放进 bootstrap 不会与游戏的依赖
      * 产生版本冲突（若把整个 agent jar 推上去，游戏自己的 gson 等会被我们的版本顶掉）。
+     *
+     * <p><b>fail-closed</b>：桥装不上（临时目录不可写、bootstrap 追加被拒）时返回 {@code false}，
+     * 调用方**不得**继续注册转换器——那样注入的调用必然 NoClassDefFoundError 崩游戏。
+     *
+     * <p><b>版本闸门</b>：桥 jar 内嵌 {@code nocturne-bootstrap/bridge.version}。bootstrap 层是
+     * first-wins：同一进程里已有旧 nocturne 注入过时，新 jar 的类根本不会再被定义。因此安装前先
+     * 读已生效桥版本，与本次 agent 的构建版本比对；不一致就硬告警并拒绝安装（提示重启游戏），
+     * 绝不在「新旧类混装」的状态下继续。
+     *
+     * @param instrumentation 插桩句柄；{@code null} 时无事可做，按成功返回
+     * @return 桥已就绪（或本来就已就绪）时为 {@code true}；失败时为 {@code false}
      */
-    private static void installBootstrapBridge(Instrumentation instrumentation) {
+    static boolean installBootstrapBridge(Instrumentation instrumentation) {
         if (instrumentation == null) {
-            return;
+            return true;
         }
         if (bootstrapBridgeInstalled) {
             log("bootstrap bridge already installed; skipping repeat");
-            return;
+            return true;
+        }
+        String version = bridgeVersion();
+        String liveVersion = installedBridgeVersion();
+        if (!bridgeVersionMatches(liveVersion, version)) {
+            // 硬告警：这是「旧 jar 已被注入过、bootstrap 里是另一份类」的确定信号。
+            log("bootstrap bridge VERSION MISMATCH: already installed="
+                    + (liveVersion == null || liveVersion.isEmpty()
+                            ? "<unversioned/older build>" : liveVersion)
+                    + ", this agent=" + version
+                    + ". Refusing to install a second, incompatible bridge jar (first-wins would"
+                    + " keep the old classes and mix both builds). Restart Minecraft and attach"
+                    + " again.");
+            return false;
         }
         // 资源路径 → bootstrap 里的目标内部名。bootstrap 独有的类只能以资源形式随包
         // （见 dist 的 bridgeKeySink），交付 jar 里没有它们，Knot 因此拿不到第二份。
@@ -342,10 +373,33 @@ public final class NocturneAgent {
                 {"nocturne-bootstrap/GameplayHook$Sink.class",
                         "dev/nocturne/client/bootstrap/GameplayHook$Sink.class"},
         };
-        java.nio.file.Path jar = null;
+        java.nio.file.Path jar;
         try {
             jar = java.nio.file.Files.createTempFile("nocturne-bridge", ".jar");
             jar.toFile().deleteOnExit();
+        } catch (Throwable t) {
+            // 只读/不可用的临时目录：直接 fail-closed，不往下注册任何东西。
+            log("bootstrap bridge failed (" + t + "); transformers will not be registered");
+            return false;
+        }
+        return writeBridgeJar(instrumentation, jar, entries, version);
+    }
+
+    /**
+     * 把桥类集与版本资源写进 jar，并挂到 bootstrap 搜索路径。
+     *
+     * <p>包可见：测试可以传入只读/不存在的路径来钉住 fail-closed 行为，也可以打开生成的 jar
+     * 检查 {@code nocturne-bootstrap/bridge.version} 是否与本次构建版本一致。
+     *
+     * @param instrumentation 插桩句柄
+     * @param jar             目标 jar 路径（由调用方负责创建/清理临时文件）
+     * @param entries         「资源路径 → bootstrap 内部名」对照表
+     * @param version         本次构建版本，写进版本资源
+     * @return 写成功且已追加到 bootstrap 搜索路径时为 {@code true}
+     */
+    static boolean writeBridgeJar(Instrumentation instrumentation, java.nio.file.Path jar,
+                                  String[][] entries, String version) {
+        try {
             try (java.util.zip.ZipOutputStream out =
                          new java.util.zip.ZipOutputStream(java.nio.file.Files.newOutputStream(jar))) {
                 for (String[] entry : entries) {
@@ -365,6 +419,11 @@ public final class NocturneAgent {
                         out.closeEntry();
                     }
                 }
+                // 版本资源：下一次注入（同进程、另一份 agent 类）靠它判断 bootstrap 里
+                // 已生效的是哪个构建。没有它就只能靠 first-wins 碰运气。
+                out.putNextEntry(new java.util.zip.ZipEntry(BRIDGE_VERSION_ENTRY));
+                out.write((version + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.closeEntry();
             }
             instrumentation.appendToBootstrapClassLoaderSearch(
                     new java.util.jar.JarFile(jar.toFile()));
@@ -386,10 +445,72 @@ public final class NocturneAgent {
                 log("system search path: skipped (" + ignored + ")");
             }
             bootstrapBridgeInstalled = true;
-            log("bootstrap bridge installed: " + entries.length + " classes from " + jar.getFileName());
+            log("bootstrap bridge installed: " + (entries.length + 1) + " entries (version "
+                    + version + ") from " + jar.getFileName());
+            return true;
         } catch (Throwable t) {
-            log("bootstrap bridge failed: " + t);
+            // fail-closed：桥不可用时必须让调用方停止注册转换器。
+            log("bootstrap bridge failed (" + t + "); transformers will not be registered");
+            return false;
         }
+    }
+
+    /**
+     * 本次 agent 的构建版本。
+     *
+     * @return 清单 {@code Implementation-Version}；没有清单（测试/classes 目录）时返回 {@code "dev"}
+     */
+    static String bridgeVersion() {
+        try {
+            String version = NocturneAgent.class.getPackage().getImplementationVersion();
+            if (version != null && !version.trim().isEmpty()) {
+                return version.trim();
+            }
+        } catch (Throwable ignored) {
+            // 无包信息：按开发构建处理。
+        }
+        return "dev";
+    }
+
+    /**
+     * 读取 bootstrap 层已生效的桥版本。
+     *
+     * @return 已装过桥时的版本文本（老构建没有版本资源时为空串）；从未装过返回 {@code null}
+     */
+    static String installedBridgeVersion() {
+        Class<?> dispatcher;
+        try {
+            // 只从 bootstrap 取：能在这里找到 FrameDispatcher，就说明之前某次注入已经装过桥。
+            dispatcher = Class.forName("dev.nocturne.client.runtime.FrameDispatcher", false, null);
+        } catch (Throwable neverInstalled) {
+            return null;
+        }
+        try (java.io.InputStream in =
+                     dispatcher.getResourceAsStream("/" + BRIDGE_VERSION_ENTRY)) {
+            if (in == null) {
+                return "";
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(32);
+            byte[] buffer = new byte[256];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            return new String(out.toByteArray(), java.nio.charset.StandardCharsets.UTF_8).trim();
+        } catch (Throwable unreadable) {
+            return "";
+        }
+    }
+
+    /**
+     * 已生效桥版本与本次 agent 版本是否兼容。
+     *
+     * @param installedVersion {@link #installedBridgeVersion()} 的结果；{@code null}=从未装过
+     * @param currentVersion   本次 agent 的构建版本
+     * @return 从未装过，或版本完全相同，才算兼容
+     */
+    static boolean bridgeVersionMatches(String installedVersion, String currentVersion) {
+        return installedVersion == null || installedVersion.equals(currentVersion);
     }
 
     /**
@@ -1093,6 +1214,14 @@ public final class NocturneAgent {
     private static volatile Instrumentation activeInstrumentation;
     /** bootstrap 桥是否已装成功：失败重试时不得重复导出/追加搜索路径。 */
     private static volatile boolean bootstrapBridgeInstalled;
+
+    /** 桥 jar 内的版本资源路径；用于阻止「同进程新旧 jar 混装」（见 installBootstrapBridge）。 */
+    static final String BRIDGE_VERSION_ENTRY = "nocturne-bootstrap/bridge.version";
+
+    /** 测试用：清掉「桥已装」标记，使下一次 installBootstrapBridge 真正执行。 */
+    static void resetBootstrapBridgeForTests() {
+        bootstrapBridgeInstalled = false;
+    }
     /** 帧钩子注册是否已完成（含"判定为 SDL 栈、不注册"的终态结论）。 */
     private static volatile boolean frameHookInstalled;
     /** 叠加层是否已完成安装（含"无 Instrumentation、已放弃"的终态结论）。 */
@@ -3444,6 +3573,7 @@ public final class NocturneAgent {
 
     /** 统一的日志输出，统一加 {@code [nocturne]} 前缀，便于在游戏日志中检索。 */
     private static void log(String message) {
-        System.out.println("[nocturne] " + message);
+        // 1.8.9 的 stdout 不进 logs/latest.log：走 AgentLog（优先 Log4j2，失败回退 stdout）。
+        AgentLog.info(message);
     }
 }

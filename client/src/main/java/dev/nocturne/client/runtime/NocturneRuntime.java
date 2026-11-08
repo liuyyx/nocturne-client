@@ -51,6 +51,8 @@ public final class NocturneRuntime {
     private static Method killMethod;
     /** {@code FrameDispatcher.isKilled()}；未解析时为 null。 */
     private static Method killedStateMethod;
+    /** {@code FrameDispatcher.claimInstall(String)}；未解析时为 null（旧桥没有它）。 */
+    private static Method claimInstallMethod;
 
     /** 工具类，禁止实例化。 */
     private NocturneRuntime() {
@@ -121,6 +123,12 @@ public final class NocturneRuntime {
             }
             killMethod = dispatcher.getMethod("kill");
             killedStateMethod = dispatcher.getMethod("isKilled");
+            try {
+                claimInstallMethod = dispatcher.getMethod("claimInstall", String.class);
+            } catch (NoSuchMethodException older) {
+                // 旧桥（没有安装令牌）：claimInstall 退化为「总是允许」，行为与旧版一致。
+                claimInstallMethod = null;
+            }
             return true;
         } catch (Throwable t) {
             System.out.println("[nocturne] bootstrap dispatcher unavailable: " + t);
@@ -194,6 +202,29 @@ public final class NocturneRuntime {
             return count instanceof Number ? ((Number) count).intValue() : 0;
         } catch (Throwable t) {
             return 0;
+        }
+    }
+
+    /**
+     * 尝试占用 bootstrap 层的安装令牌（跨加载器副本共享）。
+     *
+     * <p>用于「同一个 JVM 里连续两次注入只注册一份叠加层」：令牌若放在 agent 侧静态字段，
+     * Fabric 会把它重新定义成另一份，两边各注册一次。
+     *
+     * @param key 令牌名
+     * @return 本次是第一个占用者时为 {@code true}；分发器不可用或旧桥没有令牌时也返回
+     *         {@code true}（无从去重，保持旧行为而不是让叠加层装不上）
+     */
+    public static boolean claimInstall(String key) {
+        if (!bindDispatcher() || claimInstallMethod == null) {
+            return true;
+        }
+        try {
+            Object result = claimInstallMethod.invoke(null, key);
+            return !(result instanceof Boolean) || (Boolean) result;
+        } catch (Throwable t) {
+            System.out.println("[nocturne] claimInstall failed: " + t);
+            return true;
         }
     }
 

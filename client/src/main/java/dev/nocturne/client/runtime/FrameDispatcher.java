@@ -25,6 +25,37 @@ public final class FrameDispatcher {
     /** 是否已自销毁（{@link #clear()}）：置位后分发立刻停，哪怕还在遍历旧快照。 */
     private static volatile boolean cleared;
 
+    /**
+     * 一次性安装令牌：跨加载器副本共享「某个安装动作已经做过」。
+     *
+     * <p>同一次点击可能触发两次注入（先 CLI 再 GUI，或 Fabric 把 agent jar 再定义一份），
+     * 两侧各注册一个 {@code OverlayBootstrap} 就会有两套 listener 抢着安装/绘制。令牌必须放在
+     * 本类（bootstrap 层唯一副本）里，agent 侧的静态字段在 Fabric 下会被重新定义成另一份。
+     */
+    private static final java.util.Set<String> INSTALL_CLAIMS =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
+     * 尝试占用一个安装令牌。
+     *
+     * @param key 令牌名；{@code null} 视为占用失败
+     * @return 本次调用是第一个占用者时为 {@code true}
+     */
+    public static boolean claimInstall(String key) {
+        return key != null && INSTALL_CLAIMS.add(key);
+    }
+
+    /**
+     * 释放安装令牌（安装失败/确定放弃时使用，让下一次注入可以重试）。
+     *
+     * @param key 令牌名；不存在时无副作用
+     */
+    public static void releaseClaim(String key) {
+        if (key != null) {
+            INSTALL_CLAIMS.remove(key);
+        }
+    }
+
     /** 每帧回调的动作集合。写时复制列表，使帧线程遍历期间可安全增删。 */
     private static final CopyOnWriteArrayList<Runnable> LISTENERS =
             new CopyOnWriteArrayList<Runnable>();
@@ -322,6 +353,7 @@ public final class FrameDispatcher {
         restoreShutdownActionsOnGameThread(500L);
         SHUTDOWN_ACTIONS.clear();
         LISTENERS.clear();
+        INSTALL_CLAIMS.clear();
         DRAW_CONTEXT_SINK = null;
         FRAME_TASKS.clear();
     }

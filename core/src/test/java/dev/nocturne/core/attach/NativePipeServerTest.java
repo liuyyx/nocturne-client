@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class NativePipeServerTest {
 
     /** 统计调用的假后端：不加载 native。 */
-    private static final class CountingBackend implements NativePipeServer.Backend {
+    private static class CountingBackend implements NativePipeServer.Backend {
         final AtomicInteger awaits = new AtomicInteger();
         final AtomicInteger reads = new AtomicInteger();
         final AtomicInteger closes = new AtomicInteger();
@@ -95,5 +95,31 @@ class NativePipeServerTest {
 
         assertThrows(IOException.class, () -> server.awaitConnection(10L));
         assertEquals(0, backend.awaits.get());
+    }
+
+    /** 连接超时 = 投递结果未知：请求可能已在目标队列里，调用方不得换策略重放。 */
+    @Test
+    void acceptTimeoutReportsUnknownDelivery() {
+        CountingBackend backend = new CountingBackend() {
+            @Override
+            public int awaitConnection(long handle, long timeoutMs) {
+                return 1460; // ERROR_TIMEOUT
+            }
+        };
+        NativePipeServer server = new NativePipeServer(0x30L, backend);
+        assertThrows(DeliveryUnknownException.class, () -> server.awaitConnection(10L));
+    }
+
+    /** 读超时同样是结果未知（目标可能已经把 agent 装上了）。 */
+    @Test
+    void readTimeoutReportsUnknownDelivery() {
+        CountingBackend backend = new CountingBackend() {
+            @Override
+            public int readPipe(long handle, byte[] buffer, int offset, int length) {
+                return -1460; // ERROR_TIMEOUT 取反
+            }
+        };
+        NativePipeServer server = new NativePipeServer(0x40L, backend);
+        assertThrows(DeliveryUnknownException.class, () -> server.input().read(new byte[4], 0, 4));
     }
 }

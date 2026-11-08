@@ -65,6 +65,9 @@ public final class PosixAttachStrategy implements AttachStrategy {
         try {
             attachVia(primary, pid, agentJar, options);
             return;
+        } catch (DeliveryUnknownException unknown) {
+            // 请求已写进主套接字（目标可能已加载 agent）：不能再换 /tmp 重放，否则双注入。
+            throw unknown;
         } catch (IOException e) {
             failure = e;
         }
@@ -89,7 +92,18 @@ public final class PosixAttachStrategy implements AttachStrategy {
         try {
             PosixAttachNative.write(fd, AttachProtocol.encodeLoad(agentJar.getAbsolutePath(),
                     options, false));
-            String reply = readReply(fd);
+            String reply;
+            try {
+                reply = readReply(fd);
+            } catch (DeliveryUnknownException unknown) {
+                throw unknown;
+            } catch (IOException transport) {
+                // 请求已经写进目标监听器，读回复却失败（对端 RST、读超时等）：目标可能已经
+                // 加载了 agent。绝不能落到 /tmp 再重放一次。
+                throw new DeliveryUnknownException("attach request was sent to " + socketPath
+                        + " but its reply could not be read; the agent may already be injected",
+                        transport);
+            }
             WindowsAttachStrategy.checkReply(reply, pid);
         } finally {
             PosixAttachNative.close(fd);

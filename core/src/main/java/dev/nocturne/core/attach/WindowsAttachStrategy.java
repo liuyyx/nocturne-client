@@ -91,8 +91,19 @@ public final class WindowsAttachStrategy implements AttachStrategy {
             try {
                 byte[] request = AttachProtocol.encodeLoad(agentJar, options, false);
                 WindowsAttachNative.enqueueOperation(handle, request, pipeName);
-                server.awaitConnection(PIPE_CONNECT_TIMEOUT_MS);
-                String reply = readReply(server);
+                String reply;
+                try {
+                    server.awaitConnection(PIPE_CONNECT_TIMEOUT_MS);
+                    reply = readReply(server);
+                } catch (DeliveryUnknownException unknown) {
+                    throw unknown;
+                } catch (IOException transport) {
+                    // enqueue 已成功：操作已经在目标 JVM 的 attach 队列里，回复却拿不到。
+                    // 目标可能已经加载了 agent，这里绝不能换策略重放（否则同一次点击注入两次）。
+                    throw new DeliveryUnknownException("attach request was queued in pid " + pid
+                            + " but its reply could not be read; the agent may already be"
+                            + " injected", transport);
+                }
                 checkReply(reply, pid);
                 return;
             } catch (AttachOperationException fatal) {
@@ -120,17 +131,28 @@ public final class WindowsAttachStrategy implements AttachStrategy {
     /**
      * 按协议映射回复：外层非 0 即失败；load 内层非 0 即 agent 启动失败。
      *
+     * <p>空回复与读不懂的首行不走 {@link AttachOperationException}：那两种情况下目标已经
+     * 接受了连接（请求已投递），我们只是不知道它做了什么——必须按
+     * {@link DeliveryUnknownException} 报告，让上层停止策略链，而不是重放。
+     *
      * @param reply 目标回复全文
      * @param pid   目标进程 id（仅用于诊断文本）
-     * @throws AttachOperationException 携带返回码的结构化失败
+     * @throws AttachOperationException 携带返回码的结构化失败（目标明确拒绝）
+     * @throws DeliveryUnknownException 回复为空或首行不是返回码（投递结果未知）
      */
-    static void checkReply(String reply, int pid) throws AttachOperationException {
+    static void checkReply(String reply, int pid)
+            throws AttachOperationException, DeliveryUnknownException {
         if (reply == null || reply.isEmpty()) {
-            throw new AttachOperationException(-1, -1, "empty reply from target JVM");
+            throw new DeliveryUnknownException("empty reply from target JVM (pid " + pid
+                    + "): the load may already be in progress");
         }
         int newline = reply.indexOf('\n');
         String first = newline < 0 ? reply : reply.substring(0, newline);
         String rest = newline < 0 ? "" : reply.substring(newline + 1);
+        if (!first.trim().matches("[0-9]+")) {
+            throw new DeliveryUnknownException("unrecognised reply from target JVM (pid " + pid
+                    + "): " + first);
+        }
         int outer = AttachProtocol.parseReplyCode(first);
         if (outer != AttachProtocol.REPLY_OK) {
             throw new AttachOperationException(outer, -1,

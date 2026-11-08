@@ -209,6 +209,66 @@ Java_dev_nocturne_core_attach_WindowsAttachNative_nCreatePipeServer(
 
 /* ---- NativePipeIo ---- */
 
+/* 一次重叠 I/O 的私有状态。放在**堆上**而不是栈上：取消路径上内核可能仍持有这块内存，
+ * 只有确认 I/O 已收尾后才允许释放。 */
+typedef struct {
+    OVERLAPPED* overlapped;
+    BOOL released;
+} PipeIo;
+
+/* 建立重叠 I/O 需要的 OVERLAPPED + 手动重置事件；失败时返回 FALSE 并给出错误码。 */
+static BOOL PipeIoBegin(PipeIo* out, DWORD* error) {
+    OVERLAPPED* overlapped = (OVERLAPPED*)calloc(1, sizeof(OVERLAPPED));
+    if (overlapped == NULL) {
+        *error = 8; /* ERROR_NOT_ENOUGH_MEMORY */
+        return FALSE;
+    }
+    overlapped->hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+    if (overlapped->hEvent == NULL) {
+        *error = GetLastError();
+        free(overlapped);
+        return FALSE;
+    }
+    out->overlapped = overlapped;
+    out->released = TRUE;
+    return TRUE;
+}
+
+/* 收尾并释放：I/O 已确认完成时关事件 + free。未完成（released == FALSE）时什么都不做，
+ * 见 PipeIoAbort 的说明。 */
+static void PipeIoEnd(PipeIo* io) {
+    if (io->overlapped == NULL || !io->released) {
+        return; /* 故意泄漏：内核仍可能写这块内存 */
+    }
+    if (io->overlapped->hEvent != NULL) {
+        CloseHandle(io->overlapped->hEvent);
+    }
+    free(io->overlapped);
+    io->overlapped = NULL;
+}
+
+/* 取消一次已发出但未在窗口内完成的重叠 I/O，并**等它真正收尾**。
+ *
+ * CancelIo 是异步的：返回时内核仍可能持有 OVERLAPPED 指针。因此必须
+ *   1) 等完成事件变成 WAIT_OBJECT_0 才能返回（取消一定会完成，绝不等一会儿就放弃）；
+ *   2) GetOverlappedResult 把完成状态取走（取消导致的失败也算取走）。
+ * 只有这两步都做完，调用方才可以释放 OVERLAPPED。等待本身失败（WAIT_FAILED，
+ * 事件句柄不可信）时无法确认收尾，把 released 置 FALSE 让 PipeIoEnd 故意泄漏——
+ * 泄漏 16 字节 + 一个事件句柄远比内核写进已释放内存安全。 */
+static void PipeIoAbort(HANDLE pipe, PipeIo* io, DWORD* error) {
+    DWORD waited;
+    DWORD discarded = 0;
+    CancelIo(pipe); /* 只影响本线程在该句柄上发起的 I/O，正好是刚发的这次 */
+    waited = WaitForSingleObject(io->overlapped->hEvent, INFINITE);
+    if (waited != WAIT_OBJECT_0) {
+        io->released = FALSE;
+        *error = (waited == WAIT_TIMEOUT) ? 1460 /* ERROR_TIMEOUT */ : GetLastError();
+        return;
+    }
+    GetOverlappedResult(pipe, io->overlapped, &discarded, FALSE);
+    *error = 1460; /* ERROR_TIMEOUT：对调用方而言这次 I/O 以超时结束 */
+}
+
 JNIEXPORT jint JNICALL
 Java_dev_nocturne_core_attach_NativePipeIo_nAwaitConnection(
         JNIEnv* env, jclass ignored, jlong pipeHandle, jlong timeoutMs) {
@@ -218,33 +278,29 @@ Java_dev_nocturne_core_attach_NativePipeIo_nAwaitConnection(
         return 6; /* ERROR_INVALID_HANDLE */
     }
     /* 重叠 Connect + 等待：超时可控，避免目标不连时发起端永久阻塞。 */
-    OVERLAPPED overlapped;
-    memset(&overlapped, 0, sizeof(overlapped));
-    overlapped.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
-    if (overlapped.hEvent == NULL) {
-        return (jint)GetLastError();
+    PipeIo io;
+    DWORD error = 0;
+    DWORD waitResult;
+    BOOL connected;
+    if (!PipeIoBegin(&io, &error)) {
+        return (jint)error;
     }
-    BOOL connected = ConnectNamedPipe(pipe, &overlapped);
-    DWORD error = connected ? 0 : GetLastError();
-    DWORD waitResult = WAIT_OBJECT_0;
+    connected = ConnectNamedPipe(pipe, io.overlapped);
+    error = connected ? 0 : GetLastError();
     if (!connected && error == ERROR_IO_PENDING) {
         DWORD timeout = timeoutMs < 0 ? INFINITE : (timeoutMs > 60000 ? 60000 : (DWORD)timeoutMs);
-        waitResult = WaitForSingleObject(overlapped.hEvent, timeout);
+        waitResult = WaitForSingleObject(io.overlapped->hEvent, timeout);
         if (waitResult == WAIT_OBJECT_0) {
             DWORD transferred = 0;
-            if (!GetOverlappedResult(pipe, &overlapped, &transferred, FALSE)) {
+            if (!GetOverlappedResult(pipe, io.overlapped, &transferred, FALSE)) {
                 error = GetLastError();
             } else {
                 error = 0;
             }
         } else {
-            /* 超时或等待失败：发起取消，并且**必须等取消真正完成**再返回。
-             * CancelIo 是异步的；若直接返回，内核随后仍会往这个栈上的 OVERLAPPED 写完成状态，
-             * 而那时栈帧已经失效——典型的越界写。CancelIo 只影响本线程发起的 I/O，
-             * 也就是上面这次 ConnectNamedPipe，语义正好。 */
-            CancelIo(pipe);
-            WaitForSingleObject(overlapped.hEvent, 5000);
-            error = (waitResult == WAIT_TIMEOUT) ? 1460 /* ERROR_TIMEOUT */ : GetLastError();
+            /* 超时或等待失败：发起取消，并且等取消真正完成（含 GetOverlappedResult 收尾）
+             * 再离开。提前返回会让内核随后往已释放的 OVERLAPPED 写完成状态。 */
+            PipeIoAbort(pipe, &io, &error);
         }
     } else if (connected) {
         error = 0;
@@ -252,7 +308,7 @@ Java_dev_nocturne_core_attach_NativePipeIo_nAwaitConnection(
         /* 目标在调用前已连入：视为成功。 */
         error = 0;
     }
-    CloseHandle(overlapped.hEvent);
+    PipeIoEnd(&io);
     return (jint)error;
 }
 
@@ -281,40 +337,34 @@ Java_dev_nocturne_core_attach_NativePipeIo_nReadPipe(
     /* 管道是用 FILE_FLAG_OVERLAPPED 建的：ReadFile **必须**带 OVERLAPPED 调用，否则立即
      * 返回 ERROR_INVALID_PARAMETER；而且这里还要加读超时——目标被冻结/提前关连接时，同步读
      * 会让 attach 线程永久阻塞。 */
-    OVERLAPPED overlapped;
-    memset(&overlapped, 0, sizeof(overlapped));
-    overlapped.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
-    if (overlapped.hEvent == NULL) {
-        g_lastError = GetLastError();
-        free(staging);
-        return -(jint)(g_lastError == 0 ? 1 : g_lastError);
-    }
+    PipeIo io;
     DWORD got = 0;
-    BOOL ok = ReadFile(pipe, staging, (DWORD)length, &got, &overlapped);
-    DWORD error = ok ? 0 : GetLastError();
+    BOOL ok;
+    DWORD error = 0;
+    if (!PipeIoBegin(&io, &error)) {
+        g_lastError = error;
+        free(staging);
+        return -(jint)(error == 0 ? 1 : error);
+    }
+    ok = ReadFile(pipe, staging, (DWORD)length, &got, io.overlapped);
+    error = ok ? 0 : GetLastError();
     if (!ok && error == ERROR_IO_PENDING) {
         /* 10 秒读截止时间：本地 attach 回复是即时的，超时说明目标卡死或连接已失效。 */
-        DWORD wait = WaitForSingleObject(overlapped.hEvent, 10000);
+        DWORD wait = WaitForSingleObject(io.overlapped->hEvent, 10000);
         if (wait == WAIT_OBJECT_0) {
-            if (GetOverlappedResult(pipe, &overlapped, &got, FALSE)) {
+            if (GetOverlappedResult(pipe, io.overlapped, &got, FALSE)) {
                 ok = TRUE;
                 error = 0;
             } else {
                 error = GetLastError();
             }
         } else {
-            /* 取消这次读，并**等到取消完成**再离开：OVERLAPPED 在栈上，提前返回会让内核
-             * 之后往失效栈帧写完成状态。 */
-#if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0600
-            CancelIoEx(pipe, &overlapped);
-#else
-            CancelIo(pipe);
-#endif
-            WaitForSingleObject(overlapped.hEvent, 5000);
-            error = (wait == WAIT_TIMEOUT) ? 1460 /* ERROR_TIMEOUT */ : GetLastError();
+            /* 取消这次读，并等取消真正完成（含 GetOverlappedResult 收尾）再离开：
+             * 内核可能仍持有 OVERLAPPED，未完成就返回等于让它写已释放内存。 */
+            PipeIoAbort(pipe, &io, &error);
         }
     }
-    CloseHandle(overlapped.hEvent);
+    PipeIoEnd(&io);
     if (!ok) {
         if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) {
             free(staging);

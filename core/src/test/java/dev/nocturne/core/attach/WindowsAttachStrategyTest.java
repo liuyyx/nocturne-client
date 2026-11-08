@@ -67,7 +67,7 @@ class WindowsAttachStrategyTest {
 
     @Test
     @DisplayName("外层非 0 映射为目标拒绝")
-    void mapsOuterFailure() {
+    void mapsOuterFailure() throws Exception {
         WindowsAttachStrategy.AttachOperationException failure;
         try {
             WindowsAttachStrategy.checkReply("102\n", 4321);
@@ -80,7 +80,7 @@ class WindowsAttachStrategyTest {
 
     @Test
     @DisplayName("内层非 0 映射为 agent 启动失败")
-    void mapsInnerFailure() {
+    void mapsInnerFailure() throws Exception {
         WindowsAttachStrategy.AttachOperationException failure;
         try {
             WindowsAttachStrategy.checkReply("0\n102", 4321);
@@ -92,14 +92,17 @@ class WindowsAttachStrategyTest {
     }
 
     @Test
-    @DisplayName("空回复按传输失败处理")
+    @DisplayName("空回复按投递结果未知处理（不得重放请求）")
     void rejectsEmptyReply() {
-        try {
-            WindowsAttachStrategy.checkReply("", 4321);
-            throw new IllegalStateException("must have thrown");
-        } catch (WindowsAttachStrategy.AttachOperationException expected) {
-            assertTrue(expected.asException(4321) instanceof IOException);
-        }
+        assertThrows(DeliveryUnknownException.class,
+                () -> WindowsAttachStrategy.checkReply("", 4321));
+    }
+
+    @Test
+    @DisplayName("首行不是返回码时按投递结果未知处理")
+    void rejectsUnparseableReply() {
+        assertThrows(DeliveryUnknownException.class,
+                () -> WindowsAttachStrategy.checkReply("what?\n0", 4321));
     }
 
     @Test

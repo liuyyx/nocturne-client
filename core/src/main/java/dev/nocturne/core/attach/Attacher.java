@@ -78,7 +78,9 @@ public final class Attacher {
      * @param agentJar   agent jar 路径
      * @param options    传给 {@code agentmain} 的参数字串，可为 {@code null}
      * @return 实际成功的那条策略名
-     * @throws AttachException 所有策略都失败时抛出
+     * @throws AttachException 所有策略都失败时抛出；若其中一条已把请求送达但没有可信回复，
+     *                         则立即终止策略链并以 {@link AttachException#deliveryUnknown()}
+     *                         标记「可能已注入」
      */
     static String attachWith(List<AttachStrategy> strategies, int pid, File agentJar,
                              String options) throws AttachException {
@@ -95,6 +97,12 @@ public final class Attacher {
                 Thread.currentThread().interrupt();
                 last = e;
                 break;
+            } catch (DeliveryUnknownException e) {
+                // 请求已经投递进目标，只是回复超时/为空/读不懂：目标侧可能已把 agent 装上了。
+                // 继续下一条策略重放 = 同一次点击注入两次（双套转换器、双套监听器），
+                // 所以这里必须终止整条链并明确报告「可能已注入」。
+                attempted.set(attempted.size() - 1, strategy.name() + "(delivery unknown)");
+                throw new AttachException(pid, attempted, e, true);
             } catch (Exception e) {
                 last = e;
             } catch (Error e) {

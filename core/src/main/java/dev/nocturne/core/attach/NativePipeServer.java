@@ -79,8 +79,18 @@ final class NativePipeServer implements WindowsAttachStrategy.PipeServer {
         }
         int code = backend.awaitConnection(current, timeoutMs);
         if (code != 0) {
+            if (isTimeoutCode(code)) {
+                // 目标没在窗口内连回来。此时操作可能仍在目标队列里：结果未知，交给上层终止策略链。
+                throw new DeliveryUnknownException("timed out waiting for the target to connect"
+                        + " back to the attach pipe (win32 " + code + ")");
+            }
             throw new IOException("attach pipe accept failed: " + code);
         }
+    }
+
+    /** Win32 超时类错误码：ERROR_SEM_TIMEOUT(121) / ERROR_TIMEOUT(1460)。 */
+    private static boolean isTimeoutCode(int code) {
+        return code == 121 || code == 1460;
     }
 
     @Override
@@ -102,6 +112,11 @@ final class NativePipeServer implements WindowsAttachStrategy.PipeServer {
                 }
                 int got = backend.readPipe(current, buffer, offset, length);
                 if (got < 0) {
+                    if (isTimeoutCode(-got)) {
+                        // 读超时：请求已投递，回复却没到——目标可能已经装好 agent。
+                        throw new DeliveryUnknownException("timed out reading the attach reply"
+                                + " (win32 " + (-got) + ")");
+                    }
                     throw new IOException("attach pipe read failed: " + got);
                 }
                 return got == 0 ? -1 : got;

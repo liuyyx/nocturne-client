@@ -3,12 +3,15 @@ package dev.nocturne.core.attach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@link Attacher} 策略链的失败语义。
@@ -34,14 +37,11 @@ class AttacherTest {
             }
 
             @Override
-            public void attach(int pid, File agentJar, String options) {
-                if (failure instanceof RuntimeException) {
-                    throw (RuntimeException) failure;
-                }
+            public void attach(int pid, File agentJar, String options) throws Exception {
                 if (failure instanceof Error) {
                     throw (Error) failure;
                 }
-                throw new IllegalStateException(failure);
+                throw (Exception) failure;
             }
         };
     }
@@ -106,5 +106,47 @@ class AttacherTest {
                 1234, new File("agent.jar"), null);
 
         assertEquals("winner", winner);
+    }
+
+    /**
+     * 投递结果未知时必须终止策略链：请求已经在目标 JVM 里，重放同一次点击会注入两次。
+     */
+    @Test
+    void stopsTheChainWhenDeliveryIsUnknown() {
+        final AtomicInteger laterAttempts = new AtomicInteger();
+        AttachStrategy later = new AttachStrategy() {
+            @Override
+            public String name() {
+                return "later";
+            }
+
+            @Override
+            public void attach(int pid, File agentJar, String options) {
+                laterAttempts.incrementAndGet();
+            }
+        };
+
+        AttachException failure = assertThrows(AttachException.class,
+                () -> Attacher.attachWith(
+                        Arrays.asList(throwing(new DeliveryUnknownException("timeout")), later),
+                        1234, new File("agent.jar"), null));
+
+        assertTrue(failure.deliveryUnknown(),
+                "caller must know the agent may already be injected");
+        assertTrue(failure.getMessage().contains("UNKNOWN outcome"));
+        assertEquals(0, laterAttempts.get(),
+                "no later strategy may replay a request that was already delivered");
+        assertEquals(Collections.singletonList("throwing(delivery unknown)"), failure.attempted());
+    }
+
+    /** 明确的失败（投递前就失败）仍按原语义继续尝试后续策略。 */
+    @Test
+    void continuesAfterADefiniteFailure() throws Exception {
+        String winner = Attacher.attachWith(
+                Arrays.asList(throwing(new IOException("pipe not created")),
+                        succeeding("next")),
+                1234, new File("agent.jar"), null);
+
+        assertEquals("next", winner);
     }
 }

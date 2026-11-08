@@ -345,6 +345,9 @@
                 "displayGuiScreen": {
                     "absent": true
                 },
+                "displayInGameMenu": {
+                    "absent": true
+                },
                 "getInstance": {
                     "names": {
                         "vanilla": "u",

@@ -932,6 +932,13 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
      */
     private Object readGuiScreen(dev.nocturne.client.game.GameBridge bridge, Object minecraft) {
         try {
+            dev.nocturne.client.mapping.Mapping mapping = bridge.mapping();
+            if (mapping == null || mapping.isMemberAbsent(
+                    dev.nocturne.client.mapping.ClassType.HUD, "screen")) {
+                // 该版本 Gui 没有 screen()（1.8.9–1.21.x）：不要每帧调 callMapped，
+                // 否则 GameBridge 每次都会打一条「no overload for screen ()」把日志刷爆。
+                return null;
+            }
             Object gui = bridge.readField(minecraft,
                     dev.nocturne.client.mapping.ClassType.MINECRAFT, "gui");
             if (gui == null) {

@@ -953,6 +953,11 @@ public final class NocturneAgent {
         registerMappedInputBlocks(instrumentation, asmLoader,
                 dev.nocturne.client.mapping.ClassType.MINECRAFT, "setIngameFocus",
                 InputOptions.NONE, "()V");
+        // 1.8.9/1.12.2 的 Esc 不经过 KeyBinding：runTick 直接调 displayInGameMenu()。
+        // 不拦的话「按 Esc 关闭自绘 GUI」会同时打开原版暂停菜单（真机 1.8.9 实测）。
+        registerMappedInputBlocks(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MINECRAFT, "displayInGameMenu",
+                InputOptions.NONE, "()V");
     }
 
     /**

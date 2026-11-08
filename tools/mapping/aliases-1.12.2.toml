@@ -765,6 +765,10 @@ swapPaint = { mcp = "changeCurrentItem", scope = "net/minecraft/entity/player/In
 mcp = "setIngameFocus"
 scope = "net/minecraft/client/Minecraft"
 
+[methods.displayInGameMenu]
+mcp = "displayInGameMenu"
+scope = "net/minecraft/client/Minecraft"
+
 [methods.setKeyBindState]
 mcp = "setKeyBindState"
 scope = "net/minecraft/client/settings/KeyBinding"

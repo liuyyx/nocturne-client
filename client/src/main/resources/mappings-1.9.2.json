@@ -153,6 +153,18 @@
                         "forge": "(Lnet/minecraft/client/gui/GuiScreen;)V"
                     }
                 },
+                "displayInGameMenu": {
+                    "names": {
+                        "vanilla": "q",
+                        "fabric": "method_1486",
+                        "forge": "func_71385_j"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
                 "getInstance": {
                     "names": {
                         "vanilla": "z",

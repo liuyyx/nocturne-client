@@ -142,6 +142,16 @@
                         "fabric": "(Lnet/minecraft/class_437;)V"
                     }
                 },
+                "displayInGameMenu": {
+                    "names": {
+                        "vanilla": "q",
+                        "fabric": "method_1486"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V"
+                    }
+                },
                 "getInstance": {
                     "names": {
                         "vanilla": "z",

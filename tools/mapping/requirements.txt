@@ -583,6 +583,8 @@ net/minecraft/client/MouseHandler#turnPlayer()
 net/minecraft/client/KeyMapping#setKeyBindState()
 net/minecraft/client/KeyMapping#onTick()
 net/minecraft/client/Minecraft#setIngameFocus()
+# 1.8.9/1.12.2 的 Esc 不经过 KeyBinding，直接在 runTick 里调 displayInGameMenu()。
+net/minecraft/client/Minecraft#displayInGameMenu()
 # 数值选择：26.x 的屏幕存放在 Gui.screen()；屏幕级鼠标点击派发在 ContainerEventHandler。
 net/minecraft/client/gui/Gui#screen()
 net/minecraft/client/gui/components/events/ContainerEventHandler

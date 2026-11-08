@@ -153,6 +153,9 @@
                         "forge": "(Lnet/minecraft/client/gui/screen/Screen;)V"
                     }
                 },
+                "displayInGameMenu": {
+                    "absent": true
+                },
                 "getInstance": {
                     "names": {
                         "vanilla": "v",

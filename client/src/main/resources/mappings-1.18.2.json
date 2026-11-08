@@ -207,6 +207,18 @@
                 "forge": "net.minecraft.client.Camera"
             },
             "methods": {
+                "getEntity": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_19331",
+                        "forge": "m_90592_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laxk;",
+                        "fabric": "()Lnet/minecraft/class_1297;",
+                        "forge": "()Lnet/minecraft/world/entity/Entity;"
+                    }
+                },
                 "getMaxZoom": {
                     "names": {
                         "vanilla": "a",
@@ -293,9 +305,39 @@
             }
         },
         "net/minecraft/client/DeltaTracker": {
-            "absent": true,
-            "names": {},
-            "absentReason": "verified"
+            "names": {
+                "vanilla": "dzf",
+                "fabric": "net.minecraft.class_317",
+                "forge": "net.minecraft.client.Timer"
+            },
+            "methods": {
+                "getGameTimeDeltaPartialTick": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "getGameTimeDeltaTicks": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            },
+            "fields": {
+                "partialTick": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_1970",
+                        "forge": "f_92518_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "timerSpeed": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/client/KeyMapping": {
             "names": {
@@ -953,6 +995,32 @@
                     }
                 },
                 "thirdPersonView": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
+        },
+        "net/minecraft/client/Timer": {
+            "names": {
+                "vanilla": "dzf",
+                "fabric": "net.minecraft.class_317",
+                "forge": "net.minecraft.client.Timer"
+            },
+            "methods": {},
+            "fields": {
+                "partialTick": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_1970",
+                        "forge": "f_92518_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "renderPartialTicks": {
                     "absent": true,
                     "absentReason": "verified"
                 }
@@ -2199,6 +2267,11 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/client/renderer/EntityRenderer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {

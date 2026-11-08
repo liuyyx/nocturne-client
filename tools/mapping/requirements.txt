@@ -825,6 +825,27 @@ net/minecraft/client/Minecraft#deltaTracker
 net/minecraft/client/DeltaTracker#getGameTimeDeltaPartialTick()
 net/minecraft/client/DeltaTracker#getGameTimeDeltaTicks()
 
+# --- 相机位姿 / 有效 FOV / 渲染插值（ESP 投影的三条依赖） ---
+# Camera 是 1.14+ 的独立相机；1.8.9–1.12.2 没有它，覆盖层按能力退回玩家眼位。
+net/minecraft/client/Camera
+net/minecraft/client/Camera#getPosition()
+net/minecraft/client/Camera#getYRot()
+net/minecraft/client/Camera#getXRot()
+net/minecraft/client/Camera#getEntity()
+net/minecraft/client/renderer/GameRenderer
+net/minecraft/client/renderer/GameRenderer#getMainCamera()
+# 有效 FOV：1.16+ 是 getFov(Camera,F,Z)；1.15 同签名；26.x 移入 Camera#getFov()。
+net/minecraft/client/renderer/GameRenderer#getFov()
+# 1.8.9–1.12.2 的游戏渲染器就是 MCP 的 EntityRenderer，方法名 getFOVModifier(F,Z)。
+net/minecraft/client/renderer/EntityRenderer
+net/minecraft/client/renderer/EntityRenderer#getFOVModifier()
+# 插值计时器：1.8.9/1.12.2 是 Timer#renderPartialTicks，1.13–1.20.1 改名 partialTick，
+# 1.21+ 换成 DeltaTracker#getGameTimeDeltaPartialTick(boolean)。
+net/minecraft/client/Timer
+net/minecraft/client/Timer#renderPartialTicks
+net/minecraft/client/Timer#partialTick
+net/minecraft/client/DeltaTracker#partialTick
+
 # 发包构造器按形状反射；类名仍由每版本表翻译。
 net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket
 net/minecraft/network/protocol/game/ServerboundSwingPacket

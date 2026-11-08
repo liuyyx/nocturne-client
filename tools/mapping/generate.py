@@ -118,12 +118,27 @@ def _first_signature(spec: dict) -> "str | None":
 
 
 def build_anchor_table(requirements: scan.Requirements, manifest: sources.Manifest,
-                       fetch: namespaces.Fetch, shape_hints: dict) -> "namespaces.AnchorTable | None":
-    """canonical -> intermediary, learned on 1.12.2.
+                       fetch: namespaces.Fetch, shape_hints: dict,
+                       aliases: "tuple[dict, dict] | None" = None) -> "namespaces.AnchorTable | None":
+    """canonical -> intermediary, learned on 1.12.2 (plus a 1.14.4 top-up).
 
     Built in memory from the same legacy path that produces the 1.12.2 table, so
     an anchor run never depends on a previously written artefact and the order
     of ``--only`` arguments cannot change the result.
+
+    ``aliases`` must be the same map ``build_table`` gets: a member that only
+    exists under an alias in 1.12.2 (``DeltaTracker#partialTick`` →
+    ``renderPartialTicks``) is then still learned, and 1.9–1.14.3 resolve it
+    through intermediary instead of falling back to absent.
+
+    1.12.2 predates ``Camera`` (and its accessors), so the anchor alone can
+    never answer them for 1.14–1.14.3.  Intermediary names are stable across a
+    major version, so the 1.14.4 table (first official-mappings release) tops up
+    classes the 1.12.2 anchor does not know at all.  Restricting the top-up to
+    unknown classes matters: 1.12.2 is missing a member that MCP only named
+    later (``Entity#isSpectator``) while owning the class, and borrowing the
+    1.14.4 id for it makes 1.9–1.13 resolve an unrelated method that merely
+    shares the id there.  Only whole classes that 1.12.2 lacks are unambiguous.
     """
     resolver = namespaces.build_resolver(
         "1.12.2", fetch, CACHE, manifest, VANILLA_ROOT, TOOLS, DEFAULT_JAVAP,
@@ -131,8 +146,27 @@ def build_anchor_table(requirements: scan.Requirements, manifest: sources.Manife
     )
     if resolver is None:
         return None
-    table = build_table("1.12.2", resolver, requirements, {"versions": {}}, shape_hints)
-    return namespaces.AnchorTable(table)
+    base_table = build_table("1.12.2", resolver, requirements, {"versions": {}},
+                             shape_hints, aliases)
+    anchor = namespaces.AnchorTable(base_table)
+    known_classes = {key for key, entry in (base_table.get("classes") or {}).items()
+                     if not entry.get("absent")}
+    resolver14 = namespaces.build_resolver(
+        "1.14.4", fetch, CACHE, manifest, VANILLA_ROOT, TOOLS, DEFAULT_JAVAP,
+        find_local_jar("1.14.4"),
+    )
+    if resolver14 is not None:
+        top_up = namespaces.AnchorTable(
+            build_table("1.14.4", resolver14, requirements, {"versions": {}}, shape_hints, aliases))
+        for key, value in top_up.classes.items():
+            if key not in known_classes:
+                anchor.classes.setdefault(key, value)
+        for attribute in ("methods", "fields", "arity"):
+            base = getattr(anchor, attribute)
+            for key, value in getattr(top_up, attribute).items():
+                if key[0] not in known_classes:
+                    base.setdefault(key, value)
+    return anchor
 
 
 def find_local_jar(version: str) -> "str | None":
@@ -204,24 +238,41 @@ def build_table(version: str, resolver, requirements: scan.Requirements,
     absent = []
     for canonical in sorted(requirements.classes):
         class_names = resolver.resolve_class(canonical)
+        # 类别名（member-aliases.txt 里的 `Old = New`，如 DeltaTracker = Timer）不仅换类名：
+        # 成员也必须按**别名类**去解析，否则表里类名是 Timer、成员却仍按 DeltaTracker 查，
+        # 现代版本一条都解析不到（1.13–1.20.1 的 partialTick 就是这样静默缺失的）。
+        member_owner = canonical
         if not class_names:
             for alternative in class_aliases.get(canonical, ()):
                 class_names = resolver.resolve_class(alternative)
                 if class_names:
+                    member_owner = alternative
                     break
         if not class_names:
             classes[canonical] = {"absent": True, "names": {},
                                   "absentReason": absent_entry(resolver, canonical, "class")["absentReason"]}
             absent.append((canonical, None, f"no counterpart in {version}"))
             continue
+
+        def resolve(kind: str, name: str, hint: "int | None"):
+            """先按 canonical 类解析，再按类别名指向的类解析。"""
+            for owner in ((canonical, member_owner) if member_owner != canonical else (canonical,)):
+                answer = (resolver.resolve_method(owner, name, hint) if kind == "method"
+                          else resolver.resolve_field(owner, name))
+                if answer is not None:
+                    return answer
+            return None
+
         methods = {}
         fields = {}
         for name in sorted(requirements.methods[canonical]):
             hint = shape_hints.get((canonical, name))
-            answer = resolver.resolve_method(canonical, name, hint)
+            if hint is None and member_owner != canonical:
+                hint = shape_hints.get((member_owner, name))
+            answer = resolve("method", name, hint)
             if answer is None:
                 for alternative in member_aliases.get((canonical, name), ()):
-                    answer = resolver.resolve_method(canonical, alternative, hint)
+                    answer = resolve("method", alternative, hint)
                     if answer is not None:
                         break
             if answer:
@@ -232,13 +283,13 @@ def build_table(version: str, resolver, requirements: scan.Requirements,
                 methods[name] = entry
                 resolved += 1
             else:
-                methods[name] = absent_entry(resolver, canonical, "method", name)
+                methods[name] = absent_entry(resolver, member_owner, "method", name)
                 absent.append((canonical, name + "()", f"{version}: {methods[name]['absentReason']}"))
         for name in sorted(requirements.fields[canonical]):
-            answer = resolver.resolve_field(canonical, name)
+            answer = resolve("field", name, None)
             if answer is None:
                 for alternative in member_aliases.get((canonical, name), ()):
-                    answer = resolver.resolve_field(canonical, alternative)
+                    answer = resolve("field", alternative, None)
                     if answer is not None:
                         break
             if answer:
@@ -254,12 +305,12 @@ def build_table(version: str, resolver, requirements: scan.Requirements,
                 # 这种错误必须在生成期失败，而不是静默变成 absent。
                 exists = getattr(resolver, "method_exists", None)
                 forced = name in getattr(requirements, "forced_fields", {}).get(canonical, ())
-                if answer is None and not forced and exists is not None and exists(canonical, name):
+                if answer is None and not forced and exists is not None and exists(member_owner, name):
                     problems.append(
                         f"{version}: {canonical}#{name} 作为字段登记，但它在映射源里是方法"
                         f" → 在 requirements.txt 里写成 {name}()"
                     )
-                fields[name] = absent_entry(resolver, canonical, "field", name)
+                fields[name] = absent_entry(resolver, member_owner, "field", name)
                 absent.append((canonical, name, f"{version}: {fields[name]['absentReason']}"))
         classes[canonical] = {"names": class_names, "methods": methods, "fields": fields}
     save = getattr(resolver, "save", None)
@@ -397,7 +448,7 @@ def main() -> int:
     manifest = sources.Manifest(CACHE)
     shape_hints = load_shape_hints()
     fetch = namespaces.Fetch(CACHE)
-    anchor_table = build_anchor_table(requirements, manifest, fetch, shape_hints)
+    anchor_table = build_anchor_table(requirements, manifest, fetch, shape_hints, member_aliases)
 
     versions = release_versions(manifest)
     if args.only:

@@ -237,6 +237,20 @@
                 "neoforge": "net.minecraft.client.Camera"
             },
             "methods": {
+                "getEntity": {
+                    "names": {
+                        "vanilla": "h",
+                        "fabric": "method_19331",
+                        "forge": "m_90592_",
+                        "neoforge": "entity"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lcgk;",
+                        "fabric": "()Lnet/minecraft/class_1297;",
+                        "forge": "()Lnet/minecraft/world/entity/Entity;",
+                        "neoforge": "()Lnet/minecraft/world/entity/Entity;"
+                    }
+                },
                 "getMaxZoom": {
                     "names": {
                         "vanilla": "a",
@@ -252,16 +266,46 @@
                     }
                 },
                 "getPosition": {
-                    "absent": true,
-                    "absentReason": "verified"
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "position",
+                        "forge": "m_402260_",
+                        "neoforge": "position"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lftm;",
+                        "fabric": "()Lnet/minecraft/class_243;",
+                        "forge": "()Lnet/minecraft/world/phys/Vec3;",
+                        "neoforge": "()Lnet/minecraft/world/phys/Vec3;"
+                    }
                 },
                 "getXRot": {
-                    "absent": true,
-                    "absentReason": "verified"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_19329",
+                        "forge": "m_90589_",
+                        "neoforge": "xRot"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F",
+                        "neoforge": "()F"
+                    }
                 },
                 "getYRot": {
-                    "absent": true,
-                    "absentReason": "verified"
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "method_19330",
+                        "forge": "m_90590_",
+                        "neoforge": "yRot"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F",
+                        "neoforge": "()F"
+                    }
                 }
             },
             "fields": {}
@@ -1122,6 +1166,11 @@
                     "absentReason": "verified"
                 }
             }
+        },
+        "net/minecraft/client/Timer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/client/gui/Font": {
             "names": {
@@ -2609,6 +2658,11 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/client/renderer/EntityRenderer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {

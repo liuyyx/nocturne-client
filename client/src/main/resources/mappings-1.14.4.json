@@ -142,6 +142,18 @@
                 "forge": "net.minecraft.client.renderer.ActiveRenderInfo"
             },
             "methods": {
+                "getEntity": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_19331",
+                        "forge": "func_216773_g"
+                    },
+                    "signatures": {
+                        "vanilla": "()Laio;",
+                        "fabric": "()Lnet/minecraft/class_1297;",
+                        "forge": "()Lnet/minecraft/entity/Entity;"
+                    }
+                },
                 "getMaxZoom": {
                     "names": {
                         "vanilla": "a",
@@ -199,9 +211,39 @@
             "absentReason": "verified"
         },
         "net/minecraft/client/DeltaTracker": {
-            "absent": true,
-            "names": {},
-            "absentReason": "verified"
+            "names": {
+                "vanilla": "cym",
+                "fabric": "net.minecraft.class_317",
+                "forge": "net.minecraft.util.Timer"
+            },
+            "methods": {
+                "getGameTimeDeltaPartialTick": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "getGameTimeDeltaTicks": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            },
+            "fields": {
+                "partialTick": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_1970",
+                        "forge": "field_194147_b"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "timerSpeed": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/client/KeyMapping": {
             "names": {
@@ -837,6 +879,32 @@
                         "fabric": "I",
                         "forge": "I"
                     }
+                }
+            }
+        },
+        "net/minecraft/client/Timer": {
+            "names": {
+                "vanilla": "cym",
+                "fabric": "net.minecraft.class_317",
+                "forge": "net.minecraft.util.Timer"
+            },
+            "methods": {},
+            "fields": {
+                "partialTick": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_1970",
+                        "forge": "field_194147_b"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "renderPartialTicks": {
+                    "absent": true,
+                    "absentReason": "verified"
                 }
             }
         },
@@ -1920,6 +1988,11 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/client/renderer/EntityRenderer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {

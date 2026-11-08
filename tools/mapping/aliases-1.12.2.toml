@@ -132,6 +132,8 @@ version = "1.12.2"
 "net/minecraft/world/scores/Objective" = "net/minecraft/scoreboard/ScoreObjective"
 "net/minecraft/world/scores/Score" = "net/minecraft/scoreboard/Score"
 "net/minecraft/client/DeltaTracker" = "net/minecraft/util/Timer"
+"net/minecraft/client/Timer" = "net/minecraft/util/Timer"
+"net/minecraft/client/renderer/EntityRenderer" = "net/minecraft/client/renderer/EntityRenderer"
 "net/minecraft/client/renderer/block/BlockRenderDispatcher" = "net/minecraft/client/renderer/BlockRendererDispatcher"
 "net/minecraft/client/renderer/entity/EntityRenderDispatcher" = "net/minecraft/client/renderer/entity/RenderManager"
 "net/minecraft/client/renderer/LevelRenderer" = "net/minecraft/client/renderer/RenderGlobal"
@@ -745,6 +747,17 @@ getWindow = { unsupported = "1.8.9 Minecraft 没有 getWindow()（窗口是 LWJG
 
 [overrides."net/minecraft/client/DeltaTracker"]
 timerSpeed = { mcp = "timerSpeed", scope = "net/minecraft/util/Timer" }
+
+# 插值计时器字段：1.8.9–1.12.2 叫 renderPartialTicks（canonical 的 partialTick
+# 在 member-aliases.txt 里回退到这个名字）。
+[fields.renderPartialTicks]
+mcp = "renderPartialTicks"
+scope = "net/minecraft/util/Timer"
+
+# 有效 FOV：旧版游戏渲染器（EntityRenderer）上的方法名。
+[methods.getFOVModifier]
+mcp = "getFOVModifier"
+scope = "net/minecraft/client/renderer/EntityRenderer"
 
 [overrides."net/minecraft/client/multiplayer/PlayerInfo"]
 gameMode = { mcp = "gameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }

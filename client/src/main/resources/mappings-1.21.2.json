@@ -237,6 +237,20 @@
                 "neoforge": "net.minecraft.client.Camera"
             },
             "methods": {
+                "getEntity": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_19331",
+                        "forge": "m_90592_",
+                        "neoforge": "getEntity"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lbvj;",
+                        "fabric": "()Lnet/minecraft/class_1297;",
+                        "forge": "()Lnet/minecraft/world/entity/Entity;",
+                        "neoforge": "()Lnet/minecraft/world/entity/Entity;"
+                    }
+                },
                 "getMaxZoom": {
                     "names": {
                         "vanilla": "a",
@@ -1152,6 +1166,11 @@
                     "absentReason": "verified"
                 }
             }
+        },
+        "net/minecraft/client/Timer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/client/gui/Font": {
             "names": {
@@ -2599,6 +2618,11 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/client/renderer/EntityRenderer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {

@@ -28,3 +28,20 @@ SCREEN = GuiScreen
 
 # 文本组件：1.19+ TextComponent 并入 MutableComponent（同一层级的改名）。
 TEXT_COMPONENT = MUTABLE_COMPONENT
+
+# 插值计时器：1.13 起 Timer 从 util 移到 client 包，1.21 改名 DeltaTracker。
+# 表键仍是 DeltaTracker，运行期 `readField(..., DELTA_TRACKER, "partialTick")` 不用改。
+net/minecraft/client/DeltaTracker = net/minecraft/client/Timer
+# 1.8.9–1.12.2 的等价字段叫 renderPartialTicks（1.13 起才改名 partialTick）。
+net/minecraft/client/DeltaTracker#partialTick = renderPartialTicks
+net/minecraft/client/Timer#partialTick = renderPartialTicks
+
+# 26.x 去掉了 get 前缀：Camera#getPosition/getYRot/getXRot/getEntity 改名
+# position()/yRot()/xRot()/entity()，GameRenderer#getMainCamera 改名 mainCamera()。
+net/minecraft/client/Camera#getPosition() = position()
+net/minecraft/client/Camera#getYRot() = yRot()
+net/minecraft/client/Camera#getXRot() = xRot()
+net/minecraft/client/Camera#getEntity() = entity()
+net/minecraft/client/renderer/GameRenderer#getMainCamera() = mainCamera()
+# 1.8.9–1.12.2 的有效 FOV 方法在 EntityRenderer 上叫 getFOVModifier(F,Z)。
+net/minecraft/client/renderer/GameRenderer#getFov() = getFOVModifier()

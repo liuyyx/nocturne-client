@@ -24,7 +24,7 @@
         "com/mojang/blaze3d/platform/Window": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "com/mojang/blaze3d/vertex/PoseStack": {
             "absent": true,
@@ -34,7 +34,7 @@
         "net/minecraft/client/Camera": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "net/minecraft/client/CameraType": {
             "absent": true,
@@ -59,8 +59,11 @@
             },
             "fields": {
                 "partialTick": {
-                    "absent": true,
-                    "absentReason": "unverified"
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_1970",
+                        "forge": "field_74281_c"
+                    }
                 },
                 "timerSpeed": {
                     "names": {
@@ -412,7 +415,7 @@
         "net/minecraft/client/OptionInstance": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "net/minecraft/client/Options": {
             "names": {
@@ -439,7 +442,7 @@
                 },
                 "fovEffectScale": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "gamma": {
                     "names": {
@@ -468,6 +471,30 @@
                         "vanilla": "aB",
                         "fabric": "field_1850",
                         "forge": "field_74320_O"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/Timer": {
+            "names": {
+                "vanilla": "avl",
+                "fabric": "net.minecraft.class_317",
+                "forge": "net.minecraft.util.Timer"
+            },
+            "methods": {},
+            "fields": {
+                "partialTick": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_1970",
+                        "forge": "field_74281_c"
+                    }
+                },
+                "renderPartialTicks": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "field_1970",
+                        "forge": "field_74281_c"
                     }
                 }
             }
@@ -576,11 +603,11 @@
                 },
                 "screen": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "setScreen": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 }
             },
             "fields": {
@@ -774,7 +801,7 @@
         "net/minecraft/client/multiplayer/ClientChunkCache$Storage": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "net/minecraft/client/multiplayer/ClientLevel": {
             "names": {
@@ -991,7 +1018,7 @@
                 },
                 "handleContainerInput": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "handleInventoryMouseClick": {
                     "absent": true,
@@ -1059,7 +1086,7 @@
                 },
                 "useItemOn": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "windowClick": {
                     "names": {
@@ -1525,6 +1552,28 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/renderer/EntityRenderer": {
+            "names": {
+                "vanilla": "bfk",
+                "fabric": "net.minecraft.class_757",
+                "forge": "net.minecraft.client.renderer.EntityRenderer"
+            },
+            "methods": {
+                "getFOVModifier": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_3196",
+                        "forge": "func_78481_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(FZ)F",
+                        "fabric": "(FZ)F",
+                        "forge": "(FZ)F"
+                    }
+                }
+            },
+            "fields": {}
+        },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {
                 "vanilla": "bfk",
@@ -1533,8 +1582,16 @@
             },
             "methods": {
                 "getFov": {
-                    "absent": true,
-                    "absentReason": "unverified"
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_3196",
+                        "forge": "func_78481_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(FZ)F",
+                        "fabric": "(FZ)F",
+                        "forge": "(FZ)F"
+                    }
                 },
                 "getMainCamera": {
                     "absent": true,
@@ -2244,7 +2301,7 @@
         "net/minecraft/world/InteractionHand": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "net/minecraft/world/InteractionResult": {
             "absent": true,
@@ -2345,11 +2402,11 @@
                 },
                 "getBbHeight": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "getBbWidth": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "getBoundingBox": {
                     "names": {
@@ -2369,7 +2426,7 @@
                 },
                 "getDeltaMovement": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "getDisplayName": {
                     "absent": true,
@@ -2417,11 +2474,11 @@
                 },
                 "getTeam": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "getTeamColor": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "getUUID": {
                     "names": {
@@ -2437,7 +2494,7 @@
                 },
                 "isAlliedTo": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "isInWater": {
                     "names": {
@@ -2481,7 +2538,7 @@
                 },
                 "isSpectator": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "isSprinting": {
                     "names": {
@@ -2549,7 +2606,7 @@
                 },
                 "setDeltaMovement": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "setPos": {
                     "names": {
@@ -2724,7 +2781,7 @@
         "net/minecraft/world/entity/EquipmentSlot": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "net/minecraft/world/entity/LivingEntity": {
             "names": {
@@ -2939,7 +2996,7 @@
                 },
                 "isUsingItem": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "position": {
                     "names": {
@@ -3531,7 +3588,7 @@
                 },
                 "getAbilities": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "getAttackStrengthScale": {
                     "absent": true,
@@ -3930,7 +3987,7 @@
         "net/minecraft/world/inventory/ContainerInput": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "net/minecraft/world/inventory/Slot": {
             "absent": true,
@@ -4078,7 +4135,7 @@
                 },
                 "isEmpty": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 },
                 "setCount": {
                     "absent": true,
@@ -4332,7 +4389,7 @@
         "net/minecraft/world/level/block/entity/BarrelBlockEntity": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "net/minecraft/world/level/block/entity/BlockEntity": {
             "names": {
@@ -4404,7 +4461,7 @@
         "net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity": {
             "absent": true,
             "names": {},
-            "absentReason": "unverified"
+            "absentReason": "verified"
         },
         "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
             "names": {
@@ -4457,7 +4514,7 @@
                 },
                 "isAir": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 }
             },
             "fields": {}
@@ -4746,7 +4803,7 @@
             "methods": {
                 "getColor": {
                     "absent": true,
-                    "absentReason": "unverified"
+                    "absentReason": "verified"
                 }
             },
             "fields": {}

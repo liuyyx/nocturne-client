@@ -871,6 +871,17 @@ class LegacyResolver:
 
     def absent_reason(self, canonical: str, kind: str, name: str) -> str:
         # 别名表只收 MCP 有名字的成员，查不到并不等于该成员不存在。
+        # 例外：表里显式写了 `unsupported`（例如 "1.8.9 没有独立的 Camera 对象"），
+        # 那是人工核对过的结论，按 verified 记账；`--javap` 的 unverified 堆才不会被它污染。
+        key = canonical.replace(".", "/")
+        if kind == "class":
+            rule = self.legacy.classes.get(key)
+            if isinstance(rule, dict) and "unsupported" in rule:
+                return "verified"
+            return "unverified"
+        rule = self._rule(key, kind, name)
+        if rule and "unsupported" in rule:
+            return "verified"
         return "unverified"
 
     def resolve_field(self, canonical: str, name: str) -> "dict[str, tuple] | None":

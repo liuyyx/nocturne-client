@@ -84,6 +84,10 @@ public final class PacketHookTransformer implements ClassFileTransformer {
                             super.visitInsn(Opcodes.DUP);
                             Label continueLabel = new Label();
                             super.visitJumpInsn(Opcodes.IFNONNULL, continueLabel);
+                            // IFNONNULL 只消费了 DUP 出来的那一份引用，原值仍留在栈上。
+                            // void 方法 return 时操作数栈应为空（规范要求，HotSpot 宽松、别的
+                            // 校验器不一定），故把陷阱分支的残留引用显式弹掉。
+                            super.visitInsn(Opcodes.POP);
                             super.visitInsn(Opcodes.RETURN);
                             super.visitLabel(continueLabel);
                             Object[] locals = localsOf(isStatic);

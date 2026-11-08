@@ -53,14 +53,19 @@ class PacketHookTransformerTest {
 
     @Test
     void nullReplacementCancelsTheOriginalCall() throws Exception {
-        Class<?> type = transformedSubject();
-        Method send = type.getMethod("send", long.class, String.class);
-        Object instance = type.getDeclaredConstructor().newInstance();
-        Sink.replacement = null;
+        // 两种原类都要过：无栈帧版（老推断式校验器）与真实栈帧版（1.8.9 的类型校验器）。
+        // null 分支必须把残留引用弹掉再 RETURN：void 方法应在空栈上返回。
+        for (Class<?> type : new Class<?>[]{transformedSubject(), transformedFramedSubject()}) {
+            Sink.calls.clear();
+            Sink.replacement = null;
+            Method send = type.getMethod("send", long.class, String.class);
+            Object instance = type.getDeclaredConstructor().newInstance();
 
-        send.invoke(instance, 10L, "drop");
+            send.invoke(instance, 10L, "drop");
 
-        assertEquals(java.util.Collections.singletonList("filter:drop"), Sink.calls);
+            assertEquals(java.util.Collections.singletonList("filter:drop"), Sink.calls,
+                    type + " 的 null 分支必须取消原调用且不抛 VerifyError");
+        }
     }
 
     @Test
@@ -83,6 +88,16 @@ class PacketHookTransformerTest {
         byte[] patched = new PacketHookTransformer(TARGET, "send", descriptor, SINK, "filter", 1)
                 .transform(PacketHookTransformerTest.class.getClassLoader(), TARGET, null, null,
                         packetSubject(descriptor));
+        assertNotNull(patched);
+        return define(patched);
+    }
+
+    /** 原类自带 StackMapTable（等价于混淆过的真实方法），走类型校验器那条路径。 */
+    private static Class<?> transformedFramedSubject() {
+        String descriptor = "(JLjava/lang/String;)V";
+        byte[] patched = new PacketHookTransformer(TARGET, "send", descriptor, SINK, "filter", 1)
+                .transform(PacketHookTransformerTest.class.getClassLoader(), TARGET, null, null,
+                        framedPacketSubject());
         assertNotNull(patched);
         return define(patched);
     }

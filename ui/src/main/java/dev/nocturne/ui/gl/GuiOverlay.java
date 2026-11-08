@@ -868,20 +868,18 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
                     dev.nocturne.client.mapping.ClassType.MINECRAFT, "currentScreen");
             Object legacy = bridge.readField(minecraft,
                     dev.nocturne.client.mapping.ClassType.MINECRAFT, "screen");
-            if (current == null && legacy == null) {
-                // 26.3 的 Minecraft 没有 currentScreen/screen（映射 absent）：屏幕挂在 Gui.screen()。
-                // 读不到就按形状兜底（非 static、类型名以 Screen 结尾的字段），再退到 Gui 方法。
-                current = readScreenByShape(minecraft);
-            }
-            if (current == null && legacy == null) {
-                current = readGuiScreen(bridge, minecraft);
+            // 26.x 的 Minecraft 没有 currentScreen/screen（映射 absent）：屏幕在 Gui.screen()。
+            // 先按方法取（与 GuiDrawHook 的探针同一套），再按形状兜底。
+            Object viaGui = readGuiScreen(bridge, minecraft);
+            if (viaGui == null && current == null && legacy == null) {
+                viaGui = readScreenByShape(minecraft);
             }
             if (!nativeScreenProbeLogged) {
                 nativeScreenProbeLogged = true;
                 System.out.println("[nocturne] native screen probe: currentScreen=" + current
-                        + " screen=" + legacy);
+                        + " screen=" + legacy + " gui.screen=" + viaGui);
             }
-            return current != null || legacy != null;
+            return current != null || legacy != null || viaGui != null;
         } catch (Throwable t) {
             if (!nativeScreenProbeLogged) {
                 nativeScreenProbeLogged = true;

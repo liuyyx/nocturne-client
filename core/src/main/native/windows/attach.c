@@ -179,10 +179,15 @@ Java_dev_nocturne_core_attach_WindowsAttachNative_nCreatePipeServer(
     attributes.nLength = sizeof(attributes);
     attributes.lpSecurityDescriptor = NULL;
     attributes.bInheritHandle = FALSE;
-    if (ConvertStringSecurityDescriptorToSecurityDescriptorW(
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
             L"D:P(A;;GA;;;OW)(A;;GA;;;SY)", SDDL_REVISION_1, &descriptor, NULL)) {
-        attributes.lpSecurityDescriptor = descriptor;
+        /* fail-closed：构造不出受限 DACL 就**不建管道**。退回默认安全描述符时，任何同机用户
+         * 都能抢住这个可预测名字的管道，甚至伪装成目标写入伪造回复（结果被当成加载成功）。 */
+        g_lastError = GetLastError();
+        free(name);
+        return 0;
     }
+    attributes.lpSecurityDescriptor = descriptor;
 
     /* 单实例、字节流、阻塞模式：目标连入一次、读完回复即关，符合单命令语义。 */
     HANDLE pipe = CreateNamedPipeW(name,
@@ -273,14 +278,50 @@ Java_dev_nocturne_core_attach_NativePipeIo_nReadPipe(
     if (staging == NULL) {
         return -8; /* ERROR_NOT_ENOUGH_MEMORY 取反 */
     }
-    DWORD got = 0;
-    BOOL ok = ReadFile(pipe, staging, (DWORD)length, &got, NULL);
-    if (!ok) {
-        DWORD error = GetLastError();
+    /* 管道是用 FILE_FLAG_OVERLAPPED 建的：ReadFile **必须**带 OVERLAPPED 调用，否则立即
+     * 返回 ERROR_INVALID_PARAMETER；而且这里还要加读超时——目标被冻结/提前关连接时，同步读
+     * 会让 attach 线程永久阻塞。 */
+    OVERLAPPED overlapped;
+    memset(&overlapped, 0, sizeof(overlapped));
+    overlapped.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+    if (overlapped.hEvent == NULL) {
+        g_lastError = GetLastError();
         free(staging);
-        if (error == ERROR_BROKEN_PIPE) {
+        return -(jint)(g_lastError == 0 ? 1 : g_lastError);
+    }
+    DWORD got = 0;
+    BOOL ok = ReadFile(pipe, staging, (DWORD)length, &got, &overlapped);
+    DWORD error = ok ? 0 : GetLastError();
+    if (!ok && error == ERROR_IO_PENDING) {
+        /* 10 秒读截止时间：本地 attach 回复是即时的，超时说明目标卡死或连接已失效。 */
+        DWORD wait = WaitForSingleObject(overlapped.hEvent, 10000);
+        if (wait == WAIT_OBJECT_0) {
+            if (GetOverlappedResult(pipe, &overlapped, &got, FALSE)) {
+                ok = TRUE;
+                error = 0;
+            } else {
+                error = GetLastError();
+            }
+        } else {
+            /* 取消这次读，并**等到取消完成**再离开：OVERLAPPED 在栈上，提前返回会让内核
+             * 之后往失效栈帧写完成状态。 */
+#if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0600
+            CancelIoEx(pipe, &overlapped);
+#else
+            CancelIo(pipe);
+#endif
+            WaitForSingleObject(overlapped.hEvent, 5000);
+            error = (wait == WAIT_TIMEOUT) ? 1460 /* ERROR_TIMEOUT */ : GetLastError();
+        }
+    }
+    CloseHandle(overlapped.hEvent);
+    if (!ok) {
+        if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) {
+            free(staging);
             return 0; /* 对端关闭 = EOF，Java 侧按 -1 处理 */
         }
+        g_lastError = error;
+        free(staging);
         return -(jint)(error == 0 ? 1 : error);
     }
     if (got == 0) {

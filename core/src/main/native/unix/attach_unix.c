@@ -25,6 +25,7 @@
 
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/un.h>
 
@@ -32,6 +33,43 @@
  * Java 侧负责把返回码翻译成 IOException 文本，原生层不抛 Java 异常。 */
 static jint negErrno(int code) {
     return (jint)(-(code == 0 ? EIO : code));
+}
+
+/* 连接建立后的套接字选项：禁止 SIGPIPE、并给收发设置超时。
+ *
+ * <p>SIGPIPE：Linux 有 MSG_NOSIGNAL，macOS/BSD 没有这个标志，只能给套接字设 SO_NOSIGPIPE
+ * （不改进程级 signal 处置，避免影响宿主 JVM 的其它代码）。两者都缺时仍会退回普通 send，
+ * 但当前支持的平台至少命中一种。
+ *
+ * <p>超时：目标进程提前关闭连接/卡住时，read 会永久阻塞，attach 线程再也回不来。
+ * 5 秒足够任何本地 attach 往返，超时后 read 返回 -1/EAGAIN，Java 侧按 IOException 处理。 */
+#define ATTACH_IO_TIMEOUT_SECONDS 5
+
+static jint configureConnectedSocket(int fd) {
+#if defined(SO_NOSIGPIPE)
+    int one = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, (socklen_t)sizeof(one)) != 0) {
+        return negErrno(errno);
+    }
+#endif
+    struct timeval timeout;
+    timeout.tv_sec = ATTACH_IO_TIMEOUT_SECONDS;
+    timeout.tv_usec = 0;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, (socklen_t)sizeof(timeout)) != 0) {
+        return negErrno(errno);
+    }
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, (socklen_t)sizeof(timeout)) != 0) {
+        return negErrno(errno);
+    }
+    return 0;
+}
+
+/* 超时错误码归一：Java 侧只需要知道"超时"，不必区分平台细节。 */
+static jint ioError(int code) {
+    if (code == EAGAIN || code == EWOULDBLOCK) {
+        return negErrno(ETIMEDOUT);
+    }
+    return negErrno(code);
 }
 
 /* 向套接字写一段字节。Linux 用 MSG_NOSIGNAL、macOS 用 SO_NOSIGPIPE，
@@ -94,7 +132,13 @@ Java_dev_nocturne_core_attach_PosixAttachNative_nConnect(
                     result = negErrno(errno);
                     close(fd);
                 } else {
-                    result = (jint)fd;
+                    jint configured = configureConnectedSocket(fd);
+                    if (configured != 0) {
+                        close(fd);
+                        result = configured;
+                    } else {
+                        result = (jint)fd;
+                    }
                 }
             }
         }
@@ -133,7 +177,7 @@ Java_dev_nocturne_core_attach_PosixAttachNative_nWrite(
         } else if (n < 0 && errno == EINTR) {
             continue;
         } else {
-            result = (n < 0) ? negErrno(errno) : negErrno(EIO);
+            result = (n < 0) ? ioError(errno) : negErrno(EIO);
             break;
         }
     }
@@ -167,7 +211,9 @@ Java_dev_nocturne_core_attach_PosixAttachNative_nRead(
         n = read(fd, staging, (size_t)length);
     } while (n < 0 && errno == EINTR);
     if (n < 0) {
-        jint result = negErrno(errno);
+        // SO_RCVTIMEO 到期时 read 返回 -1/EAGAIN：转成 ETIMEDOUT，Java 侧按超时失败处理，
+        // 而不是把 EAGAIN 当成"稍后重试"无限循环。
+        jint result = ioError(errno);
         free(staging);
         return result;
     }

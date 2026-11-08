@@ -316,6 +316,10 @@ public final class NocturneAgent {
         if (instrumentation == null) {
             return;
         }
+        if (bootstrapBridgeInstalled) {
+            log("bootstrap bridge already installed; skipping repeat");
+            return;
+        }
         // 资源路径 → bootstrap 里的目标内部名。bootstrap 独有的类只能以资源形式随包
         // （见 dist 的 bridgeKeySink），交付 jar 里没有它们，Knot 因此拿不到第二份。
         String[][] entries = {
@@ -381,6 +385,7 @@ public final class NocturneAgent {
             } catch (Throwable ignored) {
                 log("system search path: skipped (" + ignored + ")");
             }
+            bootstrapBridgeInstalled = true;
             log("bootstrap bridge installed: " + entries.length + " classes from " + jar.getFileName());
         } catch (Throwable t) {
             log("bootstrap bridge failed: " + t);
@@ -524,8 +529,13 @@ public final class NocturneAgent {
     }
 
     private static void installFrameHook(Instrumentation instrumentation) {
+        if (frameHookInstalled) {
+            log("frame hook already installed; skipping repeat");
+            return;
+        }
         if (instrumentation == null) {
             log("no Instrumentation: frame hook skipped");
+            frameHookInstalled = true;
             return;
         }
         // 诊断：确认插桩通道本身可用。Fabric 下出现过「addTransformer 成功、transform 从不执行」
@@ -558,11 +568,13 @@ public final class NocturneAgent {
             // 滚轮只有 SDL 世代缺（GLFW 世代能轮询）；游戏的事件分发用 lookupswitch 按类型分流，
             // 滚轮走 SDLEventHandler.handleMouseWheelEvent，不会落到 Window.handleEvent，故挂在这里。
             installScrollHook(instrumentation);
+            frameHookInstalled = true;
             return;
         }
         if (asmLoader == null) {
             // 内嵌 ASM 缺失/损坏：不打钩子，但客户端引导与叠加层照常，其余功能不受影响。
             log("embedded ASM unavailable; frame hook skipped (overlay listener will idle)");
+            frameHookInstalled = true;
             return;
         }
         // 内部名一律用斜杠形式（跨任务契约 K2）；转换器构造器也做点号→斜杠归一化兜底。
@@ -1077,6 +1089,12 @@ public final class NocturneAgent {
             java.util.Collections.synchronizedList(new java.util.ArrayList<ClassFileTransformer>());
     /** 本会话的插桩句柄；自销毁解绑转换器时使用。 */
     private static volatile Instrumentation activeInstrumentation;
+    /** bootstrap 桥是否已装成功：失败重试时不得重复导出/追加搜索路径。 */
+    private static volatile boolean bootstrapBridgeInstalled;
+    /** 帧钩子注册是否已完成（含"判定为 SDL 栈、不注册"的终态结论）。 */
+    private static volatile boolean frameHookInstalled;
+    /** 叠加层是否已完成安装（含"无 Instrumentation、已放弃"的终态结论）。 */
+    private static volatile boolean overlayInstalled;
     /** 每个已加载目标类最近一次成功写入的字节；后续钩子据此链式修改，避免 redefine 后再 retransform。 */
     private static final java.util.Map<Class<?>, byte[]> GAMEPLAY_BYTES =
             new java.util.WeakHashMap<Class<?>, byte[]>();
@@ -2995,6 +3013,10 @@ public final class NocturneAgent {
      * 绝不向上抛出——绝不能因为叠加层问题影响游戏本身的运行。
      */
     private static void installOverlay(Instrumentation instrumentation) {
+        if (overlayInstalled) {
+            log("overlay already installed; skipping repeat");
+            return;
+        }
         try {
             // 用游戏实际加载的类加载器：Fabric/Forge 下游戏跑在隔离类加载器中，
             // 系统类加载器看不到 LWJGL。
@@ -3007,6 +3029,9 @@ public final class NocturneAgent {
             // 绘制钩子不需要任何预置配置：它只把当帧绘制上下文交给 bootstrap 层的汇，
             // 而汇由这里的 install 注册（静态状态必须放 bootstrap 层，见 GuiDrawHook 的说明）。
             OverlayBootstrap.install(loader, instrumentation, guiToggleKey, openGuiOnInstall);
+            // 只有真正交给 OverlayBootstrap 之后才标记完成；失败允许下一次 attach 重试，
+            // 但成功路径绝不会重复注册（重复 install 会把 listener 加第二遍）。
+            overlayInstalled = true;
             log("overlay bootstrap registered; toggle key=" + guiToggleKey);
         } catch (Throwable t) {
             log("overlay attach failed: " + t);

@@ -115,6 +115,45 @@ class GameBridgeCompatibilityTest {
     }
 
     @Test
+    void localMessageUsesHudChatOnModernVersions() {
+        // 26.x 形态：Minecraft.gui 是 Hud，聊天入口是 Hud.chat / getChat() →
+        // ChatComponent.addClientSystemMessage；Gui 上的三个旧入口全部 absent。
+        FakeHud263 hud = new FakeHud263();
+        FakeChatComponent263 chat = new FakeChatComponent263();
+        hud.chat = chat;
+        FakeMinecraft.instance.gui = hud;
+        TestMapping mapping = new TestMapping(FakeMinecraft.class)
+                .hudAndChat(FakeHud263.class, FakeChatComponent263.class)
+                .absent(new java.util.HashSet<String>(java.util.Arrays.asList(
+                        "HUD#displayClientMessage", "HUD#getChat", "HUD#getChatGUI")));
+        client.setGameBridge(new GameBridge(null, mapping));
+        bridge = client.gameBridge();
+
+        assertTrue(bridge.localMessage("smoke263"));
+        assertEquals(1, chat.messages);
+        assertEquals("smoke263", String.valueOf(chat.last));
+    }
+
+    @Test
+    void localMessageDoesNotRetryAbsentGuiEntries() {
+        FakeHud263 hud = new FakeHud263();
+        FakeChatComponent263 chat = new FakeChatComponent263();
+        hud.chat = chat;
+        FakeMinecraft.instance.gui = hud;
+        TestMapping mapping = new TestMapping(FakeMinecraft.class)
+                .hudAndChat(FakeHud263.class, FakeChatComponent263.class)
+                .absent(new java.util.HashSet<String>(java.util.Arrays.asList(
+                        "HUD#displayClientMessage", "HUD#getChat", "HUD#getChatGUI")));
+        client.setGameBridge(new GameBridge(null, mapping));
+        bridge = client.gameBridge();
+
+        assertTrue(bridge.localMessage("one"));
+        assertTrue(bridge.localMessage("two"));
+        assertEquals(2, chat.messages);
+        assertEquals(0, hud.getChatCalls, "26.x 不应再走 Gui.getChat/getChatGUI 入口");
+    }
+
+    @Test
     void localMessageReportsFailureWhenNoEntryExists() {
         FakeMinecraft.instance.gui = new FakeGui();
         assertFalse(bridge.localMessage("hello"));

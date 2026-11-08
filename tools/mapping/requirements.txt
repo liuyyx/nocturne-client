@@ -28,6 +28,10 @@ net/minecraft/client/gui/Gui#displayClientMessage()
 net/minecraft/client/gui/Gui#getChat()
 net/minecraft/client/gui/Gui#getChatGUI()
 net/minecraft/client/gui/components/ChatComponent#addMessage()
+net/minecraft/client/gui/components/ChatComponent#addClientSystemMessage()
+net/minecraft/client/gui/Hud
+net/minecraft/client/gui/Hud#getChat()
+net/minecraft/client/gui/Hud#chat
 net/minecraft/client/gui/GuiNewChat#printChatMessage()
 net/minecraft/sounds/SoundEvents
 net/minecraft/world/entity/player/Player#playSound()

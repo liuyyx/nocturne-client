@@ -1372,9 +1372,38 @@
                         "forge": "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
                         "neoforge": "(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V"
                     }
+                },
+                "getChat": {
+                    "names": {
+                        "vanilla": "getChat",
+                        "fabric": "getChat",
+                        "forge": "getChat",
+                        "neoforge": "getChat"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lnet/minecraft/client/gui/components/ChatComponent;",
+                        "fabric": "()Lnet/minecraft/client/gui/components/ChatComponent;",
+                        "forge": "()Lnet/minecraft/client/gui/components/ChatComponent;",
+                        "neoforge": "()Lnet/minecraft/client/gui/components/ChatComponent;"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "chat": {
+                    "names": {
+                        "vanilla": "chat",
+                        "fabric": "chat",
+                        "forge": "chat",
+                        "neoforge": "chat"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lnet/minecraft/client/gui/components/ChatComponent;",
+                        "fabric": "Lnet/minecraft/client/gui/components/ChatComponent;",
+                        "forge": "Lnet/minecraft/client/gui/components/ChatComponent;",
+                        "neoforge": "Lnet/minecraft/client/gui/components/ChatComponent;"
+                    }
+                }
+            }
         },
         "net/minecraft/client/gui/components/ChatComponent": {
             "names": {
@@ -1384,6 +1413,20 @@
                 "neoforge": "net.minecraft.client.gui.components.ChatComponent"
             },
             "methods": {
+                "addClientSystemMessage": {
+                    "names": {
+                        "vanilla": "addClientSystemMessage",
+                        "fabric": "addClientSystemMessage",
+                        "forge": "addClientSystemMessage",
+                        "neoforge": "addClientSystemMessage"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lnet/minecraft/network/chat/Component;)V",
+                        "fabric": "(Lnet/minecraft/network/chat/Component;)V",
+                        "forge": "(Lnet/minecraft/network/chat/Component;)V",
+                        "neoforge": "(Lnet/minecraft/network/chat/Component;)V"
+                    }
+                },
                 "addMessage": {
                     "names": {
                         "vanilla": "addMessage",

@@ -253,6 +253,13 @@ public enum ClassType {
      * {@code GuiNewChat#printChatMessage}（映射表按别名归一到同一个规范成员）。
      */
     CHAT_HUD("net.minecraft.client.gui.components.ChatComponent"),
+    /**
+     * 26.x 的 HUD 宿主（{@code Minecraft.gui} 的运行时类型）。
+     *
+     * <p>26.x 把聊天框从 {@code Gui} 搬到了 {@code Hud}：{@code Hud.chat}/{@code Hud.getChat()}
+     * 才是本地播报入口，{@code Gui#getChat} 在这些版本是 verified absent。
+     */
+    HUD_CHAT("net.minecraft.client.gui.Hud"),
     MUTABLE_COMPONENT("net.minecraft.network.chat.MutableComponent"),
     STYLE("net.minecraft.network.chat.Style"),
     /** 原版声音常量；报警和命中音效共享。 */

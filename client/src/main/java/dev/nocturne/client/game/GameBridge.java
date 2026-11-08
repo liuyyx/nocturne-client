@@ -862,17 +862,8 @@ public final class GameBridge {
                 && callMappedStatus(gui, ClassType.HUD, "displayClientMessage", component, false)) {
             return true;
         }
-        // 1.19+/26.x：Gui.getChat()；1.8.9–1.12：Gui.getChatGUI()。两者都走映射（混淆名不同）。
-        Object chat = callMapped(gui, ClassType.HUD, "getChat");
-        if (chat == null) {
-            chat = callMapped(gui, ClassType.HUD, "getChatGUI");
-        }
-        if (chat == null) {
-            chat = fieldFirst(gui, "chat", "chatComponent");
-        }
-        if (chat != null && (callMappedStatus(chat, ClassType.CHAT_HUD, "addMessage", component)
-                || methodAnyStatus(chat, new Object[]{component},
-                "addMessage", "printChatMessage"))) {
+        Object chat = chatOf(gui);
+        if (chat != null && sendToChat(chat, component)) {
             return true;
         }
         if (!localMessageWarned) {
@@ -881,6 +872,68 @@ public final class GameBridge {
                     + " version (no displayClientMessage / chat addMessage entry)");
         }
         return false;
+    }
+
+    /**
+     * 找到当前 HUD 的聊天框实例。
+     *
+     * <p>26.x 把聊天从 {@code Gui} 搬到了 {@code Hud}（{@code Hud.chat} 字段 / {@code Hud.getChat()}），
+     * 而 {@code Gui#getChat} 在这些版本是 verified absent——继续按 Gui 找只会每 tick 打一条
+     * "no overload for getChat"。因此按映射表的 absent 标记短路，只试真实存在的入口。
+     *
+     * @param hud {@code Minecraft.gui} 实例
+     * @return 聊天框；不可用为 null
+     */
+    private Object chatOf(Object hud) {
+        if (hud == null) {
+            return null;
+        }
+        // 26.x：Minecraft.gui 的运行时类型就是 Hud，聊天入口在它自己身上。
+        if (type(ClassType.HUD_CHAT) != null) {
+            Object chat = readField(hud, ClassType.HUD_CHAT, "chat");
+            if (chat == null && !mapping.isMemberAbsent(ClassType.HUD_CHAT, "getChat")) {
+                chat = callMapped(hud, ClassType.HUD_CHAT, "getChat");
+            }
+            if (chat != null) {
+                return chat;
+            }
+        }
+        // 1.19–1.21：Gui.getChat()；1.8.9–1.12：Gui.getChatGUI()。
+        if (!mapping.isMemberAbsent(ClassType.HUD, "getChat")) {
+            Object chat = callMapped(hud, ClassType.HUD, "getChat");
+            if (chat != null) {
+                return chat;
+            }
+        }
+        if (!mapping.isMemberAbsent(ClassType.HUD, "getChatGUI")) {
+            Object chat = callMapped(hud, ClassType.HUD, "getChatGUI");
+            if (chat != null) {
+                return chat;
+            }
+        }
+        return fieldFirst(hud, "chat", "chatComponent");
+    }
+
+    /**
+     * 把组件写进聊天框。
+     *
+     * <p>26.x 的 {@code ChatComponent#addMessage} 是 private，公开入口是
+     * {@code addClientSystemMessage(Component)}；1.8.9–1.12 是 {@code GuiNewChat#printChatMessage}
+     * （映射表按别名归一到 {@code addMessage}）。
+     *
+     * @return 是否成功写入
+     */
+    private boolean sendToChat(Object chat, Object component) {
+        if (!mapping.isMemberAbsent(ClassType.CHAT_HUD, "addClientSystemMessage")
+                && callMappedStatus(chat, ClassType.CHAT_HUD, "addClientSystemMessage", component)) {
+            return true;
+        }
+        if (!mapping.isMemberAbsent(ClassType.CHAT_HUD, "addMessage")
+                && callMappedStatus(chat, ClassType.CHAT_HUD, "addMessage", component)) {
+            return true;
+        }
+        return methodAnyStatus(chat, new Object[]{component},
+                "addClientSystemMessage", "addMessage", "printChatMessage");
     }
 
     /**

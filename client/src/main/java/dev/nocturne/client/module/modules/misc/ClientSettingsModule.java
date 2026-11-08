@@ -28,7 +28,7 @@ public final class ClientSettingsModule extends GameModule {
     public static boolean multiKeybinding() {
         NocturneClient client = NocturneClient.get();
         ClientSettingsModule module = client == null ? null
-                : (ClientSettingsModule) client.modules().get("GUI");
+                : (ClientSettingsModule) client.modules().get("Client Setting");
         return module == null || module.multiKeybinding.get();
     }
 }

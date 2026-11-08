@@ -522,6 +522,12 @@
                 "extractRenderState": {
                     "absent": true
                 },
+                "getChat": {
+                    "absent": true
+                },
+                "getChatGUI": {
+                    "absent": true
+                },
                 "render": {
                     "absent": true
                 },
@@ -562,7 +568,19 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/gui/GuiNewChat": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/gui/Hud": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/ChatComponent": {
             "absent": true,
             "names": {},
             "methods": {},
@@ -1785,6 +1803,12 @@
             "fields": {}
         },
         "net/minecraft/network/chat/Style": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/chat/TextComponent": {
             "absent": true,
             "names": {},
             "methods": {},

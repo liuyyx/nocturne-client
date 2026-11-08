@@ -19,6 +19,10 @@ public final class ModuleKeybinds {
 
     /** 在客户端事件总线上安装监听。重复调用会得到多个监听，故只由 {@code install()} 调用一次。 */
     public static void install(final NocturneClient client) {
+        // 没有键盘事件源的版本（1.8.9–1.12 的 KeyboardHandler 在映射表里 absent）由轮询回退
+        // 把 LWJGL2 的按键边沿变成 KeyEvent；事件源可用时该监听器自己静默退出。
+        dev.nocturne.client.runtime.NocturneRuntime.addListener(
+                new dev.nocturne.client.runtime.KeyPollListener(client));
         client.events().subscribe(KeyEvent.class, new java.util.function.Consumer<KeyEvent>() {
             @Override
             public void accept(KeyEvent event) {

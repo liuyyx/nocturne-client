@@ -67,7 +67,7 @@ public final class TellyModule extends GameModule implements WorldOverlay {
             event.jump = phase >= 1 && phase <= 19;
             event.sprint = phase <= 1;
         });
-        Module safeWalk = client().modules().get("SafeWalk");
+        Module safeWalk = client().modules().get("Safe Walk");
         if (disableSafeWalk.get() && safeWalk != null && safeWalk.isEnabled()) {
             safeWalk.setEnabled(false);
             disabledSafeWalk = true;
@@ -145,7 +145,7 @@ public final class TellyModule extends GameModule implements WorldOverlay {
             actions().selectSlot(original, false);
         }
         if (disabledSafeWalk) {
-            Module safeWalk = client().modules().get("SafeWalk");
+            Module safeWalk = client().modules().get("Safe Walk");
             if (safeWalk != null) {
                 safeWalk.setEnabled(true);
             }

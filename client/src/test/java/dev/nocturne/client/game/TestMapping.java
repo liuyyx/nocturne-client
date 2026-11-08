@@ -24,7 +24,13 @@ public final class TestMapping implements Mapping {
 
     @Override
     public String className(ClassType type) {
-        return type == ClassType.MINECRAFT ? minecraftClass.getName() : type.canonicalName();
+        if (type == ClassType.MINECRAFT) {
+            return minecraftClass.getName();
+        }
+        if (type == ClassType.COMPONENT) {
+            return FakeComponent.class.getName();
+        }
+        return type.canonicalName();
     }
 
     @Override

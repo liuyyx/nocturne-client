@@ -24,6 +24,11 @@ net/minecraft/client/Minecraft#gameMode
 net/minecraft/client/Minecraft#gameRenderer
 net/minecraft/client/Minecraft#gui
 net/minecraft/client/gui/Gui#displayClientMessage
+# 本地播报的另两条世代入口：1.19+/26.x 的聊天框与 1.8.9–1.12 的 GuiNewChat
+net/minecraft/client/gui/Gui#getChat()
+net/minecraft/client/gui/Gui#getChatGUI()
+net/minecraft/client/gui/components/ChatComponent#addMessage()
+net/minecraft/client/gui/GuiNewChat#printChatMessage()
 net/minecraft/sounds/SoundEvents
 net/minecraft/world/entity/player/Player#playSound
 net/minecraft/client/Minecraft#hitResult

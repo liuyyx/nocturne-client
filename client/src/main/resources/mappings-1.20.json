@@ -963,6 +963,21 @@
                 "extractRenderState": {
                     "absent": true
                 },
+                "getChat": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_1743",
+                        "forge": "m_93076_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lepj;",
+                        "fabric": "()Lnet/minecraft/class_338;",
+                        "forge": "()Lnet/minecraft/client/gui/components/ChatComponent;"
+                    }
+                },
+                "getChatGUI": {
+                    "absent": true
+                },
                 "render": {
                     "names": {
                         "vanilla": "a",
@@ -1064,10 +1079,38 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/gui/GuiNewChat": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/gui/Hud": {
             "absent": true,
             "names": {},
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/ChatComponent": {
+            "names": {
+                "vanilla": "epj",
+                "fabric": "net.minecraft.class_338",
+                "forge": "net.minecraft.client.gui.components.ChatComponent"
+            },
+            "methods": {
+                "addMessage": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1812",
+                        "forge": "m_93785_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lsw;)V",
+                        "fabric": "(Lnet/minecraft/class_2561;)V",
+                        "forge": "(Lnet/minecraft/network/chat/Component;)V"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/gui/components/events/ContainerEventHandler": {
@@ -2610,6 +2653,12 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/network/chat/TextComponent": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/Packet": {
             "names": {

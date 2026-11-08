@@ -820,6 +820,21 @@
                 "extractRenderState": {
                     "absent": true
                 },
+                "getChat": {
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "method_1743",
+                        "forge": "func_146158_b"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lczj;",
+                        "fabric": "()Lnet/minecraft/class_338;",
+                        "forge": "()Lnet/minecraft/client/gui/NewChatGui;"
+                    }
+                },
+                "getChatGUI": {
+                    "absent": true
+                },
                 "render": {
                     "names": {
                         "vanilla": "a",
@@ -903,10 +918,38 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/gui/GuiNewChat": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/gui/Hud": {
             "absent": true,
             "names": {},
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/ChatComponent": {
+            "names": {
+                "vanilla": "czj",
+                "fabric": "net.minecraft.class_338",
+                "forge": "net.minecraft.client.gui.NewChatGui"
+            },
+            "methods": {
+                "addMessage": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1812",
+                        "forge": "func_146227_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ljo;)V",
+                        "fabric": "(Lnet/minecraft/class_2561;)V",
+                        "forge": "(Lnet/minecraft/util/text/ITextComponent;)V"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/gui/components/events/ContainerEventHandler": {
@@ -2215,6 +2258,15 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/network/chat/TextComponent": {
+            "names": {
+                "vanilla": "jx",
+                "fabric": "net.minecraft.class_2585",
+                "forge": "net.minecraft.util.text.StringTextComponent"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/Packet": {
             "names": {

@@ -240,6 +240,19 @@ public enum ClassType {
     CLIENTBOUND_SET_ACTION_BAR_TEXT("net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket"),
     /** 文本组件与可变内容；TitleReplace 在包上替换内容。 */
     COMPONENT("net.minecraft.network.chat.Component"),
+    /**
+     * 可构造的纯文本组件。
+     *
+     * <p>1.8.9–1.12 的 {@code IChatComponent} 是接口，本地播报需要一个实例；那时只有
+     * {@code ChatComponentText(String)}。1.13+ 直接 {@code Component.literal(String)}，
+     * 该类型只在旧版映射表里出现（其余版本标 absent，调用方走 literal）。
+     */
+    TEXT_COMPONENT("net.minecraft.network.chat.TextComponent"),
+    /**
+     * HUD 聊天框：1.19+ 是 {@code ChatComponent#addMessage}，1.8.9–1.12 是
+     * {@code GuiNewChat#printChatMessage}（映射表按别名归一到同一个规范成员）。
+     */
+    CHAT_HUD("net.minecraft.client.gui.components.ChatComponent"),
     MUTABLE_COMPONENT("net.minecraft.network.chat.MutableComponent"),
     STYLE("net.minecraft.network.chat.Style"),
     /** 原版声音常量；报警和命中音效共享。 */

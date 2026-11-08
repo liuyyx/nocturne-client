@@ -524,6 +524,30 @@
                 "extractRenderState": {
                     "absent": true
                 },
+                "getChat": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_1743",
+                        "forge": "func_146158_b"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lavt;",
+                        "fabric": "()Lnet/minecraft/class_338;",
+                        "forge": "()Lnet/minecraft/client/gui/GuiNewChat;"
+                    }
+                },
+                "getChatGUI": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_1743",
+                        "forge": "func_146158_b"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lavt;",
+                        "fabric": "()Lnet/minecraft/class_338;",
+                        "forge": "()Lnet/minecraft/client/gui/GuiNewChat;"
+                    }
+                },
                 "render": {
                     "absent": true
                 },
@@ -564,10 +588,38 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/client/gui/GuiNewChat": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/gui/Hud": {
             "absent": true,
             "names": {},
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/ChatComponent": {
+            "names": {
+                "vanilla": "avt",
+                "fabric": "net.minecraft.class_338",
+                "forge": "net.minecraft.client.gui.GuiNewChat"
+            },
+            "methods": {
+                "addMessage": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1812",
+                        "forge": "func_146227_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Leu;)V",
+                        "fabric": "(Lnet/minecraft/class_2561;)V",
+                        "forge": "(Lnet/minecraft/util/IChatComponent;)V"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/gui/components/events/ContainerEventHandler": {
@@ -1758,6 +1810,15 @@
         "net/minecraft/network/chat/Style": {
             "absent": true,
             "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/network/chat/TextComponent": {
+            "names": {
+                "vanilla": "fa",
+                "fabric": "net.minecraft.class_2585",
+                "forge": "net.minecraft.util.ChatComponentText"
+            },
             "methods": {},
             "fields": {}
         },

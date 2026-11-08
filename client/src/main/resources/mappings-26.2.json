@@ -763,6 +763,12 @@
                         "neoforge": "extractRenderState"
                     }
                 },
+                "getChat": {
+                    "absent": true
+                },
+                "getChatGUI": {
+                    "absent": true
+                },
                 "render": {
                     "absent": true
                 },
@@ -855,6 +861,12 @@
             },
             "fields": {}
         },
+        "net/minecraft/client/gui/GuiNewChat": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/gui/Hud": {
             "names": {
                 "vanilla": "net.minecraft.client.gui.Hud",
@@ -869,6 +881,25 @@
                         "fabric": "extractRenderState",
                         "forge": "extractRenderState",
                         "neoforge": "extractRenderState"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/ChatComponent": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.components.ChatComponent",
+                "fabric": "net.minecraft.client.gui.components.ChatComponent",
+                "forge": "net.minecraft.client.gui.components.ChatComponent",
+                "neoforge": "net.minecraft.client.gui.components.ChatComponent"
+            },
+            "methods": {
+                "addMessage": {
+                    "names": {
+                        "vanilla": "addMessage",
+                        "fabric": "addMessage",
+                        "forge": "addMessage",
+                        "neoforge": "addMessage"
                     }
                 }
             },
@@ -2071,6 +2102,12 @@
                     "absent": true
                 }
             }
+        },
+        "net/minecraft/network/chat/TextComponent": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/Packet": {
             "names": {

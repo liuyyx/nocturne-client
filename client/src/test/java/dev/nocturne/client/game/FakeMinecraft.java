@@ -13,6 +13,10 @@ public final class FakeMinecraft {
     public Object player;
     /** {@code Minecraft.options} 对应字段 */
     public Object options;
+    /** {@code Minecraft.gui} 对应字段（26.x 的当前界面挂在 {@code Gui.screen()} 上） */
+    public Object gui;
+    /** {@code Minecraft.level} 对应字段 */
+    public Object level;
 
     private FakeMinecraft() {
     }

@@ -60,6 +60,9 @@ public final class GameBridge {
             new ConcurrentHashMap<ConstructorKey, java.lang.reflect.Constructor<?>>();
     /** 日志限流计数器，避免热路径上的失败信息刷屏。 */
     private final AtomicLong logCount = new AtomicLong();
+    /** 已打印过的诊断消息：同一条只打一次（映射缺失是静态事实，重复打印只会刷屏）。 */
+    private static final Set<String> REPORTED_MESSAGES =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
     /** 方块坐标构造器；首次使用时解析，失败不缓存。 */
     private volatile java.lang.reflect.Constructor<?> blockPosConstructor;
     /** 区块重建失败是否已告警；映射缺失的版本只需一条日志。 */
@@ -68,6 +71,8 @@ public final class GameBridge {
     private volatile boolean perspectiveWarned;
     /** 计分板槽位解析失败是否已告警；HUD 每个刷新周期都会重试。 */
     private volatile boolean scoreboardSlotWarned;
+    /** 本地 HUD 播报不可用是否已告警（只在首次失败时打印）。 */
+    private volatile boolean localMessageWarned;
 
     /**
      * 构造反射桥。
@@ -411,6 +416,108 @@ public final class GameBridge {
         return index == null ? -1 : index.intValue();
     }
 
+    /**
+     * 按**字面方法名**依次尝试调用（映射表缺该成员、或不同版本换了名字时用）。
+     *
+     * <p>只尝试目标类上真实存在的方法名：不存在的名字直接跳过，不产生 "no overload" 日志。
+     * 形参由实参类型推断（与 {@link #callMapped} 同一套规则），第一个返回非 null 的候选胜出。
+     *
+     * @param target 接收者
+     * @param args   实参
+     * @param names  候选方法名，按优先级排列
+     * @return 第一个成功调用的非 null 返回值；全部失败为 null
+     */
+    private Object methodAny(Object target, Object[] args, String... names) {
+        if (target == null) {
+            return null;
+        }
+        Class<?> type = target.getClass();
+        for (String name : names) {
+            if (!hasMethodNamed(type, name)) {
+                continue;
+            }
+            Class<?>[] parameters = inferParameters(type, name, args);
+            if (parameters == null) {
+                continue;
+            }
+            Method method = findMethodCached(type, name, parameters);
+            if (method == null) {
+                continue;
+            }
+            Object result = Reflect.call(method, target, args);
+            if (result != null) {
+                return result;
+            }
+        }
+        return null;
+    }
+
+    /** {@link #methodAny} 的 void 版本：返回是否至少有一个候选调用成功。 */
+    private boolean methodAnyStatus(Object target, Object[] args, String... names) {
+        if (target == null) {
+            return false;
+        }
+        Class<?> type = target.getClass();
+        for (String name : names) {
+            if (!hasMethodNamed(type, name)) {
+                continue;
+            }
+            Class<?>[] parameters = inferParameters(type, name, args);
+            if (parameters == null) {
+                continue;
+            }
+            Method method = findMethodCached(type, name, parameters);
+            if (method != null && Reflect.callStatus(method, target, args)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 无参 {@link #methodAny} 的简写。 */
+    private Object methodFirst(Object target, String name) {
+        return methodAny(target, new Object[0], name);
+    }
+
+    /**
+     * 依次读取若干候选字段名（不同版本字段名不同）：返回第一个非 null 值。
+     *
+     * @param owner 宿主实例
+     * @param names 候选字段名
+     * @return 第一个非 null 字段值；全部缺失为 null
+     */
+    private Object fieldFirst(Object owner, String... names) {
+        if (owner == null) {
+            return null;
+        }
+        Class<?> type = owner.getClass();
+        for (String name : names) {
+            Field field = findFieldCached(type, name);
+            if (field == null) {
+                continue;
+            }
+            try {
+                Object value = field.get(owner);
+                if (value != null) {
+                    return value;
+                }
+            } catch (Throwable ignored) {
+                // 单个候选读失败不阻断其余候选
+            }
+        }
+        return null;
+    }
+
+    /** 类（含父类链）上是否存在同名方法；用于在尝试前过滤，避免无谓的 no-overload 日志。 */
+    private boolean hasMethodNamed(Class<?> type, String name) {
+        for (Method method : collectMethods(type)) {
+            if (method.getName().equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 当前显示计分板的标题和玩家分数行。 */
     public java.util.List<String> scoreboardLines() {
         Object board = callMapped(world(), ClassType.CLIENT_LEVEL, "getScoreboard");
@@ -429,11 +536,21 @@ public final class GameBridge {
         java.util.List<String> lines = new java.util.ArrayList<String>();
         String title = componentText(callMapped(objective, ClassType.OBJECTIVE, "getDisplayName"));
         lines.add(title == null ? "Scoreboard" : title);
-        Object scores = callMapped(board, ClassType.SCOREBOARD, "getPlayerScores", objective);
+        Object scores = mapping.isMemberAbsent(ClassType.SCOREBOARD, "getPlayerScores")
+                ? null
+                : callMapped(board, ClassType.SCOREBOARD, "getPlayerScores", objective);
+        if (!(scores instanceof Iterable<?>)) {
+            // 1.20.3+/26.x 换成 listPlayerScores(Objective) → Collection<PlayerScoreEntry>；
+            // 条目也不再是 Score，而是 owner()/value() 的只读记录。两个形态都要吃下来，
+            // 否则侧边栏整块空白（映射表里 getPlayerScores 在 26.x 标 absent）。
+            scores = methodAny(board, new Object[]{objective},
+                    "listPlayerScores", "getPlayerScores");
+        }
         if (scores instanceof Iterable<?>) {
             for (Object score : (Iterable<?>) scores) {
-                Object owner = callMapped(score, ClassType.SCORE, "getOwner");
-                Number points = number(callMapped(score, ClassType.SCORE, "getScore"));
+                Object owner = methodAny(score, new Object[0], "owner", "getOwner", "name");
+                Number points = number(methodAny(score, new Object[0],
+                        "value", "getValue", "getScore"));
                 if (owner != null && points != null) {
                     lines.add(owner + " " + points.intValue());
                 }
@@ -622,11 +739,32 @@ public final class GameBridge {
         return componentText(callMapped(currentScreen(), ClassType.SCREEN, "getTitle"));
     }
 
-    /** 当前原生界面；未打开时为 null。 */
+    /**
+     * 当前原生界面；未打开时为 {@code null}。
+     *
+     * <p>26.x 的 {@code Minecraft} 没有 {@code currentScreen}/{@code screen} 字段（映射表里标为
+     * absent），当前界面挂在 {@code Gui.screen()} 上。旧版只有字段。两条路都必须走，否则
+     * 26.x 上永远返回 null：InvWalk（界面里允许移动）、Hover Totem、Better Chat、Stealer
+     * 这类"容器/界面打开时暂停"的判断全部恒假——模块开着却照常动作。
+     */
     public Object currentScreen() {
         Object minecraft = minecraft();
+        if (minecraft == null) {
+            return null;
+        }
         Object current = readField(minecraft, ClassType.MINECRAFT, "currentScreen");
-        return current != null ? current : readField(minecraft, ClassType.MINECRAFT, "screen");
+        if (current == null) {
+            current = readField(minecraft, ClassType.MINECRAFT, "screen");
+        }
+        if (current != null) {
+            return current;
+        }
+        // 26.x：Minecraft.gui.screen()。映射表明确标 absent 的版本不要白试（会刷 no overload）。
+        if (mapping.isMemberAbsent(ClassType.HUD, "screen")) {
+            return null;
+        }
+        Object gui = readField(minecraft, ClassType.MINECRAFT, "gui");
+        return gui == null ? null : callMapped(gui, ClassType.HUD, "screen");
     }
 
     /** 本地玩家 Input 对象。 */
@@ -684,11 +822,66 @@ public final class GameBridge {
         return player == null ? null : readField(player, ClassType.LOCAL_PLAYER, "connection");
     }
 
-    /** 在当前 HUD 显示本地消息，不发送到服务器。 */
+    /**
+     * 在当前 HUD 显示本地消息，不发送到服务器。
+     *
+     * <p>三个世代的入口完全不同，映射表里没有统一的 {@code displayClientMessage}：
+     * <ul>
+     *   <li>1.20–1.21.x：{@code Gui.displayClientMessage(Component, boolean)}；</li>
+     *   <li>1.19+/26.x：{@code Gui.getChat()} → {@code ChatComponent.addMessage(Component)}；</li>
+     *   <li>1.8.9–1.12：{@code Gui.getChatGUI()} → {@code printChatMessage(IChatComponent)}。</li>
+     * </ul>
+     * 依次尝试，全部失败时只告警一次并返回 false——调用方（Telly/ServerGuard/PlayerAlarms）
+     * 据此知道播报不可用，而不是以为已经发出去了。
+     *
+     * @param text 纯文本
+     * @return true 表示确实已交给 HUD 显示
+     */
     public boolean localMessage(String text) {
-        Object gui = readField(minecraft(), ClassType.MINECRAFT, "gui");
-        Object component = callStaticMapped(ClassType.COMPONENT, "literal", text);
-        return callMappedStatus(gui, ClassType.HUD, "displayClientMessage", component, false);
+        Object minecraft = minecraft();
+        if (minecraft == null) {
+            return false;
+        }
+        Object gui = readField(minecraft, ClassType.MINECRAFT, "gui");
+        Object component = messageComponent(text);
+        if (gui == null || component == null) {
+            return false;
+        }
+        if (hasMethodNamed(gui.getClass(), "displayClientMessage")
+                && callMappedStatus(gui, ClassType.HUD, "displayClientMessage", component, false)) {
+            return true;
+        }
+        // 1.19+/26.x：Gui.getChat()；1.8.9–1.12：Gui.getChatGUI()。两者都走映射（混淆名不同）。
+        Object chat = callMapped(gui, ClassType.HUD, "getChat");
+        if (chat == null) {
+            chat = callMapped(gui, ClassType.HUD, "getChatGUI");
+        }
+        if (chat == null) {
+            chat = fieldFirst(gui, "chat", "chatComponent");
+        }
+        if (chat != null && (callMappedStatus(chat, ClassType.CHAT_HUD, "addMessage", component)
+                || methodAnyStatus(chat, new Object[]{component},
+                "addMessage", "printChatMessage"))) {
+            return true;
+        }
+        if (!localMessageWarned) {
+            localMessageWarned = true;
+            System.out.println("[nocturne] GameBridge: local HUD message unavailable on this"
+                    + " version (no displayClientMessage / chat addMessage entry)");
+        }
+        return false;
+    }
+
+    /**
+     * 构造一条本地消息的聊天组件。
+     *
+     * <p>1.13+ 用 {@code Component.literal(String)}；1.8.9–1.12 的 {@code IChatComponent} 是接口，
+     * 必须 new 出具体实现 {@code ChatComponentText(String)}（映射表 {@code TEXT_COMPONENT}）。
+     * 两条路都不可用时返回 null，由调用方明确降级而不是假装发出去。
+     */
+    private Object messageComponent(String text) {
+        Object literal = callStaticMapped(ClassType.COMPONENT, "literal", text);
+        return literal != null ? literal : construct(ClassType.TEXT_COMPONENT, text);
     }
 
     /** 播放原版声音常量；缺失的版本/声音返回 false。 */
@@ -2165,7 +2358,9 @@ public final class GameBridge {
     /** 限流日志：前若干次与之后每 {@code 600} 次打印一条，避免热路径刷屏。 */
     private void logThrottled(String message, Throwable cause) {
         long count = logCount.incrementAndGet();
-        if (count <= 5 || count % 600 == 0) {
+        // 同一条消息只打印一次：映射缺失是**静态事实**，热路径上每个 tick 重试同一次调用会把
+        // 日志刷成一片（真机：getOffhandItem 每秒数条）。计数仍保留，便于诊断总量。
+        if (REPORTED_MESSAGES.add(message) && (count <= 5 || REPORTED_MESSAGES.size() <= 64)) {
             System.out.println("[nocturne] GameBridge: " + message + (cause == null ? "" : " (" + cause + ")"));
         }
     }

@@ -19,12 +19,16 @@
   `InvocationTargetException` 出现 **0 次**，无 `NoSuchMethodError` / `VerifyError` / 崩溃。
 - 真机日志：`tmp/mc-1_8_9-run.log`、`tmp/mc-26_3_Fabric_0_19_5.log`（推送前的旧构建里这两份日志
   记录的 `screenOpen` / `disableScissor` / `getDisplayObjective` 三类报错均已在本轮修复）。
+- 2026-11-08 `38705b4`：26.x 改由 `Gui.setScreen(Screen)` 投递 `ScreenEvent`（`Minecraft` 侧
+  `setScreen` 仍 absent），26.3 真机 `hook H10 hit`；1.8.9 / 1.12.2 / 1.20.1 的 `Gui` 无此方法，
+  表里显式 `absent`，不重复挂载。复验门禁：测试 505 项零失败（client 184 → 188），
+  映射面仍 162 个类（26.3 resolved 394 / absent 147）。
 
 ### 已知缺口与明确降级（同一次回归的边界）
 
 | 项 | 现状 | 说明 |
 |---|---|---|
-| 26.3 `ScreenEvent` | 未挂到 `Gui.setScreen` | 本版本来就没有模块订阅「原生界面开/关边沿」；等真有订阅方时再接，不先造一个空钩子 |
+| 早期世代的 `ScreenEvent` | 1.8.9 / 1.12.2 / 1.20.1 的 `Gui` 没有 `setScreen`，表中显式标 `absent` | 26.x 已改为由 `Gui.setScreen(Screen)` 投递（`38705b4`，真机 `hook H10 hit`）；两代按版本互斥，不重复挂载，早期世代也不假装能投 |
 | 1.21.5–26.3 Chams / 部分 Xray | 没有真实绘制入口时显示 `unavailable`，Xray 只画矿框 | `EntityRenderDispatcher#render`、`BlockRenderDispatcher#renderBatched` 在 26.x 找不到可织入的描述符；日志显式写 `unavailable`，不静默假装生效 |
 | 1.8.9 `Couldn't load chunk` | 存档自身问题，非客户端缺陷 | 该 NPE 的栈帧全部在 `1.8.9.jar` 内（`dn.a` → `MinecraftServer.run`），没有 nocturne 帧；换存档不复现 |
 
@@ -256,7 +260,7 @@
 
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
-表的规模为 **162 个类**（客户端实际解析的规范面；1.8.9–26.3 共 66 张表，26.3 resolved 393 / absent 147）。每个类/成员带
+表的规模为 **162 个类**（客户端实际解析的规范面；1.8.9–26.3 共 66 张表，26.3 resolved 394 / absent 147）。每个类/成员带
 `vanilla` / `fabric` / `forge` / `neoforge` 四套运行期名 + **配套的 JNI 描述符**；
 运行时按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试，因此
 **同一份表同时服务原版、Fabric、Forge、NeoForge 四种安装**（不做加载器探测）。

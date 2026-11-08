@@ -84,6 +84,10 @@ public final class InventoryManagerModule extends GameModule {
 
     @Override
     public void onTick() {
+        // 容器打开时槽位语义全变（0..containerSize-36 是箱子槽），一律不动也不关闭容器。
+        if (bridge().containerOpen()) {
+            return;
+        }
         if (pauseOnEat.get() && bridge().usingItem(bridge().player())
                 || pauseOnKillAura.get() && EpsilonSupport.enabled("Kill Aura")
                 || pauseOnScaffold.get() && EpsilonSupport.enabled("Scaffold")) {
@@ -114,9 +118,6 @@ public final class InventoryManagerModule extends GameModule {
             int source = EpsilonSupport.findInventory(bridge(), wanted.split(","));
             if (source >= 0 && source != target) {
                 actions().clickSlot(InventorySupport.menuSlot(source), target, "swap");
-                if (mode.is("Silent")) {
-                    actions().closeContainer();
-                }
                 actionDone(now);
                 return;
             }
@@ -141,7 +142,9 @@ public final class InventoryManagerModule extends GameModule {
         if (source < 0) {
             return false;
         }
-        actions().clickSlot(InventorySupport.menuSlot(source), 40, "swap");
+        // 副手只能"捡起再放下"：SWAP 的按钮是快捷栏 0..8，点不到 45 号槽。
+        actions().clickSlot(InventorySupport.menuSlot(source), 0, "pickup");
+        actions().clickSlot(InventorySupport.menuSlot(InventorySupport.OFFHAND), 0, "pickup");
         return true;
     }
 
@@ -175,7 +178,8 @@ public final class InventoryManagerModule extends GameModule {
 
     private void actionDone(long now) {
         nextAction = now + EpsilonSupport.randomLong(minDelay.asInt(), maxDelay.asInt());
-        waitingSprint = true;
+        // Silent 只改槽位：不再附带 STOP_SPRINTING 这类客户端可见副作用。
+        waitingSprint = mode.is("Inventory");
     }
 
     @Override

@@ -54,16 +54,29 @@ public final class FlyModule extends GameModule {
         if (!state.present()) {
             return;
         }
-        double radians = Math.toRadians(state.yaw());
-        double sin = Math.sin(radians);
-        double cos = Math.cos(radians);
-        double magnitude = horizontalSpeed.get();
-        event.x = (strafe * cos - forward * sin) * magnitude;
-        event.z = (forward * cos + strafe * sin) * magnitude;
+        double[] horizontal = moveVector(forward, strafe, state.yaw(), horizontalSpeed.get());
+        event.x = horizontal[0];
+        event.z = horizontal[1];
         event.y = jump ? verticalSpeed.get() : sneak ? -verticalSpeed.get() : 0.0;
         ActionApi actions = actions();
         if (actions != null) {
             actions.setMotion(event.x, event.y, event.z);
         }
+    }
+
+    /**
+     * 输入 → 世界水平位移。
+     *
+     * <p>原版输入向量可能超过 1（斜向同时按 W+D 是 √2），不归一化会让斜向速度变成 1.41 倍。
+     * 超过 1 时按长度缩放到 {@code speed}，不足 1 时保持比例（半推摇杆仍然是半速）。
+     */
+    static double[] moveVector(float forward, float strafe, double yawDegrees, double speed) {
+        double length = Math.hypot(forward, strafe);
+        double scale = length > 1.0 ? speed / length : speed;
+        double radians = Math.toRadians(yawDegrees);
+        double sin = Math.sin(radians);
+        double cos = Math.cos(radians);
+        return new double[]{(strafe * cos - forward * sin) * scale,
+                (forward * cos + strafe * sin) * scale};
     }
 }

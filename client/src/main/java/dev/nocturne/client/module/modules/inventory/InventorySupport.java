@@ -4,15 +4,28 @@ import dev.nocturne.client.game.GameBridge;
 
 /** 背包模块共享的槽位换算与轻量物品分类。 */
 public final class InventorySupport {
+    /** 副手在背包里的下标（1.9+）；对应菜单槽 45。1.8.9 没有副手，菜单只有 45 格。 */
+    public static final int OFFHAND = 40;
+
     private InventorySupport() {
     }
 
+    /**
+     * 背包下标 → 容器菜单槽。
+     *
+     * <p>快捷栏 {@code 0..8} 在菜单末尾 {@code 36..44}；护甲 {@code 36..39}（靴→头）对应菜单
+     * {@code 8..5}；主背包 {@code 9..35} 下标与菜单槽相同；副手 {@code 40} 是菜单 {@code 45}。
+     * 传进来的若是菜单槽本身（例如护甲槽位之外的容器槽），原样返回。
+     */
     public static int menuSlot(int inventorySlot) {
         if (inventorySlot >= 0 && inventorySlot <= 8) {
             return 36 + inventorySlot;
         }
         if (inventorySlot >= 36 && inventorySlot <= 39) {
             return 8 - (inventorySlot - 36);
+        }
+        if (inventorySlot == OFFHAND) {
+            return 45;
         }
         return inventorySlot;
     }

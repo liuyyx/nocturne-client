@@ -28,8 +28,12 @@ public final class AutoArmorModule extends GameModule {
 
     @Override
     public void onTick() {
-        if (pauseInventory.get() && bridge().containerOpen() || noMove.get() && state().moving()
-                || ++ticks < delay.asInt()) {
+        // 任何容器打开时一律不动：这时 clickSlot 的槽号属于箱子/工作台，shift-click 会搬错物品。
+        if (bridge().containerOpen()) {
+            return;
+        }
+        if (pauseInventory.get() && bridge().currentScreen() != null
+                || noMove.get() && state().moving() || ++ticks < delay.asInt()) {
             return;
         }
         ticks = 0;
@@ -63,9 +67,9 @@ public final class AutoArmorModule extends GameModule {
                 actions().useItem();
                 actions().selectSlot(original, false);
             } else {
-                actions().clickSlot(bestSlot, 0, "quick_move");
+                // 背包下标要换成菜单槽：0..8 是 36..44，直接传会把物品放进箱子/副手区。
+                actions().clickSlot(InventorySupport.menuSlot(bestSlot), 0, "quick_move");
             }
-            actions().closeContainer();
         }
         armorType++;
     }

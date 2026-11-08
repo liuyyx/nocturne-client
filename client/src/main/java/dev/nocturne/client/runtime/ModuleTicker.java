@@ -35,7 +35,7 @@ public final class ModuleTicker implements FrameListener {
         lastTickNanos = now;
         client.packets().noteMainThread();
         GameBridge bridge = client.gameBridge();
-        boolean inWorld = bridge != null && bridge.isResolved();
+        boolean inWorld = worldReady(bridge);
         ModuleRegistry registry = client.modules();
         if (inWorld != registry.isActive()) {
             registry.setActive(inWorld);
@@ -43,6 +43,16 @@ public final class ModuleTicker implements FrameListener {
         postWorldChange(bridge);
         client.events().post(dev.nocturne.client.event.TickEvent.INSTANCE);
         registry.tick();
+    }
+
+    /**
+     * 世界是否真的就绪。
+     *
+     * <p>"类已解析"不等于"在世界里"：主菜单/死亡界面类照样解析成功，但 player/level 为空。
+     * 旧判定让 {@code setActive} 永远为真，模块的 onSuspend/onResume 从不触发。
+     */
+    static boolean worldReady(GameBridge bridge) {
+        return bridge != null && bridge.player() != null && bridge.world() != null;
     }
 
     /** 首次读取只建立基线；进入、离开与换图各投递一次。 */

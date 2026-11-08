@@ -1,5 +1,6 @@
 package dev.nocturne.client.module.modules.player;
 
+import dev.nocturne.client.action.ActionApi;
 import dev.nocturne.client.event.MotionEvent;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
@@ -43,11 +44,25 @@ public final class NoFallModule extends GameModule {
         float distance = bridge().fallDistance(bridge().player());
         if (distance >= fallDistance.get() && bridge().entityVelocity(bridge().player())[1] < 0.0) {
             actions().sendGround(true);
-            if (grimTicks++ % 2 == 0) {
-                actions().setJumping(true);
-            }
+            // 奇偶显式 true/false：只置 true 会让跳跃键永久按住，落地后每个 tick 继续起跳。
+            actions().setJumping(grimJumpPressed(grimTicks++));
         } else {
             grimTicks = 0;
+        }
+    }
+
+    /** GrimJump 交替按/松跳跃键（tick 0 按下，tick 1 松开）。 */
+    static boolean grimJumpPressed(int tick) {
+        return (tick & 1) == 0;
+    }
+
+    @Override
+    protected void onStop() {
+        grimTicks = 0;
+        ActionApi actions = actions();
+        if (actions != null) {
+            // 关模块必须松键：否则跳跃键停在按下状态。
+            actions.setJumping(false);
         }
     }
 

@@ -18,19 +18,41 @@ public final class AutoTotemModule extends GameModule {
 
     @Override
     public void onTick() {
-        if (bridge().containerOpen() || !shouldHoldTotem()) {
+        if (bridge().containerOpen() || !offhandExists() || !shouldHoldTotem()) {
             return;
         }
         int slot = EpsilonSupport.findInventory(bridge(), "totem_of_undying");
         if (slot < 0) {
             return;
         }
+        int source = InventorySupport.menuSlot(slot);
+        int offhand = InventorySupport.menuSlot(InventorySupport.OFFHAND);
         if (strict.get()) {
-            actions().clickSlot(slot, 0, "pickup");
-            actions().clickSlot(40, 0, "pickup");
+            actions().clickSlot(source, 0, "pickup");
+            actions().clickSlot(offhand, 0, "pickup");
+            if (!holdsTotem()) {
+                // 副手点击失败（例如服务端拒绝）时把光标上的图腾放回原槽，绝不留在光标上。
+                actions().clickSlot(source, 0, "pickup");
+            }
         } else {
-            actions().clickSlot(slot, 40, "swap");
+            actions().clickSlot(source, 0, "pickup");
+            actions().clickSlot(offhand, 0, "pickup");
         }
+    }
+
+    /**
+     * 玩家背包菜单是否有副手槽。
+     *
+     * <p>1.8.9 的玩家菜单只有 45 格（0..44），第 45 槽不存在；读不到槽数时按"没有副手"处理，
+     * 以免每 tick 点击不存在的槽污染光标。
+     */
+    private boolean offhandExists() {
+        return bridge().containerSize() > InventorySupport.menuSlot(InventorySupport.OFFHAND);
+    }
+
+    private boolean holdsTotem() {
+        return bridge().itemDescription(bridge().heldItem(bridge().player(), true))
+                .contains("totem_of_undying");
     }
 
     private boolean shouldHoldTotem() {

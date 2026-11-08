@@ -1,6 +1,7 @@
 package dev.nocturne.client.module.modules.misc;
 
 import dev.nocturne.client.event.PacketEvent;
+import dev.nocturne.client.event.WorldChangeEvent;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
 import dev.nocturne.client.value.BooleanValue;
@@ -22,6 +23,9 @@ public final class BlinkModule extends GameModule {
 
     @Override
     protected void onStart() {
+        // 换世界时 PacketController 会 reset（holding 被清、队列被放），本地标志必须跟着走，
+        // 否则模块以为自己还在 hold，实际早已放行（过门后瞬间穿包）。
+        listen(WorldChangeEvent.class, event -> releaseAfterWorldChange());
         holding = client().packets().hold(PacketEvent.Direction.SEND);
         if (fakePlayer.get()) {
             fake = bridge().spawnFakePlayer("Blink", true);
@@ -30,6 +34,8 @@ public final class BlinkModule extends GameModule {
 
     @Override
     public void onTick() {
+        // 以控制器真实状态为准：panic/换世界/他人释放后，本地 holding 不能变成"幽灵开启"。
+        holding = client().packets().isHolding(PacketEvent.Direction.SEND);
         if (!holding) {
             return;
         }
@@ -42,6 +48,23 @@ public final class BlinkModule extends GameModule {
         if (client().packets().queued(PacketEvent.Direction.SEND) >= tick.asInt()) {
             client().packets().release(PacketEvent.Direction.SEND);
             holding = client().packets().hold(PacketEvent.Direction.SEND);
+        }
+    }
+
+    /** 换世界：控制器已 reset，本地状态与假人一起清掉，避免跨世界残留。 */
+    private void releaseAfterWorldChange() {
+        if (client() == null || client().packets() == null) {
+            holding = false;
+            fake = null;
+            return;
+        }
+        client().packets().release(PacketEvent.Direction.SEND);
+        holding = false;
+        if (bridge() != null) {
+            bridge().removeFakePlayer(fake);
+            fake = fakePlayer.get() ? bridge().spawnFakePlayer("Blink", true) : null;
+        } else {
+            fake = null;
         }
     }
 

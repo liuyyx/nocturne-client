@@ -499,10 +499,17 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
         if (!slotSwap.swapped()) {
             return true;
         }
-        if (swapMode.is("Silent")) {
-            actions.selectSlot(slot, true);
-        }
-        return actions.selectSlot(slot, false);
+        return applySwap(actions, swapMode.is("Silent"), slot);
+    }
+
+    /**
+     * 换槽只发一种动作。
+     *
+     * <p>Silent 只发 silent 包（服务端换槽、客户端手持物不动）；其余做本地切换。旧实现先发
+     * silent 再发本地，每 tick 两个 ServerboundSetCarriedItem，Silent 与 Normal 没有区别。
+     */
+    static boolean applySwap(ActionApi actions, boolean silent, int slot) {
+        return actions.selectSlot(slot, silent);
     }
 
     private boolean edgeNear() {
@@ -522,10 +529,7 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
         if (original < 0) {
             return;
         }
-        if (swapMode.is("Silent")) {
-            actions.selectSlot(original, true);
-        }
-        actions.selectSlot(original, false);
+        applySwap(actions, swapMode.is("Silent"), original);
     }
 
     /** 停止搭路的全部副作用：换回槽位、写回视角、清空待验证、恢复计时器。 */

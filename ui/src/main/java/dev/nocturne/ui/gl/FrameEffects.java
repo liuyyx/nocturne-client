@@ -26,8 +26,16 @@ public final class FrameEffects {
     /** 上一次绘制时所在的世界；用于切换维度/世界时作废历史帧。 */
     private Object lastWorld;
     private long inventoryOpenedAt;
+    /** 固定管线跳过整帧后处理的提示是否已打印（只打一次）。 */
+    private final java.util.concurrent.atomic.AtomicBoolean fixedPipelineNotice =
+            new java.util.concurrent.atomic.AtomicBoolean();
 
     public void render(OverlayDraw draw, NocturneClient client) {
+        // Game Animation 是独立于整帧后期的 HUD 动画：必须在任何 return 之前执行，
+        // 否则没开后期模块时它永远不画（旧代码把它放在最后，被下面的门控误伤）。
+        if (client != null) {
+            renderAnimations(draw, client);
+        }
         Module inventory = client == null ? null : client.modules().get("InventoryBlur");
         Module motion = client == null ? null : client.modules().get("Motion Blur");
         Module antiAlias = client == null ? null : client.modules().get("Anti Alias");
@@ -52,6 +60,11 @@ public final class FrameEffects {
         // 而该后端的整帧 alpha 混合实测不可靠（同帧叠加/退化成不透明）——开了任何一个后期模块
         // 就等于给整个世界盖一层黑幕。这里显式跳过，并清掉历史帧避免切回现代后端时串帧。
         if (!draw.reliableAlphaBlend()) {
+            // 固定管线跳过整帧后处理，一次性说明原因（否则用户只会看到"开了模块没效果"）。
+            if (fixedPipelineNotice.compareAndSet(false, true)) {
+                System.out.println("[nocturne] frame effects: fixed-pipeline backend,"
+                        + " full-frame post-processing is skipped on this version");
+            }
             history = null;
             return;
         }
@@ -105,7 +118,6 @@ public final class FrameEffects {
         } else {
             history = null;
         }
-        renderAnimations(draw, client);
     }
 
     private void renderAnimations(OverlayDraw draw, NocturneClient client) {

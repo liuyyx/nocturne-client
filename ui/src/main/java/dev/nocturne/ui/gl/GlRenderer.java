@@ -32,6 +32,11 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
     private int viewportHeight;
     /** {@link #beginFrame()} 是否已压入矩阵栈；决定 {@link #endFrame()} 是否需要还原。 */
     private boolean statePushed;
+    /** 进入 beginFrame 时的能力位快照；endFrame 按它还原（不写死默认值）。 */
+    private boolean savedDepthTest = true;
+    private boolean savedCullFace;
+    private boolean savedBlend;
+    private boolean savedTexture2d = true;
     /** @return 进入时的 {@code GL_SHADE_MODEL} 原始值（诊断用，0 表示读不到） */
     private int shadeModelValue() {
         int[] value = gl.intQuery(GlApi.GL_SHADE_MODEL, 1);
@@ -347,6 +352,13 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
         gl.pushMatrix();
         gl.loadIdentity();
 
+        // 进入时快照能力位：beginFrame 会关掉 DEPTH/CULL/SCISSOR/BLEND/TEXTURE_2D，
+        // endFrame 必须按**进入值**还原，而不是写死"开纹理"。游戏侧 GlStateManager 的缓存
+        // 不知道我们改过这些位，写死默认值会让它跳过重设（深度测试缺失时背景实体穿透 HUD）。
+        savedDepthTest = gl.isCapEnabled(GlApi.GL_DEPTH_TEST);
+        savedCullFace = gl.isCapEnabled(GlApi.GL_CULL_FACE);
+        savedBlend = gl.isCapEnabled(GlApi.GL_BLEND);
+        savedTexture2d = gl.isCapEnabled(GlApi.GL_TEXTURE_2D);
         // 立即模式的前提：客户态数组全部关闭（否则 glBegin/glVertex2f 被静默忽略）。
         gl.disableClientArrays();
         // 游戏会把着色模型留成 FLAT（不还原），那样逐顶点渐变会塌成单色。
@@ -425,8 +437,11 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
             // glColor。游戏侧的 GlStateManager 缓存并不知道这两项被改过，它按"自己以为的状态"
             // 跳过重设，于是紧接着的 HUD（心形/准星/物品栏）会按无纹理 + 残留颜色绘制——
             // 真机表现：开了带世界覆盖层的模块后血条变白、准星变成一个彩色方块。
-            // 1.8.9 的准星绘制路径本就不重设这两项，因此必须在这里恢复成 HUD 期望的默认值。
-            gl.enable(GlApi.GL_TEXTURE_2D);
+            // 1.8.9 的准星绘制路径本就不重设这两项，因此必须在这里恢复成进入前的快照值。
+            restoreCap(GlApi.GL_TEXTURE_2D, savedTexture2d);
+            restoreCap(GlApi.GL_DEPTH_TEST, savedDepthTest);
+            restoreCap(GlApi.GL_CULL_FACE, savedCullFace);
+            restoreCap(GlApi.GL_BLEND, savedBlend);
             gl.color(1f, 1f, 1f, 1f);
             // 这里**不再** popAttrib：状态改动都经 GlStateManager（缓存同步），
             // 属性栈回滚只会把真实状态与缓存再拆开一次（见 beginFrame 的说明）。

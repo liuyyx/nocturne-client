@@ -45,8 +45,12 @@ class WorldProjectionTest {
 
         WorldProjection.ScreenPoint behind = projection.project(0d, 0d, -10d);
         assertFalse(behind.visible, "a point behind the camera must not be visible");
-        assertFalse(projection.project(0d, 0d, 0.01d).visible,
-                "a point inside the near plane must not be visible");
+        // 近平面内侧的点改为沿视线插值到近平面后投影（否则贴箱子时框会消失/涨满屏），
+        // 因此它仍然可见，但坐标必须落在视口内。
+        WorldProjection.ScreenPoint near = projection.project(0d, 0d, 0.01d);
+        assertTrue(near.visible, "a point inside the near plane is clamped to the near plane");
+        assertTrue(near.x >= 0f && near.x <= 427f && near.y >= 0f && near.y <= 240f,
+                "near-plane point must stay inside the viewport: " + near.x + "," + near.y);
     }
 
     /**

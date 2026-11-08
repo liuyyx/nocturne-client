@@ -200,6 +200,11 @@ public final class WorldProjection {
      * @param worldZ 世界坐标 z
      * @param out    输出对象
      */
+    /** 把屏幕坐标夹到视口内（近平面插值/超大包围盒后必须夹，否则框被撑到屏幕外）。 */
+    static float clamp(float value, float min, float max) {
+        return value < min ? min : (value > max ? max : value);
+    }
+
     public void project(double worldX, double worldY, double worldZ, ScreenPoint out) {
         out.x = 0f;
         out.y = 0f;
@@ -213,26 +218,35 @@ public final class WorldProjection {
         double dz = worldZ - eyeZ;
 
         double forward = dx * lookX + dy * lookY + dz * lookZ;
-        if (forward <= NEAR_PLANE) {
-            return;   // 在相机背后或贴脸：投影会翻到另一侧，必须挡掉
+        if (forward <= 0d) {
+            return;   // 在相机背后：投影会翻到另一侧，必须挡掉
         }
         double side = dx * rightX + dy * rightY + dz * rightZ;
         double above = dx * upX + dy * upY + dz * upZ;
 
-        double ndcX = (side / forward) * focal / aspect;
-        double ndcY = (above / forward) * focal;
+        // 近平面裁剪：forward 落在 (0, NEAR] 时**不能**整点丢弃——贴箱子的 8 个角里只要一个
+        // 近点，整个框就会消失或跳到屏幕另一侧（真机表现：贴住箱子时框涨满屏）。
+        // 把该点沿视线插值到近平面再做透视除法，等价于"截断后仍然落在正确方向上"。
+        double depth = Math.max(forward, NEAR_PLANE);
 
-        out.x = (float) ((ndcX + 1d) * 0.5d * viewportWidth);
-        out.y = (float) ((1d - ndcY) * 0.5d * viewportHeight);
+        double ndcX = (side / depth) * focal / aspect;
+        double ndcY = (above / depth) * focal;
+
+        float rawX = (float) ((ndcX + 1d) * 0.5d * viewportWidth);
+        float rawY = (float) ((1d - ndcY) * 0.5d * viewportHeight);
         // depth 无条件写出：调用方（AABB 8 角包围盒）需要用它判断"在相机前方"，
         // 而 visible 只表示"落在视口 2 倍范围内"，两者的语义不能混。
         out.depth = forward;
         // 投影落到视口 2 倍范围之外的点，画出来也只是屏幕外的废物（每个框要好几次绘制调用）。
         // 边距取宽松的 2 倍，保证"一半在屏幕内"的框仍然保留——只剔掉完全在远处的。
-        if (out.x < -viewportWidth || out.x > viewportWidth * 2f
-                || out.y < -viewportHeight || out.y > viewportHeight * 2f) {
+        if (rawX < -viewportWidth || rawX > viewportWidth * 2f
+                || rawY < -viewportHeight || rawY > viewportHeight * 2f) {
             return;
         }
+        // 屏幕矩形必须 clamp 到视口：8 角包围盒取 min/max 时，越界角的原始屏幕坐标会把
+        // 整个框撑到屏幕外（尤其近平面插值后 x/y 会变得很大）。
+        out.x = clamp(rawX, 0f, viewportWidth);
+        out.y = clamp(rawY, 0f, viewportHeight);
         out.visible = true;
     }
 }

@@ -63,13 +63,7 @@ public final class CameraState {
         // 渲染插值量：游戏按 partialTicks 在「上一个 tick」与「当前 tick」之间插值渲染，覆盖层若直接用
         // tick 末值，60-120fps 的画面里框会以 20Hz 阶梯抖动（真机表现就是「框在甩、像加速」）。
         // 1.13–1.20 从 Minecraft.pausePartialTick 取；更老/更新的版本拿不到就退回 0（等同 tick 末值）。
-        float partialTicks = 0f;
-        if (minecraft != null) {
-            Double raw = number(bridge.readField(minecraft, ClassType.MINECRAFT, "pausePartialTick"));
-            if (raw != null && raw.doubleValue() >= 0d && raw.doubleValue() <= 1d) {
-                partialTicks = raw.floatValue();
-            }
-        }
+        float partialTicks = partialTicks(bridge, minecraft);
         Object eye = null;
         if (partialTicks > 0f) {
             // 有插值量时**优先**带参重载：1.16.5 的零参 getEyePosition() 返回 tick 末值，
@@ -123,11 +117,40 @@ public final class CameraState {
             pitch = Double.valueOf(pitchOld.doubleValue()
                     + (pitch.doubleValue() - pitchOld.doubleValue()) * partialTicks);
         }
+        // 相机位姿：F5 / Freelook 下相机不等于玩家眼位与朝向；能拿到 Camera 就用它，
+        // 拿不到（1.8.9 没有 getMainCamera 映射）就沿用玩家眼位——绝不因为缺一项而整帧不画。
+        Object renderer = minecraft == null ? null
+                : bridge.readField(minecraft, ClassType.MINECRAFT, "gameRenderer");
+        Object camera = renderer == null ? null
+                : bridge.callMapped(renderer, ClassType.GAME_RENDERER, "getMainCamera");
+        if (camera != null) {
+            Object position = bridge.callMapped(camera, ClassType.CAMERA, "getPosition");
+            Double cameraX = number(bridge.readField(position, ClassType.VEC3, "x"));
+            Double cameraY = number(bridge.readField(position, ClassType.VEC3, "y"));
+            Double cameraZ = number(bridge.readField(position, ClassType.VEC3, "z"));
+            Double cameraYaw = number(bridge.callMapped(camera, ClassType.CAMERA, "getYRot"));
+            Double cameraPitch = number(bridge.callMapped(camera, ClassType.CAMERA, "getXRot"));
+            if (cameraX != null && cameraY != null && cameraZ != null
+                    && cameraYaw != null && cameraPitch != null) {
+                eyeX = cameraX;
+                eyeY = cameraY;
+                eyeZ = cameraZ;
+                yaw = cameraYaw;
+                pitch = cameraPitch;
+            }
+        }
         Object options = minecraft == null
                 ? null
                 : bridge.readField(minecraft, ClassType.MINECRAFT, "options");
-        Double fov = options == null ? null
-                : fovOf(bridge, bridge.readField(options, ClassType.OPTIONS, "fov"));
+        // 有效 FOV 优先：游戏会把 FOV 按疾跑/水下/药水修正后再投影，只读 options.fov 会让
+        // 冲刺时的框整体偏移。拿不到有效 FOV（映射缺失）才退回静态设置值。
+        Double fov = number(renderer == null || camera == null ? null
+                : bridge.callMapped(renderer, ClassType.GAME_RENDERER, "getFov", camera,
+                        Float.valueOf(partialTicks), Boolean.TRUE));
+        if (fov == null) {
+            fov = options == null ? null
+                    : fovOf(bridge, bridge.readField(options, ClassType.OPTIONS, "fov"));
+        }
         if (fov == null) {
             return missing(bridge, "Options#fov / OptionInstance#get");
         }
@@ -140,13 +163,8 @@ public final class CameraState {
                     + " yaw=" + yaw + " pitch=" + pitch + " pt=" + partialTicks
                     + " fov=" + fov + " viewport=" + width + "x" + height);
         }
-        dev.nocturne.client.module.Module aspectModule = dev.nocturne.client.NocturneClient.get() == null ? null
-                : dev.nocturne.client.NocturneClient.get().modules().get("Aspect Ratio");
-        if (aspectModule instanceof dev.nocturne.client.module.modules.render.AspectRatioModule
-                && aspectModule.isEnabled()) {
-            float ratio = ((dev.nocturne.client.module.modules.render.AspectRatioModule) aspectModule).ratio();
-            fov = Math.max(1.0, Math.min(179.0, fov * ratio / Math.max(0.1, (double) width / height)));
-        }
+        // 不再用 Aspect Ratio 模块的 ratio 改这里的 fov：模块并没有改游戏投影，覆盖层若自行
+        // 改 fov，开关模块时框会整体移动（同一帧两种投影）。要真正改宽高比应该改游戏投影本身。
         projection.update(eyeX, eyeY, eyeZ, yaw.floatValue(), pitch.floatValue(), fov.floatValue(),
                 width, height);
         return true;
@@ -177,6 +195,43 @@ public final class CameraState {
     /** 把读到的值转成 {@code Double}；不是数字（含 {@code null}）时返回 {@code null}。 */
     static Double number(Object value) {
         return value instanceof Number ? Double.valueOf(((Number) value).doubleValue()) : null;
+    }
+
+    /**
+     * 当帧渲染插值量 {@code partialTicks}（0–1），拿不到时返回 0（等同 tick 末值）。
+     *
+     * <p>能力顺序（不写版本判断，只按成员是否存在降级）：
+     * <ol>
+     *   <li>{@code DeltaTracker#getGameTimeDeltaPartialTick(boolean)}（1.21+）；</li>
+     *   <li>{@code DeltaTracker#partialTick} 字段（1.21 旧名）；</li>
+     *   <li>{@code Minecraft#pausePartialTick}（1.13–1.20）。</li>
+     * </ol>
+     * 1.8.9 的 {@code Timer#renderPartialTicks} 需要 Timer 类映射（当前表里没有），因此该版本
+     * 退回 0——帧回调 delta 由调用方（叠加层）自行决定是否使用。
+     */
+    private static float partialTicks(GameBridge bridge, Object minecraft) {
+        if (minecraft == null) {
+            return 0f;
+        }
+        Object tracker = bridge.readField(minecraft, ClassType.MINECRAFT, "deltaTracker");
+        if (tracker == null) {
+            tracker = bridge.readField(minecraft, ClassType.MINECRAFT, "timer");
+        }
+        if (tracker != null) {
+            Double raw = number(bridge.callMapped(tracker, ClassType.DELTA_TRACKER,
+                    "getGameTimeDeltaPartialTick", Boolean.TRUE));
+            if (raw == null) {
+                raw = number(bridge.readField(tracker, ClassType.DELTA_TRACKER, "partialTick"));
+            }
+            if (raw != null && raw.doubleValue() >= 0d && raw.doubleValue() <= 1d) {
+                return raw.floatValue();
+            }
+        }
+        Double legacy = number(bridge.readField(minecraft, ClassType.MINECRAFT, "pausePartialTick"));
+        if (legacy != null && legacy.doubleValue() >= 0d && legacy.doubleValue() <= 1d) {
+            return legacy.floatValue();
+        }
+        return 0f;
     }
 
     /**

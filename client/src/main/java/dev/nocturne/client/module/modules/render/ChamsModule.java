@@ -90,9 +90,9 @@ public final class ChamsModule extends GameModule {
     }
 
     private void restore(RenderCapabilities capabilities) {
+        // 只恢复我们真正改过的东西：深度测试。纹理开关/多边形偏移我们从未主动修改，
+        // 强行写回"默认值"会覆盖游戏当帧的真实状态（贴图消失/深度偏移错乱）。
         capabilities.depthTest(true);
-        capabilities.texture2d(true);
-        capabilities.polygonOffset(false);
         capabilities.color(0xFFFFFFFF);
     }
 }

@@ -53,6 +53,7 @@ class FaLayoutTest {
     @BeforeEach
     void setUp() throws Exception {
         FontRasterizer.invalidate();
+        LayoutStore.resetForTests();
         renderer = new RecordingRenderer();
         // 布局会被持久化到工作目录；残留文件会让"默认窗口尺寸"这条断言随上次运行而变化。
         Files.deleteIfExists(Paths.get(System.getProperty("user.dir", "."), "nocturne/clickgui.properties"));

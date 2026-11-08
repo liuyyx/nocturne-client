@@ -40,6 +40,24 @@ final class LayoutStore {
     private LayoutStore() {
     }
 
+    /**
+     * 清空内存里的布局状态（仅测试隔离用）。
+     *
+     * <p>静态字段会跨测试类存活：磁盘文件被删掉也不会让 {@code loaded=true} 失效，
+     * 于是上一个测试保存的比例会让下一个测试按旧位置摆窗口。测试请在自己的
+     * {@code @BeforeEach}/{@code @AfterEach} 里调用本方法；磁盘文件由调用方自行处理。
+     */
+    static void resetForTests() {
+        ratioX = Float.NaN;
+        ratioY = Float.NaN;
+        width = Float.NaN;
+        height = Float.NaN;
+        category = "";
+        chinese = true;
+        loaded = false;
+        failureLogged = false;
+    }
+
     /** @return 是否有一份可用的布局（比例与尺寸都有效） */
     static boolean hasLayout() {
         load();

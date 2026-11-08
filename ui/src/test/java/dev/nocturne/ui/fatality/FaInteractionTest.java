@@ -48,12 +48,16 @@ class FaInteractionTest {
     @BeforeEach
     void setUp() throws Exception {
         FontRasterizer.invalidate();
+        LayoutStore.resetForTests();
         Files.deleteIfExists(layoutFile());
         renderer = new RecordingRenderer();
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
+        // 本测试会真的保存布局；静态字段与磁盘文件都必须清掉，否则后面的测试会按旧位置摆窗口。
+        LayoutStore.resetForTests();
+        Files.deleteIfExists(layoutFile());
         FontRasterizer.invalidate();
     }
 

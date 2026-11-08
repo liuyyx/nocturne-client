@@ -5,6 +5,7 @@ import dev.nocturne.client.NocturneClient;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 帧回调的对外入口：**状态全部在 bootstrap 层的 {@link FrameDispatcher}**，本类只做转发与模块 tick。
@@ -383,13 +384,64 @@ public final class NocturneRuntime {
     }
 
     public static void shutdown() {
-        if (!bindDispatcher()) {
-            return;
+        if (bindDispatcher()) {
+            try {
+                clearMethod.invoke(null);
+            } catch (Throwable t) {
+                System.out.println("[nocturne] runtime shutdown failed: " + t);
+            }
         }
-        try {
-            clearMethod.invoke(null);
-        } catch (Throwable t) {
-            System.out.println("[nocturne] runtime shutdown failed: " + t);
+        // vendor/vape 的两个同步工作线程不归分发器管：它们自旋等保存请求，不显式打断就会在自销毁后
+        // 继续跑；非 daemon 时还会拖住 JVM 退出（见 gg.vape.sync.SyncThread.stop）。
+        interruptVendorWorkers();
+        synchronized (WRAPPERS) {
+            WRAPPERS.clear();
+        }
+        // 解绑反射方法：下一次 attach / 重绑定必须从干净状态开始，不能复用上一轮运行留下的 Method
+        // 对象（目标类加载器可能已经不同）。
+        resetDispatcherHandles();
+    }
+
+    /** vendor/vape 侧同步工作线程名（那边不参与本模块编译，无法共享常量）。 */
+    private static final String[] VENDOR_WORKER_THREADS = {
+            "Vape settings sync worker", "Vape settings save worker"
+    };
+
+    /** 打断 vendor 侧仍在自旋的同步线程；按线程名匹配，匹配不到时无副作用。 */
+    private static void interruptVendorWorkers() {
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            String name = thread.getName();
+            for (String worker : VENDOR_WORKER_THREADS) {
+                if (worker.equals(name)) {
+                    thread.interrupt();
+                    break;
+                }
+            }
+        }
+    }
+
+    /** 清空已解析的分发器方法；下一次使用会重新绑定。 */
+    private static synchronized void resetDispatcherHandles() {
+        dispatchMethod = null;
+        addMethod = null;
+        removeMethod = null;
+        countMethod = null;
+        traceMethod = null;
+        setDrawContextSinkMethod = null;
+        setDrawContextMethod = null;
+        clearMethod = null;
+        addShutdownMethod = null;
+        restoreOnGameThreadMethod = null;
+        runOnGameThreadMethod = null;
+        killMethod = null;
+        killedStateMethod = null;
+        claimInstallMethod = null;
+    }
+
+    /** 供测试检查监听器包装缓存规模；生产代码不调用。 */
+    static int wrapperCountForTests() {
+        synchronized (WRAPPERS) {
+            return WRAPPERS.size();
         }
     }
 
@@ -406,15 +458,15 @@ public final class NocturneRuntime {
     private static volatile boolean contextDriven;
 
     /** 上一秒统计窗口起点（纳秒）；{@code 0} 表示尚未开始。 */
-    private static volatile long lastStatNanos;
+    private static final AtomicLong lastStatNanos = new AtomicLong();
     /** 当前统计窗口内的驱动次数。 */
-    private static volatile int driveCount;
+    private static final AtomicLong driveCount = new AtomicLong();
     /** 其中来自帧交换点的次数（区分双驱动）。 */
-    private static volatile int frameDrives;
+    private static final AtomicLong frameDrives = new AtomicLong();
     /** 其中来自绘制钩子的次数。 */
-    private static volatile int drawDrives;
+    private static final AtomicLong drawDrives = new AtomicLong();
     /** 绘制钩子被跳过的次数。 */
-    private static volatile int drawSkips;
+    private static final AtomicLong drawSkips = new AtomicLong();
     /** 是否打印每秒帧驱动统计（{@code -Dnocturne.debug.frames}）；默认关闭，生产不打日志。 */
     private static final boolean FRAME_STAT =
             System.getProperty("nocturne.debug.frames") != null;
@@ -431,7 +483,9 @@ public final class NocturneRuntime {
             return;
         }
         frameHookSeen = true;
-        frameDrives++;
+        if (FRAME_STAT) {
+            frameDrives.incrementAndGet();
+        }
         drive();
     }
 
@@ -447,10 +501,14 @@ public final class NocturneRuntime {
             return;
         }
         if (frameHookSeen && !contextDriven) {
-            drawSkips++;
+            if (FRAME_STAT) {
+                drawSkips.incrementAndGet();
+            }
             return;
         }
-        drawDrives++;
+        if (FRAME_STAT) {
+            drawDrives.incrementAndGet();
+        }
         drive();
     }
 
@@ -472,23 +530,23 @@ public final class NocturneRuntime {
         if (!FRAME_STAT) {
             return;
         }
-        driveCount++;
+        long count = driveCount.incrementAndGet();
         long now = System.nanoTime();
-        if (lastStatNanos == 0L) {
-            lastStatNanos = now;
+        if (lastStatNanos.get() == 0L) {
+            lastStatNanos.compareAndSet(0L, now);
             return;
         }
-        if (now - lastStatNanos < 1_000_000_000L) {
+        if (now - lastStatNanos.get() < 1_000_000_000L) {
             return;
         }
-        System.out.println("[nocturne] frame drive/s=" + driveCount
+        System.out.println("[nocturne] frame drive/s=" + count
                 + " (frameHook=" + frameDrives + " drawHook=" + drawDrives
                 + " drawSkipped=" + drawSkips + ")");
-        driveCount = 0;
-        frameDrives = 0;
-        drawDrives = 0;
-        drawSkips = 0;
-        lastStatNanos = now;
+        driveCount.set(0);
+        frameDrives.set(0);
+        drawDrives.set(0);
+        drawSkips.set(0);
+        lastStatNanos.set(now);
     }
 
     /** 每帧实际工作：分发监听器 + 广播渲染事件。 */
@@ -514,14 +572,26 @@ public final class NocturneRuntime {
         postRenderEvent();
     }
 
-    /** 广播 {@link dev.nocturne.client.event.RenderEvent}；客户端未就绪时无副作用。 */
-    private static void postRenderEvent() {
+    /** 复用的渲染事件载荷：热路径每帧投递，不再每帧分配。 */
+    private static final dev.nocturne.client.event.RenderEvent RENDER_EVENT =
+            new dev.nocturne.client.event.RenderEvent();
+    /** 帧序号；帧钩子与绘制钩子可能来自不同线程，故用原子计数器。 */
+    private static final AtomicLong renderSequence = new AtomicLong();
+
+    /**
+     * 广播 {@link dev.nocturne.client.event.RenderEvent}；客户端未就绪或无订阅者时无副作用。
+     *
+     * <p>无订阅者时连载荷都不改写（序列号不推进），避免为没人接收的事件付费。
+     */
+    static void postRenderEvent() {
         try {
             NocturneClient client = NocturneClient.get();
-            if (client == null) {
+            if (client == null
+                    || !client.events().hasSubscribers(dev.nocturne.client.event.RenderEvent.class)) {
                 return;
             }
-            client.events().post(new dev.nocturne.client.event.RenderEvent(System.nanoTime()));
+            RENDER_EVENT.update(System.nanoTime(), renderSequence.incrementAndGet());
+            client.events().post(RENDER_EVENT);
         } catch (Throwable ignored) {
             // 事件系统自身异常不能带回游戏帧；EventBus 内部已有隔离，这里是最后一道门。
         }

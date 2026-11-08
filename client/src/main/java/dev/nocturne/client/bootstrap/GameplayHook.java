@@ -710,20 +710,58 @@ public final class GameplayHook {
         }
     }
 
-    /** 钩子失败必须放行原游戏行为；日志按五秒窗口限流，每个钩子首次失败补打一次栈。 */
-    private static synchronized void failure(String hook, Throwable error) {
+    /** 同一钩子两次失败日志之间的最小间隔（毫秒）。 */
+    private static final long FAILURE_LOG_INTERVAL_MS = 5000L;
+    /** 每个全局窗口最多打印的失败行数：按钩子名限流后仍需总量上限防刷屏。 */
+    private static final int MAX_FAILURE_LINES_PER_WINDOW = 8;
+    /** 钩子名 → 上次打印时间（单元素数组充当可变槽位）；钩子名是有限字面量，不会增长。 */
+    private static final java.util.Map<String, long[]> failureLogs =
+            new java.util.HashMap<String, long[]>();
+    /** 全局窗口起点与窗口内已打印行数。 */
+    private static long failureWindowStart;
+    private static int failureWindowCount;
+
+    /**
+     * 钩子失败必须放行原游戏行为；日志**按钩子名**各限一个五秒窗口，另有每窗口总量上限，
+     * 每个钩子首次失败补打一次栈。
+     *
+     * <p>为什么不是单个全局时间戳：高频钩子（{@code mouse} / {@code key}）先失败一次就会把窗口
+     * 占满，其它钩子的首错被整段吞掉，排查时完全看不到真正坏掉的是哪一个。
+     */
+    static synchronized void failure(String hook, Throwable error) {
         Throwable cause = unwrap(error);
         long now = System.currentTimeMillis();
-        if (now - lastFailureLogAt < 5000L) {
+        long[] slot = failureLogs.get(hook);
+        if (slot == null) {
+            slot = new long[1];
+            failureLogs.put(hook, slot);
+        }
+        if (now - slot[0] < FAILURE_LOG_INTERVAL_MS) {
             return;
         }
-        lastFailureLogAt = now;
+        if (now - failureWindowStart >= FAILURE_LOG_INTERVAL_MS) {
+            failureWindowStart = now;
+            failureWindowCount = 0;
+        }
+        if (failureWindowCount >= MAX_FAILURE_LINES_PER_WINDOW) {
+            return;
+        }
+        slot[0] = now;
+        failureWindowCount++;
         System.out.println("[nocturne] gameplay hook " + hook + " failed: " + cause);
         if (STACK_LOGGED.add(hook)) {
             // 只打一次栈：每五秒刷一次完整栈会把游戏日志淹掉，但完全没有栈又查不出真因
             // （例如 useItem 反复失败时只能看到 "UndeclaredThrowableException: null"）。
             cause.printStackTrace(System.out);
         }
+    }
+
+    /** 清空失败日志限流状态；仅供测试保证用例间互不影响。 */
+    static synchronized void resetFailureLogsForTests() {
+        failureLogs.clear();
+        failureWindowStart = 0L;
+        failureWindowCount = 0;
+        STACK_LOGGED.clear();
     }
 
     /**
@@ -754,6 +792,4 @@ public final class GameplayHook {
     /** 已打印过栈的钩子名；每个钩子只补一次栈。 */
     private static final java.util.Set<String> STACK_LOGGED =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
-
-    private static long lastFailureLogAt;
 }

@@ -32,6 +32,18 @@ dependencies {
     implementation("org.lwjgl.lwjgl:lwjgl:2.9.3")
     implementation("org.lwjgl.lwjgl:lwjgl_util:2.9.3")
     compileOnly("org.jetbrains:annotations:24.1.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    // Gradle 9 不再隐式提供 Platform launcher，缺了测试进程直接起不来。
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
+
+// 快照里有同名资源条目（liquidbounce/models/*.bin），默认策略会直接判失败；探针只需要能编译与跑测试。
+tasks.processResources {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 tasks.withType<JavaCompile>().configureEach {

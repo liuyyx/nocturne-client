@@ -63,6 +63,11 @@ public final class XrayModule extends GameModule implements WorldOverlay {
     private static final int CULLING_MIN_DECISIONS = 2000;
     /** 是否已因剔除异常自动关闭过（避免重复日志）。 */
     private boolean cullingSelfCheckHit;
+    /**
+     * 自检命中后的内部停摆标志：世界已全黑，剔除必须立即失效，但**不改用户的开关**
+     * （{@code setEnabled(false)} 会静默把 GUI 里的开关翻掉，用户以为是自己关的）。
+     */
+    private volatile boolean cullingDisabled;
 
     public XrayModule() {
         super("Xray", Category.RENDER);
@@ -73,6 +78,7 @@ public final class XrayModule extends GameModule implements WorldOverlay {
         cullingDecisions.set(0);
         cullingVisible.set(0);
         cullingSelfCheckHit = false;
+        cullingDisabled = false;
         cullingWindowStartedAt = System.currentTimeMillis();
         // 能力检查：26.1+ 的映射表把 BlockRenderDispatcher 整个标记为 absent，方块剔除钩子没有入口。
         // 此时模块只提供矿石框（overlay），并在日志里明确说明"剔除不可用"——绝不假装剔除生效。
@@ -95,6 +101,7 @@ public final class XrayModule extends GameModule implements WorldOverlay {
 
     @Override
     protected void onStop() {
+        cullingDisabled = false;
         targets.clear();
         if (bridge() != null) {
             bridge().reloadChunks();
@@ -103,16 +110,17 @@ public final class XrayModule extends GameModule implements WorldOverlay {
 
     /**
      * 剔除自检：钩子已接通、样本足够、却一个方块都没放行 —— 说明剔除把整个世界剔没了
-     * （映射/方块名对不上时的典型表现），继续跑就是全黑世界。此时自动关闭并提示。
+     * （映射/方块名对不上时的典型表现），继续跑就是全黑世界。此时内部停摆并提示；
+     * **不改用户的开关**（开关是用户的意图，自动改写会让 GUI 状态与用户操作对不上）。
      *
      * <p>没有接上剔除钩子的版本（1.8.9 的 renderBatched 面缺失）不算命中：那时 shouldRender
      * 根本不会被游戏调用，模块只提供矿石框。
      *
      * @param now 当前毫秒时间
-     * @return true 表示本轮已因自检关闭模块
+     * @return true 表示本轮已因自检停摆
      */
     private boolean selfCheckCulling(long now) {
-        if (cullingSelfCheckHit
+        if (cullingSelfCheckHit || cullingDisabled
                 || !dev.nocturne.client.bootstrap.GameplayHook.isWired("xrayBlock")) {
             return false;
         }
@@ -127,9 +135,10 @@ public final class XrayModule extends GameModule implements WorldOverlay {
             return false;
         }
         cullingSelfCheckHit = true;
+        cullingDisabled = true;
+        targets.clear();
         System.out.println("[nocturne] Xray: 自检命中——" + decisions + " 次方块渲染决策中可见方块为 0"
-                + "（剔除全部命中），已自动关闭 Xray 以避免世界全黑");
-        setEnabled(false);
+                + "（剔除全部命中），已内部停用剔除以避免世界全黑；模块开关保持开启，矿石框不再绘制");
         return true;
     }
 
@@ -146,6 +155,10 @@ public final class XrayModule extends GameModule implements WorldOverlay {
 
     /** 由真实 BlockRenderDispatcher 钩子调用；同时累计自检样本。 */
     public boolean shouldRender(Object blockState, Object blockPos) {
+        if (cullingDisabled) {
+            // 自检停药：放行一切方块，世界不再被剔空。
+            return true;
+        }
         boolean visible = isVisible(blockState, blockPos);
         cullingDecisions.incrementAndGet();
         if (visible) {
@@ -174,9 +187,13 @@ public final class XrayModule extends GameModule implements WorldOverlay {
 
     @Override
     public void onTick() {
+        if (cullingDisabled) {
+            // 自检停摆：不再扫描、不再标记矿石框；用户的开关状态保持原样。
+            return;
+        }
         long now = System.currentTimeMillis();
         if (selfCheckCulling(now)) {
-            // 已被自检关闭：本次 tick 不再扫描。
+            // 本轮刚触发自检停摆：本次 tick 不再扫描。
             return;
         }
         if (now < nextScan) {
@@ -209,6 +226,9 @@ public final class XrayModule extends GameModule implements WorldOverlay {
 
     @Override
     public void drawWorldOverlay(OverlayDraw draw, WorldProjection projection) {
+        if (cullingDisabled) {
+            return;
+        }
         int alpha = Math.max(0, Math.min(255, opacity.asInt()));
         for (int[] target : targets) {
             int color = oreColor(bridge().blockDescription(bridge().blockStateAt(target[0], target[1], target[2])));

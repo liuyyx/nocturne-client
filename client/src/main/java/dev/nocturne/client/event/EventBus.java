@@ -176,6 +176,20 @@ public final class EventBus {
     }
 
     /**
+     * 是否有订阅者订阅了该类型；供热路径在投递前判断，避免无人接收时的无谓工作。
+     *
+     * @param type 事件类型；为 {@code null} 时返回 {@code false}
+     * @return 至少存在一个订阅者时为 true
+     */
+    public boolean hasSubscribers(Class<?> type) {
+        if (type == null) {
+            return false;
+        }
+        ListenerList list = listeners.get(type);
+        return list != null && !list.entries.isEmpty();
+    }
+
+    /**
      * 按订阅句柄退订；句柄为 {@code null} 或已退订时无副作用。
      *
      * <p>推荐用法：{@code onEnable} 保存 {@link #subscribe} 的返回值，{@code onDisable} 传入该句柄。

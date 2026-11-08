@@ -23,21 +23,52 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SyncThread {
+    /** 单次远端保存等待上限：join() 无超时会让调用线程（保存线程/关闭钩子）永久挂住。 */
+    private static final long SAVE_JOIN_TIMEOUT_SECONDS = 30L;
     private SyncStoreRequestWorker storeRequestWorker;
     private final SyncDebounceWorker debounceWorker;
     private final AtomicBoolean pendingSave = new AtomicBoolean();
     private final Vape vape;
+    /** 显式运行标志；{@link Vape#isEnabled()} 的 enabled 字段全源码无赋值，不能当生命周期用。 */
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    /** 工作线程句柄，供 {@link #stop()} 显式打断。 */
+    volatile Thread debounceThread;
+    volatile Thread storeThread;
     private long lastSaveTime;
     private boolean onlineSettingsApplied;
 
     public SyncThread(Vape vape) {
         this.vape = vape;
-        this.debounceWorker = new SyncDebounceWorker();
+        this.debounceWorker = new SyncDebounceWorker(this.running::get);
         Runtime.getRuntime().addShutdownHook(
                 new Thread(this::saveLocalSnapshot, "Vape local config save"));
+    }
+
+    /** @return 同步线程是否仍在运行 */
+    public boolean isRunning() {
+        return this.running.get();
+    }
+
+    /**
+     * 停止同步线程：先清运行标志，再显式打断两个工作线程。
+     *
+     * <p>只清标志不够——两个循环各自 sleep 1s/100ms，不打断最多要等一整秒才退出，而自销毁路径
+     * 需要确定性的结束。
+     */
+    public void stop() {
+        this.running.set(false);
+        Thread debounce = this.debounceThread;
+        if (debounce != null) {
+            debounce.interrupt();
+        }
+        Thread store = this.storeThread;
+        if (store != null) {
+            store.interrupt();
+        }
     }
 
     public void saveSettings() {
@@ -62,12 +93,12 @@ public class SyncThread {
 
             ApiResponse<Boolean> settingsResponse = ApiServices.getInstance().getUserDataApi().saveUserData(settingsPayload)
                     .exceptionally(error -> handleSettingsSaveFailure(notification, error))
-                    .join();
+                    .get(SAVE_JOIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             this.updateSettingsSaveStatus(notification, settingsResponse);
 
             ApiResponse<RemoteProfileDataMap> profilesResponse = ApiServices.getInstance().getUserDataApi().saveProfileData(profilesPayload)
                     .exceptionally(error -> handleProfilesSaveFailure(notification, error))
-                    .join();
+                    .get(SAVE_JOIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             this.updateProfilesSaveStatus(notification, profilesResponse);
             this.applySavedProfileIds(profilesResponse);
 
@@ -246,8 +277,14 @@ public class SyncThread {
         this.lastSaveTime = System.currentTimeMillis();
         this.pendingSave.set(false);
         if (this.storeRequestWorker == null) {
-            this.storeRequestWorker = new SyncStoreRequestWorker();
-            new Thread(this.storeRequestWorker, "Vape settings save worker").start();
+            if (!this.running.get()) {
+                return;
+            }
+            this.storeRequestWorker = new SyncStoreRequestWorker(this.running::get);
+            Thread thread = new Thread(this.storeRequestWorker, "Vape settings save worker");
+            thread.setDaemon(true);
+            this.storeThread = thread;
+            thread.start();
         }
         this.storeRequestWorker.requestSave();
     }
@@ -347,7 +384,10 @@ public class SyncThread {
     }
 
     public void start() {
-        new Thread(this.debounceWorker, "Vape settings sync worker").start();
+        Thread thread = new Thread(this.debounceWorker, "Vape settings sync worker");
+        thread.setDaemon(true);
+        this.debounceThread = thread;
+        thread.start();
     }
 
     private void syncOnlineSettings() {

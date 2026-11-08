@@ -355,6 +355,8 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
 
     /** 指针需要继续重试抓回（关闭界面那次 grabMouse 被短路吃掉时会置位）。 */
     private boolean pointerRestorePending;
+    /** 关闭后希望达到的指针抓取状态（重试时使用，避免读到一个过期的捕获值）。 */
+    private boolean pointerRestoreTarget;
     /** 输入状态是否已由 panic 恢复过（幂等：restoreInputState 可能被多次调用）。 */
     private boolean inputRestored;
 
@@ -429,7 +431,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             gui.setOpen(false);
             setBlocked(false);
             if (wasOpenForPointer) {
-                input.setPointerGrabbed(pointerGrabbedBeforeGui);
+                input.setPointerGrabbed(pointerRestoreTarget);
             }
             wasOpenForPointer = false;
             pointerRestorePending = false;
@@ -585,12 +587,21 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             // 先解除输入短路再抓回指针：grabMouse 自身也被织入短路，blocked 仍为 true 时
             // 这次恢复会被直接 return，之后 wasOpenForPointer=false 就再也不会重试。
             setBlocked(false);
-            input.setPointerGrabbed(pointerGrabbedBeforeGui);
-            pointerRestorePending = pointerGrabbedBeforeGui && !input.isPointerGrabbed();
+            boolean wantGrab = pointerGrabbedBeforeGui;
+            if (!wantGrab && inWorld() && !hasNativeScreen()) {
+                // 打开界面时游戏恰好没抓着鼠标（例如刚关掉原生 Screen 的那一帧），
+                // 直接按捕获值恢复会让关掉自绘 GUI 后永远转不了视角：游戏认为自己在游戏中
+                //（1.8.9 inGameHasFocus=true），不会再用 setIngameFocus 重新抓取。
+                // 只要在世界里且没有原生界面，就应当抓回指针。
+                wantGrab = true;
+            }
+            pointerRestoreTarget = wantGrab;
+            input.setPointerGrabbed(wantGrab);
+            pointerRestorePending = wantGrab && !input.isPointerGrabbed();
         } else if (pointerRestorePending && !hasNativeScreen()) {
             // 上一次恢复没生效（游戏可能又改了抓取状态）：继续重试，直到抓回为止。
-            input.setPointerGrabbed(pointerGrabbedBeforeGui);
-            pointerRestorePending = pointerGrabbedBeforeGui && !input.isPointerGrabbed();
+            input.setPointerGrabbed(pointerRestoreTarget);
+            pointerRestorePending = pointerRestoreTarget && !input.isPointerGrabbed();
         }
         wasOpenForPointer = open;
 
@@ -854,6 +865,17 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
 
     /** 上一帧世界覆盖层绘制耗时（纳秒），配合 debug 统计打印。 */
     private long lastOverlayNanos;
+
+    /** @return 当前是否在世界里（主菜单/加载界面不抢指针）。 */
+    private boolean inWorld() {
+        try {
+            NocturneClient client = NocturneClient.get();
+            dev.nocturne.client.game.GameBridge bridge = client == null ? null : client.gameBridge();
+            return bridge != null && bridge.inWorld();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     /** @return 游戏当前是否显示原生 Screen；桥不可用时按没有处理，不阻断自绘 GUI。 */
     private boolean hasNativeScreen() {

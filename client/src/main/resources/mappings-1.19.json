@@ -1223,6 +1223,10 @@
                 "forge": "net.minecraft.client.gui.components.ChatComponent"
             },
             "methods": {
+                "addClientSystemMessage": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "addMessage": {
                     "names": {
                         "vanilla": "a",

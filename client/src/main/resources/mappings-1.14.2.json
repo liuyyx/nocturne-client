@@ -1005,6 +1005,10 @@
                 "forge": "net.minecraft.client.gui.NewChatGui"
             },
             "methods": {
+                "addClientSystemMessage": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "addMessage": {
                     "names": {
                         "vanilla": "a",

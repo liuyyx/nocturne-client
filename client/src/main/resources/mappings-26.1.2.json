@@ -1364,6 +1364,20 @@
                 "neoforge": "net.minecraft.client.gui.components.ChatComponent"
             },
             "methods": {
+                "addClientSystemMessage": {
+                    "names": {
+                        "vanilla": "addClientSystemMessage",
+                        "fabric": "addClientSystemMessage",
+                        "forge": "addClientSystemMessage",
+                        "neoforge": "addClientSystemMessage"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lnet/minecraft/network/chat/Component;)V",
+                        "fabric": "(Lnet/minecraft/network/chat/Component;)V",
+                        "forge": "(Lnet/minecraft/network/chat/Component;)V",
+                        "neoforge": "(Lnet/minecraft/network/chat/Component;)V"
+                    }
+                },
                 "addMessage": {
                     "names": {
                         "vanilla": "addMessage",

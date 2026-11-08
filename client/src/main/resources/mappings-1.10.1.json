@@ -684,6 +684,10 @@
                 "fabric": "net.minecraft.class_338"
             },
             "methods": {
+                "addClientSystemMessage": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "addMessage": {
                     "names": {
                         "vanilla": "a",

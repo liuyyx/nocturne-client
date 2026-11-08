@@ -56,6 +56,14 @@ public final class XrayModule extends GameModule implements WorldOverlay {
 
     @Override
     protected void onStart() {
+        // 能力检查：26.1+ 的映射表把 BlockRenderDispatcher 整个标记为 absent，方块剔除钩子没有入口。
+        // 此时模块只提供矿石框（overlay），并在日志里明确说明"剔除不可用"——绝不假装剔除生效。
+        if (!dev.nocturne.client.bootstrap.GameplayHook.isWired("xrayBlock")) {
+            String reason = dev.nocturne.client.bootstrap.GameplayHook.unavailableReason("xrayBlock");
+            System.out.println("[nocturne] Xray: block culling unavailable on this version"
+                    + (reason == null ? "" : " (" + reason + ")")
+                    + "; ore boxes only");
+        }
         listen(dev.nocturne.client.event.MoveEvent.class, event -> {
             if (oreDeobf.get()) {
                 event.x = 0.0;

@@ -26,6 +26,15 @@ public final class ChamsModule extends GameModule {
 
     @Override
     protected void onStart() {
+        // 能力检查：1.21.5–1.21.8 的实体绘制首参是 EntityRenderState（不持有实体），
+        // 1.21.9+ 连 EntityRenderDispatcher#render 都没有。两种情况都没有真实绘制入口，
+        // 模块必须显式降级——注册一个"看起来生效"的假实现比不提供更糟。
+        if (!dev.nocturne.client.bootstrap.GameplayHook.isWired("chams")) {
+            String reason = dev.nocturne.client.bootstrap.GameplayHook.unavailableReason("chams");
+            System.out.println("[nocturne] Chams: unavailable on this version"
+                    + (reason == null ? " (entity render hook not wired)" : " (" + reason + ")")
+                    + "; no depth-test override is applied");
+        }
         listen(EntityRenderEvent.class, this::onRender);
     }
 

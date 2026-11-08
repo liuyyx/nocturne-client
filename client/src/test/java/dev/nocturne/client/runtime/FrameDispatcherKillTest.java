@@ -18,6 +18,12 @@ class FrameDispatcherKillTest {
         FrameDispatcher.resetForTests();
     }
 
+    /** 闸门是单向的：不复位会污染同一 JVM 里后续的帧分发用例。 */
+    @org.junit.jupiter.api.AfterEach
+    void restoreGate() {
+        FrameDispatcher.resetForTests();
+    }
+
     @Test
     void killedDispatcherStopsDispatching() {
         AtomicInteger runs = new AtomicInteger();

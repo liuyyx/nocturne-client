@@ -197,6 +197,16 @@ public final class ModernGlApi {
 
     /** 纹理句柄读写与像素上传复用的直接缓冲；不足时按需扩容。 */
     private java.nio.ByteBuffer pixelStaging;
+    /** 读取 UNPACK 原始状态的复用缓冲（4 项：ALIGNMENT / ROW_LENGTH / SKIP_ROWS / SKIP_PIXELS）。 */
+    private java.nio.IntBuffer unpackStaging;
+    /** 最近一次读到的 UNPACK 原始值；下标同 {@link #UNPACK_NAMES}。 */
+    private final int[] unpackSaved = new int[4];
+    /** UNPACK 状态项，顺序与 {@link #unpackSaved} 对应。 */
+    private static final int[] UNPACK_NAMES = {
+            GL_UNPACK_ALIGNMENT, GL_UNPACK_ROW_LENGTH, GL_UNPACK_SKIP_ROWS, GL_UNPACK_SKIP_PIXELS
+    };
+    /** "缺 pixelStorei/getIntegerv，纹理上传不安全"只告警一次。 */
+    private volatile boolean unpackUnavailableLogged;
     /** glGetError 诊断计数。 */
     private int uploadErrors;
 
@@ -333,8 +343,15 @@ public final class ModernGlApi {
     /** @return 是否具备绘制纹理所需的最小句柄集（生成 / 绑定 / 上传 / 采样参数都由本类包装）。 */
     public boolean hasTextures() {
         // activeTexture 必须可用：没有它就无法保证纹理绑在我们采样的那个单元上。
+        // pixelStorei / getIntegerv 同样必需：没有它们就无法在**上传前后**保证并还原 UNPACK 状态，
+        // 而游戏留下的非 0 ROW_LENGTH/SKIP_* 会让驱动越界读我们的小缓冲（1.21.11 真机 native crash）。
         return activeTexture != null && genTextures != null && bindTexture != null && texImage2D != null
-                && texParameteri != null;
+                && texParameteri != null && pixelStorei != null && canReadUnpackState();
+    }
+
+    /** @return 是否有可能读到 UNPACK 原始值（缓冲区形态优先，数组形态兜底） */
+    private boolean canReadUnpackState() {
+        return getIntegervBuffer != null || getIntegervArray != null;
     }
 
     /** @return 新建纹理句柄；不可用或失败时为 0 */
@@ -432,6 +449,17 @@ public final class ModernGlApi {
         if (texImage2D == null || width <= 0 || height <= 0 || argb == null) {
             return false;
         }
+        // pixelStorei 缺失时**绝不能**继续：游戏会把 UNPACK_ROW_LENGTH/SKIP_* 留在非 0 值上，
+        // 我们既无法归零也无法还原，驱动会按旧值从 base+3.98MB 处读一个几字节的缓冲
+        // → nvoglv64 ACCESS_VIOLATION（1.21.11 真机）。此时宁可让纹理路径整体不可用。
+        if (pixelStorei == null || !canReadUnpackState()) {
+            if (!unpackUnavailableLogged) {
+                unpackUnavailableLogged = true;
+                System.out.println("[nocturne] texture upload disabled: glPixelStorei/glGetIntegerv"
+                        + " unavailable, UNPACK state cannot be saved/restored safely");
+            }
+            return false;
+        }
         int needed = width * height * 4;
         java.nio.ByteBuffer buffer = pixelStaging;
         if (buffer == null || buffer.capacity() < needed) {
@@ -448,7 +476,10 @@ public final class ModernGlApi {
             buffer.put((byte) ((pixel >>> 24) & 0xFF)); // A
         }
         buffer.flip();
-        if (pixelStorei != null) {
+        if (!captureUnpackState()) {
+            return false;
+        }
+        try {
             // 行对齐：RGBA 每行字节数必然是 4 的倍数，显式设为 4 以免游戏把全局值改过。
             Reflect.call(pixelStorei, null, GL_UNPACK_ALIGNMENT, 4);
             // 这三个解包状态必须显式归零：GL 的源地址 = base + ((SKIP_ROWS*ROW_LENGTH)+SKIP_PIXELS)*bpp，
@@ -459,15 +490,56 @@ public final class ModernGlApi {
             Reflect.call(pixelStorei, null, GL_UNPACK_ROW_LENGTH, 0);
             Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_ROWS, 0);
             Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_PIXELS, 0);
+            Reflect.call(texImage2D, null, GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                    GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+        } finally {
+            // 必须还原：游戏下一次上传自己的图集时若继承我们的 0 值，图集会错位。
+            restoreUnpackState();
         }
-        Reflect.call(texImage2D, null, GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                GL_RGBA, GL_UNSIGNED_BYTE, buffer);
         if (System.getProperty("nocturne.ui.debug") != null && uploadErrors < 4) {
             uploadErrors++;
             Object error = getError == null ? null : Reflect.call(getError, null);
             System.out.println("[nocturne] texImage2D " + width + "x" + height + " err=" + error);
         }
         return true;
+    }
+
+    /**
+     * 读取 4 项 UNPACK 状态到 {@link #unpackSaved}。
+     *
+     * @return 读到返回 true；GL 读取面不可用或调用失败时返回 false
+     */
+    private boolean captureUnpackState() {
+        java.nio.IntBuffer staging = unpackStaging;
+        if (staging == null) {
+            staging = java.nio.ByteBuffer.allocateDirect(UNPACK_NAMES.length * 4)
+                    .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
+            unpackStaging = staging;
+        }
+        for (int i = 0; i < UNPACK_NAMES.length; i++) {
+            try {
+                staging.clear();
+                if (getIntegervBuffer != null) {
+                    getIntegervBuffer.invoke(null, UNPACK_NAMES[i], staging);
+                } else {
+                    int[] value = new int[1];
+                    getIntegervArray.invoke(null, UNPACK_NAMES[i], value);
+                    unpackSaved[i] = value[0];
+                    continue;
+                }
+                unpackSaved[i] = staging.get(0);
+            } catch (Throwable t) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 把 {@link #unpackSaved} 写回 GL；失败不抛（清理路径）。 */
+    private void restoreUnpackState() {
+        for (int i = 0; i < UNPACK_NAMES.length; i++) {
+            Reflect.call(pixelStorei, null, UNPACK_NAMES[i], unpackSaved[i]);
+        }
     }
 
     /**

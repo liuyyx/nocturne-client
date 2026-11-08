@@ -62,6 +62,10 @@ public final class GameBridge {
     private final AtomicLong logCount = new AtomicLong();
     /** 方块坐标构造器；首次使用时解析，失败不缓存。 */
     private volatile java.lang.reflect.Constructor<?> blockPosConstructor;
+    /** 区块重建失败是否已告警；映射缺失的版本只需一条日志。 */
+    private volatile boolean chunkReloadWarned;
+    /** 人称写入失败是否已告警（26.x 之前 Options 没有可写的人称字段）。 */
+    private volatile boolean perspectiveWarned;
 
     /**
      * 构造反射桥。
@@ -456,29 +460,65 @@ public final class GameBridge {
         return callMappedStatus(field, ClassType.OPTION_INSTANCE, "set", value);
     }
 
-    /** 当前人称：0=第一人称，1=第三人称背面；未知为 -1。 */
+    /**
+     * 当前人称：0=第一人称，1=第三人称背面；未知为 <b>-1</b>。
+     *
+     * <p>版本面：
+     * <ul>
+     *   <li>≤1.14.4：{@code Options#thirdPersonView} 是 int 字段；</li>
+     *   <li>1.16.5+：真名是 {@code Options#cameraType}（{@code OptionInstance<CameraType>}），
+     *       {@code perspective} 这个字段在任何版本都不存在——旧实现读不到时无条件返回 0，
+     *       于是所有"仅第三人称"的渲染都被当成第一人称。</li>
+     * </ul>
+     * 两个面都读不到时返回 -1（调用方必须按"未知"处理，不能默认第一人称）。
+     */
     public int perspective() {
         Object options = readField(minecraft(), ClassType.MINECRAFT, "options");
         Number legacy = number(readField(options, ClassType.OPTIONS, "thirdPersonView"));
         if (legacy != null) {
             return legacy.intValue() == 0 ? 0 : 1;
         }
-        Object option = readField(options, ClassType.OPTIONS, "perspective");
+        Object option = readField(options, ClassType.OPTIONS, "cameraType");
+        if (option == null) {
+            // 兼容旧候选名（历史上从未存在于任何表里，保留只为不改变候选顺序语义）。
+            option = readField(options, ClassType.OPTIONS, "perspective");
+        }
+        if (option == null) {
+            return -1;
+        }
         Object value = callMapped(option, ClassType.OPTION_INSTANCE, "get");
-        return value != null && String.valueOf(value).contains("THIRD") ? 1 : 0;
+        if (value == null) {
+            return -1;
+        }
+        return String.valueOf(value).contains("THIRD") ? 1 : 0;
     }
 
-    /** 设置第一/第三人称并保留调用结果。 */
+    /**
+     * 设置第一/第三人称并保留调用结果。
+     *
+     * @param perspective 0=第一人称，1=第三人称背面
+     * @return 是否真的写回；不可用版本返回 false（调用方必须据此降级，不能假装已切换）
+     */
     public boolean setPerspective(int perspective) {
         Object options = readField(minecraft(), ClassType.MINECRAFT, "options");
         Number legacy = number(readField(options, ClassType.OPTIONS, "thirdPersonView"));
         if (legacy != null) {
             return writeField(options, ClassType.OPTIONS, "thirdPersonView", perspective);
         }
-        Object option = readField(options, ClassType.OPTIONS, "perspective");
+        Object option = readField(options, ClassType.OPTIONS, "cameraType");
+        if (option == null) {
+            option = readField(options, ClassType.OPTIONS, "perspective");
+        }
         Object value = staticField(ClassType.PERSPECTIVE,
                 perspective == 0 ? "FIRST_PERSON" : "THIRD_PERSON_BACK");
-        return callMappedStatus(option, ClassType.OPTION_INSTANCE, "setValue", value);
+        boolean written = option != null && value != null
+                && callMappedStatus(option, ClassType.OPTION_INSTANCE, "set", value);
+        if (!written && !perspectiveWarned) {
+            perspectiveWarned = true;
+            System.out.println("[nocturne] GameBridge: perspective switch unavailable on this"
+                    + " version (Options#cameraType/thirdPersonView); dependent modules stay off");
+        }
+        return written;
     }
 
     /** 旧版 Timer 的倍率字段；现代字段不存在时由 ASM delta 钩子接管。 */
@@ -527,10 +567,24 @@ public final class GameBridge {
         return readField(player(), ClassType.LOCAL_PLAYER, "input");
     }
 
-    /** 请求全部区块重建；XRay 状态改变后调用。 */
+    /**
+     * 请求全部区块重建；XRay 状态改变后调用。
+     *
+     * <p>26.x 的 {@code LevelRenderer#allChanged} 在映射表里缺失，调用必然失败。失败只告警一次：
+     * Xray 的方块剔除钩子在这些版本也不存在（见 {@code BlockRenderDispatcher} 的 absent 条目），
+     * 区块重建本来就没有意义——不告警的话，模块看起来仍然"生效"。
+     *
+     * @return 是否真的触发了区块重建
+     */
     public boolean reloadChunks() {
         Object renderer = readField(minecraft(), ClassType.MINECRAFT, "levelRenderer");
-        return callMappedStatus(renderer, ClassType.LEVEL_RENDERER, "allChanged");
+        boolean reloaded = callMappedStatus(renderer, ClassType.LEVEL_RENDERER, "allChanged");
+        if (!reloaded && !chunkReloadWarned) {
+            chunkReloadWarned = true;
+            System.out.println("[nocturne] GameBridge: level chunk reload unavailable on this"
+                    + " version (LevelRenderer#allChanged); Xray falls back to ore boxes only");
+        }
+        return reloaded;
     }
 
     /** @return 当前客户端世界；未进入世界时为 {@code null} */
@@ -922,8 +976,43 @@ public final class GameBridge {
 
     /** 活体当前血量；非活体或不可读取时为 0。 */
     public float health(Object entity) {
-        Number health = number(callMapped(entity, ClassType.LIVING_ENTITY, "getHealth"));
+        Float health = healthOrNull(entity);
         return health == null ? 0.0f : health.floatValue();
+    }
+
+    /**
+     * 活体当前血量；<b>不可读取时为 {@code null}</b>。
+     *
+     * <p>渲染判定必须用它："读不到"和"血量 0"是两件事。旧实现一律返回 0，于是
+     * {@code No Dead Entities} 在 1.21.5+（实体渲染首参变成 {@code EntityRenderState}）把
+     * 所有实体都当成尸体从画面里删掉——连玩家自己都不见了。
+     *
+     * @param entity 目标实体；{@code null} 时返回 {@code null}
+     * @return 血量；非活体或反射不可用时返回 {@code null}
+     */
+    public Float healthOrNull(Object entity) {
+        if (entity == null) {
+            return null;
+        }
+        Number health = number(callMapped(entity, ClassType.LIVING_ENTITY, "getHealth"));
+        return health == null ? null : Float.valueOf(health.floatValue());
+    }
+
+    /**
+     * 渲染期"是否应作为尸体隐藏"。
+     *
+     * <p>规则：非 {@code LivingEntity} 不参与死亡判定（渲染状态对象、掉落物、船都不该被删）；
+     * 血量读不到时保持可见（未知 ≠ 已死）。
+     *
+     * @param entity 候选实体
+     * @return true 表示血量可知且 ≤0
+     */
+    public boolean isDeadForRendering(Object entity) {
+        if (entity == null || !isInstance(entity, ClassType.LIVING_ENTITY)) {
+            return false;
+        }
+        Float health = healthOrNull(entity);
+        return health != null && health.floatValue() <= 0.0f;
     }
 
     /** 活体最大血量；不可读取时为 0。 */
@@ -1412,7 +1501,10 @@ public final class GameBridge {
             Object angle = construct(ClassType.AXIS_ANGLE4F,
                     (float) Math.toRadians(rotations[axis]), ax, ay, az);
             Object quaternion = construct(ClassType.QUATERNIONF, angle);
-            callMappedStatus(pose, ClassType.POSE_STACK, "mulPose", quaternion);
+            if (!callMappedStatus(pose, ClassType.POSE_STACK, "mulPose", quaternion)) {
+                // 不再静默：旋转丢失会让 HandView/TotemAnimation 看起来"开着但没效果"。
+                logThrottled("PoseStack#mulPose(Quaternionf) failed for rotation axis " + axis, null);
+            }
         }
     }
 
@@ -1527,8 +1619,20 @@ public final class GameBridge {
                 continue;
             }
             Method method = findMethodCached(type, candidate.name(), parameters);
+            if (method != null && Reflect.callStatus(method, target, args)) {
+                return true;
+            }
             if (method != null) {
-                return Reflect.callStatus(method, target, args);
+                // 描述符选中的重载可能与实参类型不匹配：表里一个规范名只记一种签名，而同一个名字
+                // 常有多形态重载（{@code PoseStack#mulPose(Matrix4fc)} vs {@code mulPose(Quaternionf)}）。
+                // 按实参推断重试一次，否则旋转这类调用会永远静默失败。
+                Class<?>[] inferred = inferParameters(type, candidate.name(), args);
+                if (inferred != null && !java.util.Arrays.equals(inferred, parameters)) {
+                    Method retry = findMethodCached(type, candidate.name(), inferred);
+                    if (retry != null && Reflect.callStatus(retry, target, args)) {
+                        return true;
+                    }
+                }
             }
         }
         return false;

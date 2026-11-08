@@ -116,6 +116,12 @@ public final class GameplayEvents implements GameplayHook.Sink {
                 && dev.nocturne.client.module.modules.render.YsmModelModule.originalAllowed(entity);
     }
 
+    /** {@code EntityRenderDispatcher#shouldRender(Entity,Frustum,DDD)Z} 的两参形态：Frustum 只占位。 */
+    @Override
+    public boolean entityRenderGate(Object entity, Object frustum) {
+        return entityRenderGate(entity);
+    }
+
     @Override
     public void entityRender(Object entity, boolean post) {
         if (active()) {

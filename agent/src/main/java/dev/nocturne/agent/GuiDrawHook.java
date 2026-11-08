@@ -1,7 +1,5 @@
 package dev.nocturne.agent;
 
-import dev.nocturne.client.mapping.ClassType;
-import dev.nocturne.client.mapping.Mapping;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -54,6 +52,26 @@ public final class GuiDrawHook {
     private static volatile Method runtimeSetDrawContext;
     private static volatile Method runtimeOnDrawFrame;
 
+    /**
+     * 测试接缝：替换 {@code NocturneRuntime} 的类型，验证「单参 null 释放」确实按一个实参调用。
+     * 生产路径不调用它。
+     */
+    static void setRuntimeTypeForTests(Class<?> type) {
+        runtimeType = type;
+        runtimeSetDrawContext = null;
+        runtimeOnDrawFrame = null;
+    }
+
+    /** @return 自销毁闸门是否已触发；bootstrap 类缺失时按未触发处理。 */
+    private static boolean killed() {
+        try {
+            return dev.nocturne.client.runtime.FrameDispatcher.isKilled();
+        } catch (Throwable ignored) {
+            // 桥类不可用（测试/裁剪环境）：钩子照常工作。
+            return false;
+        }
+    }
+
     /** Fabric：Gui.render 捕获、GameRenderer 后置清理之间传递的当帧上下文。 */
     private static final ThreadLocal<Object> PENDING_HUD_GRAPHICS = new ThreadLocal<Object>();
 
@@ -97,26 +115,38 @@ public final class GuiDrawHook {
         throw new ClassNotFoundException("dev.nocturne.client.runtime.NocturneRuntime");
     }
 
-    private static void runtime(String name, Object... args) {
+    private static void runtimeSetDrawContextValue(Object graphics) {
         try {
             Class<?> type = runtimeType;
             if (type == null) {
                 type = resolveRuntime();
                 runtimeType = type;
             }
-            if ("setDrawContext".equals(name)) {
-                java.lang.reflect.Method method = runtimeSetDrawContext;
-                if (method == null) {
-                    method = type.getMethod("setDrawContext", Object.class);
-                    runtimeSetDrawContext = method;
-                }
-                // 显式释放时传的是 runtime("setDrawContext", null)：varargs 数组本身为 null。
-                method.invoke(null, args == null ? null : (args.length > 0 ? args[0] : null));
-                return;
+            Method method = runtimeSetDrawContext;
+            if (method == null) {
+                method = type.getMethod("setDrawContext", Object.class);
+                runtimeSetDrawContext = method;
             }
-            // 调 onDrawFrame 而不是 onFrame：帧交换点已经存在的栈上，两种驱动同时生效会让
-            // RenderEvent 与叠加层绘制每帧各跑两遍（真机：「开模块后像加速了」）。
-            java.lang.reflect.Method method = runtimeOnDrawFrame;
+            // 显式单参调用：graphics 可能为 null，但**必须**仍然算一个实参。
+            // 旧写法走 Object... varargs 且对 null 做了三元折叠，实际变成 `invoke(null, null)`
+            // ——对单参方法等于传了 0 个实参，每帧抛 IllegalArgumentException，绘制上下文永不释放。
+            method.invoke(null, graphics);
+        } catch (Throwable error) {
+            if (System.getProperty("nocturne.ui.debug") != null && reported++ < 3) {
+                System.out.println("[nocturne] gui draw hook runtime failed: setDrawContext -> " + error);
+            }
+        }
+    }
+
+    /** 调 {@code NocturneRuntime.onDrawFrame()}：帧交换点已存在时不再重复驱动。 */
+    private static void runtimeOnDrawFrameCall() {
+        try {
+            Class<?> type = runtimeType;
+            if (type == null) {
+                type = resolveRuntime();
+                runtimeType = type;
+            }
+            Method method = runtimeOnDrawFrame;
             if (method == null) {
                 method = type.getMethod("onDrawFrame");
                 runtimeOnDrawFrame = method;
@@ -124,7 +154,7 @@ public final class GuiDrawHook {
             method.invoke(null);
         } catch (Throwable error) {
             if (System.getProperty("nocturne.ui.debug") != null && reported++ < 3) {
-                System.out.println("[nocturne] gui draw hook runtime failed: " + name + " -> " + error);
+                System.out.println("[nocturne] gui draw hook runtime failed: onDrawFrame -> " + error);
             }
         }
     }
@@ -139,6 +169,10 @@ public final class GuiDrawHook {
      * Fabric 前置捕获：只保存参数槽稳定的 GuiGraphics，不在 ImmediatelyFast 的 HUD 批次里绘制。
      */
     public static void onHudDrawCapture(Object graphics) {
+        if (killed()) {
+            PENDING_HUD_GRAPHICS.remove();
+            return;
+        }
         PENDING_HUD_GRAPHICS.set(graphics);
     }
 
@@ -146,7 +180,7 @@ public final class GuiDrawHook {
     public static void onHudDrawDeferred() {
         Object graphics = PENDING_HUD_GRAPHICS.get();
         PENDING_HUD_GRAPHICS.remove();
-        if (graphics != null) {
+        if (graphics != null && !killed()) {
             onHudDraw(graphics);
         }
     }
@@ -160,6 +194,9 @@ public final class GuiDrawHook {
      * @param graphics 本帧的 {@code GuiGraphicsExtractor}
      */
     public static void onHudDraw(Object graphics) {
+        if (killed()) {
+            return;
+        }
         if (HUD_FIRST.compareAndSet(false, true)) {
             System.out.println("[nocturne] gui draw hook active via Hud.extractRenderState");
         }
@@ -185,6 +222,9 @@ public final class GuiDrawHook {
      * @param graphics 本帧的 {@code GuiGraphicsExtractor}
      */
     public static void onScreenDraw(Object graphics) {
+        if (killed()) {
+            return;
+        }
         if (SCREEN_FIRST.compareAndSet(false, true)) {
             System.out.println("[nocturne] gui draw hook active via Screen.extractRenderStateWithTooltipAndSubtitles");
         }
@@ -200,6 +240,10 @@ public final class GuiDrawHook {
      * @param graphics 本帧的 {@code PoseStack}
      */
     public static void onScreenDrawCapture(Object graphics) {
+        if (killed()) {
+            PENDING_SCREEN_GRAPHICS.remove();
+            return;
+        }
         PENDING_SCREEN_GRAPHICS.set(graphics);
     }
 
@@ -207,7 +251,7 @@ public final class GuiDrawHook {
     public static void onScreenDrawDeferred() {
         Object graphics = PENDING_SCREEN_GRAPHICS.get();
         PENDING_SCREEN_GRAPHICS.remove();
-        if (graphics != null) {
+        if (graphics != null && !killed()) {
             onScreenDraw(graphics);
         }
     }
@@ -219,12 +263,12 @@ public final class GuiDrawHook {
      */
     private static void drive(Object graphics) {
         try {
-            runtime("setDrawContext", graphics);
+            runtimeSetDrawContextValue(graphics);
             try {
-                runtime("onDrawFrame");
+                runtimeOnDrawFrameCall();
             } finally {
                 // 绘制上下文只在这次调用期间有效：用完立刻释放，避免后端持有已失效的对象。
-                runtime("setDrawContext", (Object) null);
+                runtimeSetDrawContextValue(null);
             }
         } catch (Throwable t) {
             // 绝不把异常带回游戏的绘制路径。
@@ -275,13 +319,20 @@ public final class GuiDrawHook {
         screenProbeResolved = true;
         try {
             ClassLoader loader = GuiDrawHook.class.getClassLoader();
-            Mapping mapping = NocturneAgent.currentMapping();
-            Class<?> minecraftType = loadCandidate(loader, mapping.classNameCandidates(ClassType.MINECRAFT));
-            Class<?> screenType = loadCandidate(loader, mapping.classNameCandidates(ClassType.SCREEN));
+            // 候选名由 agent 通过 bootstrap 层的 GameplaySink 推入：本类会被复制进 bootstrap 桥 jar，
+            // 那一层看不到 agent 类（旧代码静态引用 NocturneAgent.currentMapping() → 每次探测
+            // 都 NoClassDefFoundError，界面探测永久失效）。
+            if (!dev.nocturne.bootstrap.GameplaySink.probeConfigured()) {
+                throw new ClassNotFoundException("gui probe candidates not published");
+            }
+            Class<?> minecraftType = loadCandidate(loader,
+                    dev.nocturne.bootstrap.GameplaySink.probeMinecraft());
+            Class<?> screenType = loadCandidate(loader,
+                    dev.nocturne.bootstrap.GameplaySink.probeScreen());
             if (minecraftType == null || screenType == null) {
                 throw new ClassNotFoundException("Minecraft/Screen mapping unavailable");
             }
-            for (String name : mapping.methodNameCandidates(ClassType.MINECRAFT, "getInstance", null)) {
+            for (String name : dev.nocturne.bootstrap.GameplaySink.probeGetInstance()) {
                 try {
                     Method candidate = minecraftType.getMethod(name);
                     if (candidate.getReturnType() == minecraftType) {
@@ -292,7 +343,7 @@ public final class GuiDrawHook {
                     // 下一个命名空间候选。
                 }
             }
-            for (String name : mapping.fieldNameCandidates(ClassType.MINECRAFT, "screen")) {
+            for (String name : dev.nocturne.bootstrap.GameplaySink.probeScreenFields()) {
                 try {
                     Field candidate = minecraftType.getField(name);
                     if (screenType.isAssignableFrom(candidate.getType())) {
@@ -312,8 +363,8 @@ public final class GuiDrawHook {
         }
     }
 
-    /** 只从本游戏加载器解析映射候选，不触发目标类静态初始化。 */
-    private static Class<?> loadCandidate(ClassLoader loader, java.util.List<String> names) {
+    /** 只从本游戏加载器解析候选名，不触发目标类静态初始化。 */
+    private static Class<?> loadCandidate(ClassLoader loader, String[] names) {
         for (String name : names) {
             try {
                 return Class.forName(name.replace('/', '.'), false, loader);

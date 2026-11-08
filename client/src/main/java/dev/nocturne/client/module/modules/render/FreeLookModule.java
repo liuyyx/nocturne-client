@@ -59,7 +59,12 @@ public final class FreeLookModule extends GameModule {
             originalPerspective = bridge().perspective();
             previousYaw = originalYaw;
             previousPitch = originalPitch;
-            bridge().setPerspective(perspectiveMode.is("1st Person") ? 0 : 1);
+            // 人称写不进去（1.16.5+ 的真名是 Options#cameraType，映射面缺失时写回必然失败）时
+            // 不得进入 active：否则退出时既恢复不了，界面又显示"Freelook 正在生效"。
+            if (!bridge().setPerspective(perspectiveMode.is("1st Person") ? 0 : 1)) {
+                active = false;
+                return;
+            }
             if (startingPosition.is("Backward") && actions() != null) {
                 actions().setRotation(RotationController.wrap(originalYaw + 180.0f), originalPitch);
             }
@@ -103,7 +108,10 @@ public final class FreeLookModule extends GameModule {
             return;
         }
         if (bridge() != null && bridge().player() != null) {
-            bridge().setPerspective(originalPerspective);
+            // -1 表示"未知"（两个人称面都读不到）：此时不能拿它去写，否则会把第三人称当默认值。
+            if (originalPerspective >= 0) {
+                bridge().setPerspective(originalPerspective);
+            }
             if (actions() != null) {
                 actions().setRotation(originalYaw, originalPitch);
             }

@@ -99,6 +99,8 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
     private int textureFlagLocation;
     /** 1×1 白色纹理：纯色绘制时也绑着它，避免"采样器未绑定"的未定义采样。 */
     private int whiteTexture;
+    /** 白纹理创建失败后不再重试（上传路径不可用是永久性的）。 */
+    private boolean whiteTextureFailed;
     /** 着色器与缓冲是否已创建成功；未就绪时所有绘制调用都会被跳过。 */
     private boolean ready;
     /** 初始化失败计数；达到上限后停止重试（避免无限重试的产生与清理泄漏）。 */
@@ -357,11 +359,14 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         gl.vertexAttribPointer(ATTRIB_POSITION, 2, FLOATS_PER_VERTEX * 4, 0);
         gl.enableVertexAttrib(ATTRIB_UV);
         gl.vertexAttribPointer(ATTRIB_UV, 2, FLOATS_PER_VERTEX * 4, 2 * 4);
-        if (whiteTexture == 0) {
+        if (whiteTexture == 0 && !whiteTextureFailed) {
             whiteTexture = createWhiteTexture();
             if (whiteTexture == 0) {
+                // 失败只报一次、不再重试：失败原因是上传路径本身不可用（例如缺 glPixelStorei），
+                // 每次 initialise 重试只会反复写 GL 错误日志，而且永远好不了。
+                whiteTextureFailed = true;
                 System.err.println("[nocturne] could not create the 1x1 white texture;"
-                        + " core-profile texturing unavailable");
+                        + " core-profile texturing unavailable (no retry)");
             }
         }
 

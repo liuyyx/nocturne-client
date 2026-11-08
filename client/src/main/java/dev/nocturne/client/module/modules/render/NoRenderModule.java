@@ -88,8 +88,11 @@ public final class NoRenderModule extends GameModule {
             return true;
         }
         NocturneClient client = NocturneClient.get();
+        // 死亡判定只在**能确认**血量时成立：非 LivingEntity 不参与（1.21.5+ 的实体渲染首参是
+        // EntityRenderState，不是实体）；血量读不到时保持可见（未知 ≠ 已死）。
+        // 旧实现把"读不到"当 0，于是 1.21.5–1.21.8 上所有实体（含玩家）都被删掉。
         if (module.noDeadEntities.get() && client.gameBridge() != null
-                && client.gameBridge().health(entity) <= 0.0f) {
+                && client.gameBridge().isDeadForRendering(entity)) {
             return false;
         }
         String type = entity.getClass().getSimpleName().toLowerCase(java.util.Locale.ROOT);

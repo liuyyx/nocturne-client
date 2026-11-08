@@ -27,6 +27,7 @@ public final class HatModule extends GameModule implements WorldOverlay {
 
     @Override
     public void drawWorldOverlay(OverlayDraw draw, WorldProjection projection) {
+        // 人称未知（-1：两个字段面都读不到）时按"不在第一人称"处理，宁可多画也不要整片消失。
         if (onlyThirdPerson.get() && bridge().perspective() == 0) {
             return;
         }

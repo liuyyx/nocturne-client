@@ -12,8 +12,14 @@ public final class TestSupport {
     private TestSupport() {
     }
 
-    /** 把 {@link NocturneClient#instance} 置空；下一次 {@code boot} 会重新安装。 */
+    /**
+     * 把 {@link NocturneClient#instance} 置空；下一次 {@code boot} 会重新安装。
+     *
+     * <p>同时复位自销毁闸门与钩子能力表：{@code panic()} 会把闸门单向置位，若不在这里复位，
+     * 同一 JVM 里后续用例的 GameplayHook 调用会全部退化成"放行"，看起来像事件系统坏了。
+     */
     public static void resetClient() {
+        dev.nocturne.bootstrap.GameplaySink.resetForTests();
         try {
             Field field = NocturneClient.class.getDeclaredField("instance");
             field.setAccessible(true);

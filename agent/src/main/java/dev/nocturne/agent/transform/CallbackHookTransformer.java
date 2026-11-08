@@ -172,7 +172,9 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                             // 末尾注入：目标方法自己先画完，钩子再把叠加层画上去（否则被它盖住）。
                             // 双端模式的消费钩子是幂等的（第二次取不到上下文就空转），所以**每个**
                             // RETURN 前都插：多返回点的方法里任一返回路径都必须把当帧画完。
-                            // 单点注入仍只在首个 RETURN 前插，避免叠加层一帧画多遍。
+                            // 返回形态必须全覆盖：1.8.9 的实体绘制返回 boolean（IRETURN），
+                            // 只认 RETURN 会让 pre 生效、post 永不执行——Chams 关掉的深度测试
+                            // 再也恢复不回来。单点注入仍只在首个 RETURN 前插，避免叠加层一帧画多遍。
                             if (opcode == Opcodes.RETURN) {
                                 if (deferredMethod != null) {
                                     super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner,
@@ -192,8 +194,19 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                                         inject();
                                     }
                                 }
+                            } else if (deferredMethod != null && isValueReturn(opcode)) {
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner,
+                                        deferredMethod, "()V", false);
+                                patched[0] = true;
                             }
                             super.visitInsn(opcode);
+                        }
+
+                        /** 是否「带返回值的返回」；无参 void 调用插在它之前不改变栈内容。 */
+                        private boolean isValueReturn(int opcode) {
+                            return opcode == Opcodes.IRETURN || opcode == Opcodes.LRETURN
+                                    || opcode == Opcodes.FRETURN || opcode == Opcodes.DRETURN
+                                    || opcode == Opcodes.ARETURN;
                         }
 
                         /** 插入 {@code aload <首个引用形参>; invokestatic 钩子}；只插一次。 */

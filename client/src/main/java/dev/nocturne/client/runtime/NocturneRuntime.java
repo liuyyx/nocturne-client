@@ -43,6 +43,10 @@ public final class NocturneRuntime {
     private static Method clearMethod;
     /** {@code FrameDispatcher.addShutdown(Runnable)}；未解析时为 null。 */
     private static Method addShutdownMethod;
+    /** {@code FrameDispatcher.kill()}；未解析时为 null。 */
+    private static Method killMethod;
+    /** {@code FrameDispatcher.isKilled()}；未解析时为 null。 */
+    private static Method killedStateMethod;
 
     /** 工具类，禁止实例化。 */
     private NocturneRuntime() {
@@ -101,6 +105,8 @@ public final class NocturneRuntime {
             setDrawContextMethod = dispatcher.getMethod("setDrawContext", Object.class);
             clearMethod = dispatcher.getMethod("clear");
             addShutdownMethod = dispatcher.getMethod("addShutdown", Runnable.class);
+            killMethod = dispatcher.getMethod("kill");
+            killedStateMethod = dispatcher.getMethod("isKilled");
             return true;
         } catch (Throwable t) {
             System.out.println("[nocturne] bootstrap dispatcher unavailable: " + t);
@@ -246,11 +252,44 @@ public final class NocturneRuntime {
     }
 
     /**
+     * 触发自销毁闸门：让分发器 {@code dispatch()} 与全部注入钩子立即变成放行空操作。
+     *
+     * <p>只置一个 volatile 标志，**不**拆任何资源、不做 GL 调用，因此可以在渲染线程上安全调用，
+     * 也可以与正在执行的帧回调并发。真正的拆卸见 {@link #shutdown()}，必须在非渲染线程上调用。
+     */
+    public static void kill() {
+        if (!bindDispatcher()) {
+            return;
+        }
+        try {
+            killMethod.invoke(null);
+        } catch (Throwable t) {
+            System.out.println("[nocturne] runtime kill failed: " + t);
+        }
+    }
+
+    /** @return 是否已进入自销毁状态；分发器不可用时按未触发处理 */
+    public static boolean isKilled() {
+        if (!bindDispatcher() || killedStateMethod == null) {
+            return false;
+        }
+        try {
+            Object state = killedStateMethod.invoke(null);
+            return state instanceof Boolean && (Boolean) state;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
      * 自销毁：清空 bootstrap 层分发器的全部每帧动作与绘制上下文汇。
      *
      * <p>清空之后注入的字节码仍会每帧调到这里，但分发器列表是空的——一次空遍历，不绘制、不轮询输入、
      * 不 tick 模块。这是"看起来没注入过"最接近的做法：agent 无法从目标 JVM 里卸载自己，
      * 但可以让所有可观察行为停下。
+     *
+     * <p><b>必须在非渲染线程上调用</b>：清空会执行 shutdown 动作（恢复鼠标抓取、解绑 transformer、
+     * 释放 GL sink）。与 {@link #kill()} 配合的顺序是「先 kill 再 shutdown」。
      */
     public static void shutdown() {
         if (!bindDispatcher()) {
@@ -296,6 +335,10 @@ public final class NocturneRuntime {
      * （单个监听器抛出的 Throwable 不会传播回被补丁的游戏方法）；之后按 20Hz 折算驱动模块 tick。
      */
     public static void onFrame() {
+        if (isKilled()) {
+            // 自销毁后仍会每帧被注入点调进来：必须在这里就返回，不能进入 drive() 的 GL 工作。
+            return;
+        }
         frameHookSeen = true;
         frameDrives++;
         drive();
@@ -309,6 +352,9 @@ public final class NocturneRuntime {
      * 就是同帧两遍。
      */
     public static void onDrawFrame() {
+        if (isKilled()) {
+            return;
+        }
         if (frameHookSeen && !contextDriven) {
             drawSkips++;
             return;

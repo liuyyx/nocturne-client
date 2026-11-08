@@ -12,9 +12,19 @@ import dev.nocturne.client.mapping.Mapping;
 public final class TestMapping implements Mapping {
 
     private final Class<?> minecraftClass;
+    /** {@code Component} 的替身类；默认 {@link FakeComponent}。 */
+    private final Class<?> componentClass;
+    /** {@code TextComponent} 的替身类；null 表示该版本没有可构造实现（走其它回退）。 */
+    private final Class<?> textComponentClass;
 
     public TestMapping(Class<?> minecraftClass) {
+        this(minecraftClass, FakeComponent.class, FakeTextComponent.class);
+    }
+
+    public TestMapping(Class<?> minecraftClass, Class<?> componentClass, Class<?> textComponentClass) {
         this.minecraftClass = minecraftClass;
+        this.componentClass = componentClass;
+        this.textComponentClass = textComponentClass;
     }
 
     @Override
@@ -28,7 +38,10 @@ public final class TestMapping implements Mapping {
             return minecraftClass.getName();
         }
         if (type == ClassType.COMPONENT) {
-            return FakeComponent.class.getName();
+            return componentClass.getName();
+        }
+        if (type == ClassType.TEXT_COMPONENT) {
+            return textComponentClass == null ? type.canonicalName() : textComponentClass.getName();
         }
         return type.canonicalName();
     }

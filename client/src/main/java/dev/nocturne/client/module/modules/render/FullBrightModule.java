@@ -437,6 +437,31 @@ public final class FullBrightModule extends Module {
      * @return 是否成功调用到任一入口
      */
     private static boolean writeOption(Object option, double value) {
+        // 先按原值写（旧版滑块允许 0..1 之外的内部值）；写入后**回读校验**：
+        // 26.x 的亮度 OptionInstance 校验域是 0..1，10.0 会被直接拒绝（Illegal option value），
+        // 而 set 可能不抛异常只静默不改——只有回读才能判断"真的生效了"。
+        if (writeOptionRaw(option, value) && optionApplied(option, value)) {
+            return true;
+        }
+        double clamped = Math.max(0.0, Math.min(1.0, value));
+        if (clamped != value && writeOptionRaw(option, clamped) && optionApplied(option, clamped)) {
+            return true;
+        }
+        return false;
+    }
+
+    /** 回读校验：读到数值时要求与目标基本一致（亮度滑块 0..1，容差 1e-3）。 */
+    private static boolean optionApplied(Object option, double value) {
+        Object read = readOptionValue(option);
+        if (!(read instanceof Number)) {
+            // 读不到就按"可写"处理：旧版字段或实现没有 get()，交给上层视觉判断
+            return true;
+        }
+        return Math.abs(((Number) read).doubleValue() - value) < 1.0e-3;
+    }
+
+    /** 真正下发写入：force_double 优先（绕过校验器），否则通用 set(T)。 */
+    private static boolean writeOptionRaw(Object option, double value) {
         Class<?> type = option.getClass();
         Method force = findMethod(type, "force_double", double.class);
         if (force == null) {
@@ -493,12 +518,18 @@ public final class FullBrightModule extends Module {
     }
 
     /** 打印一次性的“gamma 写入失败”诊断，避免静默失效；成功一次后重新武装。 */
+    /** 已提示过的写入失败类别：跨 enable/disable 也只提示一次（这是能力事实，不是每帧状态）。 */
+    private static final java.util.Set<String> REPORTED_FAILURES =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private void logWriteFailure(String reason) {
-        if (writeFailureLogged) {
+        if (writeFailureLogged || !REPORTED_FAILURES.add("gamma")) {
+            writeFailureLogged = true;
             return;
         }
         writeFailureLogged = true;
-        System.out.println("[nocturne] FullBright: gamma 写入失败：" + reason);
+        System.out.println("[nocturne] FullBright: gamma 写入失败（本会话只提示一次，亮度可能没变化）："
+                + reason);
     }
 
     /** 取当前客户端的游戏桥接；客户端尚未构造时返回 {@code null}。 */

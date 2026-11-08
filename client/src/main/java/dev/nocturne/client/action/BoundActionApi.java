@@ -9,6 +9,10 @@ final class BoundActionApi implements ActionApi {
     private final ActionBinder binder;
     private final GameBridge bridge;
 
+    /** 已提示过的能力缺失（同 key 只打印一次）：这些是静态事实，不能每 tick 刷屏。 */
+    private static final java.util.Set<String> WARNED =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     BoundActionApi(ActionBinder binder, GameBridge bridge) {
         this.binder = binder;
         this.bridge = bridge;
@@ -224,10 +228,19 @@ final class BoundActionApi implements ActionApi {
             return false;
         }
         if (binder.isAvailable("sendChat")) {
-            return binder.invoke("sendChat", connection(), text);
+            boolean sent = binder.invoke("sendChat", connection(), text);
+            if (sent) {
+                return true;
+            }
         }
         Object player = bridge.player();
-        return player != null && binder.invoke("legacyChat", player, text);
+        if (player != null && binder.invoke("legacyChat", player, text)) {
+            return true;
+        }
+        // 1.8.9 两条入口都缺映射：不静默失败，至少让用户知道播报/排队没发出去。
+        warnOnce("sendChat", "sendChat unavailable on this version (no ClientPacketListener"
+                + "#sendChat/sendChatMessage nor LocalPlayer#sendChatMessage entry)");
+        return false;
     }
 
     @Override
@@ -237,10 +250,17 @@ final class BoundActionApi implements ActionApi {
         }
         String normalized = command.startsWith("/") ? command.substring(1) : command;
         if (binder.isAvailable("sendCommand")) {
-            return binder.invoke("sendCommand", connection(), normalized);
+            if (binder.invoke("sendCommand", connection(), normalized)) {
+                return true;
+            }
         }
         Object player = bridge.player();
-        return player != null && binder.invoke("legacyChat", player, "/" + normalized);
+        if (player != null && binder.invoke("legacyChat", player, "/" + normalized)) {
+            return true;
+        }
+        warnOnce("sendCommand", "sendCommand unavailable on this version (no ClientPacketListener"
+                + "#sendCommand nor LocalPlayer#sendChatMessage entry)");
+        return false;
     }
 
     @Override
@@ -377,8 +397,7 @@ final class BoundActionApi implements ActionApi {
         Number health = number(bridge.callMapped(player, ClassType.LIVING_ENTITY, "getHealth"));
         Number absorption = number(bridge.callMapped(player, ClassType.LIVING_ENTITY,
                 "getAbsorptionAmount"));
-        Number attack = number(bridge.callMapped(player, ClassType.PLAYER,
-                "getAttackStrengthScale", 0.5f));
+        Number attack = attackCooldown(player);
         Object sprinting = bridge.callMapped(player, ClassType.ENTITY, "isSprinting");
         Object shifting = bridge.callMapped(player, ClassType.ENTITY, "isShiftKeyDown");
         Number strafe = number(bridge.readField(player, ClassType.LIVING_ENTITY, "xxa"));
@@ -393,6 +412,44 @@ final class BoundActionApi implements ActionApi {
                 absorption == null ? 0.0f : absorption.floatValue(),
                 attack == null ? 1.0f : attack.floatValue(),
                 Boolean.TRUE.equals(sprinting), Boolean.TRUE.equals(shifting), moving);
+    }
+
+    /**
+     * 攻击冷却比例（0..1）。
+     *
+     * <p>{@code Player#getAttackStrengthScale(float)} 在 1.8.9 的映射表里是 absent，旧入口是
+     * {@code getCooledAttackStrength(float)}（部分重映射环境同名可读）。两条都拿不到时返回
+     * {@code null}，调用方按 1.0（视为已就绪）处理并只提示一次——绝不假装读到了 0。
+     *
+     * @param player 本地玩家
+     * @return 0..1 的冷却比例；不可用为 null
+     */
+    private Number attackCooldown(Object player) {
+        if (player == null) {
+            return null;
+        }
+        if (!bridge.mapping().isMemberAbsent(ClassType.PLAYER, "getAttackStrengthScale")) {
+            Number scale = number(bridge.callMapped(player, ClassType.PLAYER,
+                    "getAttackStrengthScale", 0.5f));
+            if (scale != null) {
+                return scale;
+            }
+        }
+        Number cooled = number(bridge.callMapped(player, ClassType.PLAYER,
+                "getCooledAttackStrength", 0.5f));
+        if (cooled != null) {
+            return cooled;
+        }
+        warnOnce("attackCooldown", "attack cooldown unavailable on this version"
+                + " (no getAttackStrengthScale/getCooledAttackStrength entry); treated as 1.0");
+        return null;
+    }
+
+    /** 打印一次带 key 的告警。 */
+    private static void warnOnce(String key, String message) {
+        if (WARNED.add(key)) {
+            System.out.println("[nocturne] actions: " + message);
+        }
     }
 
     @Override

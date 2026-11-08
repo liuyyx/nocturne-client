@@ -25,8 +25,13 @@ public final class ItemPhysicsModule extends GameModule {
             double z = velocity[2] * 0.6;
             if (Math.abs(x) < 0.005) x = 0.0;
             if (Math.abs(z) < 0.005) z = 0.0;
-            Object motion = bridge().construct(ClassType.VEC3, x, 0.0, z);
-            if (!bridge().callMappedStatus(entity, ClassType.ENTITY, "setDeltaMovement", motion)) {
+            // 先看映射表：旧版（1.8.9）没有 setDeltaMovement，直接写 motionX/motionZ 字段，
+            // 不要每 tick 反射一次去换一条 "no overload"。可用时才构造 Vec3 调 setter。
+            boolean hasSetter = !bridge().mapping()
+                    .isMemberAbsent(ClassType.ENTITY, "setDeltaMovement");
+            Object motion = hasSetter ? bridge().construct(ClassType.VEC3, x, 0.0, z) : null;
+            if (motion == null
+                    || !bridge().callMappedStatus(entity, ClassType.ENTITY, "setDeltaMovement", motion)) {
                 bridge().writeField(entity, ClassType.ENTITY, "motionX", x);
                 bridge().writeField(entity, ClassType.ENTITY, "motionZ", z);
             }

@@ -173,7 +173,8 @@ public final class KeepSprintModule extends Module {
 
     /** 读取水平动量；现代走 getDeltaMovement，旧版退回 motionX/motionZ。 */
     private static double[] readHorizontalMotion(GameBridge bridge, Object player) {
-        Object delta = bridge.callMapped(player, ClassType.ENTITY, "getDeltaMovement");
+        Object delta = bridge.mapping().isMemberAbsent(ClassType.ENTITY, "getDeltaMovement")
+                ? null : bridge.callMapped(player, ClassType.ENTITY, "getDeltaMovement");
         if (delta != null) {
             Number x = number(bridge.readField(delta, ClassType.VEC3, "x"));
             Number z = number(bridge.readField(delta, ClassType.VEC3, "z"));
@@ -190,7 +191,8 @@ public final class KeepSprintModule extends Module {
         if (bridge.writeField(player, ClassType.ENTITY, "motionX", x)) {
             return bridge.writeField(player, ClassType.ENTITY, "motionZ", z);
         }
-        Object delta = bridge.callMapped(player, ClassType.ENTITY, "getDeltaMovement");
+        Object delta = bridge.mapping().isMemberAbsent(ClassType.ENTITY, "getDeltaMovement")
+                ? null : bridge.callMapped(player, ClassType.ENTITY, "getDeltaMovement");
         if (delta == null) {
             return false;
         }

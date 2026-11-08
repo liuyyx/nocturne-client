@@ -24,8 +24,18 @@ public final class TimerModule extends GameModule {
         super("Timer", Category.MOVEMENT);
     }
 
+    /** 钩子不可用时标记一次：开关照常显示，但 onTick 不再假装改速度。 */
+    private boolean unavailable;
+
     @Override
     protected void onStart() {
+        unavailable = !dev.nocturne.client.bootstrap.GameplayHook.isWired("timer");
+        if (unavailable) {
+            String reason = dev.nocturne.client.bootstrap.GameplayHook.unavailableReason("timer");
+            System.out.println("[nocturne] Timer: 该版本没有可用的计时倍率入口"
+                    + (reason == null ? "" : "（" + reason + "）")
+                    + "，模块切换不会改变游戏速度");
+        }
         listen(KeyEvent.class, event -> {
             if (event.keyCode == activate.get()) {
                 held = event.pressed;
@@ -45,6 +55,9 @@ public final class TimerModule extends GameModule {
 
     @Override
     public void onTick() {
+        if (unavailable) {
+            return;
+        }
         if (mode.is("Always")) {
             currentSpeed = multiplier.asFloat();
         } else if (mode.is("Balance")) {
@@ -60,7 +73,9 @@ public final class TimerModule extends GameModule {
             }
             currentSpeed = balance >= 1.0f ? multiplier.asFloat() : 0.96f;
         }
-        bridge().setTimerSpeed(currentSpeed);
+        if (bridge() != null) {
+            bridge().setTimerSpeed(currentSpeed);
+        }
     }
 
     public float speed() {

@@ -1072,6 +1072,8 @@ public final class NocturneAgent {
             "(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDD)Z";
     /** {@code Camera#getMaxZoom(F)F}（1.16.5–1.21.4 是 {@code (D)D}，那些版本表里有真实签名）。 */
     private static final String CAMERA_MAX_ZOOM_DESCRIPTOR = "(F)F";
+    /** DeltaTracker#getGameTimeDeltaTicks：1.20.2+ 是 {@code ()F}，26.x 改成 {@code ()D}。 */
+    private static final String TIMER_DESCRIPTOR = "()F|()D";
     /** {@code ItemInHandRenderer#applyItemArmTransform(PoseStack,HumanoidArm,F)V}（1.14.4+）。 */
     private static final String APPLY_ITEM_ARM_DESCRIPTOR =
             "(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V";
@@ -1305,6 +1307,17 @@ public final class NocturneAgent {
                     : mapping.methodCandidates(owner, "getGameTimeDeltaTicks")) {
                 String descriptor = candidate.descriptor();
                 if (descriptor == null || descriptor.isEmpty()) {
+                    // 26.x 表只有名字；与其余 8 个钩子一样从已加载类反射出真实描述符，
+                    // 否则 timerScale 永远注册不上（面板显示可用、实际毫无效果）。
+                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
+                            TIMER_DESCRIPTOR);
+                }
+                if (descriptor == null && mapping.isIdentity()) {
+                    descriptor = "()F";
+                }
+                if (descriptor == null) {
+                    log("timer hook: no descriptor for " + className + "." + candidate.name()
+                            + " (mapping face missing)");
                     continue;
                 }
                 ClassFileTransformer transformer = asmLoader.createFloatReturnTransformer(
@@ -1314,7 +1327,12 @@ public final class NocturneAgent {
             }
         }
         if (!patched) {
-            log("timer delta hook pending or unavailable: " + owner.canonicalName());
+            // 26.x 的 DeltaTracker 接口没有 timerSpeed；描述符缺失时显式标记不可用，
+            // 模块据此提示"本版本不支持"，而不是开关亮着却毫无效果。
+            publishHookState("timer", false, "DeltaTracker timer descriptor unavailable");
+            log("timer delta hook unavailable: " + owner.canonicalName());
+        } else {
+            publishHookState("timer", true, null);
         }
     }
 
@@ -1347,8 +1365,24 @@ public final class NocturneAgent {
                             + candidate.name() + " (mapping face missing)");
                     continue;
                 }
+                // BlockState/BlockPos 的位置随版本变化（renderBatched 是前两参，
+                // 26.x 的 ModelBlockRenderer#tesselateBlock 里 BlockState 是第 7 参）：
+                // 按描述符里的类型定位，不写版本判断。
+                int stateIndex = descriptorArgumentIndex(descriptor,
+                        typeInternalNames(dev.nocturne.client.mapping.ClassType.BLOCK_STATE));
+                int posIndex = descriptorArgumentIndex(descriptor,
+                        typeInternalNames(dev.nocturne.client.mapping.ClassType.BLOCK_POS));
+                if (stateIndex < 0) {
+                    log("xray block hook: no BlockState parameter in " + className + "."
+                            + candidate.name() + descriptor + " (ore boxes only)");
+                    continue;
+                }
+                if (posIndex < 0) {
+                    posIndex = stateIndex == 0 ? 1 : 0;
+                }
                 ClassFileTransformer transformer = asmLoader.createFirstArgumentGateTransformer(
-                        className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "xrayBlock");
+                        className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "xrayBlock",
+                        stateIndex, posIndex);
                 int state = registerGameplayTransformerState(instrumentation, transformer, className,
                         candidate.name(), descriptor, "xrayBlock");
                 wired |= state >= HOOK_REGISTERED;
@@ -1400,12 +1434,34 @@ public final class NocturneAgent {
                     descriptor = SHOULD_RENDER_DESCRIPTOR;
                 }
                 if (descriptor == null || !firstParameterIsEntity(mapping, descriptor)) {
+                    // 表里的描述符可能已过版本（26.3 的 shouldRender 是 6 参）：改用运行期真实描述符。
+                    for (String real : descriptorsFor(instrumentation, className, candidate.name(),
+                            null, SHOULD_RENDER_DESCRIPTOR)) {
+                        if (!firstParameterIsEntity(mapping, real)) {
+                            continue;
+                        }
+                        ClassFileTransformer gate = asmLoader.createFirstArgumentGateTransformer(
+                                className, candidate.name(), real, GAMEPLAY_HOOK_OWNER,
+                                "entityRenderGate");
+                        gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
+                                candidate.name(), real, "entityRenderGate") >= HOOK_REGISTERED;
+                    }
                     continue;
                 }
                 ClassFileTransformer gate = asmLoader.createFirstArgumentGateTransformer(className,
                         candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "entityRenderGate");
                 gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
                         candidate.name(), descriptor, "entityRenderGate") >= HOOK_REGISTERED;
+                for (String real : descriptorsFor(instrumentation, className, candidate.name(),
+                        null, null)) {
+                    if (real.equals(descriptor) || !firstParameterIsEntity(mapping, real)) {
+                        continue;
+                    }
+                    ClassFileTransformer extra = asmLoader.createFirstArgumentGateTransformer(
+                            className, candidate.name(), real, GAMEPLAY_HOOK_OWNER, "entityRenderGate");
+                    gateWired |= registerGameplayTransformerState(instrumentation, extra, className,
+                            candidate.name(), real, "entityRenderGate") >= HOOK_REGISTERED;
+                }
             }
             // 2) render：首参必须是实体才是真实绘制点。
             for (dev.nocturne.client.mapping.MethodCandidate candidate
@@ -1486,6 +1542,142 @@ public final class NocturneAgent {
     }
 
     /** 按映射候选注册通知/门控转换器。 */
+
+    /**
+     * 候选描述符集合：映射表给的描述符/兜底描述符 **加上** 运行期真实方法描述符。
+     *
+     * <p>为什么需要运行期这一份：同一个规范方法在不同版本改了 arity（典型：
+     * {@code EntityRenderDispatcher#shouldRender} 26.3 是 6 参 {@code (Entity,Frustum,DDD,F)}，
+     * 映射表里的描述符仍是 5 参），照表织入会"注册成功但方法不存在"。这里用已加载类的
+     * {@code getDeclaredMethods()} 取真实描述符，按名字匹配、不做版本判断。
+     *
+     * @param instrumentation 插桩句柄
+     * @param className       目标类名
+     * @param methodName      方法名
+     * @param mapped          映射表描述符，可为 null
+     * @param fallbacks       兜底描述符串（{@code |} 分隔），可为 null
+     * @return 去重后的描述符列表（运行期描述符在后，保证表里的优先）
+     */
+    private static java.util.LinkedHashSet<String> descriptorsFor(Instrumentation instrumentation,
+                                                                  String className, String methodName,
+                                                                  String mapped, String fallbacks) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<String>();
+        if (mapped != null && !mapped.isEmpty()) {
+            out.add(mapped);
+        }
+        if (fallbacks != null) {
+            for (String fallback : fallbacks.split("\\|")) {
+                if (!fallback.isEmpty()) {
+                    out.add(fallback);
+                }
+            }
+        }
+        Class<?> target = null;
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            if (className.equals(loaded.getName())) {
+                target = loaded;
+                break;
+            }
+        }
+        if (target == null) {
+            return out;
+        }
+        try {
+            for (java.lang.reflect.Method method : target.getDeclaredMethods()) {
+                if (!method.getName().equals(methodName)) {
+                    continue;
+                }
+                StringBuilder descriptor = new StringBuilder("(");
+                for (Class<?> parameter : method.getParameterTypes()) {
+                    descriptor.append(jniDescriptor(parameter));
+                }
+                descriptor.append(')').append(jniDescriptor(method.getReturnType()));
+                out.add(descriptor.toString());
+            }
+        } catch (Throwable ignored) {
+            // 反射枚举失败就退回表里的描述符
+        }
+        return out;
+    }
+
+    /** JNI 描述符片段。 */
+    private static String jniDescriptor(Class<?> type) {
+        if (type == void.class) return "V";
+        if (type == int.class) return "I";
+        if (type == long.class) return "J";
+        if (type == float.class) return "F";
+        if (type == double.class) return "D";
+        if (type == boolean.class) return "Z";
+        if (type == byte.class) return "B";
+        if (type == short.class) return "S";
+        if (type == char.class) return "C";
+        if (type.isArray()) return "[" + jniDescriptor(type.getComponentType());
+        return "L" + type.getName().replace('.', '/') + ";";
+    }
+
+
+    /**
+     * 在 JNI 描述符里按类型名定位形参下标。
+     *
+     * <p>只做字符串切分（描述符是自描述的），因此不需要 ASM，也不依赖具体版本。
+     *
+     * @param descriptor   JNI 方法描述符
+     * @param internalNames 目标类型的内部名集合（如 {@code net/minecraft/world/level/block/state/BlockState}）
+     * @return 第一个匹配的形参下标；没有匹配返回 -1
+     */
+    private static int descriptorArgumentIndex(String descriptor, java.util.Set<String> internalNames) {
+        if (descriptor == null || internalNames == null || internalNames.isEmpty()) {
+            return -1;
+        }
+        int at = 0;
+        int index = 0;
+        int argumentStart = descriptor.indexOf('(') + 1;
+        while (argumentStart > 0 && at < descriptor.length()) {
+            int position = argumentStart;
+            int skip = 0;
+            while (position + skip < descriptor.length() && descriptor.charAt(position + skip) == '[') {
+                skip++;
+            }
+            if (position + skip >= descriptor.length()) {
+                return -1;
+            }
+            char kind = descriptor.charAt(position + skip);
+            String internal = null;
+            int length;
+            if (kind == 'L') {
+                int end = descriptor.indexOf(';', position + skip);
+                if (end < 0) {
+                    return -1;
+                }
+                internal = descriptor.substring(position + skip + 1, end);
+                length = end - position + 1;
+            } else {
+                // long/double 占两个局部变量槽位，其余占一个
+                length = (kind == 'J' || kind == 'D') ? 2 : 1;
+            }
+            if (internal != null && internalNames.contains(internal)) {
+                return index;
+            }
+            index += 1;
+            argumentStart += length;
+            at = argumentStart;
+        }
+        return -1;
+    }
+
+
+    /** 目标映射类的全部运行期内部名（映射候选 + 规范名）。 */
+    private static java.util.Set<String> typeInternalNames(
+            dev.nocturne.client.mapping.ClassType type) {
+        java.util.Set<String> names = new java.util.LinkedHashSet<String>();
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        for (String name : mapping.classNameCandidates(type)) {
+            names.add(name.replace('.', '/'));
+        }
+        names.add(type.canonicalName().replace('.', '/'));
+        return names;
+    }
+
     private static void registerGate(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                      dev.nocturne.client.mapping.ClassType owner, String canonicalMethod,
                                      String fallbackDescriptors, String hookMethod, String hookReturn,
@@ -1503,20 +1695,12 @@ public final class NocturneAgent {
                     descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
                             fallbackDescriptors);
                 }
-                if (descriptor != null) {
+                for (String each : descriptorsFor(instrumentation, className, candidate.name(),
+                        descriptor, fallbackDescriptors)) {
                     ClassFileTransformer transformer = createGateTransformer(asmLoader, className,
-                            candidate.name(), descriptor, hookMethod, hookReturn, atMethodEnd,
-                            passThis);
+                            candidate.name(), each, hookMethod, hookReturn, atMethodEnd, passThis);
                     patched |= registerGameplayTransformer(instrumentation, transformer, className,
-                            candidate.name(), descriptor, hookMethod);
-                } else {
-                    for (String fallback : fallbackDescriptors.split("\\|")) {
-                        ClassFileTransformer transformer = createGateTransformer(asmLoader, className,
-                                candidate.name(), fallback, hookMethod, hookReturn, atMethodEnd,
-                                passThis);
-                        patched |= registerGameplayTransformer(instrumentation, transformer, className,
-                                candidate.name(), fallback, hookMethod);
-                    }
+                            candidate.name(), each, hookMethod);
                 }
             }
         }
@@ -1653,12 +1837,18 @@ public final class NocturneAgent {
                         ? composite.transform(loaded.getClassLoader(), internalName,
                                 loaded, null, current)
                         : patchBytes(loaded, composite, targetClass, method);
-                if (bytes != null) {
+                // 只有**真的织进去了**才算成功：转换器在方法名/描述符不匹配时会原样返回输入
+                // （非 null），旧代码把这种情况也打成 "woven"——日志说织上了、行为却完全没有。
+                if (bytes != null && dev.nocturne.agent.transform.TransformGuard.containsHook(
+                        bytes, GAMEPLAY_HOOK_OWNER, hookMethod)) {
                     instrumentation.redefineClasses(new java.lang.instrument.ClassDefinition(loaded, bytes));
                     GAMEPLAY_BYTES.put(loaded, bytes);
                     patched = true;
                     log("gameplay hook woven: " + targetClass + "." + method + descriptor
                             + " -> " + hookMethod);
+                } else {
+                    log("gameplay hook skipped: " + targetClass + "." + method + descriptor
+                            + " (no such method or descriptor mismatch)");
                 }
             } catch (Throwable t) {
                 log("gameplay hook redefine failed: " + targetClass + "." + method + descriptor

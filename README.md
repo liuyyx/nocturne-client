@@ -44,7 +44,8 @@
 这些依赖已接入 **OpenVape 的 108 个去重顶层注册模块**，并保留 Nocturne 的 Watermark/AutoRespawn
 两个扩展模块（注册总数 110）。66 个 release 的映射由 `python tools/mapping/generate.py` 生成并受
 `--check` 门禁约束——该门禁现在**连真实 client jar 一起校验**（`--fast` 才是纯文本快路径）——
-目前覆盖 **165 个规范类**（26.3：resolved 407 / absent 103；1.20.1：418 / 80；1.8.9：311 / 120）。
+目前覆盖 **165 个规范类**（成员级 resolved / absent：26.3 407/103，另有 22 个类整缺；
+1.20.1 418/80；1.8.9 311/120）。
 没有对应原版语义的成员保留 `absent` 并带 `absentReason`（`verified` 才算"确认没有"），
 调用方不得把缺项当作成功。
 

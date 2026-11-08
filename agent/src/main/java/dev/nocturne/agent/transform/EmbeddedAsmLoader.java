@@ -364,11 +364,20 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     /** 创建首参 boolean 门控转换器。 */
     public ClassFileTransformer createFirstArgumentGateTransformer(String targetInternalName,
             String method, String descriptor, String hookOwner, String hookMethod) {
+        return createFirstArgumentGateTransformer(targetInternalName, method, descriptor, hookOwner,
+                hookMethod, 0, 1);
+    }
+
+    /** 创建按下标取形参的门控转换器（形参位置随版本变化时用）。 */
+    public ClassFileTransformer createFirstArgumentGateTransformer(String targetInternalName,
+            String method, String descriptor, String hookOwner, String hookMethod,
+            int first, int second) {
         try {
             Class<?> type = loadClass("dev.nocturne.agent.transform.FirstArgumentGateTransformer");
             return (ClassFileTransformer) type.getConstructor(String.class, String.class, String.class,
-                    String.class, String.class).newInstance(targetInternalName, method, descriptor,
-                    hookOwner, hookMethod);
+                    String.class, String.class, int.class, int.class)
+                    .newInstance(targetInternalName, method, descriptor, hookOwner, hookMethod,
+                            Integer.valueOf(first), Integer.valueOf(second));
         } catch (Throwable t) {
             log("could not create first-argument gate for " + targetInternalName + "." + method + ": " + t);
             return null;

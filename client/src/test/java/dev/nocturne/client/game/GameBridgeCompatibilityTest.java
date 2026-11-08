@@ -82,6 +82,39 @@ class GameBridgeCompatibilityTest {
     }
 
     @Test
+    void localMessageFallsBackToConstructibleTextComponent() {
+        // 1.8.9 形态：映射表没有 Component#literal，但有可构造的 ChatComponentText。
+        client.setGameBridge(new GameBridge(null,
+                new TestMapping(FakeMinecraft.class, FakeComponentWithoutLiteral.class,
+                        FakeTextComponent.class)));
+        bridge = client.gameBridge();
+        FakeGui gui = new FakeGui();
+        FakeChat chat = new FakeChat();
+        gui.chat = chat;
+        FakeMinecraft.instance.gui = gui;
+
+        assertTrue(bridge.localMessage("hello"));
+        assertEquals(1, chat.messages);
+        assertTrue(chat.last instanceof FakeTextComponent,
+                "应回退到可构造的文本组件（1.8.9 ChatComponentText）");
+    }
+
+    @Test
+    void localMessageFallsBackToEmptyAppend() {
+        // 1.19+/1.20.1 形态：literal 缺失且没有可构造实现时，用 Component.empty().append(text)。
+        client.setGameBridge(new GameBridge(null,
+                new TestMapping(FakeMinecraft.class, FakeComponentWithoutLiteral.class, null)));
+        bridge = client.gameBridge();
+        FakeGui gui = new FakeGui();
+        FakeChat chat = new FakeChat();
+        gui.chat = chat;
+        FakeMinecraft.instance.gui = gui;
+
+        assertTrue(bridge.localMessage("hello"));
+        assertEquals("hello", String.valueOf(chat.last));
+    }
+
+    @Test
     void localMessageReportsFailureWhenNoEntryExists() {
         FakeMinecraft.instance.gui = new FakeGui();
         assertFalse(bridge.localMessage("hello"));
@@ -123,9 +156,11 @@ class GameBridgeCompatibilityTest {
     /** 替身聊天框：记录 {@code addMessage} 次数。 */
     public static final class FakeChat {
         int messages;
+        Object last;
 
         public void addMessage(Object component) {
             messages++;
+            last = component;
         }
     }
 }

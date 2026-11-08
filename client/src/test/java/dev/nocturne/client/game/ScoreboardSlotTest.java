@@ -40,11 +40,28 @@ class ScoreboardSlotTest {
         assertEquals(ObfuscatedSlot.b, GameBridge.sidebarSlot(ObfuscatedSlot.class));
     }
 
+    /**
+     * 1.8.9–1.12 的形参是 {@code int}（0 = SIDEBAR），不是枚举。
+     *
+     * <p>旧断言把"int 形参一律返回 null"固化成了契约，结果 1.8.9 上计分板整块空白；
+     * 新契约：int/Integer 返回 0，其它非枚举仍返回 null。
+     */
+    @Test
+    void resolvesSidebarForLegacyIntParameter() {
+        assertEquals(Integer.valueOf(0), GameBridge.sidebarSlot(int.class));
+        assertEquals(Integer.valueOf(0), GameBridge.sidebarSlot(Integer.class));
+    }
+
     @Test
     void rejectsNonEnumAndDegenerateEnums() {
         assertNull(GameBridge.sidebarSlot(String.class));
-        assertNull(GameBridge.sidebarSlot(int.class));
+        assertNull(GameBridge.sidebarSlot(double.class));
         assertNull(GameBridge.sidebarSlot(null));
         assertNull(GameBridge.sidebarSlot(SingleSlot.class));
+        assertNull(GameBridge.sidebarSlot(EmptySlot.class));
+    }
+
+    /** 没有常量的枚举（退化情形）不得返回槽位。 */
+    enum EmptySlot {
     }
 }

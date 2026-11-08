@@ -2,6 +2,7 @@ package dev.nocturne.client.render;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -27,7 +28,12 @@ class WorldProjectionNearPlaneTest {
         assertTrue(point.visible, "a point just in front of the camera must not be dropped");
         assertTrue(point.x >= 0f && point.x <= 800f, "x must be clamped into the viewport: " + point.x);
         assertTrue(point.y >= 0f && point.y <= 600f, "y must be clamped into the viewport: " + point.y);
-        assertTrue(point.x > 350f && point.x < 450f, "near-plane interpolation must stay near the centre");
+        // 近平面插值是比例不变的：屏幕位置必须与"未裁剪的直接透视"一致（容差 1px）。
+        // (0.01, 0, 0.05)：side/forward = 0.2，focal = 1/tan(35°)，aspect = 800/600
+        //   → 相对中心偏移 = 0.2 * 1.4281 / 1.3333 * 400 ≈ 85.7px
+        float offset = Math.abs(point.x - 400f);
+        assertEquals(85.7f, offset, 1.0f,
+                "screen position must match the unclipped perspective projection");
     }
 
     @Test

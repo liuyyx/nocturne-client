@@ -224,13 +224,12 @@ public final class WorldProjection {
         double side = dx * rightX + dy * rightY + dz * rightZ;
         double above = dx * upX + dy * upY + dz * upZ;
 
-        // 近平面裁剪：forward 落在 (0, NEAR] 时**不能**整点丢弃——贴箱子的 8 个角里只要一个
-        // 近点，整个框就会消失或跳到屏幕另一侧（真机表现：贴住箱子时框涨满屏）。
-        // 把该点沿视线插值到近平面再做透视除法，等价于"截断后仍然落在正确方向上"。
-        double depth = Math.max(forward, NEAR_PLANE);
-
-        double ndcX = (side / depth) * focal / aspect;
-        double ndcY = (above / depth) * focal;
+        // 近平面内侧的点**不整点丢弃**（贴箱子时 8 个角里只要一个近点，整个框就会消失或
+        // 跳到屏幕另一侧）。但屏幕位置必须与直接透视一致：透视除法本身是比例不变的，
+        // 把点沿视线插值到近平面后 side/forward 的比值不变，因此这里仍然用原始 forward 做除法，
+        // 真正的修复是不再丢弃该点 + 下面把屏幕坐标 clamp 到视口（否则近点的巨大 x/y 会撑满屏）。
+        double ndcX = (side / forward) * focal / aspect;
+        double ndcY = (above / forward) * focal;
 
         float rawX = (float) ((ndcX + 1d) * 0.5d * viewportWidth);
         float rawY = (float) ((1d - ndcY) * 0.5d * viewportHeight);

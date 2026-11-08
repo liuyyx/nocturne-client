@@ -25,6 +25,7 @@ class FrameDispatcherTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        FrameDispatcher.resetForTests();
         savedFirstFrame = readFirstFrame();
         writeFirstFrame(false);
         FrameDispatcher.trace(false);
@@ -145,6 +146,58 @@ class FrameDispatcherTest {
         FrameDispatcher.clear();
 
         assertEquals(1, ran[0], "a failing recovery must not block the others");
+    }
+
+    /**
+     * panic 的输入还原必须回到游戏主线程：从别的线程调用时任务要投递到 dispatch() 所在线程。
+     */
+    @Test
+    void shutdownActionsRunOnTheGameThread() throws Exception {
+        final Thread dispatchThread = Thread.currentThread();
+        final java.util.concurrent.atomic.AtomicReference<Thread> ranOn =
+                new java.util.concurrent.atomic.AtomicReference<Thread>();
+        final java.util.concurrent.CountDownLatch done =
+                new java.util.concurrent.CountDownLatch(1);
+        FrameDispatcher.addShutdown(new Runnable() {
+            @Override
+            public void run() {
+                ranOn.set(Thread.currentThread());
+                done.countDown();
+            }
+        });
+
+        final java.util.concurrent.CountDownLatch started =
+                new java.util.concurrent.CountDownLatch(1);
+        Thread caller = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                started.countDown();
+                FrameDispatcher.restoreShutdownActionsOnGameThread(2000L);
+            }
+        }, "panic-caller");
+        caller.start();
+        started.await();
+
+        long deadline = System.currentTimeMillis() + 2000L;
+        while (!done.await(10L, java.util.concurrent.TimeUnit.MILLISECONDS)
+                && System.currentTimeMillis() < deadline) {
+            // 游戏主线程：帧回调在这里 drain 投递任务。
+            FrameDispatcher.dispatch();
+        }
+        assertTrue(done.await(1L, java.util.concurrent.TimeUnit.SECONDS),
+                "game-thread restore task must run");
+        assertEquals(dispatchThread, ranOn.get(),
+                "restore actions must execute on the dispatch (game) thread");
+        caller.join(2000L);
+
+        // 幂等：第二次调用不得再执行一次。
+        FrameDispatcher.restoreShutdownActionsOnGameThread(10L);
+        assertEquals(1, countOf(ranOn), "shutdown actions must run exactly once");
+    }
+
+    /** 读取 ranOn 是否已被设置（用 0/1 表示，避免引入额外计数器）。 */
+    private static int countOf(java.util.concurrent.atomic.AtomicReference<Thread> ranOn) {
+        return ranOn.get() == null ? 0 : 1;
     }
 
     private static boolean readFirstFrame() throws Exception {

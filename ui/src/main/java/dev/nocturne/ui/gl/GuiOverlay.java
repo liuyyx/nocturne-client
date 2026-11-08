@@ -357,8 +357,12 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     private boolean pointerRestorePending;
     /** 关闭后希望达到的指针抓取状态（重试时使用，避免读到一个过期的捕获值）。 */
     private boolean pointerRestoreTarget;
+    /** 关闭/panic 后抓取重试的已用帧数；上限 {@link #POINTER_RESTORE_FRAMES}。 */
+    private int pointerRestoreAttempts;
     /** 输入状态是否已由 panic 恢复过（幂等：restoreInputState 可能被多次调用）。 */
     private boolean inputRestored;
+    /** 关闭/panic 后最多重试的帧数：游戏在被别的钩子打断时可能晚一两帧才接受抓取。 */
+    private static final int POINTER_RESTORE_FRAMES = 20;
 
     /** bootstrap 层 {@code KeySink.setBlocked} 的方法句柄。 */
     private static java.lang.reflect.Method setBlockedMethod;
@@ -431,12 +435,24 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             gui.setOpen(false);
             setBlocked(false);
             if (wasOpenForPointer) {
-                input.setPointerGrabbed(pointerRestoreTarget);
+                // panic 可能发生在界面仍开着的时候：此时关闭分支还没算过目标值，
+                // 必须在这里按同一规则重算（pointerRestoreTarget 的默认 false 会直接把指针放开）。
+                boolean wantGrab = pointerGrabbedBeforeGui
+                        || (inWorld() && !hasNativeScreen());
+                pointerRestoreTarget = wantGrab;
+                input.setPointerGrabbed(wantGrab);
+                // 抓取可能被游戏自身的状态机晚一两帧接受：保留最多 20 帧的重试窗口，
+                // 由 onFrame 消费（panic 的还原阶段仍在 kill 之前，帧回调还活着）。
+                pointerRestoreAttempts = 0;
+                pointerRestorePending = wantGrab && !input.isPointerGrabbed();
+            } else {
+                pointerRestorePending = false;
             }
             wasOpenForPointer = false;
-            pointerRestorePending = false;
-        } catch (Throwable ignored) {
-            // 尽力而为：panic 路径不能因为恢复失败而中断。
+        } catch (Throwable failure) {
+            // panic 路径不能因为恢复失败而中断，但不能像以前那样完全静默：
+            // 真机“panic 后鼠标不能动”时这条日志是唯一的线索。
+            System.out.println("[nocturne] overlay input restore failed: " + failure);
         }
     }
 
@@ -596,12 +612,19 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
                 wantGrab = true;
             }
             pointerRestoreTarget = wantGrab;
+            pointerRestoreAttempts = 0;
             input.setPointerGrabbed(wantGrab);
             pointerRestorePending = wantGrab && !input.isPointerGrabbed();
         } else if (pointerRestorePending && !hasNativeScreen()) {
-            // 上一次恢复没生效（游戏可能又改了抓取状态）：继续重试，直到抓回为止。
+            // 上一次恢复没生效（游戏可能又改了抓取状态）：逐帧重试，最多 20 帧后放弃。
             input.setPointerGrabbed(pointerRestoreTarget);
             pointerRestorePending = pointerRestoreTarget && !input.isPointerGrabbed();
+            if (pointerRestorePending && ++pointerRestoreAttempts >= POINTER_RESTORE_FRAMES) {
+                pointerRestorePending = false;
+                System.out.println("[nocturne] WARNING: pointer grab did not take effect after "
+                        + POINTER_RESTORE_FRAMES + " frames; giving up (target="
+                        + pointerRestoreTarget + ")");
+            }
         }
         wasOpenForPointer = open;
 
@@ -987,8 +1010,10 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             renderer.setScaleOverride(wantedScale);
             configuredScale = wantedScale;
         }
-        renderer.beginFrame();
         try {
+            // beginFrame 也可能抛（GL 句柄缺失/驱动异常）：放进 try 才能保证 finally 的
+            // endFrame 一定执行，把已压入的矩阵栈按实际层数回滚。
+            renderer.beginFrame();
             if (renderer.width() <= 0 || renderer.height() <= 0) {
                 // 尺寸尚未解析时不能创建/恢复一个 0×0 裁剪区；那会把游戏自身整帧裁黑。
                 return;

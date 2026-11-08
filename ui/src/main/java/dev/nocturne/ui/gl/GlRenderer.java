@@ -32,6 +32,14 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
     private int viewportHeight;
     /** {@link #beginFrame()} 是否已压入矩阵栈；决定 {@link #endFrame()} 是否需要还原。 */
     private boolean statePushed;
+    /**
+     * 已压入的矩阵栈层数（0/1/2）。
+     *
+     * <p>{@code beginFrame} 里两次 pushMatrix 之间若抛异常（例如 ortho 句柄缺失后 GL 调用失败），
+     * 以前只有全部完成后才置 {@code statePushed=true}，残留的一层矩阵就再也没人 pop，
+     * 约 16 帧后投影矩阵永久损坏。按实际压入层数记账，下一帧 beginFrame 先按层数回滚。
+     */
+    private int pushedMatrices;
     /** 进入 beginFrame 时的能力位快照；endFrame 按它还原（不写死默认值）。 */
     private boolean savedDepthTest = true;
     private boolean savedCullFace;
@@ -285,7 +293,7 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
      */
     @Override
     public void beginFrame() {
-        if (statePushed) {
+        if (pushedMatrices > 0) {
             // 上一帧的 endFrame 没有执行（例如组件树抛异常被上层吞掉）：
             // 先把残留状态还原，避免矩阵栈每帧净泄漏两层、约 16 帧后永久损坏游戏投影。
             endFrame();
@@ -342,6 +350,7 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
 
         gl.matrixMode(GlApi.GL_PROJECTION);
         gl.pushMatrix();
+        pushedMatrices++;
         gl.loadIdentity();
         if (haveViewport) {
             // 下边界传 viewportHeight、上边界传 0：把 y 轴翻转成向下增长，与屏幕坐标一致。
@@ -350,6 +359,7 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
 
         gl.matrixMode(GlApi.GL_MODELVIEW);
         gl.pushMatrix();
+        pushedMatrices++;
         gl.loadIdentity();
 
         // 进入时快照能力位：beginFrame 会关掉 DEPTH/CULL/SCISSOR/BLEND/TEXTURE_2D，
@@ -422,11 +432,19 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
 
     @Override
     public void endFrame() {
-        if (statePushed) {
-            gl.matrixMode(GlApi.GL_PROJECTION);
-            gl.popMatrix();
-            gl.matrixMode(GlApi.GL_MODELVIEW);
-            gl.popMatrix();
+        if (statePushed || pushedMatrices > 0) {
+            if (pushedMatrices >= 2) {
+                gl.matrixMode(GlApi.GL_PROJECTION);
+                gl.popMatrix();
+                gl.matrixMode(GlApi.GL_MODELVIEW);
+                gl.popMatrix();
+            } else if (pushedMatrices == 1) {
+                // 只压入了投影矩阵就异常：只回滚这一层，必要时把矩阵模式切回去。
+                gl.matrixMode(GlApi.GL_PROJECTION);
+                gl.popMatrix();
+                gl.matrixMode(GlApi.GL_MODELVIEW);
+            }
+            pushedMatrices = 0;
             // 把真实绑定还原成游戏以为的那个：游戏缓存从不参与我们的 glBindTexture，
             // 恢复真实状态等于让两套状态重新对齐（否则背景变白/纹理错乱）。
             if (savedTextureBinding >= 0) {

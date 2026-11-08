@@ -522,14 +522,19 @@ public final class NocturneClient {
             return;
         }
         panicked = true;
-        // 1) 先关闸门：分发器与**全部注入钩子/绘制入口**立即变成放行空操作。
-        //    必须是第一步——拆除动作与 Render 线程的帧回调曾经并发（1.16.5 WER dump：拆 GL sink 时
+        // 1) 先把输入还原投递到**游戏主线程**并限时等待。
+        //    必须在关闸门之前：kill() 之后帧分发直接返回，还原任务没有人执行——真机表现为
+        //    panic 后视角/光标永久失效。MouseHandler.grabMouse / Mouse.setGrabbed 只能在持有
+        //    游戏上下文的线程上调用；本方法可能从 GUI 线程或模块线程进来。
+        NocturneRuntime.restoreInputOnGameThread(1200L);
+        // 2) 再关闸门：分发器与**全部注入钩子/绘制入口**立即变成放行空操作。
+        //    拆除动作与 Render 线程的帧回调曾经并发（1.16.5 WER dump：拆 GL sink 时
         //    Render 线程仍在帧钩子里做 GL，疑似 use-after-free）。闸门是 volatile，跨加载器共享。
         NocturneRuntime.kill();
         // 钩子汇是 bootstrap 里的另一份状态（游戏线程读的是它），必须同样置位。
         dev.nocturne.client.bootstrap.GameplayHook.kill();
         packets.onPanic();
-        // 2) 状态层同步收尾：模块停用（GL 还原留在持有上下文的线程上）、驱动闸门关闭、输入放开。
+        // 3) 状态层同步收尾：模块停用（GL 还原留在持有上下文的线程上）、驱动闸门关闭、输入放开。
         //    这些必须在 panic() 返回前完成——调用方（GUI / 模块 tick）依赖同步结论，
         //    而此刻钩子已经不会再有并发进入。
         shutdown();
@@ -537,7 +542,7 @@ public final class NocturneClient {
         // 输入占用必须显式停：blocked 由叠加层每帧刷新，清空分发器后没人再刷新它——若那一刻界面
         // 正开着，游戏侧输入入口就被永久短路（点不动、按不动、滚不动）。
         dev.nocturne.client.runtime.InputBlock.disable();
-        // 3) 拆分发器（帧监听器、绘制上下文汇、transformer 解绑）放到专用线程：
+        // 4) 拆分发器（帧监听器、绘制上下文汇、transformer 解绑）放到专用线程：
         //    它由渲染线程驱动，绝不能在渲染线程上边拆边被调用。解绑动作登记在分发器的
         //    shutdown actions 里，clear() 保证「先解绑 transformer、再清状态」。
         Thread teardown = new Thread(new Runnable() {

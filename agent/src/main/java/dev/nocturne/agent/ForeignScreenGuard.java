@@ -330,10 +330,18 @@ final class ForeignScreenGuard implements FrameListener {
                 }
                 savedFocus = null;
             }
-        } catch (Throwable ignored) {
-            // 尽力而为：恢复失败也不该影响 panic 的其余步骤
+        } catch (Throwable failure) {
+            // 尽力而为：恢复失败也不该影响 panic 的其余步骤；但要留一条痕迹，
+            // 否则真机“panic 后视角失效”完全查不到原因。
+            if (restoreFailureLogged.compareAndSet(false, true)) {
+                System.out.println("[nocturne] foreign screen guard restore failed: " + failure);
+            }
         }
     }
+
+    /** 恢复失败是否已记录（只打一次）。 */
+    private final java.util.concurrent.atomic.AtomicBoolean restoreFailureLogged =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /** @return 当前是否显示原生 Screen（映射读不到时按形状兜底）。 */
     private boolean hasNativeScreen() {

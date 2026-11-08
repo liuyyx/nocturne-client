@@ -43,6 +43,10 @@ public final class NocturneRuntime {
     private static Method clearMethod;
     /** {@code FrameDispatcher.addShutdown(Runnable)}；未解析时为 null。 */
     private static Method addShutdownMethod;
+    /** {@code FrameDispatcher.restoreShutdownActionsOnGameThread(long)}；未解析时为 null。 */
+    private static Method restoreOnGameThreadMethod;
+    /** {@code FrameDispatcher.runOnGameThread(Runnable,long)}；未解析时为 null。 */
+    private static Method runOnGameThreadMethod;
     /** {@code FrameDispatcher.kill()}；未解析时为 null。 */
     private static Method killMethod;
     /** {@code FrameDispatcher.isKilled()}；未解析时为 null。 */
@@ -105,6 +109,16 @@ public final class NocturneRuntime {
             setDrawContextMethod = dispatcher.getMethod("setDrawContext", Object.class);
             clearMethod = dispatcher.getMethod("clear");
             addShutdownMethod = dispatcher.getMethod("addShutdown", Runnable.class);
+            try {
+                restoreOnGameThreadMethod = dispatcher.getMethod(
+                        "restoreShutdownActionsOnGameThread", long.class);
+                runOnGameThreadMethod = dispatcher.getMethod("runOnGameThread",
+                        Runnable.class, long.class);
+            } catch (NoSuchMethodException older) {
+                // 旧分发器没有这两个入口：还原会退化为在调用线程执行（clear() 的旧行为）。
+                restoreOnGameThreadMethod = null;
+                runOnGameThreadMethod = null;
+            }
             killMethod = dispatcher.getMethod("kill");
             killedStateMethod = dispatcher.getMethod("isKilled");
             return true;
@@ -291,6 +305,52 @@ public final class NocturneRuntime {
      * <p><b>必须在非渲染线程上调用</b>：清空会执行 shutdown 动作（恢复鼠标抓取、解绑 transformer、
      * 释放 GL sink）。与 {@link #kill()} 配合的顺序是「先 kill 再 shutdown」。
      */
+    /**
+     * 在游戏主线程执行全部 shutdown 还原动作（panic 前置），限时等待。
+     *
+     * <p>分发器不可用时无副作用：随后的 {@link #shutdown()} 仍会走旧路径尽力还原。
+     *
+     * @param timeoutMs 等待游戏线程的上限（毫秒）
+     */
+    public static void restoreInputOnGameThread(long timeoutMs) {
+        if (!bindDispatcher() || restoreOnGameThreadMethod == null) {
+            return;
+        }
+        try {
+            restoreOnGameThreadMethod.invoke(null, Long.valueOf(timeoutMs));
+        } catch (Throwable t) {
+            Throwable cause = t instanceof java.lang.reflect.InvocationTargetException
+                    && t.getCause() != null ? t.getCause() : t;
+            System.out.println("[nocturne] restore on game thread failed: " + cause);
+            cause.printStackTrace(System.out);
+        }
+    }
+
+    /**
+     * 把任务投递到游戏主线程并限时等待；分发器不支持时退化为直接执行。
+     *
+     * @param task      任务
+     * @param timeoutMs 等待上限（毫秒）
+     */
+    public static void runOnGameThread(Runnable task, long timeoutMs) {
+        if (task == null) {
+            return;
+        }
+        if (!bindDispatcher() || runOnGameThreadMethod == null) {
+            task.run();
+            return;
+        }
+        try {
+            runOnGameThreadMethod.invoke(null, task, Long.valueOf(timeoutMs));
+        } catch (Throwable t) {
+            Throwable cause = t instanceof java.lang.reflect.InvocationTargetException
+                    && t.getCause() != null ? t.getCause() : t;
+            System.out.println("[nocturne] runOnGameThread failed: " + cause);
+            cause.printStackTrace(System.out);
+            task.run();
+        }
+    }
+
     public static void shutdown() {
         if (!bindDispatcher()) {
             return;

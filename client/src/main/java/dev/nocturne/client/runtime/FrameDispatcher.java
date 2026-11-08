@@ -57,6 +57,14 @@ public final class FrameDispatcher {
     private static final CopyOnWriteArrayList<Runnable> SHUTDOWN_ACTIONS =
             new CopyOnWriteArrayList<Runnable>();
 
+    /** 第一次 {@link #dispatch()} 的线程＝游戏主线程；还原鼠标/输入必须回到这个线程。 */
+    private static volatile Thread frameThread;
+    /** 待游戏线程执行的一次性任务（panic 前置还原等）。 */
+    private static final java.util.Queue<Runnable> FRAME_TASKS =
+            new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
+    /** shutdown 动作是否已在游戏线程执行过：{@link #clear()} 不再重复跑。 */
+    private static volatile boolean shutdownActionsExecuted;
+
     /** 异常日志的限流窗口（毫秒）。 */
     private static final long ERROR_LOG_INTERVAL_MS = 5000L;
     /** 上次打印异常日志的时间戳。 */
@@ -114,13 +122,147 @@ public final class FrameDispatcher {
         return KILLED;
     }
 
+    /**
+     * 把任务投递到游戏主线程执行，并限时等待。
+     *
+     * <p>为什么必须回到游戏线程：{@code MouseHandler.grabMouse}/{@code releaseMouse}、
+     * 1.8.9 的 {@code Mouse.setGrabbed} 都要求调用方持有游戏/渲染线程的上下文。panic 可能从
+     * GUI 线程或模块线程触发，直接在调用线程上抓鼠标会让指针状态在错误的线程上改写，真机表现
+     * 为“panic 后视角/光标永久失效”。
+     *
+     * <p>任务只会执行一次：超时后如果游戏线程仍没取走，调用线程会代为执行并打 WARN；
+     * 与游戏线程并发时用 CAS 保证不重复执行。
+     *
+     * @param task      待执行任务；{@code null} 时忽略
+     * @param timeoutMs 最长等待毫秒数；{@code 0} 表示不等待（但仍会投递）
+     */
+    public static void runOnGameThread(Runnable task, long timeoutMs) {
+        if (task == null) {
+            return;
+        }
+        if (isFrameThread()) {
+            runSafely(task);
+            return;
+        }
+        final java.util.concurrent.CountDownLatch done =
+                new java.util.concurrent.CountDownLatch(1);
+        final AtomicBoolean once = new AtomicBoolean(false);
+        // 用 lambda 而不是匿名内部类：bootstrap bridge 只复制 FrameDispatcher.class 本身，
+        // 匿名类会生成 FrameDispatcher$1 并要求 bootstrap 加载器找得到它（真机
+        // NoClassDefFoundError: FrameDispatcher$1）。lambda 的合成方法就在本类里。
+        FRAME_TASKS.add(() -> {
+            if (!once.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                runSafely(task);
+            } finally {
+                done.countDown();
+            }
+        });
+        boolean finished = false;
+        try {
+            finished = done.await(Math.max(0L, timeoutMs),
+                    java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        if (!finished && once.compareAndSet(false, true)) {
+            System.out.println("[nocturne] WARNING: game thread unreachable within " + timeoutMs
+                    + "ms; running restore on caller thread " + Thread.currentThread().getName());
+            try {
+                runSafely(task);
+            } finally {
+                done.countDown();
+            }
+        } else if (!finished) {
+            // 游戏线程已开始执行（CAS 失败）：再给它一点时间收尾，避免和它并发抓鼠标。
+            try {
+                done.await(200L, java.util.concurrent.TimeUnit.MILLISECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /** @return 当前线程是否是登记的游戏主线程 */
+    public static boolean isFrameThread() {
+        Thread current = frameThread;
+        return current != null && current == Thread.currentThread();
+    }
+
+    /**
+     * 在游戏线程执行全部 shutdown 还原动作（幂等），限时等待。
+     *
+     * <p>顺序：**逆序**执行。后注册的是叠加层的 {@code restoreInputState}，它会先解除输入短路；
+     * 早先注册的 {@code ForeignScreenGuard.restore()} 再抓回鼠标/恢复焦点——顺序反了的话
+     * grabMouse 会被仍然生效的输入短路挡住，指针永远抓不回来。
+     *
+     * <p>执行完再留一个很短的窗口（≤250ms），让 GUI 关闭后登记的“抓取重试”能在帧回调里跑几次。
+     *
+     * @param timeoutMs 等待游戏线程的上限（毫秒）
+     */
+    public static void restoreShutdownActionsOnGameThread(long timeoutMs) {
+        if (shutdownActionsExecuted) {
+            return;
+        }
+        shutdownActionsExecuted = true;
+        final java.util.List<Runnable> actions =
+                new java.util.ArrayList<Runnable>(SHUTDOWN_ACTIONS);
+        java.util.Collections.reverse(actions);
+        if (actions.isEmpty()) {
+            return;
+        }
+        boolean onGameThread = isFrameThread();
+        final java.util.concurrent.CountDownLatch finished =
+                new java.util.concurrent.CountDownLatch(1);
+        runOnGameThread(() -> {
+            try {
+                for (Runnable action : actions) {
+                    runSafely(action);
+                }
+            } finally {
+                finished.countDown();
+            }
+        }, timeoutMs);
+        if (onGameThread) {
+            return;
+        }
+        try {
+            finished.await(250L, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** 执行一个任务并吞掉异常：还原路径绝不能把异常抛给调用方。 */
+    private static void runSafely(Runnable task) {
+        try {
+            task.run();
+        } catch (Throwable t) {
+            report("frame task failed: " + t);
+        }
+    }
+
+    /** 在游戏线程上清空待执行任务。 */
+    private static void drainFrameTasks() {
+        Runnable task;
+        while ((task = FRAME_TASKS.poll()) != null) {
+            task.run();
+        }
+    }
+
     /** 仅供测试：恢复闸门与列表的初始状态（生产路径不调用）。 */
     static void resetForTests() {
         KILLED = false;
+        cleared = false;
         firstFrameLogged = false;
         SHUTDOWN_ACTIONS.clear();
         LISTENERS.clear();
         DRAW_CONTEXT_SINK = null;
+        shutdownActionsExecuted = false;
+        frameThread = null;
+        FRAME_TASKS.clear();
     }
 
     /** 开启或关闭首帧存活日志。 */
@@ -175,16 +317,13 @@ public final class FrameDispatcher {
         // 先跑恢复动作、再清列表：这些动作修的是"我们改过、但不在监听器列表里"的外部状态
         // （放开游戏鼠标抓取、1.8.9 的 inGameHasFocus）。清完列表就再没有任何每帧回调，
         // 那时想恢复也没人能做——顺序反了，输入会被永久卡住。
-        for (Runnable action : SHUTDOWN_ACTIONS) {
-            try {
-                action.run();
-            } catch (Throwable ignored) {
-                // 恢复是尽力而为：一个失败不该挡住其余的
-            }
-        }
+        // 恢复动作必须在**游戏线程**执行：panic 已经把它投递并等待过（幂等），这里通常直接跳过；
+        // 没经过 panic 的调用（测试/异常路径）仍按同样语义处理。
+        restoreShutdownActionsOnGameThread(500L);
         SHUTDOWN_ACTIONS.clear();
         LISTENERS.clear();
         DRAW_CONTEXT_SINK = null;
+        FRAME_TASKS.clear();
     }
 
     /**
@@ -211,6 +350,10 @@ public final class FrameDispatcher {
     public static void dispatch() {
         // 文件诊断（diag3）已删除：生产环境每会话前 3 帧写 nocturne-diag.txt 是残留 IO；
         // 首帧状态由 TRACE 日志与叠加层的 overlay first frame 行覆盖。
+        frameThread = Thread.currentThread();
+        // 先把投递到游戏线程的一次性任务跑掉（panic 还原）；即使已 KILLED 也要跑，
+        // 否则超时兜底之外的还原任务会永远留在队列里。
+        drainFrameTasks();
         if (KILLED) {
             // 自销毁后注入的加载点仍会每帧调到这里：一次 volatile 读就退出，不碰任何监听器。
             return;

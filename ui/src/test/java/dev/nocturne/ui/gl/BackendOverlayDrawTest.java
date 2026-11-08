@@ -32,6 +32,12 @@ class BackendOverlayDrawTest {
     }
 
     @Test
+    void fixedPipelineBackendReportsUnreliableAlphaBlend() {
+        // FakeBackend 在 ui 测试里代表现代后端：默认允许整帧遮罩。
+        assertTrue(new BackendOverlayDraw(new FakeBackend(320, 240)).reliableAlphaBlend());
+    }
+
+    @Test
     void textureCallsDelegateDirectly() {
         FakeBackend backend = new FakeBackend(320, 240);
         BackendOverlayDraw draw = new BackendOverlayDraw(backend);

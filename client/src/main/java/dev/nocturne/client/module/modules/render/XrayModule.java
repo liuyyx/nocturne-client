@@ -50,12 +50,30 @@ public final class XrayModule extends GameModule implements WorldOverlay {
     private long nextScan;
     private long nextDeobf;
 
+    /** 渲染钩子里的剔除决策数与本窗口内放行的方块数；shouldRender 在渲染线程，onTick 在游戏线程。 */
+    private final java.util.concurrent.atomic.AtomicInteger cullingDecisions =
+            new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicInteger cullingVisible =
+            new java.util.concurrent.atomic.AtomicInteger();
+    /** 自检窗口起点（启用时刻）；0 表示尚未开始。 */
+    private volatile long cullingWindowStartedAt;
+    /** 自检窗口长度：必须积累足够样本再判定，避免刚启用那一帧误判。 */
+    private static final long CULLING_WINDOW_MS = 3000L;
+    /** 判定「什么都不画」所需的最小决策数：世界正常时一秒内有数千次方块渲染。 */
+    private static final int CULLING_MIN_DECISIONS = 2000;
+    /** 是否已因剔除异常自动关闭过（避免重复日志）。 */
+    private boolean cullingSelfCheckHit;
+
     public XrayModule() {
         super("Xray", Category.RENDER);
     }
 
     @Override
     protected void onStart() {
+        cullingDecisions.set(0);
+        cullingVisible.set(0);
+        cullingSelfCheckHit = false;
+        cullingWindowStartedAt = System.currentTimeMillis();
         // 能力检查：26.1+ 的映射表把 BlockRenderDispatcher 整个标记为 absent，方块剔除钩子没有入口。
         // 此时模块只提供矿石框（overlay），并在日志里明确说明"剔除不可用"——绝不假装剔除生效。
         if (!dev.nocturne.client.bootstrap.GameplayHook.isWired("xrayBlock")) {
@@ -83,8 +101,61 @@ public final class XrayModule extends GameModule implements WorldOverlay {
         }
     }
 
-    /** 由真实 BlockRenderDispatcher 钩子调用。 */
+    /**
+     * 剔除自检：钩子已接通、样本足够、却一个方块都没放行 —— 说明剔除把整个世界剔没了
+     * （映射/方块名对不上时的典型表现），继续跑就是全黑世界。此时自动关闭并提示。
+     *
+     * <p>没有接上剔除钩子的版本（1.8.9 的 renderBatched 面缺失）不算命中：那时 shouldRender
+     * 根本不会被游戏调用，模块只提供矿石框。
+     *
+     * @param now 当前毫秒时间
+     * @return true 表示本轮已因自检关闭模块
+     */
+    private boolean selfCheckCulling(long now) {
+        if (cullingSelfCheckHit
+                || !dev.nocturne.client.bootstrap.GameplayHook.isWired("xrayBlock")) {
+            return false;
+        }
+        long started = cullingWindowStartedAt;
+        if (started == 0L || now - started < CULLING_WINDOW_MS) {
+            return false;
+        }
+        int decisions = cullingDecisions.getAndSet(0);
+        int visible = cullingVisible.getAndSet(0);
+        cullingWindowStartedAt = now;
+        if (!cullingExhausted(decisions, visible)) {
+            return false;
+        }
+        cullingSelfCheckHit = true;
+        System.out.println("[nocturne] Xray: 自检命中——" + decisions + " 次方块渲染决策中可见方块为 0"
+                + "（剔除全部命中），已自动关闭 Xray 以避免世界全黑");
+        setEnabled(false);
+        return true;
+    }
+
+    /**
+     * 自检判据（单独抽出便于回归）：窗口内决策数足够多、却一个方块都没放行。
+     *
+     * @param decisions 窗口内的剔除决策数
+     * @param visible   其中被放行的方块数
+     * @return true 表示剔除把整个世界剔没了
+     */
+    static boolean cullingExhausted(int decisions, int visible) {
+        return decisions >= CULLING_MIN_DECISIONS && visible == 0;
+    }
+
+    /** 由真实 BlockRenderDispatcher 钩子调用；同时累计自检样本。 */
     public boolean shouldRender(Object blockState, Object blockPos) {
+        boolean visible = isVisible(blockState, blockPos);
+        cullingDecisions.incrementAndGet();
+        if (visible) {
+            cullingVisible.incrementAndGet();
+        }
+        return visible;
+    }
+
+    /** 纯判定，不计数：自检与 onTick 的矿石扫描都走这里，避免把扫描当成渲染样本。 */
+    private boolean isVisible(Object blockState, Object blockPos) {
         String id = bridge().blockDescription(blockState);
         if (id.isEmpty()) {
             return true;
@@ -104,6 +175,10 @@ public final class XrayModule extends GameModule implements WorldOverlay {
     @Override
     public void onTick() {
         long now = System.currentTimeMillis();
+        if (selfCheckCulling(now)) {
+            // 已被自检关闭：本次 tick 不再扫描。
+            return;
+        }
         if (now < nextScan) {
             return;
         }
@@ -124,7 +199,7 @@ public final class XrayModule extends GameModule implements WorldOverlay {
             for (int y = Math.max(-64, py - downward); y <= py + upward; y++) {
                 for (int z = pz - horizontal; z <= pz + horizontal; z++) {
                     Object block = bridge.blockStateAt(x, y, z);
-                    if (shouldRender(block, bridge.blockPos(x, y, z))) {
+                    if (isVisible(block, bridge.blockPos(x, y, z))) {
                         targets.add(new int[]{x, y, z});
                     }
                 }

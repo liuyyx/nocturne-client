@@ -105,4 +105,18 @@ public interface OverlayDraw {
 
     /** 当前后端是否支持纹理；false 时模块应退回文字/几何，不上传空纹理。 */
     boolean supportsTextures();
+
+    /**
+     * 本后端的 alpha 混合是否可靠到可以画**整帧遮罩**。
+     *
+     * <p>1.8.9–1.12 的固定管线（{@code GlRenderer}）上实测：同一个世界覆盖层在每帧内会被应用多次，
+     * 25% 的雾色遮罩最终落成 ~44%，而雾色一旦接近黑（或 alpha 因状态失效被当成不透明），
+     * 整个世界就是一块黑幕——只剩 HUD 与准星。因此这类后端必须显式返回 {@code false}，
+     * 需要整帧混合的模块（雾色/后期滤镜）据此跳过自己，而不是把世界涂黑。
+     *
+     * @return true 表示可以安全地画半透明整帧遮罩；未知实现默认 true（不改变既有行为）
+     */
+    default boolean reliableAlphaBlend() {
+        return true;
+    }
 }

@@ -88,6 +88,16 @@ public final class BackendOverlayDraw implements OverlayDraw {
         return renderer.supportsTextures();
     }
 
+    /**
+     * 固定管线（1.8.9–1.12）的整帧 alpha 混合不可靠：真机实测同一帧内遮罩被叠加两次
+     * （25% 落成 ~44%），且状态失效时按不透明绘制，世界会变成一块黑幕。只有现代后端
+     * （gl-core / extractor）才允许模块画整帧遮罩。
+     */
+    @Override
+    public boolean reliableAlphaBlend() {
+        return !(backend instanceof GlRenderer);
+    }
+
     @Override
     public void text(String text, float x, float y, int argb) {
         renderer.text(text, x, y, TEXT_SIZE, Color.of(argb));

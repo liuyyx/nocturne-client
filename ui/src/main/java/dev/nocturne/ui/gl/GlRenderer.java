@@ -421,6 +421,13 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
                 gl.bindTexture2D(savedTextureBinding);
                 savedTextureBinding = -1;
             }
+            // 纹理开关与当前颜色也必须复位：beginFrame 关掉了 GL_TEXTURE_2D，绘制期间又改过
+            // glColor。游戏侧的 GlStateManager 缓存并不知道这两项被改过，它按"自己以为的状态"
+            // 跳过重设，于是紧接着的 HUD（心形/准星/物品栏）会按无纹理 + 残留颜色绘制——
+            // 真机表现：开了带世界覆盖层的模块后血条变白、准星变成一个彩色方块。
+            // 1.8.9 的准星绘制路径本就不重设这两项，因此必须在这里恢复成 HUD 期望的默认值。
+            gl.enable(GlApi.GL_TEXTURE_2D);
+            gl.color(1f, 1f, 1f, 1f);
             // 这里**不再** popAttrib：状态改动都经 GlStateManager（缓存同步），
             // 属性栈回滚只会把真实状态与缓存再拆开一次（见 beginFrame 的说明）。
             statePushed = false;

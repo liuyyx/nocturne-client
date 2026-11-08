@@ -27,6 +27,13 @@ public final class FullBrightModule extends Module {
     /** 未能记录启用前原值时，禁用回退写入的亮度（等同于 1.8.9 原生默认 gamma）。 */
     private static final double FALLBACK_GAMMA = 1.0;
 
+    /**
+     * 现代亮度滑块（{@code OptionInstance}）的取值域：各版本都是 0..1，上限即"最大亮度"。
+     * 26.x 的 {@code set} 对越界值直接抛 {@code Illegal option value}，因此必须先钳制再写。
+     */
+    private static final double OPTION_MIN = 0.0;
+    private static final double OPTION_MAX = 1.0;
+
     /** 用户可调的亮度设置项，取值范围 1.0–15.0，步进 0.5。 */
     private final NumberValue gamma = add(new NumberValue("Gamma", 10.0, 1.0, 15.0, 0.5));
     /** 模式：Gamma 写亮度 / Potion 上夜视药水（对齐 OpenVape Fullbright 行为）。 */
@@ -430,24 +437,18 @@ public final class FullBrightModule extends Module {
      * 改写 {@code OptionInstance} 型选项内部的数值。
      *
      * <p>优先使用绕过取值校验器的 {@code force_double(double)}；不存在时回退通用 {@code set(T)}
-     * （泛型擦除后形参为 Object，实参用 Double）。现代版本的亮度滑块校验域是 0..1，而本模块的
-     * 取值区间是 1..15——直接写数值会被钳到滑块上限（即最大亮度），这正是本模块想要的语义；
-     * 能走 {@code force_double} 时则可原样写入。
+     * （泛型擦除后形参为 Object，实参用 Double）。
      *
-     * @return 是否成功调用到任一入口
+     * <p><b>必须先钳制再写</b>：26.x 的亮度滑块校验域是 0..1，把配置里的 10.0 第一次就交给
+     * {@code set} 会直接抛 {@code Illegal option value}（26.3 真机日志 18 条）。先写越界值再
+     * 重试钳制值是错的——错误已经产生，只是多打一遍日志。钳到上限即"最大亮度"，语义不变。
+     *
+     * @return 是否真正生效
      */
     private static boolean writeOption(Object option, double value) {
-        // 先按原值写（旧版滑块允许 0..1 之外的内部值）；写入后**回读校验**：
-        // 26.x 的亮度 OptionInstance 校验域是 0..1，10.0 会被直接拒绝（Illegal option value），
-        // 而 set 可能不抛异常只静默不改——只有回读才能判断"真的生效了"。
-        if (writeOptionRaw(option, value) && optionApplied(option, value)) {
-            return true;
-        }
-        double clamped = Math.max(0.0, Math.min(1.0, value));
-        if (clamped != value && writeOptionRaw(option, clamped) && optionApplied(option, clamped)) {
-            return true;
-        }
-        return false;
+        double clamped = Math.max(OPTION_MIN, Math.min(OPTION_MAX, value));
+        // 写入后仍回读校验：set 可能不抛异常只静默拒绝，只有回读才能判断真的生效。
+        return writeOptionRaw(option, clamped) && optionApplied(option, clamped);
     }
 
     /** 回读校验：读到数值时要求与目标基本一致（亮度滑块 0..1，容差 1e-3）。 */

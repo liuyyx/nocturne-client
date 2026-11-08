@@ -11,7 +11,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@link FullBrightModule} 的跨版本 gamma 写入测试（H-33 / M-132）。
@@ -19,6 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * <p>{@code gamma} 的运行时类型随版本不同：1.8.9 是 {@code float}，1.21/26.x 是 {@code OptionInstance}
  * 对象。旧实现一律按 Float 写入，向对象型字段写 Float 会抛 {@code IllegalArgumentException} 被反射层
  * 吞掉、模块静默失效。这里分别用两种替身 Options 验证写入与还原路径。
+ *
+ * <p>26.3 的亮度滑块校验域是 0..1：配置值 10.0 必须在<b>第一次写入前</b>钳制，否则真机日志刷
+ * {@code Illegal option value 10.0}。替身 {@code set} 会像真机一样拒绝越界值。
  */
 class FullBrightModuleTest {
 
@@ -38,7 +45,9 @@ class FullBrightModuleTest {
         Thread.currentThread().setContextClassLoader(savedTccl);
     }
 
-    /** 现代版本：必须改写 OptionInstance 内部的数值，而不是向对象字段写 Float */
+    /**
+     * 现代版本：改写 OptionInstance 内部数值，且下发值首次即钳到 0..1 上限。
+     */
     @Test
     void writesModernGammaThroughTheOptionInstance() {
         FakeOptions options = new FakeOptions(0.5);
@@ -47,15 +56,25 @@ class FullBrightModuleTest {
 
         FullBrightModule module = new FullBrightModule();
         module.setEnabled(true);
-        assertEquals(10.0, options.gamma.value, 1e-9,
-                "onEnable must push the configured brightness into the OptionInstance");
+        assertEquals(1.0, options.gamma.value, 1e-9,
+                "onEnable must clamp the configured brightness into the OptionInstance's 0..1 range");
+
+        List<Double> attempts = options.gamma.attempts();
+        assertFalse(attempts.isEmpty(), "the module must actually write gamma");
+        assertEquals(1.0, attempts.get(0), 1e-9,
+                "the very first value handed to the option must already be clamped");
 
         module.onTick();
-        assertEquals(10.0, options.gamma.value, 1e-9, "onTick re-applies after world loads");
+        assertEquals(1.0, options.gamma.value, 1e-9, "onTick re-applies after world loads");
 
         module.setEnabled(false);
         assertEquals(0.5, options.gamma.value, 1e-9,
                 "onDisable must restore the pre-enable brightness, not hardcode 1.0");
+
+        for (Double attempt : options.gamma.attempts()) {
+            assertTrue(attempt >= 0.0 && attempt <= 1.0,
+                    "no out-of-range value may ever reach OptionInstance.set: " + attempt);
+        }
     }
 
     /** 1.8.9：gamma 是 float 字段，走类型匹配的直接写入与还原 */

@@ -3,10 +3,44 @@
 映射表现已覆盖 **1.8.9 – 26.3 的全部 66 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
 >下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
+## 映射生成器强化（2026-11-08，仅离线/单测，**未真机**）
+
+本批不碰渲染数学，只把"表里的名字和描述符真的存在吗"这件事变成可执行的门禁：
+
+- **描述符来自真实 jar**：类层级的 javap 结果现在被用来生成 `signatures` / `descriptors`，并作为
+  `ModernResolver._on_jar` 的择优依据——候选方法必须在 jar 里声明同样的描述符，否则丢弃并试下一个
+  重载。1.16.x 的 `Style#withColor` 之前写成 `(I)Lk;`（真实是 `(Lk;)Lob;`），就是这样被清掉的。
+- **`--check` 默认连 jar 一起校验**（新增 `--fast` 退回纯文本比较）；`--javap` 单独跑交叉校验。
+- **`absent` 带 `absentReason`**：`verified` / `ambiguous` / `unverified`，`--javap` 打印
+  `absent verified=N unverified=M`，出现 `ambiguous` 直接 exit 1；旧版 anchor/legacy 路径一律记
+  `unverified`，不再冒充"确认没有"。
+- **成员别名表** `tools/mapping/member-aliases.txt`：改名不写 `absent`，按链式别名回退；
+  `requirements.txt` 新增 `#成员!field` 强制字段标记（同名方法/字段并存时用）。
+- **扫描面扩大**到 `agent/` 与 `ui/`，并修掉"同语句内两个字面量都被当成字段"的误判（改为按直接包裹的
+  桥调用判定）；生成器对"按字段登记但映射源里是方法"直接报错。agent 的 timer 钩子因此补上了
+  `resolveDescriptor`（`()F|()D`）。
+- 规模：**165 个规范类 / 66 张表**。各版本 resolved / absent：
+
+| 版本 | resolved | absent | 类整体 absent |
+|---|---|---|---|
+| 26.3 | 407 | 103 | 22 |
+| 1.21.11 | 416 | 95 | 23 |
+| 1.20.1 | 418 | 80 | 23 |
+| 1.16.5 | 403 | 88 | 31 |
+| 1.12.2 | 308 | 132 | 57 |
+| 1.8.9 | 311 | 120 | 59 |
+
+- 门禁：`generate.py --check --javap` → exit 0、0 problems、66 张表最新；单测 554 项
+  （agent 71 / client 225 / ui 147 / core 65 / injector 46）。`client` 里
+  `WorldProjectionNearPlaneTest.pointInsideTheNearPlaneStaysOnScreen` 由本批之外的新渲染测试引入，
+  断言与透视数学不自洽（沿视线插值到近平面不改变屏幕位置），由渲染批次负责修；本批不改渲染数学。
+- UI 侧：`UiBackend` 新增 `reliableAlphaBlend` 能力位（默认 `false`，`ModernRenderer`/`ExtractorRenderer`
+  报 `true`），`OverlayDraw`/`BackendOverlayDraw` 据此决定整屏 alpha 混合；`GameBridge` 增加前置检查。
+
 ## 真机回归验收（提交 2d6c6a6）
 
 - 2026-11-08：`2d6c6a6` 在 **1.8.9 与 26.3** 真机上完成回归，全部通过；测试 501 项零失败，
-  66 张映射表 `generate.py --check` 通过，映射面 **162 个类**（26.3：resolved 393 / absent 147）。
+  66 张映射表 `generate.py --check` 通过，映射面 **162 个类**（26.3：resolved 393 / absent 147；该批之后已扩到 165 / 407，见上节）。
 - 门禁命令：`gradle :agent:test :client:test :ui:test :dist:distJar --rerun-tasks --offline` →
   `BUILD SUCCESSFUL`；测试 agent 69 / client 184 / ui 140 / core 62 / injector 46 = **501 项零失败**。
 - 交付 jar：`nocturne-0.1.0-SNAPSHOT.jar` 1170 个类，major 只有 51/52（`over52=0`），无
@@ -260,7 +294,7 @@
 
 ## 1. 映射表：每版本一张，四个加载器命名空间
 
-表的规模为 **162 个类**（客户端实际解析的规范面；1.8.9–26.3 共 66 张表，26.3 resolved 394 / absent 147）。每个类/成员带
+表的规模为 **165 个类**（客户端实际解析的规范面；1.8.9–26.3 共 66 张表，26.3 resolved 407 / absent 103）。每个类/成员带
 `vanilla` / `fabric` / `forge` / `neoforge` 四套运行期名 + **配套的 JNI 描述符**；
 运行时按 `vanilla → fabric → forge → neoforge → 规范名` 依次尝试，因此
 **同一份表同时服务原版、Fabric、Forge、NeoForge 四种安装**（不做加载器探测）。

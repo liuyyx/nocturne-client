@@ -5,14 +5,25 @@ the injected client uses to translate canonical (Mojmap) class/member names to
 whatever the running game actually exposes.
 
 ```
-python tools/mapping/generate.py            # (re)write every table
-python tools/mapping/generate.py --check    # exit 1 if any table is stale
-python tools/mapping/generate.py --javap    # also verify against local client jars
+python tools/mapping/generate.py              # (re)write every table
+python tools/mapping/generate.py --check      # stale OR jar mismatch -> exit 1
+python tools/mapping/generate.py --check --fast   # text-only quick path (no javap)
+python tools/mapping/generate.py --javap      # jar cross-check only
 python tools/mapping/generate.py --only 1.20.1 --report
 ```
 
 Output is byte-stable (sorted keys, `indent=4`, UTF-8, trailing newline), so
-`--check` is a reliable CI gate. Python 3.12 stdlib only.
+`--check` is a reliable CI gate. **`--check` runs the jar cross-check too**: a
+text-only comparison cannot catch a table that is self-consistent but whose
+descriptors do not exist in the real jar (the 1.16.x `Style#withColor` phantom
+was exactly that). `--fast` keeps the old text-only behaviour for machines
+without `javap` or without the cached client jars. Python 3.12 stdlib only.
+
+Requirement-kind errors also fail the run: a member written as a bare name
+(`Entity#remove`) is resolved as a *field*, so the runtime's
+`callMapped(..., "remove")` would never find it. The generator now reports
+`作为字段登记，但它在映射源里是方法 → 写成 remove()` and exits 1 instead of
+silently writing `"absent": true`.
 
 ## Why four namespaces
 
@@ -50,23 +61,71 @@ launchers without the agent having to detect which one it is.
 
 The **requirement surface** is merged from two sources:
 
-* `scan.py` — walks `client/src/main/java` for `ClassType` enum constants and
-  for the member string literals passed to the reflection bridge
-  (`callMapped`/`methodName` = method, `readField`/`writeField`/`fieldName` =
-  field);
+* `scan.py` — walks `client/src/main/java`, `agent/src/main/java` and
+  `ui/src/main/java` for `ClassType` enum constants and for the member string
+  literals passed to the reflection bridge (`callMapped`, `callMappedStatus`,
+  `callStaticMapped`, `methodName` = method; `readField`/`writeField`/`fieldName`
+  = field). The kind comes from the call that **directly wraps** the literal
+  (paren-stack), not from the nearest preceding bridge name: in
+  `callMapped(readField(opts, OPTIONS, "fov"), OPTION_INSTANCE, "get")` both
+  literals share a statement and a naive "nearest API" scan classified `get` as
+  a field;
 * `requirements.txt` — the curated list for names the scanner cannot see
   (the name travels through a variable, or GUI/font/input members added later).
   Format:
 
   ```
-  net/minecraft/client/Minecraft              # the class is needed
-  net/minecraft/client/Minecraft#player       # a field
+  net/minecraft/client/Minecraft                # the class is needed
+  net/minecraft/client/Minecraft#player         # a field
   net/minecraft/client/Minecraft#getInstance()  # a method
+  net/minecraft/client/Minecraft#player!field   # a field even though a
+                                                # same-named method exists
   ```
 
+  `!field` is for members the client reads **and** calls under one canonical
+  name (`ClientLevel#dayTime`, `TeamColor#rgb`). Without it the method/field
+  cross-check below would flag the field entry as a mistake.
+
 Anything that resolves is written per namespace; anything that does **not**
-resolve in a given version is written as `"absent": true` and listed by
-`--report` — that list is the to-do list for adding an alias or a requirement.
+resolve in a given version is written as `"absent": true` plus an
+`"absentReason"` and listed by `--report` — that list is the to-do list for
+adding an alias or a requirement.
+
+## Renamed members: `member-aliases.txt`
+
+A version that renamed a member gets an alias chain instead of an `absent`
+entry; the table key stays the canonical name, so the runtime needs no change:
+
+```
+ITEM_STACK#getEnchantments() = getEnchantmentTags(), getEnchantmentTagList()
+LIVING_ENTITY#jumpTicks      = noJumpDelay
+TEXT_COMPONENT               = MUTABLE_COMPONENT
+```
+
+Aliases are tried in order only after the primary name fails. Class aliases
+(the form without `#`) are tried when the class itself is missing in that
+version.
+
+## `absent` is not "verified missing"
+
+Every absent entry carries `absentReason`:
+
+| reason | meaning |
+|---|---|
+| `verified` | the mapping source / real jar says this member does not exist in this version |
+| `ambiguous` | the generator found it but could not pick one overload/source unambiguously — **a generator bug, reported as a failure by `--javap`** |
+| `unverified` | no source in this version can prove either way (legacy alias table, anchor path) |
+
+Only `verified` counts as "this version lacks it". The runtime treats all three
+the same (canonical-name fallback + one diagnostic), but `--check --javap`
+prints `absent verified=N unverified=M` so an `unverified` pile cannot hide
+behind a green check, and an `ambiguous` entry fails the gate.
+
+When the generator picks a descriptor it also verifies it against the real jar
+(`ModernResolver._on_jar`): a candidate that the jar does not declare is
+dropped and the next overload is tried, so mapping sources that list removed
+overloads (1.16.x `Style#withColor(int)`) cannot leak a phantom signature into
+the table.
 
 ## JSON schema
 

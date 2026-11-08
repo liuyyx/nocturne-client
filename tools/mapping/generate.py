@@ -21,9 +21,14 @@ Usage::
 
     python tools/mapping/generate.py                 # write all tables
     python tools/mapping/generate.py --only 1.8.9    # one version
-    python tools/mapping/generate.py --check         # fail if any table is stale
-    python tools/mapping/generate.py --javap         # also verify against local jars
+    python tools/mapping/generate.py --check         # 表是否最新 **且** 名字/描述符对得上 jar
+    python tools/mapping/generate.py --check --fast  # 只比文本（快速路径，跳过 javap 交叉校验）
+    python tools/mapping/generate.py --javap         # cross-check against local jars only
     python tools/mapping/generate.py --report        # print the absent-member lists
+
+``--check`` 默认包含 ``--javap``：只比文本的检查抓不到"表是旧的但自洽"和"描述符在真实
+jar 里不存在"这两类错误（1.16.x ``Style#withColor`` 幻影描述符就是这样漏过去的）。
+装不上 javap 或没有本地 jar 的机器用 ``--fast`` 走原来的快速路径。
 
 Stdlib only.
 """
@@ -45,8 +50,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 TOOLS = os.path.join(ROOT, "tools", "mapping")
 CACHE = os.path.join(TOOLS, "cache")
 CLIENT_SRC = os.path.join(ROOT, "client", "src", "main", "java")
+AGENT_SRC = os.path.join(ROOT, "agent", "src", "main", "java")
+UI_SRC = os.path.join(ROOT, "ui", "src", "main", "java")
 CLASS_TYPE = os.path.join(CLIENT_SRC, "dev", "nocturne", "client", "mapping", "ClassType.java")
 REQUIREMENTS = os.path.join(TOOLS, "requirements.txt")
+#: 成员/类的别名链。生成的表按**canonical** 名字建键，但个别版本把同一个成员换了
+#: 名字（`ItemStack#getEnchantments` → `getEnchantmentTags`）；这份文件让生成器在
+#: 首选名字解析失败时按序尝试别名，而不是在表里留一个 absent 让运行期静默失效。
+ALIASES_FILE = os.path.join(TOOLS, "member-aliases.txt")
 RESOURCES = os.path.join(ROOT, "client", "src", "main", "resources")
 #: 旧的 SRG/MCP 资产（1.8.9 / 1.12.2 / 1.16.5 … 的 joined.srg 与 MCP CSV）。
 #: 必须用**仓库内**的 vendor 副本：指向仓库外（../OpenVape4.21）会让干净检出上的重新生成
@@ -135,15 +146,72 @@ def find_local_jar(version: str) -> "str | None":
     return None
 
 
+def load_member_aliases(class_type: dict) -> "tuple[dict, dict]":
+    """``member-aliases.txt`` -> ``(成员别名, 类别名)``.
+
+    格式（一行一条，``#`` 注释）::
+
+        ITEM_STACK#getEnchantments() = getEnchantmentTags()
+        TextComponent = MutableComponent
+
+    左边可用 ``ClassType`` 常量名或 canonical 类名；右边的类名同理。
+    键统一成 canonical（斜杠分隔、成员去掉 ``()``），与 ``build_table`` 的查表口径一致。
+    """
+    members: "dict[tuple, list]" = {}
+    classes: "dict[str, list]" = {}
+
+    def canonical(text: str) -> str:
+        text = text.strip()
+        return class_type.get(text, text).replace(".", "/")
+
+    if not os.path.exists(ALIASES_FILE):
+        return members, classes
+    for raw in open(ALIASES_FILE, encoding="utf-8"):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        left, right = line.split("=", 1)
+        left = left.strip()
+        alternatives = [part.strip() for part in right.split(",") if part.strip()]
+        if not alternatives:
+            continue
+        if "#" in left:
+            owner, member = left.split("#", 1)
+            member = member.strip().rstrip("()")
+            members[(canonical(owner), member)] = [a.rstrip("()") for a in alternatives]
+        else:
+            classes[canonical(left)] = [canonical(a) for a in alternatives]
+    return members, classes
+
+def absent_entry(resolver, canonical: str, kind: str, name: "str | None" = None) -> dict:
+    """``absent`` 条目，带可信度：``verified`` / ``ambiguous`` / ``unverified``。
+
+    ``verified`` 才表示"映射源/真实 jar 确认该成员本版本不存在"；``ambiguous`` 是
+    生成器自己没能唯一确定（重载、来源不全），``unverified`` 表示根本没有可判定的来源。
+    没有这一层区分，``--javap`` 会把"我们不知道"当成"确认没有"，整类成员静默消失。
+    """
+    reason = getattr(resolver, "absent_reason", None)
+    state = reason(canonical, kind, name) if reason is not None else "unverified"
+    return {"absent": True, "absentReason": state}
+
 def build_table(version: str, resolver, requirements: scan.Requirements,
-                report: dict, shape_hints: dict) -> dict:
+                report: dict, shape_hints: dict, aliases: "tuple[dict, dict] | None" = None,
+                lint: "list | None" = None) -> dict:
+    member_aliases, class_aliases = aliases if aliases is not None else ({}, {})
+    problems = lint if lint is not None else []
     classes = {}
     resolved = 0
     absent = []
     for canonical in sorted(requirements.classes):
         class_names = resolver.resolve_class(canonical)
         if not class_names:
-            classes[canonical] = {"absent": True, "names": {}, "methods": {}, "fields": {}}
+            for alternative in class_aliases.get(canonical, ()):
+                class_names = resolver.resolve_class(alternative)
+                if class_names:
+                    break
+        if not class_names:
+            classes[canonical] = {"absent": True, "names": {},
+                                  "absentReason": absent_entry(resolver, canonical, "class")["absentReason"]}
             absent.append((canonical, None, f"no counterpart in {version}"))
             continue
         methods = {}
@@ -151,6 +219,11 @@ def build_table(version: str, resolver, requirements: scan.Requirements,
         for name in sorted(requirements.methods[canonical]):
             hint = shape_hints.get((canonical, name))
             answer = resolver.resolve_method(canonical, name, hint)
+            if answer is None:
+                for alternative in member_aliases.get((canonical, name), ()):
+                    answer = resolver.resolve_method(canonical, alternative, hint)
+                    if answer is not None:
+                        break
             if answer:
                 entry = {"names": {ns: name_ for ns, (name_, _) in answer.items()}}
                 signatures = {ns: sig for ns, (_, sig) in answer.items() if sig}
@@ -159,10 +232,15 @@ def build_table(version: str, resolver, requirements: scan.Requirements,
                 methods[name] = entry
                 resolved += 1
             else:
-                methods[name] = {"absent": True}
-                absent.append((canonical, name + "()", f"{version}: unresolved"))
+                methods[name] = absent_entry(resolver, canonical, "method", name)
+                absent.append((canonical, name + "()", f"{version}: {methods[name]['absentReason']}"))
         for name in sorted(requirements.fields[canonical]):
             answer = resolver.resolve_field(canonical, name)
+            if answer is None:
+                for alternative in member_aliases.get((canonical, name), ()):
+                    answer = resolver.resolve_field(canonical, alternative)
+                    if answer is not None:
+                        break
             if answer:
                 entry = {"names": {ns: name_ for ns, (name_, _) in answer.items()}}
                 descriptors = {ns: desc for ns, (_, desc) in answer.items() if desc}
@@ -171,8 +249,18 @@ def build_table(version: str, resolver, requirements: scan.Requirements,
                 fields[name] = entry
                 resolved += 1
             else:
-                fields[name] = {"absent": True}
-                absent.append((canonical, name, f"{version}: unresolved"))
+                # 反方向登记错误：需求把方法写成了裸名（没有 `()`），于是这里按字段解析，
+                # 解析不到就被写成 absent——运行期的 `callMapped(..., "name")` 永远落空。
+                # 这种错误必须在生成期失败，而不是静默变成 absent。
+                exists = getattr(resolver, "method_exists", None)
+                forced = name in getattr(requirements, "forced_fields", {}).get(canonical, ())
+                if answer is None and not forced and exists is not None and exists(canonical, name):
+                    problems.append(
+                        f"{version}: {canonical}#{name} 作为字段登记，但它在映射源里是方法"
+                        f" → 在 requirements.txt 里写成 {name}()"
+                    )
+                fields[name] = absent_entry(resolver, canonical, "field", name)
+                absent.append((canonical, name, f"{version}: {fields[name]['absentReason']}"))
         classes[canonical] = {"names": class_names, "methods": methods, "fields": fields}
     save = getattr(resolver, "save", None)
     if save is not None:
@@ -201,7 +289,7 @@ def table_path(version: str) -> str:
 # --------------------------------------------------------------------------
 
 
-def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
+def verify_javap(version: str, table: dict) -> "tuple[list, int, bool, dict]":
     """Check the ``vanilla`` (obfuscated) names against the real client jar.
 
     That namespace is the only one whose jar we can obtain: Fabric/Forge
@@ -210,13 +298,23 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
     """
     jar = find_local_jar(version)
     if jar is None:
-        return ([f"{version}: no local client jar"], 0, True)
+        return ([f"{version}: no local client jar"], 0, True, {"verified": 0, "unverified": 0})
     index = javap.JavapIndex(jar, DEFAULT_JAVAP, os.path.join(CACHE, f"javap-{version}.json"))
     problems = []
     checked = 0
     transient_before = 0
+    absent_verified = absent_unverified = 0
     for canonical, entry in table["classes"].items():
         if entry.get("absent"):
+            # absent 不再一律当作"已验证不存在"：只有 verified 才记账，
+            # ambiguous（生成器择优失败）在本函数里是**错误**，unverified 只统计。
+            state = entry.get("absentReason", "unverified")
+            if state == "verified":
+                absent_verified += 1
+            else:
+                absent_unverified += 1
+                if state == "ambiguous":
+                    problems.append(f"{version}: {canonical} 类被标为 absent 但状态是 ambiguous（生成器没能择优）")
             continue
         obf = (entry.get("names") or {}).get("vanilla")
         if not obf:
@@ -227,6 +325,13 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
             continue
         for name, spec in entry["methods"].items():
             if spec.get("absent"):
+                state = spec.get("absentReason", "unverified")
+                if state == "verified":
+                    absent_verified += 1
+                else:
+                    absent_unverified += 1
+                    if state == "ambiguous":
+                        problems.append(f"{version}: {canonical}#{name}() 被标为 absent 但状态是 ambiguous")
                 continue
             runtime = (spec.get("names") or {}).get("vanilla")
             if not runtime:
@@ -240,6 +345,13 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
                 checked += 1
         for name, spec in entry["fields"].items():
             if spec.get("absent"):
+                state = spec.get("absentReason", "unverified")
+                if state == "verified":
+                    absent_verified += 1
+                else:
+                    absent_unverified += 1
+                    if state == "ambiguous":
+                        problems.append(f"{version}: {canonical}#{name} 被标为 absent 但状态是 ambiguous")
                 continue
             runtime = (spec.get("names") or {}).get("vanilla")
             if not runtime:
@@ -257,7 +369,8 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
             f"{version}: {transient} javap call(s) failed without a verdict "
             f"(javap missing/timed out?) — results are NOT trustworthy"
         )
-    return (problems, checked, False)
+    report_absent = {"verified": absent_verified, "unverified": absent_unverified}
+    return (problems, checked, False, report_absent)
 
 
 # --------------------------------------------------------------------------
@@ -267,13 +380,20 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool]":
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="do not write; fail if a table is stale")
+    parser.add_argument("--check", action="store_true",
+                        help="do not write; fail if a table is stale (also cross-checks jars)")
     parser.add_argument("--javap", action="store_true", help="cross-check tables against local client jars")
+    parser.add_argument("--fast", action="store_true",
+                        help="with --check: skip the jar cross-check (text-only comparison, no javap)")
     parser.add_argument("--only", default=None, help="comma-separated version filter")
     parser.add_argument("--report", action="store_true", help="print absent-member lists")
     args = parser.parse_args()
 
-    requirements = scan.collect(CLIENT_SRC, CLASS_TYPE, REQUIREMENTS)
+    # ui/agent 也通过同一座桥取成员（GameBridge.callMapped 等）：只扫 client 会让
+    # "字面量只写在 ui/agent 里"的需求整项消失，运行期表现为该钩子静默落空。
+    sources_roots = [CLIENT_SRC, AGENT_SRC, UI_SRC]
+    requirements = scan.collect(sources_roots, CLASS_TYPE, REQUIREMENTS)
+    member_aliases = load_member_aliases(scan.parse_class_type(CLASS_TYPE))
     manifest = sources.Manifest(CACHE)
     shape_hints = load_shape_hints()
     fetch = namespaces.Fetch(CACHE)
@@ -291,6 +411,10 @@ def main() -> int:
     report = {"versions": {}, "unsupported": []}
     stale = False
     failures = []
+    # 需求面的结构性错误（方法写成字段名）与版本无关，但每条只报一次。
+    lint: "list" = []
+    if args.check and not args.fast:
+        args.javap = True
     for version in versions:
         local_jar = find_local_jar(version)
         resolver = namespaces.build_resolver(
@@ -301,7 +425,8 @@ def main() -> int:
             report["unsupported"].append(version)
             print(f"{version:8} skipped  (no mapping source for this version)")
             continue
-        table = build_table(version, resolver, requirements, report, shape_hints)
+        table = build_table(version, resolver, requirements, report, shape_hints,
+                            member_aliases, lint)
         text = render(table)
         path = table_path(version)
         info = report["versions"][version]
@@ -311,14 +436,16 @@ def main() -> int:
             f"namespaces={','.join(info['namespaces'])}"
         )
         if args.javap:
-            problems, checked, skipped = verify_javap(version, table)
+            problems, checked, skipped, absent_stats = verify_javap(version, table)
             report["versions"][version]["javap"] = problems
             if skipped:
                 print("  javap: no local client jar — skipped")
             elif problems:
-                print(f"  javap: {len(problems)} PROBLEMS ({checked} checked)")
+                print(f"  javap: {len(problems)} PROBLEMS ({checked} checked, "
+                      f"absent verified={absent_stats['verified']} unverified={absent_stats['unverified']})")
             else:
-                print(f"  javap: ok ({checked} members verified against the client jar)")
+                print(f"  javap: ok ({checked} members verified against the client jar, "
+                      f"absent verified={absent_stats['verified']} unverified={absent_stats['unverified']})")
             for problem in problems:
                 print(f"    {problem}")
                 if not skipped:
@@ -349,6 +476,11 @@ def main() -> int:
             print("  No route reaches these: they need either an aliases-<version>.toml"
                   " bridge, an intermediary file, or an SRG source for that version.")
 
+    if lint:
+        for problem in sorted(set(lint)):
+            print(f"requirements: {problem}", file=sys.stderr)
+        print(f"\n{len(set(lint))} requirements entries登记成了错误种类", file=sys.stderr)
+        return 1
     if failures:
         print(f"\n{len(failures)} javap problems", file=sys.stderr)
         return 1

@@ -31,9 +31,11 @@ export JAVA_HOME="C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot"        # 必
 GRADLE="C:/Users/liuyyx/.gradle/wrapper/dists/gradle-9.2.1-bin/9fgc9dy84duywbml6zqd0l4mo/gradle-9.2.1/bin/gradle.bat"
 
 "$GRADLE" build --console=plain --no-daemon    # 编译 + 单测 + 打包 dist（实测 BUILD SUCCESSFUL）
-"$GRADLE" test  --console=plain --no-daemon    # 仅单测（实测 298 项，0 失败 0 跳过）
-python tools/mapping/generate.py --check       # 映射表门禁（实测 66 个版本，exit 0，离线可跑）
-python tools/mapping/generate.py --javap       # 逐版本对真实 client jar 校验（⚠ 当前 exit 1，见 §8）
+"$GRADLE" test  --console=plain --no-daemon    # 仅单测（--rerun-tasks 实测 554 项 = agent 71 /
+                                               # client 225 / ui 147 / core 65 / injector 46）
+python tools/mapping/generate.py --check       # 映射表门禁：陈旧 **或** 描述符与 jar 不符 → exit 1
+python tools/mapping/generate.py --check --fast  # 只比文本的快速路径（没装 javap 的机器用）
+python tools/mapping/generate.py --javap       # 只做逐版本 jar 交叉校验
 ```
 
 - **没有 gradle wrapper**：`gradlew` / `gradlew.bat` / `gradle/wrapper/` 都不存在，`gradle` 也不在 PATH。
@@ -46,7 +48,9 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 - 运行：`java -jar dist/build/libs/nocturne-*.jar --list-json`（列进程）/
   `java -jar … --pid=<n>`（注入）。GUI 与 CLI 是同一个入口。
 - 映射表生成器（`tools/mapping/`）：`generate.py` 重写全部表；`--check` 陈旧即 exit 1；
-  `--javap` 对本地 client jar 逐版本校验；`--only <ver>` + `--report` 打 absent 清单。
+  `--check` 默认已包含 jar 交叉校验（`--fast` 退回只比文本）；`--only <ver>` + `--report` 打 absent 清单。
+  absent 条目现在带 `absentReason`（`verified` / `ambiguous` / `unverified`）：只有 `verified` 才算
+  "本版本确实没有"，`ambiguous`（生成器择优失败）会让 `--check --javap` 直接失败。
   只用 Python 3.12 stdlib；`tools/mapping/cache/` 已含 66 个 client jar，**离线可跑**。
 - **不在 Gradle 构建内**：`launcher/`（.NET 8 WPF，`dotnet build`）、`tools/mapping/`（Python）、
   `vendor/`（参考快照）。改它们不影响 `gradle build`。
@@ -102,6 +106,8 @@ python tools/mapping/generate.py --javap       # 逐版本对真实 client jar �
 - 候选顺序恒为 `vanilla → fabric → forge → neoforge → canonical`；名字与描述符必须**同命名空间配对**使用，
   跨命名空间混用会让参数解析失效。
 - 表里 `"absent": true` 表示该版本**真的没有**对应物：运行期打一次性日志并回退规范名。
+  生成器会再附一个 `absentReason`：`verified`（映射源/jar 确认不存在）、`ambiguous`（自身择优失败，
+  生成期就该失败）、`unverified`（该版本的来源不足以判定，例如 anchor 路径）。别把后两者当"确认没有"。
 - 跨版本 arity 漂移是常态（例：`Entity#getEyePosition` 在 ≤1.16.5 是 `(F)`，1.17+ 是无参），
   `callMapped` 会在 arity 不匹配时退回按实参类型推断。
 - 反射句柄有缓存，且**只缓存成功**；失败会重试，别在外面再套一层缓存。
@@ -196,7 +202,8 @@ Chams 使用 `EntityRenderDispatcher` 的实体首参回调；Xray 使用 `Block
 3. legacy 版本（1.8.9 / 1.12.2）改 `aliases-<version>.toml` 的桥接规则；
    modern 版本以官方映射为准——真改名就保持 absent，只有**移动了命名空间**才改 `namespaces.py`。
 4. 重跑 `--check` / `--javap`，并确认 `--report` 里你关心的成员干净。
-   **`--check` 只保证表的字节稳定，不保证名字真的存在**——改过别名或需求后必须 `--javap` 双绿再提交。
+   `--check` 现在会连 jar 校验一起跑（`--fast` 才是纯文本比较）；只比文本时它**不保证名字真的存在**，
+改过别名或需求后不要用 `--fast` 当门禁。
 5. 静态常量必须映射到真实持有类：效果常量使用 `MOB_EFFECTS`，不能挂到 `MOB_EFFECT` 上；
    旧映射可以把两种规范类映射到同一运行时类，但不能把别的类的字段名写进效果类型。
 

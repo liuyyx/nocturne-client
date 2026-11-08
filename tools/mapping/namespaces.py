@@ -666,6 +666,23 @@ class ModernResolver:
             self.index.save()
 
     # -- members ---------------------------------------------------------
+    def _on_jar(self, ancestor: str, obf_name: str, canonical_desc: str) -> "bool | None":
+        """Is that (name, descriptor) really declared on ``ancestor``'s obf class?
+
+        ``None`` = no jar to check against. 1.16.x mojmap 里 ``Style#withColor``
+        有三个重载，其中 ``withColor(int)`` 在 jar 里并不存在；不做这一步校验，
+        生成器就会写出幻影描述符，运行期按签名选钩子全落空。
+        """
+        if self.index is None:
+            return None
+        obf_owner = self.to_obf.get(ancestor)
+        if obf_owner is None:
+            return False
+        info = self.index.class_info(obf_owner)
+        if info is None:
+            return False
+        return convert_descriptor(canonical_desc, self.to_obf) in (info["methods"].get(obf_name) or [])
+
     def _pick_method(self, canonical: str, name: str, shape_hint: "int | None"):
         """(declaring class, (obf name, canonical descriptor)) for a method."""
         for ancestor in self._ancestors(canonical):
@@ -677,9 +694,32 @@ class ModernResolver:
                     matching = [c for c in candidates if parameter_count(c[1]) == shape_hint]
                     if matching:
                         candidates = matching
-                candidates = sorted(candidates, key=lambda c: (parameter_count(c[1]), c[1], c[0]))
+            candidates = sorted(candidates, key=lambda c: (parameter_count(c[1]), c[1], c[0]))
+            if self.index is not None:
+                verified = [c for c in candidates if self._on_jar(ancestor, c[0], c[1])]
+                if not verified:
+                    # 映射源与真实 jar 对不上（幻影重载）：宁可不解析，也不写进表里。
+                    continue
+                candidates = verified
             return ancestor, candidates[0]
         return None
+
+    def method_exists(self, canonical: str, name: str) -> bool:
+        key = canonical.replace(".", "/")
+        return any((ancestor, name) in self.mojmap.methods
+                   for ancestor in self._ancestors(key))
+
+    def absent_reason(self, canonical: str, kind: str, name: str) -> str:
+        key = canonical.replace(".", "/")
+        if self.mojmap.class_of(key) is None:
+            return "verified"
+        if kind == "method":
+            if self.method_exists(key, name):
+                return "ambiguous"
+            return "verified" if self.index is not None else "unverified"
+        if any((ancestor, name) in self.mojmap.fields for ancestor in self._ancestors(key)):
+            return "ambiguous"
+        return "verified" if self.index is not None else "unverified"
 
     def _pick_field(self, canonical: str, name: str):
         """(declaring class, (obf name, canonical descriptor)) for a field."""
@@ -816,6 +856,22 @@ class LegacyResolver:
             result["fabric"] = (rule.get("fabric", fabric or name), convert_descriptor(obf_desc, self.obf_to_fabric))
         result["forge"] = (rule.get("forge", srg), mcp_desc or obf_desc)
         return result
+
+    def method_exists(self, canonical: str, name: str) -> bool:
+        key = canonical.replace(".", "/")
+        rule = self._rule(key, "method", name)
+        if not rule or "unsupported" in rule or "skip" in rule:
+            return False
+        # 名字级索引跨类共用：必须再用 scope 收窄，否则 Potion#NAUSEA 这类
+        # 静态字段会因为别处同名方法而被判成"方法写成字段"。
+        scope = self._scope(key, rule)
+        if scope is None:
+            return False
+        return bool(self.data.by_method_name.get(scope, {}).get(rule.get("mcp")))
+
+    def absent_reason(self, canonical: str, kind: str, name: str) -> str:
+        # 别名表只收 MCP 有名字的成员，查不到并不等于该成员不存在。
+        return "unverified"
 
     def resolve_field(self, canonical: str, name: str) -> "dict[str, tuple] | None":
         key = canonical.replace(".", "/")
@@ -986,6 +1042,11 @@ class AnchorResolver:
                 result["forge"] = (srg_name, descriptor or obf_desc)
         return result
 
+    def absent_reason(self, canonical: str, kind: str, name: str) -> str:
+        # anchor 路径没有 jar 级证据（版本内 intermediary 文件才是真凭据），
+        # 查不到只能算"未验证"，绝不冒充"确认不存在"。
+        return "unverified"
+
     def resolve_field(self, canonical: str, name: str) -> "dict[str, tuple] | None":
         key = canonical.replace(".", "/")
         inter = self.anchor.fields.get((key, name))
@@ -1020,6 +1081,9 @@ class IdentityResolver:
         self.jar = jar
         self._entries = None
         self.index = None
+        # 一次生成里出现过的"多重载无法择优"成员，供 absent_reason 区分
+        # 「真实不存在」与「我们的选择器没法定」。
+        self.ambiguous: "set[tuple]" = set()
         if jar is not None:
             import javap as _javap
             self._entries = _javap.class_entries(jar)
@@ -1034,19 +1098,78 @@ class IdentityResolver:
         name = canonical.replace("/", ".")
         return {namespace: name for namespace in NAMESPACES}
 
-    def _member(self, canonical: str, kind: str, name: str):
+    def _ancestors(self, canonical: str) -> "list[str]":
+        """The class itself first, then its supers breadth-first."""
+        order: "list[str]" = []
+        seen = set()
+        queue = [canonical]
+        while queue:
+            current = queue.pop(0)
+            if current in seen:
+                continue
+            seen.add(current)
+            order.append(current)
+            info = self.index.class_info(current) if self.index is not None else None
+            if info is not None:
+                queue.extend(info.get("supers") or [])
+        return order
+
+    def _member(self, canonical: str, kind: str, name: str,
+                shape_hint: "int | None" = None):
+        """``namespace -> (name, descriptor)`` with the descriptor from the jar.
+
+        26.x 表原先只写名字、签名为空：`.7z` 的 `shouldRender` 之类无法按签名选钩子，
+        全部候选都因 `descriptor()==null` 被跳过。真实描述符只能来自 jar，
+        这里按形参个数挑重载——挑不唯一就**不猜**，交由 absent_reason 标 ambiguous。
+        """
         if self.jar is None:
             return None
-        internal = canonical.replace(".", "/")
-        if not self.index.reachable(internal, kind, name):
-            return None
-        return {namespace: (name, None) for namespace in NAMESPACES}
+        for owner in self._ancestors(canonical.replace(".", "/")):
+            info = self.index.class_info(owner)
+            if info is None:
+                continue
+            table = info["methods"] if kind == "method" else info["fields"]
+            descriptors = table.get(name)
+            if not descriptors:
+                continue
+            if kind == "method" and len(descriptors) > 1 and shape_hint is not None:
+                matching = [d for d in descriptors if parameter_count(d) == shape_hint]
+                if matching:
+                    descriptors = matching
+            if len(descriptors) > 1:
+                # 同一形参个数的多重载：不猜描述符，但**仍然**给出名字条目——
+                # 靠名字即可调用的成员（translate/mulPose…）不该因为签名有歧义就整项丢失。
+                self.ambiguous.add((canonical.replace(".", "/"), name))
+                return {namespace: (name, None) for namespace in NAMESPACES}
+            return {namespace: (name, descriptors[0]) for namespace in NAMESPACES}
+        return None
 
     def resolve_method(self, canonical: str, name: str, shape_hint: "int | None"):
-        return self._member(canonical, "method", name)
+        return self._member(canonical, "method", name, shape_hint)
 
     def resolve_field(self, canonical: str, name: str):
         return self._member(canonical, "field", name)
+
+    def method_exists(self, canonical: str, name: str) -> bool:
+        """Whether ``name`` is a *method* here (requirements wrote a bare name)."""
+        for owner in self._ancestors(canonical.replace(".", "/")):
+            info = self.index.class_info(owner) if self.index is not None else None
+            if info is not None and name in info["methods"]:
+                return True
+        return False
+
+    def absent_reason(self, canonical: str, kind: str, name: str) -> str:
+        key = (canonical.replace(".", "/"), name)
+        if key in self.ambiguous:
+            return "ambiguous"
+        if self.jar is None or self.index is None:
+            return "unverified"
+        if key[0] not in self._entries:
+            return "verified"
+        if any(name in ((info or {}).get("methods" if kind == "method" else "fields") or {})
+               for info in (self.index.class_info(owner) for owner in self._ancestors(key[0]))):
+            return "ambiguous"
+        return "verified"
 
     def save(self) -> None:
         if self.index is not None:

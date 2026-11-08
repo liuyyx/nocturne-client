@@ -4,50 +4,42 @@
         "com/mojang/authlib/GameProfile": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "com/mojang/blaze3d/platform/InputConstants": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "com/mojang/blaze3d/platform/InputConstants$Key": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "com/mojang/blaze3d/platform/InputConstants$Type": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "com/mojang/blaze3d/platform/Window": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "com/mojang/blaze3d/vertex/PoseStack": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/Camera": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/CameraType": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/DeltaTracker": {
             "names": {
@@ -57,13 +49,19 @@
             },
             "methods": {
                 "getGameTimeDeltaPartialTick": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getGameTimeDeltaTicks": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
+                "partialTick": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "timerSpeed": {
                     "names": {
                         "vanilla": "d",
@@ -81,7 +79,8 @@
             },
             "methods": {
                 "click": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "isDown": {
                     "names": {
@@ -108,10 +107,16 @@
                     }
                 },
                 "set": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setAll": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "setDown": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setKeyBindState": {
                     "names": {
@@ -126,17 +131,12 @@
                     }
                 }
             },
-            "fields": {
-                "setDown": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/client/KeyboardHandler": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/Minecraft": {
             "names": {
@@ -182,10 +182,12 @@
                     }
                 },
                 "getWindow": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "renderFrame": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "runGameLoop": {
                     "names": {
@@ -290,7 +292,8 @@
                     }
                 },
                 "font": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "fontRenderer": {
                     "names": {
@@ -335,7 +338,8 @@
                     }
                 },
                 "itemInHandRenderer": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "level": {
                     "names": {
@@ -359,7 +363,8 @@
                     }
                 },
                 "mouseHandler": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "options": {
                     "names": {
@@ -369,7 +374,8 @@
                     }
                 },
                 "pausePartialTick": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "player": {
                     "names": {
@@ -391,20 +397,22 @@
                         "fabric": "field_1755",
                         "forge": "field_71462_r"
                     }
+                },
+                "timer": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             }
         },
         "net/minecraft/client/MouseHandler": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/OptionInstance": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/Options": {
             "names": {
@@ -415,10 +423,12 @@
             "methods": {},
             "fields": {
                 "bobView": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "cameraType": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "fov": {
                     "names": {
@@ -428,7 +438,8 @@
                     }
                 },
                 "fovEffectScale": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "gamma": {
                     "names": {
@@ -438,10 +449,12 @@
                     }
                 },
                 "keyUse": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "perspective": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "sensitivity": {
                     "names": {
@@ -462,8 +475,7 @@
         "net/minecraft/client/gui/Font": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/gui/FontRenderer": {
             "names": {
@@ -518,11 +530,17 @@
                 "forge": "net.minecraft.client.gui.GuiIngame"
             },
             "methods": {
+                "displayClientMessage": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "drawRect": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "extractRenderState": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getChat": {
                     "names": {
@@ -549,56 +567,53 @@
                     }
                 },
                 "render": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "renderGameOverlay": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "screen": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setScreen": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
-                "displayClientMessage": {
-                    "absent": true
-                },
                 "hud": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             }
         },
         "net/minecraft/client/gui/GuiComponent": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/gui/GuiGraphics": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/gui/GuiGraphicsExtractor": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/gui/GuiNewChat": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/gui/Hud": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/gui/components/ChatComponent": {
             "names": {
@@ -625,8 +640,7 @@
         "net/minecraft/client/gui/components/events/ContainerEventHandler": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/gui/screens/ChatScreen": {
             "names": {
@@ -654,17 +668,15 @@
             },
             "methods": {
                 "getTitle": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "render": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
-            "fields": {
-                "getTitle": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/client/gui/screens/inventory/AbstractContainerScreen": {
             "names": {
@@ -675,7 +687,8 @@
             "methods": {},
             "fields": {
                 "hoveredSlot": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             }
         },
@@ -717,13 +730,16 @@
                     }
                 },
                 "extractEntityInInventoryFollowsMouse": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "renderEntityInInventory": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "renderEntityInInventoryFollowsMouse": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}
@@ -731,14 +747,12 @@
         "net/minecraft/client/input/KeyEvent": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/input/MouseButtonInfo": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/multiplayer/ClientChunkCache": {
             "names": {
@@ -760,8 +774,7 @@
         "net/minecraft/client/multiplayer/ClientChunkCache$Storage": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/multiplayer/ClientLevel": {
             "names": {
@@ -795,7 +808,8 @@
                     }
                 },
                 "getBlockEntity": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getBlockState": {
                     "names": {
@@ -807,6 +821,18 @@
                         "vanilla": "(Lcj;)Lalz;",
                         "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_0_378;",
                         "forge": "(Lnet/minecraft/util/BlockPos;)Lnet/minecraft/block/state/IBlockState;"
+                    }
+                },
+                "getChunk": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_0_271",
+                        "forge": "func_72964_e"
+                    },
+                    "signatures": {
+                        "vanilla": "(II)Lamy;",
+                        "fabric": "(II)Lnet/minecraft/class_2818;",
+                        "forge": "(II)Lnet/minecraft/world/chunk/Chunk;"
                     }
                 },
                 "getChunkSource": {
@@ -860,10 +886,8 @@
             },
             "fields": {
                 "dayTime": {
-                    "absent": true
-                },
-                "getChunk": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "levelData": {
                     "names": {
@@ -920,20 +944,19 @@
                     }
                 },
                 "sendChat": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "sendChatMessage": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "sendCommand": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
-            "fields": {
-                "getOnlinePlayers": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/client/multiplayer/MultiPlayerGameMode": {
             "names": {
@@ -967,10 +990,12 @@
                     }
                 },
                 "handleContainerInput": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "handleInventoryMouseClick": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "onPlayerRightClick": {
                     "names": {
@@ -985,10 +1010,12 @@
                     }
                 },
                 "processRightClick": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "processRightClickBlock": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "sendUseItem": {
                     "names": {
@@ -1027,10 +1054,12 @@
                     }
                 },
                 "useItem": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "useItemOn": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "windowClick": {
                     "names": {
@@ -1058,8 +1087,7 @@
         "net/minecraft/client/multiplayer/MultiPlayerLevel": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/multiplayer/PlayerInfo": {
             "names": {
@@ -1100,20 +1128,13 @@
                         "fabric": "field_3744",
                         "forge": "field_178866_b"
                     }
-                },
-                "getGameMode": {
-                    "absent": true
-                },
-                "getProfile": {
-                    "absent": true
                 }
             }
         },
         "net/minecraft/client/player/ClientInput": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/player/Input": {
             "names": {
@@ -1441,7 +1462,8 @@
                     }
                 },
                 "lastSentInput": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "noPhysics": {
                     "names": {
@@ -1510,6 +1532,14 @@
                 "forge": "net.minecraft.client.renderer.EntityRenderer"
             },
             "methods": {
+                "getFov": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getMainCamera": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "hurtCamera": {
                     "names": {
                         "vanilla": "d",
@@ -1540,8 +1570,7 @@
         "net/minecraft/client/renderer/ItemInHandRenderer": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/renderer/LevelRenderer": {
             "names": {
@@ -1563,7 +1592,8 @@
                     }
                 },
                 "renderLevel": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}
@@ -1598,7 +1628,8 @@
             },
             "methods": {
                 "extractEntity": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "render": {
                     "names": {
@@ -1613,7 +1644,8 @@
                     }
                 },
                 "shouldRender": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}
@@ -1621,20 +1653,17 @@
         "net/minecraft/client/renderer/state/gui/GuiRenderState": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/settings/GameSettings": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/client/settings/KeyBinding": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/core/BlockPos": {
             "names": {
@@ -1645,13 +1674,16 @@
             "methods": {},
             "fields": {
                 "above(int)": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "east(int)": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "south(int)": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             }
         },
@@ -1779,6 +1811,10 @@
                 "forge": "net.minecraft.util.IChatComponent"
             },
             "methods": {
+                "empty": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "getString": {
                     "names": {
                         "vanilla": "d",
@@ -1790,28 +1826,23 @@
                         "fabric": "()Ljava/lang/String;",
                         "forge": "()Ljava/lang/String;"
                     }
-                }
-            },
-            "fields": {
-                "empty": {
-                    "absent": true
                 },
                 "literal": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
-            }
+            },
+            "fields": {}
         },
         "net/minecraft/network/chat/MutableComponent": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/chat/Style": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/chat/TextComponent": {
             "names": {
@@ -1847,14 +1878,12 @@
         "net/minecraft/network/protocol/game/ClientboundAddEntityPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundBlockEventPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket": {
             "names": {
@@ -1881,20 +1910,17 @@
         "net/minecraft/network/protocol/game/ClientboundEntityEventPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundExplodePacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundPlayerInfoRemovePacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket": {
             "names": {
@@ -1908,14 +1934,12 @@
         "net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket": {
             "names": {
@@ -2007,26 +2031,22 @@
         "net/minecraft/network/protocol/game/ClientboundSetSubtitleTextPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundSetTitleTextPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ClientboundSystemChatPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ServerboundContainerClickPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ServerboundContainerClosePacket": {
             "names": {
@@ -2090,7 +2110,8 @@
             },
             "methods": {
                 "getAction": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}
@@ -2127,7 +2148,8 @@
                     }
                 },
                 "START_FALL_FLYING": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "START_SNEAKING": {
                     "names": {
@@ -2162,14 +2184,12 @@
         "net/minecraft/network/protocol/game/ServerboundPlayerInputPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ServerboundPunchPacket": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket": {
             "names": {
@@ -2179,14 +2199,11 @@
             },
             "methods": {
                 "getSlot": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
-            "fields": {
-                "getSlot": {
-                    "absent": true
-                }
-            }
+            "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundSwingPacket": {
             "names": {
@@ -2200,8 +2217,7 @@
         "net/minecraft/sounds/SoundEvents": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/util/MouseHelper": {
             "names": {
@@ -2228,14 +2244,12 @@
         "net/minecraft/world/InteractionHand": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/InteractionResult": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/effect/MobEffect": {
             "names": {
@@ -2279,7 +2293,8 @@
                     }
                 },
                 "NAUSEA": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "NIGHT_VISION": {
                     "names": {
@@ -2329,10 +2344,12 @@
                     }
                 },
                 "getBbHeight": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getBbWidth": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getBoundingBox": {
                     "names": {
@@ -2347,13 +2364,16 @@
                     }
                 },
                 "getCustomName": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getDeltaMovement": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getDisplayName": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getEyePosition": {
                     "names": {
@@ -2392,13 +2412,16 @@
                     }
                 },
                 "getScale": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getTeam": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getTeamColor": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getUUID": {
                     "names": {
@@ -2413,7 +2436,8 @@
                     }
                 },
                 "isAlliedTo": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "isInWater": {
                     "names": {
@@ -2440,7 +2464,8 @@
                     }
                 },
                 "isPassenger": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "isShiftKeyDown": {
                     "names": {
@@ -2455,7 +2480,8 @@
                     }
                 },
                 "isSpectator": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "isSprinting": {
                     "names": {
@@ -2482,7 +2508,8 @@
                     }
                 },
                 "pick": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "position": {
                     "names": {
@@ -2508,8 +2535,21 @@
                         "forge": "(DF)Lnet/minecraft/util/MovingObjectPosition;"
                     }
                 },
+                "refreshDimensions": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "remove": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "setDead": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "setDeltaMovement": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setPos": {
                     "names": {
@@ -2545,7 +2585,8 @@
                     }
                 },
                 "eyeHeight": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "fallDistance": {
                     "names": {
@@ -2555,10 +2596,8 @@
                     }
                 },
                 "getScale": {
-                    "absent": true
-                },
-                "getUUID": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "height": {
                     "names": {
@@ -2568,10 +2607,12 @@
                     }
                 },
                 "horizontalCollision": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "id": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "isDead": {
                     "names": {
@@ -2579,9 +2620,6 @@
                         "fabric": "field_5988",
                         "forge": "field_70128_L"
                     }
-                },
-                "isPassenger": {
-                    "absent": true
                 },
                 "motionX": {
                     "names": {
@@ -2617,15 +2655,6 @@
                         "fabric": "field_5952",
                         "forge": "field_70122_E"
                     }
-                },
-                "refreshDimensions": {
-                    "absent": true
-                },
-                "remove": {
-                    "absent": true
-                },
-                "setDead": {
-                    "absent": true
                 },
                 "tickCount": {
                     "names": {
@@ -2695,8 +2724,7 @@
         "net/minecraft/world/entity/EquipmentSlot": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/entity/LivingEntity": {
             "names": {
@@ -2802,7 +2830,8 @@
                     }
                 },
                 "getItemBySlot": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getMainHandItem": {
                     "names": {
@@ -2841,7 +2870,8 @@
                     }
                 },
                 "getOffhandItem": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getSpeed": {
                     "names": {
@@ -2856,13 +2886,16 @@
                     }
                 },
                 "getUseItem": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getUseItemRemainingTicks": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getUsedItemHand": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "hasLineOfSight": {
                     "names": {
@@ -2877,7 +2910,8 @@
                     }
                 },
                 "isFallFlying": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "isShiftKeyDown": {
                     "names": {
@@ -2904,7 +2938,8 @@
                     }
                 },
                 "isUsingItem": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "position": {
                     "names": {
@@ -2955,7 +2990,8 @@
                     }
                 },
                 "travel": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
@@ -2965,15 +3001,6 @@
                         "fabric": "field_6017",
                         "forge": "field_70143_R"
                     }
-                },
-                "getCurrentArmor": {
-                    "absent": true
-                },
-                "getItemBySlot": {
-                    "absent": true
-                },
-                "getUsedItemHand": {
-                    "absent": true
                 },
                 "hurtTime": {
                     "names": {
@@ -3350,7 +3377,8 @@
             },
             "methods": {
                 "getFuse": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
@@ -3390,8 +3418,7 @@
         "net/minecraft/world/entity/player/Input": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/entity/player/Inventory": {
             "names": {
@@ -3449,10 +3476,16 @@
                     }
                 },
                 "getSelectedSlot": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "setItem": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setSelectedSlot": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "swapPaint": {
                     "names": {
@@ -3474,9 +3507,6 @@
                         "fabric": "field_7545",
                         "forge": "field_70461_c"
                     }
-                },
-                "setItem": {
-                    "absent": true
                 }
             }
         },
@@ -3500,10 +3530,16 @@
                     }
                 },
                 "getAbilities": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getAttackStrengthScale": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getCooledAttackStrength": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getHealth": {
                     "names": {
@@ -3578,7 +3614,8 @@
                     }
                 },
                 "isAlliedTo": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "isShiftKeyDown": {
                     "names": {
@@ -3627,6 +3664,10 @@
                         "fabric": "()Z",
                         "forge": "()Z"
                     }
+                },
+                "playSound": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "position": {
                     "names": {
@@ -3700,7 +3741,8 @@
                     }
                 },
                 "fishing": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "inventory": {
                     "names": {
@@ -3729,9 +3771,6 @@
                         "fabric": "field_5960",
                         "forge": "field_70145_X"
                     }
-                },
-                "playSound": {
-                    "absent": true
                 },
                 "tickCount": {
                     "names": {
@@ -3826,8 +3865,7 @@
         "net/minecraft/world/entity/projectile/ThrowableProjectile": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/entity/projectile/ThrownEnderpearl": {
             "names": {
@@ -3887,20 +3925,17 @@
         "net/minecraft/world/inventory/ClickType": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/inventory/ContainerInput": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/inventory/Slot": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/item/BlockItem": {
             "names": {
@@ -3950,7 +3985,8 @@
             },
             "methods": {
                 "getCount": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getDamageValue": {
                     "names": {
@@ -3989,7 +4025,8 @@
                     }
                 },
                 "getEnchantments": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getItem": {
                     "names": {
@@ -4040,10 +4077,12 @@
                     }
                 },
                 "isEmpty": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setCount": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
@@ -4053,9 +4092,6 @@
                         "fabric": "field_8031",
                         "forge": "field_77994_a"
                     }
-                },
-                "getEnchantments": {
-                    "absent": true
                 }
             }
         },
@@ -4097,7 +4133,8 @@
                     }
                 },
                 "getOrCreateDisplayEntity": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}
@@ -4105,8 +4142,7 @@
         "net/minecraft/world/level/ClipContext": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/level/GameType": {
             "names": {
@@ -4157,7 +4193,8 @@
                     }
                 },
                 "clip": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "entitiesForRendering": {
                     "names": {
@@ -4184,17 +4221,19 @@
                     }
                 },
                 "noCollision": {
-                    "absent": true
-                }
-            },
-            "fields": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "playerWillDestroy": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setBlock": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
-            }
+            },
+            "fields": {}
         },
         "net/minecraft/world/level/LevelReader": {
             "names": {
@@ -4235,7 +4274,8 @@
             },
             "methods": {
                 "getDefaultState": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getDescriptionId": {
                     "names": {
@@ -4252,7 +4292,8 @@
             },
             "fields": {
                 "getDefaultState": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             }
         },
@@ -4265,7 +4306,8 @@
             "methods": {},
             "fields": {
                 "AIR": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             }
         },
@@ -4290,8 +4332,7 @@
         "net/minecraft/world/level/block/entity/BarrelBlockEntity": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/level/block/entity/BlockEntity": {
             "names": {
@@ -4363,8 +4404,7 @@
         "net/minecraft/world/level/block/entity/ShulkerBoxBlockEntity": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/level/block/entity/SpawnerBlockEntity": {
             "names": {
@@ -4396,7 +4436,8 @@
             },
             "methods": {
                 "canBeReplaced": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getBlock": {
                     "names": {
@@ -4411,10 +4452,12 @@
                     }
                 },
                 "getCollisionShape": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "isAir": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}
@@ -4572,7 +4615,8 @@
                     }
                 },
                 "getDirection": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
@@ -4588,8 +4632,7 @@
         "net/minecraft/world/phys/EntityHitResult": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/phys/HitResult": {
             "names": {
@@ -4599,10 +4642,12 @@
             },
             "methods": {
                 "getLocation": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getType": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
@@ -4632,8 +4677,7 @@
         "net/minecraft/world/phys/Vec2": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/phys/Vec3": {
             "names": {
@@ -4669,8 +4713,7 @@
         "net/minecraft/world/phys/shapes/VoxelShape": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "net/minecraft/world/scores/Objective": {
             "names": {
@@ -4702,7 +4745,8 @@
             },
             "methods": {
                 "getColor": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}
@@ -4783,32 +4827,34 @@
             },
             "methods": {
                 "getColorValue": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "rgb": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
                 "colorValue": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "rgb": {
-                    "absent": true
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             }
         },
         "org/joml/AxisAngle4f": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         },
         "org/joml/Quaternionf": {
             "absent": true,
             "names": {},
-            "methods": {},
-            "fields": {}
+            "absentReason": "unverified"
         }
     }
 }

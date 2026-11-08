@@ -23,14 +23,14 @@ net/minecraft/client/Minecraft#fontRenderer
 net/minecraft/client/Minecraft#gameMode
 net/minecraft/client/Minecraft#gameRenderer
 net/minecraft/client/Minecraft#gui
-net/minecraft/client/gui/Gui#displayClientMessage
+net/minecraft/client/gui/Gui#displayClientMessage()
 # 本地播报的另两条世代入口：1.19+/26.x 的聊天框与 1.8.9–1.12 的 GuiNewChat
 net/minecraft/client/gui/Gui#getChat()
 net/minecraft/client/gui/Gui#getChatGUI()
 net/minecraft/client/gui/components/ChatComponent#addMessage()
 net/minecraft/client/gui/GuiNewChat#printChatMessage()
 net/minecraft/sounds/SoundEvents
-net/minecraft/world/entity/player/Player#playSound
+net/minecraft/world/entity/player/Player#playSound()
 net/minecraft/client/Minecraft#hitResult
 net/minecraft/client/Minecraft#level
 net/minecraft/client/Minecraft#options
@@ -82,7 +82,7 @@ net/minecraft/client/gui/screens/ChatScreen
 net/minecraft/client/gui/screens/PauseScreen
 
 net/minecraft/client/gui/screens/Screen
-net/minecraft/client/gui/screens/Screen#getTitle
+net/minecraft/client/gui/screens/Screen#getTitle()
 net/minecraft/client/gui/screens/inventory/AbstractContainerScreen
 net/minecraft/client/gui/screens/inventory/AbstractContainerScreen#hoveredSlot
 net/minecraft/world/inventory/Slot
@@ -103,7 +103,7 @@ net/minecraft/client/gui/screens/inventory/InventoryScreen#extractEntityInInvent
 net/minecraft/client/multiplayer/ClientLevel
 net/minecraft/client/multiplayer/ClientLevel#entitiesForRendering()
 net/minecraft/client/multiplayer/ClientLevel#getBlockState()
-net/minecraft/client/multiplayer/ClientLevel#getChunk
+net/minecraft/client/multiplayer/ClientLevel#getChunk()
 # 1.14.4 的客户端世界类名；其余版本 absent，运行时只作为回退候选。
 net/minecraft/client/multiplayer/MultiPlayerLevel
 net/minecraft/client/multiplayer/MultiPlayerLevel#entitiesForRendering()
@@ -158,9 +158,9 @@ net/minecraft/client/player/LocalPlayer#sendPosition()
 
 net/minecraft/client/player/RemotePlayer
 net/minecraft/world/entity/Entity#id
-net/minecraft/world/entity/Entity#remove
-net/minecraft/world/entity/Entity#setDead
-net/minecraft/world/entity/player/Inventory#setItem
+net/minecraft/world/entity/Entity#remove()
+net/minecraft/world/entity/Entity#setDead()
+net/minecraft/world/entity/player/Inventory#setItem()
 
 net/minecraft/client/Minecraft#missTime
 net/minecraft/world/entity/LivingEntity#jumpTicks
@@ -177,9 +177,9 @@ net/minecraft/client/renderer/ItemInHandRenderer#offHandHeight
 net/minecraft/client/renderer/ItemInHandRenderer#mainHandItem
 net/minecraft/client/renderer/ItemInHandRenderer#offHandItem
 net/minecraft/client/Minecraft#itemInHandRenderer
-com/mojang/blaze3d/vertex/PoseStack#translate
-com/mojang/blaze3d/vertex/PoseStack#scale
-com/mojang/blaze3d/vertex/PoseStack#mulPose
+com/mojang/blaze3d/vertex/PoseStack#translate()
+com/mojang/blaze3d/vertex/PoseStack#scale()
+com/mojang/blaze3d/vertex/PoseStack#mulPose()
 # 旋转走方法 mulPose(Quaternionf)：旧条目（裸名）只能解析成字段，HandView/TotemAnimation 的
 # 旋转因此从未生效。字段条目保留仅为兼容既有表读数。
 com/mojang/blaze3d/vertex/PoseStack#mulPose()
@@ -190,7 +190,7 @@ net/minecraft/client/multiplayer/ClientLevel#rainLevel
 net/minecraft/client/multiplayer/ClientLevel#thunderLevel
 net/minecraft/client/multiplayer/ClientLevel#setRainLevel()
 net/minecraft/client/multiplayer/ClientLevel#setThunderLevel()
-net/minecraft/client/multiplayer/ClientLevel#dayTime
+net/minecraft/client/multiplayer/ClientLevel#dayTime!field
 net/minecraft/client/multiplayer/ClientLevel#levelData
 net/minecraft/world/level/storage/LevelData
 net/minecraft/world/level/storage/LevelData#setDayTime()
@@ -228,9 +228,9 @@ net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket
 net/minecraft/network/protocol/game/ClientboundExplodePacket
 net/minecraft/network/protocol/game/ClientboundEntityEventPacket
-net/minecraft/network/protocol/game/ClientboundEntityEventPacket#getEventId
+net/minecraft/network/protocol/game/ClientboundEntityEventPacket#getEventId()
 net/minecraft/network/protocol/game/ClientboundAddEntityPacket
-net/minecraft/network/protocol/game/ClientboundEntityEventPacket#getEntityId
+net/minecraft/network/protocol/game/ClientboundEntityEventPacket#getEntityId()
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#getId()
 net/minecraft/network/protocol/game/ServerboundPlayerActionPacket
 net/minecraft/network/protocol/game/ServerboundPlayerActionPacket#getAction()
@@ -248,7 +248,7 @@ net/minecraft/world/entity/LivingEntity#hurtTime
 net/minecraft/world/entity/projectile/AbstractArrow
 net/minecraft/world/entity/projectile/ThrownEnderpearl
 net/minecraft/world/entity/projectile/ThrowableProjectile
-net/minecraft/world/entity/projectile/ThrowableProjectile#getOwner
+net/minecraft/world/entity/projectile/ThrowableProjectile#getOwner()
 net/minecraft/world/entity/projectile/FishingHook
 net/minecraft/world/entity/projectile/FishingHook#caughtEntity
 net/minecraft/world/entity/projectile/AbstractFireball
@@ -258,7 +258,7 @@ net/minecraft/world/entity/projectile/ThrownPotion
 net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket
 net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket#getPos()
 net/minecraft/network/protocol/game/ClientboundBlockEventPacket
-net/minecraft/network/protocol/game/ClientboundBlockEventPacket#getPos
+net/minecraft/network/protocol/game/ClientboundBlockEventPacket#getPos()
 net/minecraft/world/effect/MobEffects#NAUSEA
 net/minecraft/world/effect/MobEffects#BLINDNESS
 net/minecraft/world/effect/MobEffects#SLOWNESS
@@ -282,10 +282,10 @@ net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$Rot
 net/minecraft/network/protocol/game/ServerboundMovePlayerPacket$StatusOnly
 
 net/minecraft/world/entity/Entity
-net/minecraft/world/entity/Entity#getUUID
-net/minecraft/client/multiplayer/ClientPacketListener#getOnlinePlayers
-net/minecraft/client/multiplayer/PlayerInfo#getProfile
-net/minecraft/client/multiplayer/PlayerInfo#getGameMode
+net/minecraft/world/entity/Entity#getUUID()
+net/minecraft/client/multiplayer/ClientPacketListener#getOnlinePlayers()
+net/minecraft/client/multiplayer/PlayerInfo#getProfile()
+net/minecraft/client/multiplayer/PlayerInfo#getGameMode()
 com/mojang/authlib/GameProfile
 com/mojang/authlib/GameProfile#getId
 com/mojang/authlib/GameProfile#getName
@@ -500,8 +500,8 @@ net/minecraft/world/level/block/ChestBlock
 net/minecraft/world/level/block/Blocks
 net/minecraft/world/level/block/Blocks#AIR
 net/minecraft/world/level/block/Block#getDefaultState
-net/minecraft/world/level/Level#setBlock
-net/minecraft/world/level/Level#playerWillDestroy
+net/minecraft/world/level/Level#setBlock()
+net/minecraft/world/level/Level#playerWillDestroy()
 net/minecraft/world/level/block/Block
 net/minecraft/world/level/block/Block#getDescriptionId()
 # 区块内逐格读方块：走 LevelReader 面而不是 ClientLevel 面——后者在 1.9–1.14.3 缺（锚点学不到）。
@@ -655,21 +655,21 @@ net/minecraft/world/entity/Entity#move()
 net/minecraft/world/entity/LivingEntity#hasLineOfSight()
 net/minecraft/world/entity/LivingEntity#getAbsorptionAmount()
 net/minecraft/world/entity/LivingEntity#getUseItem()
-net/minecraft/world/entity/LivingEntity#getUsedItemHand
+net/minecraft/world/entity/LivingEntity#getUsedItemHand()
 net/minecraft/world/entity/LivingEntity#getUseItemRemainingTicks()
-net/minecraft/world/entity/LivingEntity#getItemBySlot
-net/minecraft/world/entity/LivingEntity#getCurrentArmor
+net/minecraft/world/entity/LivingEntity#getItemBySlot()
+net/minecraft/world/entity/LivingEntity#getCurrentArmor()
 net/minecraft/world/entity/EquipmentSlot
 net/minecraft/world/entity/EquipmentSlot#HEAD
 net/minecraft/world/entity/EquipmentSlot#CHEST
 net/minecraft/world/entity/EquipmentSlot#LEGS
 net/minecraft/world/entity/EquipmentSlot#FEET
-net/minecraft/world/entity/Entity#isPassenger
+net/minecraft/world/entity/Entity#isPassenger()
 net/minecraft/world/entity/Entity#eyeHeight
-net/minecraft/world/entity/Entity#refreshDimensions
+net/minecraft/world/entity/Entity#refreshDimensions()
 net/minecraft/world/entity/Entity#getScale
 net/minecraft/client/Options#keyUse
-net/minecraft/client/KeyMapping#setDown
+net/minecraft/client/KeyMapping#setDown()
 net/minecraft/world/entity/LivingEntity#travel()
 net/minecraft/world/entity/player/Player#inventoryMenu
 net/minecraft/world/entity/player/Player#isSpectator()
@@ -678,7 +678,7 @@ net/minecraft/world/item/ItemStack#getCount()
 net/minecraft/world/item/ItemStack#setCount()
 net/minecraft/world/item/ItemStack#isEmpty()
 net/minecraft/world/item/ItemStack#getUseDuration()
-net/minecraft/world/item/ItemStack#getEnchantments
+net/minecraft/world/item/ItemStack#getEnchantments()
 net/minecraft/world/item/ItemStack#getMaxStackSize()
 net/minecraft/world/item/ItemStack#count
 net/minecraft/world/entity/player/Player#getAttackStrengthScale()
@@ -687,7 +687,8 @@ net/minecraft/world/InteractionResult
 net/minecraft/world/InteractionResult#consumesAction()
 net/minecraft/world/scores/PlayerTeam
 net/minecraft/world/scores/TeamColor
-net/minecraft/world/scores/TeamColor#rgb
+net/minecraft/world/scores/TeamColor#rgb!field
+net/minecraft/world/scores/TeamColor#rgb()
 net/minecraft/world/scores/TeamColor#rgb()
 net/minecraft/world/scores/TeamColor#getColorValue()
 net/minecraft/world/scores/PlayerTeam#getColor()
@@ -709,7 +710,7 @@ net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket
 net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#yRot
 net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#xRot
 net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket
-net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket#getSlot
+net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket#getSlot()
 net/minecraft/network/protocol/game/ServerboundContainerClickPacket
 net/minecraft/network/protocol/game/ServerboundContainerClosePacket
 net/minecraft/network/protocol/game/ServerboundPlayerInputPacket
@@ -720,13 +721,13 @@ net/minecraft/network/protocol/game/ClientboundSetSubtitleTextPacket#text
 net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket
 net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket#text
 net/minecraft/network/chat/MutableComponent
-net/minecraft/network/chat/MutableComponent#append
-net/minecraft/network/chat/MutableComponent#setStyle
+net/minecraft/network/chat/MutableComponent#append()
+net/minecraft/network/chat/MutableComponent#setStyle()
 net/minecraft/network/chat/Style
-net/minecraft/network/chat/Style#empty
-net/minecraft/network/chat/Style#withColor
-net/minecraft/network/chat/Component#literal
-net/minecraft/network/chat/Component#empty
+net/minecraft/network/chat/Style#empty()
+net/minecraft/network/chat/Style#withColor()
+net/minecraft/network/chat/Component#literal()
+net/minecraft/network/chat/Component#empty()
 net/minecraft/world/entity/player/Input#EMPTY
 net/minecraft/client/player/LocalPlayer#lastSentInput
 net/minecraft/world/scores/Scoreboard

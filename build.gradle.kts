@@ -54,9 +54,11 @@ tasks.named("jar") {
 
 val copyDistJar = tasks.register<Copy>("copyDistJar") {
     group = "build"
-    description = "Copies the dist delivery jar into the root build/libs."
-    dependsOn(":dist:distJar")
-    from(project(":dist").layout.buildDirectory.file("libs/nocturne-${version}.jar"))
+    description = "Copies the dist delivery jars (agent + GUI launcher) into the root build/libs."
+    dependsOn(":dist:distJar", ":dist:launcherJar")
+    from(project(":dist").layout.buildDirectory.dir("libs")) {
+        include("nocturne-*.jar", "nocturne-launcher-*.jar")
+    }
     into(layout.buildDirectory.dir("libs"))
 }
 

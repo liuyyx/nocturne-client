@@ -18,10 +18,21 @@ rem Pick the NEWEST jar: dir /o-d lists by last-write time, newest first, so the
 rem first match wins. This stops an older client from shadowing a fresh one.
 rem dist ships nocturne-<version>.jar, hence the wildcard instead of a fixed name.
 set "JAR="
-for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%dist\build\libs\nocturne-*.jar" 2^>nul') do (
+for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%dist\build\libs\nocturne-launcher-*.jar" 2^>nul') do (
     if not defined JAR set "JAR=%ROOT%dist\build\libs\%%F"
 )
+rem Fall back to the plain agent jar. It carries no MigLayout (that stays out of the
+rem agent jar so Java 8 targets never see major-55 classes), so the injector GUI
+rem needs the launcher jar; the agent jar is only useful for direct -javaagent use.
+if not defined JAR (
+    for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%dist\build\libs\nocturne-*.jar" 2^>nul') do (
+        if not defined JAR set "JAR=%ROOT%dist\build\libs\%%F"
+    )
+)
 rem Fall back to a jar beside this script; likewise newest first.
+for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%nocturne-launcher-*.jar" 2^>nul') do (
+    if not defined JAR set "JAR=%ROOT%%%F"
+)
 for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%nocturne*.jar" 2^>nul') do (
     if not defined JAR set "JAR=%ROOT%%%F"
 )

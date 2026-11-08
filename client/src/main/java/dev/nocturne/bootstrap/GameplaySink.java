@@ -218,10 +218,19 @@ public final class GameplaySink {
         try {
             return Proxy.newProxyInstance(loader, new Class<?>[]{sinkType},
                     new Forwarder(shared));
-        } catch (Throwable ignored) {
+        } catch (Throwable failure) {
+            // 静默失败会让真机只看到 sink=false；至少留一条原因（每类加载器只打一次）。
+            if (ADAPT_FAILED.add(sinkType.getName() + "@" + System.identityHashCode(loader))) {
+                System.out.println("[nocturne] gameplay sink adapt failed for "
+                        + sinkType.getName() + " via " + loader + ": " + failure);
+            }
             return null;
         }
     }
+
+    /** 已报告过适配失败的「接口@加载器」。 */
+    private static final java.util.Set<String> ADAPT_FAILED =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /** 把一个接口副本的方法按名字转发给共享汇对象。 */
     private static final class Forwarder implements InvocationHandler {

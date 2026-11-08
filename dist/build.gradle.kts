@@ -76,6 +76,12 @@ val bridgeKeySink = tasks.register<Copy>("bridgeKeySink") {
     from(project(":client").layout.buildDirectory.dir("classes/java/main/dev/nocturne/bootstrap")) {
         include("KeySink.class", "GameplaySink.class", "LegacyMouse.class")
     }
+    // GameplayHook 也必须只有 bootstrap 一份：Knot 会从暴露的 agent jar 再定义一份，
+    // 织入的 LocalPlayer/KeyboardHandler 调到那一份，sink 永远为 null（26.3 实测
+    // gameplay hook first tick event; sink=false，所有事件丢失）。
+    from(project(":client").layout.buildDirectory.dir("classes/java/main/dev/nocturne/client/bootstrap")) {
+        include("GameplayHook.class", "GameplayHook\$Sink.class")
+    }
     into(layout.buildDirectory.dir("generated/bridge-resources/nocturne-bootstrap"))
     // 显式依赖 client 的编译输出（Gradle 不允许隐式使用其它任务的产物）。
     dependsOn(project(":client").tasks.named("compileJava"))
@@ -107,9 +113,9 @@ val distJar = tasks.register<Jar>("distJar") {
         )
     }
 
-    // KeySink 只能由 bootstrap bridge 提供：顶层再排除一次，确保任何来源（工程产物或依赖解包）
-    // 都不会把编译版带进交付 jar。
-    exclude("dev/nocturne/bootstrap/**")
+    // KeySink/GameplayHook 只能由 bootstrap bridge 提供：顶层再排除一次，确保任何来源
+    //（工程产物或依赖解包）都不会把编译版带进交付 jar，否则 Knot 会加载出第二份。
+    exclude("dev/nocturne/bootstrap/**", "dev/nocturne/client/bootstrap/GameplayHook*.class")
     // 先并入本模块自身的 class 与资源输出。
     from(sourceSets.main.get().output)
     // 预编译的 KeySink（仅作为资源，见 bridgeKeySink）。
@@ -128,7 +134,7 @@ val distJar = tasks.register<Jar>("distJar") {
         // KeySink 必须是「全局唯一」：只能由 bootstrap bridge 提供。若交付 jar 里也有它，
         // Fabric 的 KnotClassLoader 会自己加载一份，静态字段与 bootstrap 那份互不可见
         // （1.21.1 实测：recordKey 写 Knot 份、叠加层读 bootstrap 份）。
-        exclude("dev/nocturne/bootstrap/**")
+        exclude("dev/nocturne/bootstrap/**", "dev/nocturne/client/bootstrap/GameplayHook*.class")
         // 目录条目也得排：zipTree 会把 "org/objectweb/" 这样的目录带进来，在 jar 里留下一个
         // 空的 org/objectweb/（无意义，而且看起来像「ASM 被展开了」的误导信号）。
         exclude("org/objectweb/")
@@ -290,7 +296,9 @@ val verifyJarBytecode = tasks.register("verifyJarBytecode") {
                     .forEach classLoop@ { file ->
                         val name = file.relativeTo(root).invariantSeparatorsPath
                         // dev/nocturne/bootstrap/** 故意不进 jar：唯一副本由 bootstrap bridge 提供。
-                        if (name.startsWith("dev/nocturne/bootstrap/")) {
+                        // GameplayHook 同理（26.3 会从 agent jar 再定义一份，sink 分裂成两套）。
+                        if (name.startsWith("dev/nocturne/bootstrap/")
+                                || name.startsWith("dev/nocturne/client/bootstrap/GameplayHook")) {
                             return@classLoop
                         }
                         if (name !in present) {

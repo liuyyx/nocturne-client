@@ -40,6 +40,9 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
     /** 织入结局是否已打印过（成功/未命中各一次）。 */
     private final AtomicBoolean outcomeLogged = new AtomicBoolean(false);
 
+    /** 是否真的织入成功；供 {@code installScrollHook} 等注册方探 {@code patched()}。 */
+    private final AtomicBoolean patchedFlag = new AtomicBoolean(false);
+
     /** 目标类内部名（斜杠形式）。 */
     private final String targetClassInternalName;
     /** 目标方法名。 */
@@ -111,6 +114,11 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
     /** 把点号全限定名归一化为斜杠内部名；null 原样返回。 */
     private static String internalize(String name) {
         return name == null ? null : name.replace('.', '/');
+    }
+
+    /** @return 目标方法是否真的被织入（注册方用它区分「注册了」与「没命中」）。 */
+    public boolean patched() {
+        return patchedFlag.get();
     }
 
     @Override
@@ -225,6 +233,7 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
             // 钩子"注册成功"不等于"织入成功"：类名/方法名/描述符三者对不上时这里会静默返回 null，
             // 现场表现是钩子一次都不触发。把两种结局都留痕（每个转换器只印一次）。
             if (patched[0]) {
+                patchedFlag.set(true);
                 if (outcomeLogged.compareAndSet(false, true)) {
                     System.out.println("[nocturne] callback hook woven: " + label);
                 }

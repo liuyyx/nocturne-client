@@ -41,6 +41,9 @@ public final class GuiDrawHook {
     /** 判定"当前是否有界面"用的句柄；解析一次后复用（每帧都要问，不能每帧解析）。 */
     private static volatile Method minecraftGetInstance;
     private static volatile Field minecraftScreenField;
+    /** 26.x：界面挂在 {@code Minecraft.gui} 的 {@code screen()} 方法上，不在 Minecraft 字段里。 */
+    private static volatile Field minecraftGuiField;
+    private static volatile Method guiScreenMethod;
     /** 是否已尝试过解析上述句柄（失败也只试一次，避免每帧刷日志）。 */
     private static volatile boolean screenProbeResolved;
     /** 首次命中日志只打一次，避免每帧刷屏。 */
@@ -295,12 +298,24 @@ public final class GuiDrawHook {
         }
         Method getInstance = minecraftGetInstance;
         Field screenField = minecraftScreenField;
-        if (getInstance == null || screenField == null) {
+        Field guiField = minecraftGuiField;
+        Method guiScreen = guiScreenMethod;
+        if (getInstance == null || (screenField == null && (guiField == null || guiScreen == null))) {
             return false;
         }
         try {
             Object minecraft = getInstance.invoke(null);
-            return minecraft != null && screenField.get(minecraft) != null;
+            if (minecraft == null) {
+                return false;
+            }
+            if (screenField != null && screenField.get(minecraft) != null) {
+                return true;
+            }
+            if (guiField != null && guiScreen != null) {
+                Object gui = guiField.get(minecraft);
+                return gui != null && guiScreen.invoke(gui) != null;
+            }
+            return false;
         } catch (Throwable t) {
             return false;
         }
@@ -354,8 +369,31 @@ public final class GuiDrawHook {
                     // 下一个命名空间候选。
                 }
             }
-            if (minecraftGetInstance == null || minecraftScreenField == null) {
-                throw new NoSuchFieldException("Minecraft.getInstance()/screen");
+            if (minecraftScreenField == null) {
+                // 26.x：Screen 存放在 Minecraft.gui.screen()，Minecraft 上没有 screen 字段。
+                for (Field candidate : minecraftType.getDeclaredFields()) {
+                    if (java.lang.reflect.Modifier.isStatic(candidate.getModifiers())
+                            || !candidate.getType().getSimpleName().endsWith("Gui")) {
+                        continue;
+                    }
+                    for (Method method : candidate.getType().getMethods()) {
+                        if (method.getParameterCount() == 0
+                                && method.getReturnType().getSimpleName().endsWith("Screen")) {
+                            candidate.setAccessible(true);
+                            method.setAccessible(true);
+                            minecraftGuiField = candidate;
+                            guiScreenMethod = method;
+                            break;
+                        }
+                    }
+                    if (guiScreenMethod != null) {
+                        break;
+                    }
+                }
+            }
+            if (minecraftGetInstance == null
+                    || (minecraftScreenField == null && guiScreenMethod == null)) {
+                throw new NoSuchFieldException("Minecraft.getInstance()/screen (field or Gui.screen())");
             }
         } catch (Throwable t) {
             System.out.println("[nocturne] gui draw hook: screen probe unavailable (" + t + ");"

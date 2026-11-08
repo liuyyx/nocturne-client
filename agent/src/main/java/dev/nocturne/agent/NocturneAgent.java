@@ -316,19 +316,27 @@ public final class NocturneAgent {
         if (instrumentation == null) {
             return;
         }
-        String[] entries = {
-                "dev/nocturne/agent/GuiDrawHook.class",
-                // KeySink/GameplaySink/LegacyMouse 不在交付 jar 的编译产物里，而是以资源形式随包
-                // （见 dist 的 bridgeKeySink）；Knot 因此拿不到第二份。
-                "nocturne-bootstrap/KeySink.class",
-                "nocturne-bootstrap/GameplaySink.class",
-                "nocturne-bootstrap/LegacyMouse.class",
-                "dev/nocturne/client/runtime/FrameDispatcher.class",
-                "dev/nocturne/client/runtime/FrameListener.class",
-                "dev/nocturne/client/runtime/InputBlock.class",
-                "dev/nocturne/client/runtime/ScrollState.class",
-                "dev/nocturne/client/bootstrap/GameplayHook.class",
-                "dev/nocturne/client/bootstrap/GameplayHook$Sink.class",
+        // 资源路径 → bootstrap 里的目标内部名。bootstrap 独有的类只能以资源形式随包
+        // （见 dist 的 bridgeKeySink），交付 jar 里没有它们，Knot 因此拿不到第二份。
+        String[][] entries = {
+                {"dev/nocturne/agent/GuiDrawHook.class", "dev/nocturne/agent/GuiDrawHook.class"},
+                {"nocturne-bootstrap/KeySink.class", "dev/nocturne/bootstrap/KeySink.class"},
+                {"nocturne-bootstrap/GameplaySink.class", "dev/nocturne/bootstrap/GameplaySink.class"},
+                {"nocturne-bootstrap/LegacyMouse.class", "dev/nocturne/bootstrap/LegacyMouse.class"},
+                {"dev/nocturne/client/runtime/FrameDispatcher.class",
+                        "dev/nocturne/client/runtime/FrameDispatcher.class"},
+                {"dev/nocturne/client/runtime/FrameListener.class",
+                        "dev/nocturne/client/runtime/FrameListener.class"},
+                {"dev/nocturne/client/runtime/InputBlock.class",
+                        "dev/nocturne/client/runtime/InputBlock.class"},
+                {"dev/nocturne/client/runtime/ScrollState.class",
+                        "dev/nocturne/client/runtime/ScrollState.class"},
+                // GameplayHook 也必须只有 bootstrap 一份：Knot 从暴露的 agent jar 再定义一份时，
+                // 织入代码调到的那份 sink 永远为 null（26.3 实测 sink=false，事件全丢）。
+                {"nocturne-bootstrap/GameplayHook.class",
+                        "dev/nocturne/client/bootstrap/GameplayHook.class"},
+                {"nocturne-bootstrap/GameplayHook$Sink.class",
+                        "dev/nocturne/client/bootstrap/GameplayHook$Sink.class"},
         };
         java.nio.file.Path jar = null;
         try {
@@ -336,17 +344,14 @@ public final class NocturneAgent {
             jar.toFile().deleteOnExit();
             try (java.util.zip.ZipOutputStream out =
                          new java.util.zip.ZipOutputStream(java.nio.file.Files.newOutputStream(jar))) {
-                for (String entry : entries) {
+                for (String[] entry : entries) {
                     try (java.io.InputStream in =
-                                 NocturneAgent.class.getClassLoader().getResourceAsStream(entry)) {
+                                 NocturneAgent.class.getClassLoader().getResourceAsStream(entry[0])) {
                         if (in == null) {
-                            log("bootstrap bridge: entry missing " + entry);
+                            log("bootstrap bridge: entry missing " + entry[0]);
                             continue;
                         }
-                        String target = entry.startsWith("nocturne-bootstrap/")
-                                ? "dev/nocturne/bootstrap/"
-                                        + entry.substring("nocturne-bootstrap/".length())
-                                : entry;
+                        String target = entry[1];
                         out.putNextEntry(new java.util.zip.ZipEntry(target));
                         byte[] buffer = new byte[8192];
                         int read;

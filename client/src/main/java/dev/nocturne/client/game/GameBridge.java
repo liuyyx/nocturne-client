@@ -66,6 +66,8 @@ public final class GameBridge {
     private volatile boolean chunkReloadWarned;
     /** 人称写入失败是否已告警（26.x 之前 Options 没有可写的人称字段）。 */
     private volatile boolean perspectiveWarned;
+    /** 计分板槽位解析失败是否已告警；HUD 每个刷新周期都会重试。 */
+    private volatile boolean scoreboardSlotWarned;
 
     /**
      * 构造反射桥。
@@ -412,7 +414,15 @@ public final class GameBridge {
     /** 当前显示计分板的标题和玩家分数行。 */
     public java.util.List<String> scoreboardLines() {
         Object board = callMapped(world(), ClassType.CLIENT_LEVEL, "getScoreboard");
-        Object objective = callMapped(board, ClassType.SCOREBOARD, "getDisplayObjective", 1);
+        if (board == null) {
+            return java.util.Collections.emptyList();
+        }
+        Object slot = displaySlot(board);
+        if (slot == null) {
+            warnScoreboardSlot();
+            return java.util.Collections.emptyList();
+        }
+        Object objective = callMapped(board, ClassType.SCOREBOARD, "getDisplayObjective", slot);
         if (objective == null) {
             return java.util.Collections.emptyList();
         }
@@ -430,6 +440,63 @@ public final class GameBridge {
             }
         }
         return lines;
+    }
+
+    /**
+     * 组 {@code getDisplayObjective} 需要的 {@code DisplaySlot} 枚举常量。
+     *
+     * <p>形参是枚举而不是 int：传 {@code Integer} 会走不通重载推断（"no overload for
+     * getDisplayObjective"），计分板整块空白。这里按映射表的候选方法名在运行时真实方法上
+     * 找"恰好一个枚举形参"的重载，再取 {@code SIDEBAR}，因此不需要额外的类/字段映射。
+     */
+    private Object displaySlot(Object board) {
+        for (MethodCandidate candidate : mapping.methodCandidates(ClassType.SCOREBOARD,
+                "getDisplayObjective")) {
+            for (Method method : collectMethods(board.getClass())) {
+                if (!method.getName().equals(candidate.name())) {
+                    continue;
+                }
+                Class<?>[] parameters = method.getParameterTypes();
+                if (parameters.length != 1) {
+                    continue;
+                }
+                Object slot = sidebarSlot(parameters[0]);
+                if (slot != null) {
+                    return slot;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 从形参类型取 {@code DisplaySlot.SIDEBAR}：先按名字（未混淆客户端），名字被混淆时退回
+     * 稳定序号 1（LIST=0、SIDEBAR=1 自 1.8.9 起未变）。非枚举形参返回 {@code null}。
+     */
+    static Object sidebarSlot(Class<?> parameterType) {
+        if (parameterType == null || !parameterType.isEnum()) {
+            return null;
+        }
+        Object[] constants = parameterType.getEnumConstants();
+        if (constants == null || constants.length < 2) {
+            return null;
+        }
+        for (Object constant : constants) {
+            if (constant instanceof Enum && "SIDEBAR".equalsIgnoreCase(((Enum<?>) constant).name())) {
+                return constant;
+            }
+        }
+        return constants[1];
+    }
+
+    /** 计分板槽位解析失败只记一条：这是每次 HUD 刷新都会走到的热路径。 */
+    private void warnScoreboardSlot() {
+        if (scoreboardSlotWarned) {
+            return;
+        }
+        scoreboardSlotWarned = true;
+        System.out.println("[nocturne] GameBridge: Scoreboard#getDisplayObjective has no enum "
+                + "parameter; scoreboard lines disabled for this session");
     }
 
     /** 读取映射类静态字段。 */

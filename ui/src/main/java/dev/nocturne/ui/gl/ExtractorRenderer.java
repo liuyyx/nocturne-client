@@ -1924,6 +1924,15 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
      * 否则一次嵌套就把外层的裁剪丢掉。都是浮点入参、整数落地的矩形，直接存 int。
      */
     private final java.util.ArrayDeque<int[]> clipStack = new java.util.ArrayDeque<int[]>();
+    /**
+     * 已下发、尚未 pop 的原生裁剪深度（仅栈式 API {@code GuiGraphicsExtractor.enableScissor}）。
+     *
+     * <p>26.3 的 {@code disableScissor()} 直接等于 {@code scissorStack.pop()}：**没有配对 push 时它
+     * 会抛异常**（真机 {@code InvocationTargetException} 的来源）。旧实现有两个漏洞：
+     * 空矩形被跳过（没有 push）却仍然 pop；嵌套 pop 时又用 {@code enableScissor} 重新下发父矩形
+     * （再 push 一次），深度只增不减，最终 pop 到空栈。
+     */
+    private int scissorDepth;
 
     @Override
     public void pushClip(float x, float y, float width, float height) {
@@ -1941,8 +1950,16 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             rect[2] = Math.min(rect[2], outer[2]);
             rect[3] = Math.min(rect[3], outer[3]);
         }
-        clipStack.push(rect);
-        applyScissor(graphics, rect);
+        // 第五个分量记录"这一次 push 是否真的下发了原生 enableScissor"：空矩形/物理尺寸缺失时
+        // applyScissor 会跳过，pop 时必须据此决定是否 pop 原生栈。
+        int[] entry = {rect[0], rect[1], rect[2], rect[3], 0};
+        clipStack.push(entry);
+        if (applyScissor(graphics, entry)) {
+            entry[4] = 1;
+            if (!scissorWh) {
+                scissorDepth++;
+            }
+        }
     }
 
     /**
@@ -1954,31 +1971,31 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
      * @param graphics 本帧绘制上下文（{@code RenderSystem} 形态不使用）
      * @param rect     {@code {x1, y1, x2, y2}}
      */
-    private void applyScissor(Object graphics, int[] rect) {
+    private boolean applyScissor(Object graphics, int[] rect) {
         if (enableScissor == null) {
-            return;
+            return false;
         }
         int w = rect[2] - rect[0];
         int h = rect[3] - rect[1];
         if (w <= 0 || h <= 0) {
             // 空矩形：下发零面积会把后面所有内容裁掉，直接跳过。
-            return;
+            return false;
         }
         if (scissorWh) {
             // RenderSystem.enableScissor 直接转发 GL20.glScissor：收**物理像素**、y 从帧缓冲底部算。
             // 传 GUI 逻辑坐标会把整块内容裁掉（1.16.5 真机：面板只剩标题栏）。
             int scale = guiScale > 0 ? guiScale : 1;
             if (physicalHeightValue <= 0) {
-                return;
+                return false;
             }
             int px = Math.round(rect[0] * (float) scale);
             int pw = Math.round(w * (float) scale);
             int ph = Math.round(h * (float) scale);
             int py = physicalHeightValue - Math.round(rect[3] * (float) scale);
             call(enableScissor, null, px, Math.max(0, py), pw, ph);
-        } else {
-            call(enableScissor, graphics, rect[0], rect[1], rect[2], rect[3]);
+            return true;
         }
+        return call(enableScissor, graphics, rect[0], rect[1], rect[2], rect[3]);
     }
 
     @Override
@@ -1992,21 +2009,30 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             // 裁剪区域一起关掉。
             return;
         }
-        clipStack.pop();
-        if (clipStack.isEmpty()) {
-            if (disableScissor != null) {
-                call(disableScissor, scissorWh ? null : graphics);
-            } else if (enableScissor != null) {
-                if (width <= 0 || height <= 0) {
-                    return;
-                }
+        int[] popped = clipStack.pop();
+        boolean nativePushed = popped != null && popped.length > 4 && popped[4] == 1;
+        if (scissorWh) {
+            // RenderSystem/GL 的 enableScissor 不是栈：内层 pop 后必须重新下发父矩形；
+            // 最外层 pop 直接关掉。这条路径没有"配对 pop"的硬约束，失败不会抛异常。
+            if (!clipStack.isEmpty()) {
+                applyScissor(graphics, clipStack.peek());
+            } else if (disableScissor != null) {
+                call(disableScissor, null);
+            } else if (enableScissor != null && width > 0 && height > 0) {
                 // 1.20–1.21 只有 enableScissor：用整个绘制区复位裁剪，
                 // 否则裁剪状态会残留到游戏自己的绘制上（表现为整片黑）。
                 call(enableScissor, graphics, 0, 0, width, height);
             }
             return;
         }
-        applyScissor(graphics, clipStack.peek());
+        if (!nativePushed || scissorDepth <= 0) {
+            // 本次 push 没有真正下发原生裁剪（空矩形等），没有可 pop 的原生层。
+            return;
+        }
+        scissorDepth--;
+        // 栈式 API：一次 pop 正好抵消一次 enableScissor，父矩形由游戏自动恢复，
+        // **不要**再 enableScissor 一遍（那会让深度只增不减，最终 pop 到空栈抛异常）。
+        call(disableScissor, scissorWh ? null : graphics);
     }
 
     /**
@@ -2014,12 +2040,23 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
      * 裁剪矩形会一直挂在游戏的绘制状态上，把游戏后续画的内容整片裁掉。
      */
     private void resetClipStack(Object graphics) {
-        if (clipStack.isEmpty()) {
+        if (clipStack.isEmpty() && scissorDepth == 0) {
             return;
         }
         clipStack.clear();
-        if (graphics != null && disableScissor != null) {
-            call(disableScissor, scissorWh ? null : graphics);
+        if (graphics == null || disableScissor == null) {
+            scissorDepth = 0;
+            return;
+        }
+        if (scissorWh) {
+            call(disableScissor, null);
+            scissorDepth = 0;
+            return;
+        }
+        // 栈式 API：弹出所有本帧残留的层，逐一抵消，绝不 pop 到空栈（26.3 会直接抛异常）。
+        while (scissorDepth > 0) {
+            scissorDepth--;
+            call(disableScissor, graphics);
         }
     }
 
@@ -2070,19 +2107,27 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     }
 
     /** 调用方法；句柄为 {@code null} 时什么也不做，失败只报一次（限流）。 */
-    private void call(Method method, Object target, Object... args) {
+    private boolean call(Method method, Object target, Object... args) {
         if (method == null) {
-            return;
+            return false;
         }
         try {
             method.invoke(target, args);
+            return true;
         } catch (Throwable t) {
             if (!drawFailureLogged) {
                 drawFailureLogged = true;
-                System.out.println("[nocturne] extractor backend draw call failed (" + method.getName()
-                        + "): " + t + "; declaring=" + method.getDeclaringClass().getName()
-                        + "; target=" + (target == null ? "null" : target.getClass().getName()));
+                // InvocationTargetException 只说明"方法体抛了"，真正原因在 getCause() 里
+                // （26.3 实测：disableScissor 抛 NoSuchElementException —— scissorStack 已空）。
+                Throwable cause = t instanceof java.lang.reflect.InvocationTargetException
+                        && t.getCause() != null ? t.getCause() : t;
+                System.out.println("[nocturne] extractor backend draw call failed ("
+                        + method.getName() + "): " + cause + "; declaring="
+                        + method.getDeclaringClass().getName()
+                        + "; target=" + (target == null ? "null" : target.getClass().getName())
+                        + "; scissorDepth=" + scissorDepth + "; clipStack=" + clipStack.size());
             }
+            return false;
         }
     }
 

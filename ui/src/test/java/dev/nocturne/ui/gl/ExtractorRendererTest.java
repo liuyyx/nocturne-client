@@ -222,11 +222,16 @@ class ExtractorRendererTest {
     }
 
     /**
-     * 回归（High-29）：裁剪必须按栈配平。
+     * 回归（High-29 / 26.3 真机）：裁剪必须按**栈**配平。
      *
-     * <p>GL 只有一个裁剪矩形，所以：内层 pop 必须恢复外层矩形（不恢复等于丢掉外层裁剪）；
-     * 没有配对的 pop 不能去 disable（那会把外层的、甚至游戏自己的裁剪一起关掉）；
-     * 上一帧没配平的 push 必须由下一帧开头清掉（否则会一直裁掉游戏自己后续画的内容）。
+     * <p>26.3 的 {@code disableScissor()} 直接等于 {@code scissorStack.pop()}，没有配对 push 时会
+     * 抛 {@code NoSuchElementException}（真机 InvocationTargetException 的来源）。因此：
+     * <ul>
+     *   <li>内层 pop 只需一次 {@code disableScissor}——父矩形由游戏自己的栈自动恢复，
+     *       再 {@code enableScissor} 一遍会让深度只增不减；</li>
+     *   <li>没有配对的 pop 不得触碰原生栈；</li>
+     *   <li>上一帧没配平的每一层都必须由下一帧开头逐一弹掉。</li>
+     * </ul>
      */
     @Test
     void clipStackRestoresOuterRectAndDropsUnbalancedPushes() {
@@ -237,22 +242,27 @@ class ExtractorRendererTest {
 
         renderer.pushClip(0f, 0f, 100f, 50f);
         renderer.pushClip(10f, 10f, 20f, 20f);
+        assertEquals(Arrays.asList("enableScissor 0,0,100,50", "enableScissor 10,10,30,30"),
+                extractor.calls, "nested clips push once each");
+
+        extractor.calls.clear();
         renderer.popClip();
-        assertEquals(Arrays.asList("enableScissor 0,0,100,50", "enableScissor 10,10,30,30",
-                "enableScissor 0,0,100,50"), extractor.calls,
-                "popping the inner clip must restore the outer rect");
+        assertEquals(Arrays.asList("disableScissor"), extractor.calls,
+                "inner pop must only pop the native stack (parent rect is restored by the game)");
 
         extractor.calls.clear();
         renderer.popClip();
         renderer.popClip();
         assertEquals(Arrays.asList("disableScissor"), extractor.calls,
-                "unbalanced pops must not disable the outer clip more than once");
+                "unbalanced pops must not touch an empty native stack");
 
         extractor.calls.clear();
         renderer.pushClip(0f, 0f, 5f, 5f);
+        renderer.pushClip(0f, 0f, 4f, 4f);
+        extractor.calls.clear();
         renderer.beginFrame();
-        assertEquals(Arrays.asList("enableScissor 0,0,5,5", "disableScissor"), extractor.calls,
-                "an unbalanced push must be cleaned up at the next frame start");
+        assertEquals(Arrays.asList("disableScissor", "disableScissor"), extractor.calls,
+                "every leftover layer must be drained at the next frame start");
     }
 
     /** 文字与度量：字号被忽略（26.x 的 Font 只有原生尺寸），度量必须与绘制同基准。 */

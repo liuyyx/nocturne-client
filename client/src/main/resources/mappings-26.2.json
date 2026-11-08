@@ -115,6 +115,14 @@
                 "neoforge": "com.mojang.blaze3d.vertex.PoseStack"
             },
             "methods": {
+                "mulPose": {
+                    "names": {
+                        "vanilla": "mulPose",
+                        "fabric": "mulPose",
+                        "forge": "mulPose",
+                        "neoforge": "mulPose"
+                    }
+                },
                 "popPose": {
                     "names": {
                         "vanilla": "popPose",
@@ -167,12 +175,17 @@
                 "forge": "net.minecraft.client.Camera",
                 "neoforge": "net.minecraft.client.Camera"
             },
-            "methods": {},
-            "fields": {
+            "methods": {
                 "getMaxZoom": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "getMaxZoom",
+                        "fabric": "getMaxZoom",
+                        "forge": "getMaxZoom",
+                        "neoforge": "getMaxZoom"
+                    }
                 }
-            }
+            },
+            "fields": {}
         },
         "net/minecraft/client/CameraType": {
             "names": {
@@ -256,6 +269,9 @@
                         "neoforge": "isDown"
                     }
                 },
+                "onTick": {
+                    "absent": true
+                },
                 "set": {
                     "names": {
                         "vanilla": "set",
@@ -271,6 +287,9 @@
                         "forge": "setAll",
                         "neoforge": "setAll"
                     }
+                },
+                "setKeyBindState": {
+                    "absent": true
                 }
             },
             "fields": {
@@ -343,6 +362,9 @@
                         "forge": "runTick",
                         "neoforge": "runTick"
                     }
+                },
+                "setIngameFocus": {
+                    "absent": true
                 },
                 "setScreen": {
                     "absent": true
@@ -596,13 +618,18 @@
                         "forge": "get",
                         "neoforge": "get"
                     }
+                },
+                "set": {
+                    "names": {
+                        "vanilla": "set",
+                        "fabric": "set",
+                        "forge": "set",
+                        "neoforge": "set"
+                    }
                 }
             },
             "fields": {
                 "get": {
-                    "absent": true
-                },
-                "set": {
                     "absent": true
                 }
             }
@@ -622,6 +649,14 @@
                         "fabric": "bobView",
                         "forge": "bobView",
                         "neoforge": "bobView"
+                    }
+                },
+                "cameraType": {
+                    "names": {
+                        "vanilla": "cameraType",
+                        "fabric": "cameraType",
+                        "forge": "cameraType",
+                        "neoforge": "cameraType"
                     }
                 },
                 "fov": {
@@ -730,6 +765,14 @@
                 },
                 "renderGameOverlay": {
                     "absent": true
+                },
+                "screen": {
+                    "names": {
+                        "vanilla": "screen",
+                        "fabric": "screen",
+                        "forge": "screen",
+                        "neoforge": "screen"
+                    }
                 }
             },
             "fields": {
@@ -815,6 +858,25 @@
                         "fabric": "extractRenderState",
                         "forge": "extractRenderState",
                         "neoforge": "extractRenderState"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/events/ContainerEventHandler": {
+            "names": {
+                "vanilla": "net.minecraft.client.gui.components.events.ContainerEventHandler",
+                "fabric": "net.minecraft.client.gui.components.events.ContainerEventHandler",
+                "forge": "net.minecraft.client.gui.components.events.ContainerEventHandler",
+                "neoforge": "net.minecraft.client.gui.components.events.ContainerEventHandler"
+            },
+            "methods": {
+                "mouseClicked": {
+                    "names": {
+                        "vanilla": "mouseClicked",
+                        "fabric": "mouseClicked",
+                        "forge": "mouseClicked",
+                        "neoforge": "mouseClicked"
                     }
                 }
             },
@@ -1203,7 +1265,13 @@
                 "onPlayerRightClick": {
                     "absent": true
                 },
+                "processRightClick": {
+                    "absent": true
+                },
                 "processRightClickBlock": {
+                    "absent": true
+                },
+                "sendUseItem": {
                     "absent": true
                 },
                 "startDestroyBlock": {
@@ -1646,11 +1714,17 @@
                 "forge": "net.minecraft.client.renderer.ItemInHandRenderer",
                 "neoforge": "net.minecraft.client.renderer.ItemInHandRenderer"
             },
-            "methods": {},
-            "fields": {
+            "methods": {
                 "applyItemArmTransform": {
-                    "absent": true
-                },
+                    "names": {
+                        "vanilla": "applyItemArmTransform",
+                        "fabric": "applyItemArmTransform",
+                        "forge": "applyItemArmTransform",
+                        "neoforge": "applyItemArmTransform"
+                    }
+                }
+            },
+            "fields": {
                 "mainHandHeight": {
                     "names": {
                         "vanilla": "mainHandHeight",
@@ -3763,6 +3837,9 @@
                         "forge": "setSelectedSlot",
                         "neoforge": "setSelectedSlot"
                     }
+                },
+                "swapPaint": {
+                    "absent": true
                 }
             },
             "fields": {

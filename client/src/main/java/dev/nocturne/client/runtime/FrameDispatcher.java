@@ -22,6 +22,9 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public final class FrameDispatcher {
 
+    /** 是否已自销毁（{@link #clear()}）：置位后分发立刻停，哪怕还在遍历旧快照。 */
+    private static volatile boolean cleared;
+
     /** 每帧回调的动作集合。写时复制列表，使帧线程遍历期间可安全增删。 */
     private static final CopyOnWriteArrayList<Runnable> LISTENERS =
             new CopyOnWriteArrayList<Runnable>();
@@ -41,6 +44,15 @@ public final class FrameDispatcher {
     /** 是否已打印过首帧存活日志。 */
     private static volatile boolean firstFrameLogged;
 
+    /**
+     * 自销毁闸门：一旦置位，{@link #dispatch()} 直接返回，任何注入钩子都不再进入游戏/GL 路径。
+     *
+     * <p>顺序契约：拆除方**先**置这个标志（volatile，任意线程安全），**再**在专用线程上做
+     * 模块副作用与 GL 状态的清理。反过来的话，Render 线程会在"拆一半"的状态下继续进来做 GL
+     * （1.16.5 WER dump：frame listener 被摘除的同时 Render 线程仍在做 GL，疑似 use-after-free）。
+     */
+    private static volatile boolean KILLED;
+
     /** 自销毁前要执行的恢复动作：修那些由监听器施加、但监听器列表清空后就没人能修的外部状态。 */
     private static final CopyOnWriteArrayList<Runnable> SHUTDOWN_ACTIONS =
             new CopyOnWriteArrayList<Runnable>();
@@ -49,6 +61,12 @@ public final class FrameDispatcher {
     private static final long ERROR_LOG_INTERVAL_MS = 5000L;
     /** 上次打印异常日志的时间戳。 */
     private static volatile long lastErrorLog;
+
+    /** 已打印过链接错误的「动作 + 错误」指纹：链接错误不会自愈，同一个只报一次。 */
+    private static final java.util.Set<String> LINKAGE_REPORTED =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** 被静默掉的重复链接错误次数，供诊断读取。 */
+    private static final AtomicLong LINKAGE_SUPPRESSED = new AtomicLong();
 
     /** 诊断用：已记录的分发次数（只记前几帧，避免每帧写盘）。 */
     private static final java.util.concurrent.atomic.AtomicInteger DIAG_FRAMES =
@@ -64,6 +82,9 @@ public final class FrameDispatcher {
      */
     public static void add(Runnable action) {
         if (action != null) {
+            // 新会话（重新注入）注册监听器即认为分发重新可用；自销毁后的旧字节码调用仍被
+            // dispatch() 里的 cleared 检查挡住。
+            cleared = false;
             LISTENERS.addIfAbsent(action);
         }
     }
@@ -76,6 +97,30 @@ public final class FrameDispatcher {
     /** @return 当前已注册的动作数量，主要用于诊断。 */
     public static int count() {
         return LISTENERS.size();
+    }
+
+    /**
+     * 触发自销毁闸门；幂等。
+     *
+     * <p>只置标志并停发帧事件，**不**拆卸任何 GL 资源：拆卸必须由调用方在非渲染线程上按
+     * 「先解绑 transformer、再清状态」的顺序完成。
+     */
+    public static void kill() {
+        KILLED = true;
+    }
+
+    /** @return 是否已进入自销毁状态 */
+    public static boolean isKilled() {
+        return KILLED;
+    }
+
+    /** 仅供测试：恢复闸门与列表的初始状态（生产路径不调用）。 */
+    static void resetForTests() {
+        KILLED = false;
+        firstFrameLogged = false;
+        SHUTDOWN_ACTIONS.clear();
+        LISTENERS.clear();
+        DRAW_CONTEXT_SINK = null;
     }
 
     /** 开启或关闭首帧存活日志。 */
@@ -124,6 +169,9 @@ public final class FrameDispatcher {
      * ——GUI 不再绘制、开关键不再响应、模块不再 tick，行为上与"没注入过"一致。
      */
     public static void clear() {
+        // 先置位：clear() 可能发生在 dispatch() 遍历快照的途中（panic 从某个监听器里调用），
+        // 之后同一快照里的监听器绝不能再跑——它们会把刚恢复的输入状态再写坏一次。
+        cleared = true;
         // 先跑恢复动作、再清列表：这些动作修的是"我们改过、但不在监听器列表里"的外部状态
         // （放开游戏鼠标抓取、1.8.9 的 inGameHasFocus）。清完列表就再没有任何每帧回调，
         // 那时想恢复也没人能做——顺序反了，输入会被永久卡住。
@@ -163,6 +211,10 @@ public final class FrameDispatcher {
     public static void dispatch() {
         // 文件诊断（diag3）已删除：生产环境每会话前 3 帧写 nocturne-diag.txt 是残留 IO；
         // 首帧状态由 TRACE 日志与叠加层的 overlay first frame 行覆盖。
+        if (KILLED) {
+            // 自销毁后注入的加载点仍会每帧调到这里：一次 volatile 读就退出，不碰任何监听器。
+            return;
+        }
         if (Boolean.TRUE.equals(IN_FRAME.get())) {
             report("re-entrant dispatch ignored");
             return;
@@ -177,8 +229,15 @@ public final class FrameDispatcher {
                 System.out.println("[nocturne] frame hook is live");
             }
             for (Runnable action : LISTENERS) {
+                if (cleared) {
+                    // panic 可能就从某个监听器内部调用 clear()：CopyOnWriteArrayList 的快照
+                    // 仍持有后续监听器，继续跑会把已经恢复的输入状态再次写坏。
+                    break;
+                }
                 try {
                     action.run();
+                } catch (LinkageError e) {
+                    reportLinkage(action, e);
                 } catch (Throwable t) {
                     report("frame action failed: " + action.getClass().getName() + ": " + t);
                 }
@@ -189,6 +248,30 @@ public final class FrameDispatcher {
             IN_FRAME.remove();
             FRAME_LOCK.unlock();
         }
+    }
+
+    /**
+     * 链接错误（NoClassDefFoundError / ExceptionInInitializerError 派生）单独处理：
+     * 这类错误不会自己恢复，每帧打印只会把日志刷成一片，真正的原因反而看不到。
+     *
+     * <p>每个「动作 + 错误类型 + 缺失类」只打印一次，并附带完整栈；后续同类错误静默计数
+     * （{@link #LINKAGE_SUPPRESSED}）。刻意不摘掉监听器：界面仍是用户可见的功能，静默摘除
+     * 等于让 ClickGUI 悄悄失效——这里只保证根因可见、日志不刷屏。
+     *
+     * @param action 抛错的动作
+     * @param error  链接错误
+     */
+    private static void reportLinkage(Runnable action, LinkageError error) {
+        String key = action.getClass().getName() + "|" + error.getClass().getName() + "|"
+                + (error.getMessage() == null ? "" : error.getMessage());
+        if (!LINKAGE_REPORTED.add(key)) {
+            LINKAGE_SUPPRESSED.incrementAndGet();
+            return;
+        }
+        System.out.println("[nocturne] frame action linkage failure: " + action + ": " + error
+                + " (missing class or class-loader boundary; this action keeps failing,"
+                + " further identical reports are counted silently)");
+        error.printStackTrace(System.out);
     }
 
     /** 限流记录一条异常；同一窗口内只打印一次，避免故障时每帧刷屏。 */

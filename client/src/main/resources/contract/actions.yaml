@@ -101,6 +101,37 @@
             "net.minecraft.world.InteractionHand"
           ],
           "arguments": ["player", "hand"]
+        },
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "sendUseItem",
+          "parameters": [
+            "net.minecraft.world.entity.player.Player",
+            "net.minecraft.world.level.Level",
+            "net.minecraft.world.item.ItemStack"
+          ],
+          "arguments": ["player", "level", "heldItem"]
+        },
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "processRightClick",
+          "parameters": [
+            "net.minecraft.world.entity.player.Player",
+            "net.minecraft.world.level.Level",
+            "net.minecraft.world.InteractionHand"
+          ],
+          "arguments": ["player", "level", "hand"]
+        },
+        {
+          "owner": "MULTI_PLAYER_GAME_MODE",
+          "method": "processRightClick",
+          "parameters": [
+            "net.minecraft.world.entity.player.Player",
+            "net.minecraft.world.level.Level",
+            "net.minecraft.world.item.ItemStack",
+            "net.minecraft.world.InteractionHand"
+          ],
+          "arguments": ["player", "level", "heldItem", "hand"]
         }
       ]
     },

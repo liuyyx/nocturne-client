@@ -1274,6 +1274,9 @@ public final class GameBridge {
         return result instanceof Boolean ? (Boolean) result : isAir(blockState);
     }
 
+    /** 盒体坐标的合法上限：单轴跨度超过它就是异常 AABB，绝不逐格采样。 */
+    private static final double MAX_BOX_SPAN = 16.0;
+
     /** 实体盒子是否无碰撞；现代使用 Level.noCollision，旧版组合两个检查入口。 */
     public boolean noCollision(Object entity, Object box) {
         Object world = world();
@@ -1284,17 +1287,33 @@ public final class GameBridge {
         if (result instanceof Boolean) {
             return (Boolean) result;
         }
-        Object noEntities = callMapped(world, ClassType.LEVEL, "checkNoEntityCollision", box);
         Object blockCollision = callMapped(world, ClassType.LEVEL, "checkBlockCollision", box);
-        if (noEntities instanceof Boolean && blockCollision instanceof Boolean) {
-            return (Boolean) noEntities && !(Boolean) blockCollision;
+        if (blockCollision instanceof Boolean) {
+            // 1.8.9–1.12.2：实体检查必须是两参重载（把自己排除在外）。一参重载把盒子覆盖到的
+            // 玩家本身算成碰撞，边缘检测因此恒为 false；映射表里该条已固定到两参 SRG。
+            Object entityCollision = entity == null ? null
+                    : callMapped(world, ClassType.LEVEL, "checkNoEntityCollision", box, entity);
+            return legacyBoxFree((Boolean) blockCollision, entityCollision);
         }
         // 1.13+ 的 Level 只剩 noCollision(Entity)，旧的两个检查入口被移除；
         // 用已映射的方块状态逐格采样盒体覆盖的方块，避免边缘检测整代失效。
         return blockBoxFree(box);
     }
 
-    /** 盒体覆盖的方块是否全部无碰撞；读不到 AABB 字段时保守返回 false。 */
+    /**
+     * 旧版两入口合成：方块无碰撞且（读得到实体检查时）无实体碰撞。
+     *
+     * <p>实体检查读不到时只据方块判定——把"读不到"当成"有碰撞"会让 1.8.9–1.12.2 的
+     * 边缘检测整代失效。
+     */
+    static boolean legacyBoxFree(boolean blockCollision, Object entityCollision) {
+        if (blockCollision) {
+            return false;
+        }
+        return !(entityCollision instanceof Boolean) || (Boolean) entityCollision;
+    }
+
+    /** 盒体覆盖的方块是否全部无碰撞；坐标不合法或任一格未加载时保守返回 false。 */
     private boolean blockBoxFree(Object box) {
         Number minX = number(readField(box, ClassType.AABB, "minX"));
         Number minY = number(readField(box, ClassType.AABB, "minY"));
@@ -1306,44 +1325,81 @@ public final class GameBridge {
                 || maxX == null || maxY == null || maxZ == null) {
             return false;
         }
+        if (!boxSpanValid(minX.doubleValue(), minY.doubleValue(), minZ.doubleValue(),
+                maxX.doubleValue(), maxY.doubleValue(), maxZ.doubleValue())) {
+            return false;
+        }
         int x0 = (int) Math.floor(minX.doubleValue() + 1.0E-7);
         int y0 = (int) Math.floor(minY.doubleValue() + 1.0E-7);
         int z0 = (int) Math.floor(minZ.doubleValue() + 1.0E-7);
         int x1 = (int) Math.floor(maxX.doubleValue() - 1.0E-7);
         int y1 = (int) Math.floor(maxY.doubleValue() - 1.0E-7);
         int z1 = (int) Math.floor(maxZ.doubleValue() - 1.0E-7);
-        boolean readAny = false;
         for (int x = x0; x <= x1; x++) {
             for (int y = y0; y <= y1; y++) {
                 for (int z = z0; z <= z1; z++) {
                     Object state = blockStateAt(x, y, z);
                     if (state == null) {
-                        continue;
+                        // 未加载区块不能当成空位：那会把"读不到"判成"可以走"。
+                        return false;
                     }
-                    readAny = true;
                     if (hasBlockCollision(state, blockPos(x, y, z))) {
                         return false;
                     }
                 }
             }
         }
-        // 一格都读不到说明映射面缺失；此时不能把"未知"当成"安全"。
-        return readAny;
+        return true;
     }
 
-    /** 方块是否有碰撞形状；形状面不可用时按非空气保守处理。 */
+    /** 盒体坐标必须有限、有序且单轴跨度不超过 {@link #MAX_BOX_SPAN}。 */
+    static boolean boxSpanValid(double minX, double minY, double minZ,
+                                double maxX, double maxY, double maxZ) {
+        if (!finiteBoxCoordinate(minX) || !finiteBoxCoordinate(minY) || !finiteBoxCoordinate(minZ)
+                || !finiteBoxCoordinate(maxX) || !finiteBoxCoordinate(maxY) || !finiteBoxCoordinate(maxZ)) {
+            return false;
+        }
+        return maxX >= minX && maxY >= minY && maxZ >= minZ
+                && maxX - minX <= MAX_BOX_SPAN
+                && maxY - minY <= MAX_BOX_SPAN
+                && maxZ - minZ <= MAX_BOX_SPAN;
+    }
+
+    private static boolean finiteBoxCoordinate(double value) {
+        return !Double.isNaN(value) && !Double.isInfinite(value);
+    }
+
+    /**
+     * 方块是否有碰撞形状；形状面不可用时按"可替换方块无碰撞"判定。
+     *
+     * <p>草、水、火把、花都不是空气却没有碰撞：用 {@code !isAir} 兜底会把它们全算成碰撞，
+     * 于是任何草地边缘都被判成安全。读不到形状时只认空气或可替换方块，其余保守算碰撞。
+     */
     public boolean hasBlockCollision(Object blockState, Object blockPos) {
+        if (blockState == null) {
+            return true;
+        }
         Object shape = callMapped(blockState, ClassType.BLOCK_STATE, "getCollisionShape",
                 world(), blockPos);
         Object empty = callMapped(shape, ClassType.VOXEL_SHAPE, "isEmpty");
-        return empty instanceof Boolean ? !(Boolean) empty : !isAir(blockState);
+        if (empty instanceof Boolean) {
+            return !(Boolean) empty;
+        }
+        if (isAir(blockState)) {
+            return false;
+        }
+        Object replaceable = callMapped(blockState, ClassType.BLOCK_STATE, "canBeReplaced");
+        return !(replaceable instanceof Boolean) || !(Boolean) replaceable;
     }
 
     /** 对手持 PoseStack 应用平移、缩放和 XYZ 轴旋转。 */
     public void transformPose(Object pose, double x, double y, double z,
                               double scaleX, double scaleY, double scaleZ,
                               double rotX, double rotY, double rotZ) {
-        callMappedStatus(pose, ClassType.POSE_STACK, "translate", (float) x, (float) y, (float) z);
+        if (!callMappedStatus(pose, ClassType.POSE_STACK, "translate",
+                (float) x, (float) y, (float) z)) {
+            logThrottled("PoseStack#translate unavailable; hand transform skipped", null);
+        }
         callMappedStatus(pose, ClassType.POSE_STACK, "scale", (float) scaleX, (float) scaleY, (float) scaleZ);
         float[] rotations = {(float) rotX, (float) rotY, (float) rotZ};
         for (int axis = 0; axis < 3; axis++) {

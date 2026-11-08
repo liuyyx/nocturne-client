@@ -477,6 +477,11 @@ unsupported = "1.8.9 是 Container.windowClick(int,int,int,int,EntityPlayer)Item
 [methods.useItemOn]
 unsupported = "1.8.9 是 PlayerControllerMP.onPlayerRightClick(EntityPlayerSP,WorldClient,ItemStack,BlockPos,EnumFacing,Vec3)Z（6 参，且无 InteractionHand），Rust 调用点需要 1.8.9 分支"
 
+[methods.sendUseItem]
+mcp = "sendUseItem"
+srg = "func_78769_a"
+scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
 [methods.onPlayerRightClick]
 mcp = "onPlayerRightClick"
 scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
@@ -729,6 +734,19 @@ getItem = { mcp = "getStackInSlot", scope = "net/minecraft/entity/player/Invento
 getSelectedItem = { mcp = "getCurrentItem", scope = "net/minecraft/entity/player/InventoryPlayer" }
 getContainerSize = { mcp = "getSizeInventory", scope = "net/minecraft/entity/player/InventoryPlayer" }
 changeCurrentItem = { mcp = "changeCurrentItem", scope = "net/minecraft/entity/player/InventoryPlayer" }
+swapPaint = { mcp = "changeCurrentItem", scope = "net/minecraft/entity/player/InventoryPlayer" }
+
+[methods.setIngameFocus]
+mcp = "setIngameFocus"
+scope = "net/minecraft/client/Minecraft"
+
+[methods.setKeyBindState]
+mcp = "setKeyBindState"
+scope = "net/minecraft/client/settings/KeyBinding"
+
+[methods.onTick]
+mcp = "onTick"
+scope = "net/minecraft/client/settings/KeyBinding"
 
 [methods.mouseXYChange]
 mcp = "mouseXYChange"
@@ -902,7 +920,7 @@ getColorValue = { mcp = "getColorValue", scope = "net/minecraft/util/EnumChatFor
 colorValue = { mcp = "colorValue", scope = "net/minecraft/util/EnumChatFormatting" }
 
 [overrides."net/minecraft/world/level/Level"]
-checkNoEntityCollision = { mcp = "checkNoEntityCollision", scope = "net/minecraft/world/World" }
+checkNoEntityCollision = { mcp = "checkNoEntityCollision", srg = "func_72917_a", scope = "net/minecraft/world/World", note = "固定到两参重载 (AABB,Entity)：一参重载把盒子覆盖到的玩家自己算成碰撞" }
 checkBlockCollision = { mcp = "checkBlockCollision", scope = "net/minecraft/world/World" }
 
 [overrides."net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action"]

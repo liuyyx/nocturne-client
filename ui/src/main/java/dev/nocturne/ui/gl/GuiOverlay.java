@@ -94,8 +94,6 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     private boolean rightWasDown;
     /** 原生 Screen 关闭后的按压交接：松开前不得把它派发给自绘 GUI。 */
     private boolean nativeMouseHandoff;
-    /** 打开 GUI 前的 {@code Minecraft.inGameHasFocus}；关闭时恢复。 */
-    private Boolean focusBeforeGui;
     /** 上一帧指针 x（GUI 坐标），用于计算拖拽增量。 */
     private double lastX;
     /** 上一帧指针 y（GUI 坐标）。 */
@@ -256,29 +254,6 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         return input.describe();
     }
 
-    /**
-     * 1.8.9 的相机旋转由 {@code Minecraft.inGameHasFocus} 门控；仅释放指针不足以停止视角。
-     * 打开时每帧压为 false，关闭时恢复打开前的值。现代版本字段 absent，调用无副作用。
-     */
-    private void applyGameFocus(boolean open) {
-        NocturneClient client = NocturneClient.get();
-        GameBridge bridge = client == null ? null : client.gameBridge();
-        Object minecraft = bridge == null ? null : bridge.minecraft();
-        if (minecraft == null) {
-            return;
-        }
-        if (open) {
-            if (focusBeforeGui == null) {
-                Object current = bridge.readField(minecraft, ClassType.MINECRAFT, "inGameHasFocus");
-                focusBeforeGui = current instanceof Boolean ? (Boolean) current : Boolean.TRUE;
-            }
-            bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus", Boolean.FALSE);
-        } else if (focusBeforeGui != null) {
-            bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus", focusBeforeGui);
-            focusBeforeGui = null;
-        }
-    }
-
     /** @return 配置键或 INSERT 任一按下；INSERT 用于规避第三方客户端占用右 Shift。 */
     private boolean togglePressed() {
         return keyPressed(toggleKey) || keyPressed(KEY_INSERT);
@@ -378,6 +353,91 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     /** 句柄解析失败只报一次。 */
     private static boolean consumePressedFailed;
 
+    /** 指针需要继续重试抓回（关闭界面那次 grabMouse 被短路吃掉时会置位）。 */
+    private boolean pointerRestorePending;
+    /** 输入状态是否已由 panic 恢复过（幂等：restoreInputState 可能被多次调用）。 */
+    private boolean inputRestored;
+
+    /** bootstrap 层 {@code KeySink.setBlocked} 的方法句柄。 */
+    private static java.lang.reflect.Method setBlockedMethod;
+    /** bootstrap 层 {@code KeySink.shouldBlock} 的方法句柄。 */
+    private static java.lang.reflect.Method shouldBlockMethod;
+    /** 桥解析失败只报一次。 */
+    private static boolean blockedBridgeFailed;
+
+    /**
+     * 写输入占用状态。
+     *
+     * <p>必须走 bootstrap 里的 {@code KeySink}：织入的短路读的是那一份。直接静态调用
+     * {@code InputBlock.setBlocked} 在类身份分裂时会把状态写进另一份静态字段（26.x Fabric 风险），
+     * 游戏侧照旧响应输入。
+     *
+     * @param value {@code true} = 我们的界面占用输入
+     */
+    private static void setBlocked(boolean value) {
+        if (!blockedBridgeFailed) {
+            try {
+                java.lang.reflect.Method method = setBlockedMethod;
+                if (method == null) {
+                    Class<?> type = Class.forName("dev.nocturne.bootstrap.KeySink", true, null);
+                    method = type.getMethod("setBlocked", boolean.class);
+                    setBlockedMethod = method;
+                }
+                method.invoke(null, Boolean.valueOf(value));
+                return;
+            } catch (Throwable error) {
+                blockedBridgeFailed = true;
+                System.out.println("[nocturne] input block bridge failed: " + error);
+            }
+        }
+        InputBlock.setBlocked(value);
+    }
+
+    /** @return 游戏侧输入入口是否应短路（与织入代码读同一份 bootstrap 状态）。 */
+    private static boolean shouldBlock() {
+        if (!blockedBridgeFailed) {
+            try {
+                java.lang.reflect.Method method = shouldBlockMethod;
+                if (method == null) {
+                    Class<?> type = Class.forName("dev.nocturne.bootstrap.KeySink", true, null);
+                    method = type.getMethod("shouldBlock");
+                    shouldBlockMethod = method;
+                }
+                Object value = method.invoke(null);
+                return Boolean.TRUE.equals(value);
+            } catch (Throwable error) {
+                blockedBridgeFailed = true;
+                System.out.println("[nocturne] input block bridge failed: " + error);
+            }
+        }
+        return InputBlock.shouldBlock();
+    }
+
+    /**
+     * panic 收尾：关闭自绘界面并还原输入状态。
+     *
+     * <p>{@code panic()} 会清空帧分发器，之后 {@link #onFrame()} 不再执行；若此刻界面正开着，
+     * 指针仍处于释放状态（现代版本）或 {@code inGameHasFocus} 仍为 false（1.8.9，由
+     * {@code ForeignScreenGuard} 负责还原）。这里显式把指针抓回原来的状态，带幂等标志。
+     */
+    public void restoreInputState() {
+        if (inputRestored) {
+            return;
+        }
+        inputRestored = true;
+        try {
+            gui.setOpen(false);
+            setBlocked(false);
+            if (wasOpenForPointer) {
+                input.setPointerGrabbed(pointerGrabbedBeforeGui);
+            }
+            wasOpenForPointer = false;
+            pointerRestorePending = false;
+        } catch (Throwable ignored) {
+            // 尽力而为：panic 路径不能因为恢复失败而中断。
+        }
+    }
+
     /**
      * 从 <b>bootstrap</b> 取 {@code InputBlock.consumePressed}。
      *
@@ -457,7 +517,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         // 因此这一帧不调用 drawFrame()，并关闭自绘 GUI，避免“回到游戏”被标签压住。
         boolean nativeScreen = hasNativeScreen();
         if (nativeScreen) {
-            InputBlock.setBlocked(false);
+            setBlocked(false);
             nativeMouseHandoff = false;
             if (gui.isOpen()) {
                 gui.setOpen(false);
@@ -472,11 +532,11 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             java.util.Arrays.fill(charWasDown, false);
             return;
         }
-        InputBlock.setBlocked(gui.isOpen());
+        setBlocked(gui.isOpen());
         if (lastBlockedLogged != gui.isOpen()) {
             lastBlockedLogged = gui.isOpen();
             System.out.println("[nocturne] input block: guiOpen=" + gui.isOpen()
-                    + " blocked=" + InputBlock.shouldBlock());
+                    + " blocked=" + shouldBlock());
         }
         // 事件驱动优先：1.21.1 的 glfwGetKey 在合成按键下恒为 0（游戏回调却正常）。
         boolean toggleDown = togglePressed();
@@ -498,6 +558,14 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
                     + " key=" + toggleKey);
         }
         toggleWasDown = toggleDown;
+        // 开关键可能在本帧关掉界面：立即同步 blocked，否则关闭分支恢复指针时 grabMouse
+        // 仍会被短路吃掉（随后 wasOpenForPointer=false 不再重试，指针永久不抓回）。
+        setBlocked(gui.isOpen());
+        if (lastBlockedLogged != gui.isOpen()) {
+            lastBlockedLogged = gui.isOpen();
+            System.out.println("[nocturne] input block: guiOpen=" + gui.isOpen()
+                    + " blocked=" + shouldBlock());
+        }
 
         // 指针捕获交接（不是每帧强制）：
         //   打开界面      → 记下游戏原本的捕获状态，然后把指针交还给界面；
@@ -506,7 +574,6 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         // 界面关闭期间完全不碰这个状态：主菜单/聊天/原生界面本来就需要可见光标，
         // 无条件捕获会把光标锁死——真机上「鼠标被锁」就是这里来的。
         boolean open = gui.isOpen();
-        applyGameFocus(open);
         // 用 = / - 手动调界面大小：与开关、指针捕获一样每帧轮询（按键只在这一层读）。
         handleScaleKeys(open);
         if (open) {
@@ -515,7 +582,15 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             }
             input.setPointerGrabbed(false);
         } else if (wasOpenForPointer) {
+            // 先解除输入短路再抓回指针：grabMouse 自身也被织入短路，blocked 仍为 true 时
+            // 这次恢复会被直接 return，之后 wasOpenForPointer=false 就再也不会重试。
+            setBlocked(false);
             input.setPointerGrabbed(pointerGrabbedBeforeGui);
+            pointerRestorePending = pointerGrabbedBeforeGui && !input.isPointerGrabbed();
+        } else if (pointerRestorePending && !hasNativeScreen()) {
+            // 上一次恢复没生效（游戏可能又改了抓取状态）：继续重试，直到抓回为止。
+            input.setPointerGrabbed(pointerGrabbedBeforeGui);
+            pointerRestorePending = pointerGrabbedBeforeGui && !input.isPointerGrabbed();
         }
         wasOpenForPointer = open;
 
@@ -793,6 +868,14 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
                     dev.nocturne.client.mapping.ClassType.MINECRAFT, "currentScreen");
             Object legacy = bridge.readField(minecraft,
                     dev.nocturne.client.mapping.ClassType.MINECRAFT, "screen");
+            if (current == null && legacy == null) {
+                // 26.3 的 Minecraft 没有 currentScreen/screen（映射 absent）：屏幕挂在 Gui.screen()。
+                // 读不到就按形状兜底（非 static、类型名以 Screen 结尾的字段），再退到 Gui 方法。
+                current = readScreenByShape(minecraft);
+            }
+            if (current == null && legacy == null) {
+                current = readGuiScreen(bridge, minecraft);
+            }
             if (!nativeScreenProbeLogged) {
                 nativeScreenProbeLogged = true;
                 System.out.println("[nocturne] native screen probe: currentScreen=" + current
@@ -807,6 +890,61 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             return false;
         }
     }
+    /** 形状兜底缓存的 Screen 字段（26.3 的 currentScreen/screen 映射 absent）。 */
+    private java.lang.reflect.Field nativeScreenField;
+    /** 是否已尝试过形状解析。 */
+    private boolean nativeScreenFieldResolved;
+
+    /**
+     * 按形状找当前 Screen：非 static、类型名以 {@code Screen} 结尾的字段。
+     *
+     * @param minecraft 游戏主类实例
+     * @return Screen 实例；找不到时为 {@code null}
+     */
+    private Object readScreenByShape(Object minecraft) {
+        try {
+            java.lang.reflect.Field field = nativeScreenField;
+            if (field == null && !nativeScreenFieldResolved) {
+                nativeScreenFieldResolved = true;
+                for (java.lang.reflect.Field candidate : minecraft.getClass().getDeclaredFields()) {
+                    if (java.lang.reflect.Modifier.isStatic(candidate.getModifiers())
+                            || !candidate.getType().getSimpleName().endsWith("Screen")) {
+                        continue;
+                    }
+                    candidate.setAccessible(true);
+                    nativeScreenField = candidate;
+                    field = candidate;
+                    break;
+                }
+            }
+            return field == null ? null : field.get(minecraft);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 26.3 的屏幕挂在 {@code Gui.screen()} 上；22.x 的 {@code Minecraft.gui} 是 {@code Gui}。
+     *
+     * @param bridge    游戏桥
+     * @param minecraft 游戏主类实例
+     * @return Screen 实例；不可用时为 {@code null}
+     */
+    private Object readGuiScreen(dev.nocturne.client.game.GameBridge bridge, Object minecraft) {
+        try {
+            Object gui = bridge.readField(minecraft,
+                    dev.nocturne.client.mapping.ClassType.MINECRAFT, "gui");
+            if (gui == null) {
+                return null;
+            }
+            Object screen = bridge.callMapped(gui,
+                    dev.nocturne.client.mapping.ClassType.HUD, "screen");
+            return screen;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     private void drawFrame() {
         // TEMP-DIAG（定位界面不显示后删除）：界面打开时每秒打一次真实下发次数。
         long diagNow = System.currentTimeMillis();

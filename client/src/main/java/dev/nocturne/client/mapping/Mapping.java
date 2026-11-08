@@ -146,4 +146,28 @@ public interface Mapping {
 
     /** 恒等映射返回 true，供调用方走「无需查表」的快路径。 */
     boolean isIdentity();
+
+    /**
+     * 该规范类在目标版本里是否**确定不存在**（表中显式标记 {@code absent}）。
+     *
+     * <p>注册注入点时用它提前跳过：为一个不存在的类注册转换器只会留下永远不命中的空转，
+     * 真机上表现为「日志说注册了、实际什么都没织入」。
+     *
+     * @param type 规范类
+     * @return 确定不存在时返回 {@code true}
+     */
+    default boolean isClassAbsent(ClassType type) {
+        return false;
+    }
+
+    /**
+     * 该规范方法在目标版本里是否**确定不存在**（表中显式标记 {@code absent}）。
+     *
+     * @param owner         所属类
+     * @param canonicalName 规范方法名
+     * @return 确定不存在时返回 {@code true}
+     */
+    default boolean isMemberAbsent(ClassType owner, String canonicalName) {
+        return false;
+    }
 }

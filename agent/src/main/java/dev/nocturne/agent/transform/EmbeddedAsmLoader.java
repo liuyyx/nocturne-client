@@ -211,6 +211,40 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     }
 
     /**
+     * 创建带选项的输入短路转换器。
+     *
+     * @param targetInternalName 目标类内部名（斜杠形式）
+     * @param method             目标方法名
+     * @param descriptor         目标方法描述符
+     * @param hookOwner          钩子类内部名（斜杠形式）
+     * @param hookMethod         钩子方法名（无参、返回 {@code boolean}）
+     * @param forwardWheel       短路前把首个数值形参转发进滚轮累加器
+     * @param forceFalseParam    短路时把首个布尔形参置 false 后继续执行
+     * @param zeroIntFields      短路返回前清零实例整型字段
+     * @return 转换器；内嵌 ASM 缺失或类加载失败时返回 {@code null}
+     */
+    public ClassFileTransformer createInputBlockTransformer(String targetInternalName, String method,
+                                                            String descriptor, String hookOwner,
+                                                            String hookMethod, boolean forwardWheel,
+                                                            boolean forceFalseParam,
+                                                            boolean zeroIntFields) {
+        try {
+            Class<?> transformerClass = loadClass(INPUT_BLOCK_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, String.class,
+                    boolean.class, boolean.class, boolean.class);
+            Object instance = constructor.newInstance(targetInternalName, method, descriptor,
+                    hookOwner, hookMethod, Boolean.valueOf(forwardWheel),
+                    Boolean.valueOf(forceFalseParam), Boolean.valueOf(zeroIntFields));
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create input block transformer for " + targetInternalName + "." + method
+                    + ": " + t + "; input block disabled");
+            return null;
+        }
+    }
+
+    /**
      * 创建滚轮形参转换器：把目标方法第 {@code argumentIndex} 个 {@code double} 形参交给无返回值钩子。
      *
      * <p>GLFW 世代没有 SDL 那种"事件对象"，滚轮增量只以 {@code MouseHandler#onScroll(JDD)V} 的
@@ -475,5 +509,32 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     /** 统一的日志输出，带 {@code [nocturne]} 前缀便于在游戏日志中检索。 */
     private static void log(String message) {
         System.out.println("[nocturne] " + message);
+    }
+
+    /**
+     * 展开反射包装异常，取真正的失败原因。
+     *
+     * <p>转换器构造器由内嵌 ASM 子加载器反射调用，参数不合法时（例如 1.8.9 的实体门控返回
+     * boolean）抛出的异常会被包成 {@code InvocationTargetException}，只打外层等于什么都没说
+     * ——真机日志里 12 行 {@code InvocationTargetException; entity gate disabled} 完全看不出
+     * 是"返回值形态不匹配"。
+     */
+    static Throwable rootCause(Throwable failure) {
+        Throwable current = failure;
+        for (int depth = 0; depth < 8; depth++) {
+            if (current instanceof java.lang.reflect.InvocationTargetException
+                    && current.getCause() != null) {
+                current = current.getCause();
+                continue;
+            }
+            if ((current instanceof ExceptionInInitializerError
+                    || current instanceof java.lang.reflect.UndeclaredThrowableException)
+                    && current.getCause() != null) {
+                current = current.getCause();
+                continue;
+            }
+            break;
+        }
+        return current;
     }
 }

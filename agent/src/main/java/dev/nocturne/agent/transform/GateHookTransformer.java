@@ -116,8 +116,12 @@ public final class GateHookTransformer implements ClassFileTransformer {
                             if (atMethodEnd && opcode == Opcodes.RETURN) {
                                 // 带 StackMapTable 的 RETURN 常见 chop_frame，局部变量槽可能全部
                                 // 被裁成 top（1.16.5 KeyboardInput#tick 实测连 this 都不可读）。
-                                // 末尾只允许无参调用；任何需要读局部变量的尾钩一律跳过。
-                                if ("V".equals(hookReturn) && sawFrame) {
+                                // 末尾只允许**无参**调用：任何需要读 this/形参的尾钩一律跳过——
+                                // 只看 hookReturn 是否 void 不够（1.20.1 的 ffa.a 就是非 void 尾钩
+                                // 在带帧方法上注入，JVM 直接 VerifyError chop_frame）。
+                                boolean needsLocals = passThis
+                                        || Type.getArgumentTypes(targetDescriptor).length > 0;
+                                if (sawFrame && needsLocals) {
                                     if (!tailSkipLogged) {
                                         tailSkipLogged = true;
                                         System.out.println("[nocturne] tail hook skipped (stack map): "

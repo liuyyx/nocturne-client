@@ -13,12 +13,12 @@ import java.security.ProtectionDomain;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 在目标 {@code void} 方法开头插入「占用输入时直接返回」：
+ * 在目标方法开头插入「占用输入时短路」：
  *
  * <pre>
  *   invokestatic  &lt;hookOwner&gt;.&lt;hookMethod&gt;()Z
  *   ifeq          continue
- *   return
+ *   &lt;短路路径：直接 return / 把形参置 false / 先清零字段再 return&gt;
  *   continue: ...
  * </pre>
  *
@@ -36,6 +36,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 只看返回值不看语义的话，布尔返回 {@code false} 会被调用方当成"没处理"，反而触发别的分支
  * （例如点击穿透到"点外面关界面"）。
  *
+ * <p><b>幂等</b>：只检查**目标方法体内**是否已经有同一条钩子调用。曾经用过类级 {@code TransformGuard}，
+ * 结果是同一个类里先注册的 {@code grabMouse} 让后面的 {@code turnPlayer}/{@code onScroll} 全部静默
+ * 不织入（26.3 真机相机与滚轮漏拦的根因）。
+ *
  * <p>类名/方法名/描述符三者不精确命中时一律返回 {@code null}（JVM 沿用原字节码）。
  */
 public final class InputBlockTransformer implements ClassFileTransformer {
@@ -44,6 +48,10 @@ public final class InputBlockTransformer implements ClassFileTransformer {
     private static final int ASM_API = Opcodes.ASM9;
     /** 钩子方法的描述符：无参、返回布尔。 */
     private static final String HOOK_DESCRIPTOR = "()Z";
+    /** 滚轮增量汇（只存在于 bootstrap，跨加载器唯一）。 */
+    private static final String SCROLL_OWNER = "dev/nocturne/bootstrap/KeySink";
+    /** 累加一次滚轮增量。 */
+    private static final String SCROLL_METHOD = "accumulateScroll";
 
     /** 内部错误是否已打印过（限流）。 */
     private final AtomicBoolean errorLogged = new AtomicBoolean(false);
@@ -58,12 +66,20 @@ public final class InputBlockTransformer implements ClassFileTransformer {
     private final String hookOwner;
     /** 钩子方法名。 */
     private final String hookMethod;
+    /** 短路前是否把首个数值形参（整型/双精度）转发进滚轮累加器。 */
+    private final boolean forwardWheel;
+    /** 短路时是否把首个布尔形参强制写成 {@code false} 并继续执行（而不是直接返回）。 */
+    private final boolean forceFalseParam;
+    /** 短路返回前是否清零实例的整型字段（1.8.9/1.12.2 的 {@code MouseHelper} 增量缓存）。 */
+    private final boolean zeroIntFields;
     /** 是否真的插桩成功（诊断用）。 */
     private final AtomicBoolean patched = new AtomicBoolean(false);
     /** transform 调用计数（仅 debug）。 */
     private int transformCalls;
 
     /**
+     * 普通短路：占用输入时直接返回。
+     *
      * @param targetClass  目标类（点号或斜杠形式，构造器内归一化）
      * @param method       目标方法名
      * @param descriptor   目标方法描述符（返回类型必须是 {@code V}）
@@ -72,11 +88,32 @@ public final class InputBlockTransformer implements ClassFileTransformer {
      */
     public InputBlockTransformer(String targetClass, String method, String descriptor,
                                  String hookOwner, String hookMethod) {
+        this(targetClass, method, descriptor, hookOwner, hookMethod, false, false, false);
+    }
+
+    /**
+     * 全参数构造。
+     *
+     * @param targetClass    目标类（点号或斜杠形式）
+     * @param method         目标方法名
+     * @param descriptor     目标方法描述符
+     * @param hookOwner      钩子类内部名
+     * @param hookMethod     钩子方法名
+     * @param forwardWheel   短路前把首个数值形参转发进滚轮累加器
+     * @param forceFalseParam 短路时把首个布尔形参置 false 后继续执行，而不是直接返回
+     * @param zeroIntFields  短路返回前清零实例的全部整型字段（{@code MouseHelper} 的增量缓存）
+     */
+    public InputBlockTransformer(String targetClass, String method, String descriptor,
+                                 String hookOwner, String hookMethod, boolean forwardWheel,
+                                 boolean forceFalseParam, boolean zeroIntFields) {
         this.targetClassInternalName = targetClass.replace('.', '/');
         this.targetMethod = method;
         this.targetDescriptor = descriptor;
         this.hookOwner = hookOwner;
         this.hookMethod = hookMethod;
+        this.forwardWheel = forwardWheel;
+        this.forceFalseParam = forceFalseParam;
+        this.zeroIntFields = zeroIntFields;
     }
 
     /** @return 目标方法是否已被打上补丁（供注册方判断"织入了但没有目标"这类情况）。 */
@@ -93,11 +130,15 @@ public final class InputBlockTransformer implements ClassFileTransformer {
                     + className + " target=" + targetClassInternalName + " method=" + targetMethod
                     + " desc=" + targetDescriptor);
         }
-        if (className == null || !className.equals(targetClassInternalName)
-                || TransformGuard.containsHook(classfileBuffer, hookOwner, hookMethod)) {
+        if (className == null || !className.equals(targetClassInternalName)) {
             return null;
         }
         try {
+            if (containsHookInMethod(classfileBuffer)) {
+                // 已经织过：标记 patched（调用方据此认为钩子有效），但不再返回新字节。
+                patched.set(true);
+                return null;
+            }
             ClassReader reader = new ClassReader(classfileBuffer);
             ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
 
@@ -114,12 +155,12 @@ public final class InputBlockTransformer implements ClassFileTransformer {
                         @Override
                         public void visitCode() {
                             super.visitCode();
-                            inject();
+                            inject(access);
                             patched.set(true);
                         }
 
-                        /** 插入 {@code if (hook()) return <handled>;} 并补上分支目标的满帧。 */
-                        private void inject() {
+                        /** 插入短路逻辑并补上分支目标的满帧。 */
+                        private void inject(int access) {
                             // 键盘入口 (J I I I I)：把 key/action 记进 InputBlock，供叠加层事件驱动地
                             // 读取。1.21.1 实测 glfwGetKey 在合成按键下恒为 0，只有游戏自己的回调可靠。
                             if ("(JIIII)V".equals(targetDescriptor)) {
@@ -130,14 +171,98 @@ public final class InputBlockTransformer implements ClassFileTransformer {
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,
                                         "dev/nocturne/bootstrap/KeySink", "recordKey", "(II)V", false);
                             }
+                            if (forwardWheel) {
+                                forwardWheelArgument(access);
+                            }
                             Label continueLabel = new Label();
                             super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, hookMethod,
                                     HOOK_DESCRIPTOR, false);
                             super.visitJumpInsn(Opcodes.IFEQ, continueLabel);
-                            pushHandledReturn();
+                            if (forceFalseParam) {
+                                forceFirstBooleanFalse(access);
+                            } else {
+                                zeroFields(access);
+                                pushHandledReturn();
+                            }
                             super.visitLabel(continueLabel);
                             Object[] locals = localsOf(access);
                             super.visitFrame(Opcodes.F_NEW, locals.length, locals, 0, null);
+                        }
+
+                        /**
+                         * 把滚轮方向/增量转发进 bootstrap 的累加器：旧世代（1.8.9/1.12.2）没有
+                         * 可轮询的滚轮接口，界面只能靠这个入口拿到增量。
+                         *
+                         * @param access 目标方法访问标志
+                         */
+                        private void forwardWheelArgument(int access) {
+                            Type[] arguments = Type.getArgumentTypes(targetDescriptor);
+                            if (arguments.length == 0) {
+                                return;
+                            }
+                            int slot = (access & Opcodes.ACC_STATIC) != 0 ? 0 : 1;
+                            Type first = arguments[0];
+                            if (first.getSort() == Type.INT
+                                    || first.getSort() == Type.BOOLEAN
+                                    || first.getSort() == Type.BYTE
+                                    || first.getSort() == Type.SHORT
+                                    || first.getSort() == Type.CHAR) {
+                                super.visitVarInsn(Opcodes.ILOAD, slot);
+                                super.visitInsn(Opcodes.I2D);
+                            } else if (first.getSort() == Type.DOUBLE) {
+                                super.visitVarInsn(Opcodes.DLOAD, slot);
+                            } else {
+                                return;
+                            }
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, SCROLL_OWNER, SCROLL_METHOD,
+                                    "(D)V", false);
+                        }
+
+                        /**
+                         * 键盘绑定的短路方式：把 {@code setKeyBindState(key, pressed)} 的
+                         * {@code pressed} 强制写成 false，而不是整条返回。
+                         *
+                         * <p>不能直接返回：按键的"松开"事件也会走这里，返回意味着最后一次 true
+                         * 永远留在绑定里（玩家开界面时按着 W，关掉界面后一直往前走）。置 false
+                         * 让游戏自己的状态机把按键放开。
+                         *
+                         * @param access 目标方法访问标志
+                         */
+                        private void forceFirstBooleanFalse(int access) {
+                            Type[] arguments = Type.getArgumentTypes(targetDescriptor);
+                            int slot = (access & Opcodes.ACC_STATIC) != 0 ? 0 : 1;
+                            int booleanSlot = -1;
+                            for (Type argument : arguments) {
+                                if (argument.getSort() == Type.BOOLEAN) {
+                                    booleanSlot = slot;
+                                    break;
+                                }
+                                slot += argument.getSize();
+                            }
+                            if (booleanSlot < 0) {
+                                // 没有布尔形参：退化为普通短路。
+                                zeroFields(access);
+                                pushHandledReturn();
+                                return;
+                            }
+                            super.visitInsn(Opcodes.ICONST_0);
+                            super.visitVarInsn(Opcodes.ISTORE, booleanSlot);
+                        }
+
+                        /**
+                         * 短路返回前清零实例字段：旧世代 {@code MouseHelper#deltaX/deltaY} 在
+                         * 被短路后不会刷新，恢复时会把上一帧的增量再吃一次。
+                         */
+                        private void zeroFields(int access) {
+                            if (!zeroIntFields || (access & Opcodes.ACC_STATIC) != 0) {
+                                return;
+                            }
+                            // 走 bootstrap 唯一的 LegacyMouse：字段名按运行期类反射收集，
+                            // 不把 1.8.9/1.12.2 的混淆字段名写死在转换器里。
+                            super.visitVarInsn(Opcodes.ALOAD, 0);
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC,
+                                    "dev/nocturne/bootstrap/LegacyMouse", "clearDeltas",
+                                    "(Ljava/lang/Object;)V", false);
                         }
 
                         /** 压入「已处理」返回值并返回：布尔用 {@code true}，其它按类型给零值。 */
@@ -233,7 +358,41 @@ public final class InputBlockTransformer implements ClassFileTransformer {
                 System.out.println("[nocturne] input block transformer failed on "
                         + targetClassInternalName + "." + targetMethod + ": " + t);
             }
-            return null;   // 绝不因为插桩让游戏类加载失败
+            return null;
         }
+    }
+
+    /**
+     * 精确到方法的幂等检查：只有目标方法体里已经有同一条钩子调用时才跳过。
+     *
+     * @param bytes 目标类原始字节
+     * @return 目标方法已含该钩子调用时返回 {@code true}
+     */
+    private boolean containsHookInMethod(byte[] bytes) {
+        final boolean[] found = {false};
+        try {
+            new ClassReader(bytes).accept(new ClassVisitor(ASM_API) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    if (!targetMethod.equals(name) || !targetDescriptor.equals(descriptor)) {
+                        return null;
+                    }
+                    return new MethodVisitor(ASM_API) {
+                        @Override
+                        public void visitMethodInsn(int opcode, String owner, String name,
+                                                    String descriptor, boolean isInterface) {
+                            if (opcode == Opcodes.INVOKESTATIC && hookOwner.equals(owner)
+                                    && hookMethod.equals(name) && HOOK_DESCRIPTOR.equals(descriptor)) {
+                                found[0] = true;
+                            }
+                        }
+                    };
+                }
+            }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        } catch (Throwable ignored) {
+            return false;
+        }
+        return found[0];
     }
 }

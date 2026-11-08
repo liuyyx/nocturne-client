@@ -63,6 +63,11 @@ public enum ClassType {
     TEAM_COLOR("net.minecraft.world.scores.TeamColor"),
     /** 键盘输入入口（{@code KeyboardHandler.keyPress}）。 */
     KEYBOARD_HANDLER("net.minecraft.client.KeyboardHandler"),
+    /**
+     * 屏幕级输入派发接口（1.16+ 的 {@code ContainerEventHandler}）：鼠标点击在这里分发给
+     * 子控件。自绘界面打开时必须短路，否则同一次点击会穿透到背后的原生 Screen。
+     */
+    CONTAINER_EVENT_HANDLER("net.minecraft.client.gui.components.events.ContainerEventHandler"),
     /** 26.x 的键盘事件记录；key() 返回 SDL scancode。 */
     KEY_EVENT("net.minecraft.client.input.KeyEvent"),
     /** 26.x 的鼠标按钮事件记录。 */

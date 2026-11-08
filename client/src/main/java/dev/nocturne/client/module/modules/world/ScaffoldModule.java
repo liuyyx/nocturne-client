@@ -1,6 +1,11 @@
 package dev.nocturne.client.module.modules.world;
 
+import dev.nocturne.client.action.ActionApi;
+import dev.nocturne.client.action.PlayerState;
+import dev.nocturne.client.control.RotationController;
 import dev.nocturne.client.event.MovementInputEvent;
+import dev.nocturne.client.event.PlayerTickEvent;
+import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
@@ -16,8 +21,18 @@ import dev.nocturne.client.value.ModeValue;
 import dev.nocturne.client.value.NumberValue;
 import dev.nocturne.client.value.TextValue;
 
+import java.util.Locale;
+
 /** Epsilon Scaffold：六主模式、真实支撑面放置、换槽/输入/旋转与放置淡出。 */
 public final class ScaffoldModule extends GameModule implements WorldOverlay {
+    private static final float EYE_HEIGHT = 1.62f;
+    /** 放置失败后的冷却：失败也必须有间隔，否则每个 tick 都会重发一次 C08。 */
+    private static final long FAIL_COOLDOWN_MS = 50L;
+    /** 放置后等待服务端确认再验证目标格（2 tick 量级）。 */
+    private static final long VERIFY_DELAY_MS = 100L;
+    private static final long ROTATION_TTL_NANOS = 200_000_000L;
+    private static final int ROTATION_PRIORITY = 20;
+
     private final TextValue blacklist = add(new TextValue("Blacklisted Blocks", "chest,ender_chest,shulker,barrel,furnace,anvil,enchanting_table,crafting_table,beacon,bed,button,pressure_plate,door,trapdoor,fence_gate,note_block,tnt,slime_block,pumpkin,obsidian", 2048));
     private final BooleanValue toggleOnTeleport = add(new BooleanValue("Toggle On Teleport", false));
     private final ModeValue mode = mode("Mode", "TellyBridge", "TellyBridge", "GodBridge", "Heypixel", "Hypixel", "Elowen", "RavenB4");
@@ -120,16 +135,26 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
     private final BooleanValue shrink = bool("Shrink", false);
     private final ColorValue sideColor = color("Side Color", 0x64FFB7C5);
     private final ColorValue lineColor = color("Line Color", 0xFFFF69B4);
-    private int original = -1;
+
+    /** 换槽状态（原槽 + 是否真的换过），与 -1 哨兵解耦。 */
+    private final SlotSwap slotSwap = new SlotSwap();
+    /** 成功放置后延迟到下一 tick 才换回，避免同一 tick 内手持物来回跳。 */
+    private boolean pendingRestore;
+    /** 是否处于我们写回视角的状态。 */
+    private boolean rotating;
+    /** 未被旋转改写的基准 yaw；target 只读它，写回 yaw 不会反向影响它。 */
+    private float baseYaw;
+    /** 上一次真正写到客户端/控制器的 yaw，用于平滑进度与反馈扣除。 */
+    private float appliedYaw;
+    private float restorePitch;
     private int placedTicks;
-    private int inputTicks;
     private int sneakTicks;
     private long nextPlace;
     private int[] lastPlaced;
+    private int[] pendingVerify;
+    private long verifyAt;
     private long placedAt;
     private boolean inputJump;
-    private boolean inputSneak;
-    private float inputForward;
     private boolean slowTicks;
 
     public ScaffoldModule() {
@@ -138,152 +163,236 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
 
     @Override
     protected void onStart() {
-        listen(MovementInputEvent.class, event -> {
-            inputForward = event.forward;
-            inputTicks++;
-            if (mode.is("GodBridge")) {
-                if (godStopInput.get()) {
-                    event.forward = 0.0f;
-                    event.strafe = 0.0f;
-                }
-                if (godStepBack.get()) {
-                    event.forward = -1.0f;
-                }
-                if (godJump.get() && event.forward > 0.0f) {
-                    event.jump = true;
-                }
-                if (godSneak.get() || sneakBridging.get() && sneakTicks > 0) {
-                    event.sneak = true;
-                    sneakTicks--;
-                }
-            }
-            if (mode.is("Elowen")) {
-                event.sneak |= elowenSneak.get() && edgeNear();
-                event.jump |= elowenJumpSprint.get();
-                event.sprint |= elowenJumpSprint.get();
-            }
-            if ((mode.is("Heypixel") || mode.is("Hypixel")) && uitemsSafeWalk.get()) {
-                event.sneak |= edgeNear();
-            }
-            if (mode.is("RavenB4") && ravenSafe.get()) {
-                event.sneak |= edgeNear();
-            }
-            inputJump = event.jump;
-            inputSneak = event.sneak;
-        });
+        listen(MovementInputEvent.class, this::correctMovementInput);
+        // 放置挂在真实玩家 tick 上：帧驱动 20Hz 只是近似节拍，帧率变化会直接改变放置频率。
+        listen(PlayerTickEvent.Pre.class, event -> onPlayerTick());
     }
 
+    /** 帧驱动只保留覆盖层维护，放置已移到 {@link PlayerTickEvent.Pre}。 */
     @Override
     public void onTick() {
-        long now = System.currentTimeMillis();
-        if (now < nextPlace || state().player() == null) {
+        if (lastPlaced != null && fade.get()
+                && System.currentTimeMillis() - placedAt > Math.max(1.0f, fadeTime.asFloat())) {
+            lastPlaced = null;
+        }
+    }
+
+    private void onPlayerTick() {
+        ActionApi actions = actions();
+        GameBridge bridge = bridge();
+        // 每 tick 只取一次快照，后续全部复用，避免热路径反复反射。
+        PlayerState player = state();
+        if (actions == null || bridge == null || !player.present()) {
+            restore();
             return;
         }
+        long now = System.currentTimeMillis();
+        if (bridge.currentScreen() != null || player.health() <= 0.0f) {
+            // 开界面/死亡时继续发 C08 只会被拒或误触，先恢复槽位与视角。
+            stopBridging(true);
+            return;
+        }
+        if (pendingVerify != null && now >= verifyAt) {
+            Object placed = bridge.blockStateAt(pendingVerify[0], pendingVerify[1], pendingVerify[2]);
+            if (placed != null && !bridge.canBeReplaced(placed)) {
+                lastPlaced = pendingVerify;
+                placedAt = now;
+                placedTicks++;
+            }
+            pendingVerify = null;
+        }
+        if (pendingRestore) {
+            restore();
+        }
         if (slowTicks) {
-            bridge().setTimerSpeed(0.5f);
+            bridge.setTimerSpeed(0.5f);
             slowTicks = false;
         }
-        int slot = blockSlot();
+        if (now < nextPlace) {
+            return;
+        }
+        int slot = blockSlot(player);
         if (slot < 0) {
             restore();
             return;
         }
-        if (original < 0) {
-            original = state().selectedSlot();
-            slowTicks = mode.is("RavenB4") && ravenSlowEnable.get();
-        }
-        actions().selectSlot(slot, swapMode.is("Silent"));
-        double[] target = target();
-        if (target == null) {
-            return;
-        }
-        int x = (int) Math.floor(target[0]);
-        int y = (int) Math.floor(target[1]);
-        int z = (int) Math.floor(target[2]);
-        aim(x, y, z);
-        if (interactBefore.get() && (mode.is("Heypixel") || mode.is("Hypixel"))) {
-            actions().useItem();
-        }
-        boolean placed = PlacementSupport.placeNear(bridge(), actions(), x, y, z);
-        if (!placed && emergency.get()) {
-            int below = (int) Math.floor(state().y()) - 1;
-            placed = PlacementSupport.placeNear(bridge(), actions(),
-                    (int) Math.floor(state().x()), below, (int) Math.floor(state().z()));
-        }
-        if (!placed) {
-            if (simulateAttempts.get() && debugLog.get()) {
-                System.out.println("[nocturne] Scaffold placement attempt failed");
+        try {
+            if (!selectSlot(actions, player, slot)) {
+                return;
             }
-            return;
-        }
-        placedTicks++;
-        lastPlaced = new int[]{x, y, z};
-        placedAt = now;
-        if (swingHand.get() && !mode.is("Elowen") || elowenSwing.get()) {
-            actions().swing(false, swingMode.is("HideForClient") || swingMode.is("HideForBoth")
-                    || mode.is("RavenB4") && ravenSilentSwing.get());
-        }
-        if (swapBack.get()) {
-            restore();
-        }
-        int base = mode.is("Elowen") ? elowenDelay.asInt() : placeDelay.asInt();
-        int random = mode.is("GodBridge") ? EpsilonSupport.randomInt(delayMin.asInt(), delayMax.asInt())
-                : EpsilonSupport.randomInt(0, placeDelayRandom.asInt());
-        nextPlace = now + (base + random) * 50L;
-        if (mode.is("GodBridge") && placedTicks >= forceSneak.asInt()) {
-            sneakTicks = EpsilonSupport.randomInt(sneakMin.asInt(), sneakMax.asInt());
-            placedTicks = 0;
+            float yaw = baseYawFor(player);
+            double[] target = target(yaw, player);
+            if (target == null) {
+                return;
+            }
+            int x = (int) Math.floor(target[0]);
+            int y = (int) Math.floor(target[1]);
+            int z = (int) Math.floor(target[2]);
+            float[] rotation = aim(x, y, z, yaw, player);
+            // 控制器只写客户端字段；不显式发包，服务端看到的仍是旧朝向，于是 C08 先于 C03。
+            actions.sendRotation(rotation[0], rotation[1], player.onGround());
+            if (interactBefore.get() && (mode.is("Heypixel") || mode.is("Hypixel"))) {
+                actions.useItem();
+            }
+            boolean placed = PlacementSupport.placeNear(bridge, actions, x, y, z);
+            if (!placed && emergency.get()) {
+                int below = (int) Math.floor(player.y()) - 1;
+                placed = PlacementSupport.placeNear(bridge, actions,
+                        (int) Math.floor(player.x()), below, (int) Math.floor(player.z()));
+            }
+            if (!placed) {
+                nextPlace = now + FAIL_COOLDOWN_MS;
+                if (simulateAttempts.get() && debugLog.get()) {
+                    System.out.println("[nocturne] Scaffold placement attempt failed");
+                }
+                return;
+            }
+            // 放置结果先记成待验证：只有下一 tick 目标格真的变成实体方块才计入成功。
+            pendingVerify = new int[]{x, y, z};
+            verifyAt = now + VERIFY_DELAY_MS;
+            if (swingHand.get() && !mode.is("Elowen") || elowenSwing.get()) {
+                actions.swing(false, swingMode.is("HideForClient") || swingMode.is("HideForBoth")
+                        || mode.is("RavenB4") && ravenSilentSwing.get());
+            }
+            pendingRestore = swapBack.get();
+            int base = mode.is("Elowen") ? elowenDelay.asInt() : placeDelay.asInt();
+            int random = mode.is("GodBridge") ? EpsilonSupport.randomInt(delayMin.asInt(), delayMax.asInt())
+                    : EpsilonSupport.randomInt(0, placeDelayRandom.asInt());
+            nextPlace = now + (base + random) * 50L;
+            if (mode.is("GodBridge") && placedTicks >= forceSneak.asInt()) {
+                sneakTicks = EpsilonSupport.randomInt(sneakMin.asInt(), sneakMax.asInt());
+                placedTicks = 0;
+            }
+        } finally {
+            // 任何提前 return 都不能把玩家留在方块槽；成功路径留给下一 tick 才换回。
+            if (!pendingRestore && slotSwap.swapped()) {
+                restore();
+            }
         }
     }
 
-    private double[] target() {
-        double yaw = Math.toRadians(state().yaw());
+    /** 按基准 yaw 补偿 WASD 输入，再交给各模式自己的输入改写。 */
+    private void correctMovementInput(MovementInputEvent event) {
+        inputJump = event.jump;
+        if (rotating) {
+            // 视角已经被我们转开：把 WASD 输入反向补偿，否则按 W 会朝身后走。
+            float[] corrected = rotateInput(event.forward, event.strafe,
+                    RotationController.wrap(appliedYaw - baseYaw));
+            event.forward = corrected[0];
+            event.strafe = corrected[1];
+        }
+        if (mode.is("GodBridge")) {
+            if (godStopInput.get()) {
+                event.forward = 0.0f;
+                event.strafe = 0.0f;
+            }
+            if (godStepBack.get()) {
+                event.forward = -1.0f;
+            }
+            if (godJump.get() && event.forward > 0.0f) {
+                event.jump = true;
+            }
+            if (godSneak.get() || sneakBridging.get() && sneakTicks > 0) {
+                event.sneak = true;
+                sneakTicks--;
+            }
+        }
+        if (mode.is("Elowen")) {
+            event.sneak |= elowenSneak.get() && edgeNear();
+            event.jump |= elowenJumpSprint.get();
+            event.sprint |= elowenJumpSprint.get();
+        }
+        if ((mode.is("Heypixel") || mode.is("Hypixel")) && uitemsSafeWalk.get()) {
+            event.sneak |= edgeNear();
+        }
+        if (mode.is("RavenB4") && ravenSafe.get()) {
+            event.sneak |= edgeNear();
+        }
+    }
+
+    /**
+     * 把输入按"视角已被旋转 {@code deltaDegrees}"补偿回用户意图。
+     *
+     * <p>原版用 {@code (strafe·cosθ - forward·sinθ, forward·cosθ + strafe·sinθ)} 把输入旋到世界空间；
+     * 要让世界向量在旋转后的 θ+Δ 下保持不变，输入必须反向旋转 Δ。
+     */
+    static float[] rotateInput(float forward, float strafe, float deltaDegrees) {
+        double delta = Math.toRadians(deltaDegrees);
+        float cos = (float) Math.cos(delta);
+        float sin = (float) Math.sin(delta);
+        return new float[]{forward * cos - strafe * sin, forward * sin + strafe * cos};
+    }
+
+    /**
+     * 取"没有被自己旋转改写"的玩家朝向。
+     *
+     * <p>只把上一次写回的旋转扣掉：{@code 当前 yaw - appliedYaw} 就是玩家这段时间自己转过的角度，
+     * 照常计入基准。这样 target 不会读到被 aim 改写后的 yaw，再叠加 +180 形成绕圈。
+     */
+    private float baseYawFor(PlayerState player) {
+        float current = player.yaw();
+        if (rotating) {
+            baseYaw = RotationController.wrap(baseYaw + RotationController.wrap(current - appliedYaw));
+        } else {
+            baseYaw = current;
+            appliedYaw = current;
+            restorePitch = player.pitch();
+        }
+        return baseYaw;
+    }
+
+    private double[] target(float baseYawDegrees, PlayerState player) {
+        double distance = mode.is("TellyBridge") || mode.is("Elowen") && elowenMode.is("TellyBridge") ? 1.2 : 1.0;
+        if (mode.is("RavenB4") && ravenTower.get() && inputJump) {
+            return new double[]{player.x(), player.y(), player.z()};
+        }
+        double[] point = targetPoint(baseYawDegrees, player.x(), player.y(), player.z(), distance,
+                mode.is("Elowen") && elowenSideway.get(),
+                mode.is("Elowen") && elowenMode.is("KeepY"));
+        if (Math.abs(point[0] - Math.floor(point[0]) - 0.5) < minDist.get()
+                || Math.abs(point[2] - Math.floor(point[2]) - 0.5) < minDist.get()) {
+            return null;
+        }
+        return point;
+    }
+
+    /** 目标点只由未旋转的基准 yaw 决定，写回视角不会改变它。 */
+    static double[] targetPoint(float baseYaw, double x, double y, double z, double distance,
+                                boolean sideways, boolean keepY) {
+        double yaw = Math.toRadians(baseYaw);
         double forwardX = -Math.sin(yaw);
         double forwardZ = Math.cos(yaw);
-        if (mode.is("Elowen") && elowenSideway.get()) {
+        if (sideways) {
             double old = forwardX;
             forwardX = forwardZ;
             forwardZ = -old;
         }
-        double distance = mode.is("TellyBridge") || mode.is("Elowen") && elowenMode.is("TellyBridge") ? 1.2 : 1.0;
-        double y = state().y() - 1.0;
-        if (mode.is("Elowen") && elowenMode.is("KeepY")) {
-            y = Math.floor(state().y()) - 1.0;
-        }
-        if (mode.is("RavenB4") && ravenTower.get() && inputJump) {
-            y = state().y();
-            forwardX = 0.0;
-            forwardZ = 0.0;
-        }
-        double x = state().x() + forwardX * distance;
-        double z = state().z() + forwardZ * distance;
-        if (Math.abs(x - Math.floor(x) - 0.5) < minDist.get() || Math.abs(z - Math.floor(z) - 0.5) < minDist.get()) {
-            return null;
-        }
-        return new double[]{x, y, z};
+        return new double[]{x + forwardX * distance,
+                keepY ? Math.floor(y) - 1.0 : y - 1.0,
+                z + forwardZ * distance};
     }
 
-    private void aim(int x, int y, int z) {
-        double yaw = Math.toRadians(state().yaw());
-        float targetYaw = state().yaw() + 180.0f;
+    /** 请求朝向并返回真正写入的 {yaw, pitch}；平滑从上次写回的角度推进，不从反馈读数的 yaw 推进。 */
+    private float[] aim(int x, int y, int z, float baseYawDegrees, PlayerState player) {
+        float targetYaw = RotationController.wrap(baseYawDegrees + 180.0f);
         if (snap.get() || fortyFive.get() || mode.is("Elowen") && elowenMode.is("Snap")) {
             targetYaw = Math.round(targetYaw / 45.0f) * 45.0f;
         }
         if (mode.is("RavenB4") && ravenForward.get() && inputJump) {
-            targetYaw = state().yaw();
+            targetYaw = baseYawDegrees;
         }
-        double dx = x + 0.5 - state().x();
-        double dz = z + 0.5 - state().z();
-        float pitch = dev.nocturne.client.control.RotationController.pitchTo(Math.hypot(dx, dz),
-                y + 1.0 - state().y() - 1.62);
+        double dx = x + 0.5 - player.x();
+        double dz = z + 0.5 - player.z();
+        float pitch = RotationController.pitchTo(Math.hypot(dx, dz),
+                y + 1.0 - player.y() - EYE_HEIGHT);
         float speed = rotationSpeed.asFloat();
         if (mode.is("Elowen")) {
             speed = elowenSpeed.asFloat();
         } else if (mode.is("Heypixel") || mode.is("Hypixel")) {
             speed = uitemsRotation.asFloat();
         } else if (mode.is("GodBridge")) {
-            float t = (float) Math.min(1.0, Math.abs(dev.nocturne.client.control.RotationController.wrap(
-                    targetYaw - state().yaw())) / 180.0);
+            float t = (float) Math.min(1.0, Math.abs(RotationController.wrap(
+                    targetYaw - appliedYaw)) / 180.0);
             float sigmoid = (float) (1.0 / (1.0 + Math.exp(-steepness.get() * (t - midpoint.get()))));
             speed = angleSmooth.is("Linear") ? horizontalMin.asFloat()
                     : horizontalMin.asFloat() + (float) ((horizontalMax.get() - horizontalMin.get()) * sigmoid);
@@ -291,35 +400,109 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
         if (rotationTiming.is("OnTickSnap")) {
             speed = 180.0f;
         }
-        client().rotations().request(dev.nocturne.client.control.RotationController.approach(
-                state().yaw(), targetYaw, speed), pitch, 20, 200_000_000L);
+        float yaw = RotationController.approach(appliedYaw, targetYaw, speed);
+        client().rotations().request(yaw, pitch, ROTATION_PRIORITY, ROTATION_TTL_NANOS);
+        // 更高优先级的请求会覆盖我们：以控制器实际持有的角度为准，下一 tick 的扣除才不会漂移。
+        appliedYaw = client().rotations().yaw(yaw);
+        rotating = true;
+        return new float[]{appliedYaw, pitch};
     }
 
-    private int blockSlot() {
+    /** 快捷栏里的方块槽；黑名单全命中时返回 -1，绝不退回"任意方块槽"。 */
+    private int blockSlot(PlayerState player) {
         if (swapMode.is("None")) {
-            return state().selectedSlot();
+            return player.selectedSlot();
         }
-        int slot = EpsilonSupport.findHotbar(bridge(), "block");
         for (int i = 0; i < 9; i++) {
             Object stack = bridge().hotbarStack(i);
             Object item = bridge().callMapped(stack, ClassType.ITEM_STACK, "getItem");
             if (!bridge().isInstance(item, ClassType.BLOCK_ITEM)) {
                 continue;
             }
-            String id = bridge().itemDescription(stack);
-            if (!blacklist.get().toLowerCase(java.util.Locale.ROOT).contains(id.replace("block.minecraft.", ""))) {
-                return i;
+            if (blacklisted(blacklist.get(), bridge().itemDescription(stack))) {
+                continue;
             }
+            return i;
         }
         if (swapMode.is("InvSwitch") || considerInventory.get()) {
             int inventory = EpsilonSupport.findInventory(bridge(), "block");
             if (inventory >= 9) {
-                int target = 8;
-                actions().clickSlot(InventorySupport.menuSlot(inventory), target, "swap");
-                return target;
+                Object stack = bridge().inventoryStack(inventory);
+                if (!blacklisted(blacklist.get(), bridge().itemDescription(stack))) {
+                    actions().clickSlot(InventorySupport.menuSlot(inventory), 8, "swap");
+                    return 8;
+                }
             }
         }
-        return slot;
+        return -1;
+    }
+
+    /**
+     * 黑名单按"方块 id 的连续词元"匹配。
+     *
+     * <p>{@code contains("bed")} 会把 {@code bedrock} 一起拉黑；反过来 {@code oak_door} 又必须被
+     * {@code door} 命中。因此把 id 与词条都按 {@code _} 切词，再做连续子序列匹配。
+     * 读不到 id 时按黑名单处理（无法确认就不放）。
+     */
+    static boolean blacklisted(String config, String id) {
+        if (config == null || id == null || id.isEmpty()) {
+            return true;
+        }
+        String normalized = id.toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("block.minecraft.")) {
+            normalized = normalized.substring("block.minecraft.".length());
+        } else if (normalized.startsWith("item.minecraft.")) {
+            normalized = normalized.substring("item.minecraft.".length());
+        }
+        String[] parts = normalized.split("_");
+        for (String raw : config.toLowerCase(Locale.ROOT).split("[,\\s;/]+")) {
+            if (raw.isEmpty()) {
+                continue;
+            }
+            if (containsTokenRun(parts, raw.split("_"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsTokenRun(String[] parts, String[] token) {
+        if (token.length == 0 || token.length > parts.length) {
+            return false;
+        }
+        outer:
+        for (int i = 0; i + token.length <= parts.length; i++) {
+            for (int j = 0; j < token.length; j++) {
+                if (!parts[i + j].equals(token[j])) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 选中方块槽并记录原槽。
+     *
+     * <p>Silent 只发换槽包、客户端手持物不变，放置会用错物品：这里同时做本地切换，
+     * 放置结束（或失败）再换回。读不到原槽时放弃换槽，绝不把玩家留在无法恢复的槽位。
+     */
+    private boolean selectSlot(ActionApi actions, PlayerState player, int slot) {
+        if (swapMode.is("None")) {
+            return true;
+        }
+        if (!slotSwap.begin(player.selectedSlot(), slot)) {
+            // 读不到原槽就放弃换槽：换出去就再也换不回来。
+            return false;
+        }
+        if (!slotSwap.swapped()) {
+            return true;
+        }
+        if (swapMode.is("Silent")) {
+            actions.selectSlot(slot, true);
+        }
+        return actions.selectSlot(slot, false);
     }
 
     private boolean edgeNear() {
@@ -327,11 +510,43 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
         return bridge().noCollision(bridge().player(), bridge().moveBox(box, 0, -0.5, 0));
     }
 
+    /** 换回进入搭路前的槽位；状态机保证只恢复一次，且原槽 0 不会被当成"没有原槽"。 */
     private void restore() {
-        if (original >= 0 && actions() != null) {
-            actions().selectSlot(original, swapMode.is("Silent"));
+        pendingRestore = false;
+        ActionApi actions = actions();
+        if (actions == null) {
+            // 动作层不可用时保留记录：丢状态等于把玩家留在方块槽里。
+            return;
         }
-        original = -1;
+        int original = slotSwap.takeRestore();
+        if (original < 0) {
+            return;
+        }
+        if (swapMode.is("Silent")) {
+            actions.selectSlot(original, true);
+        }
+        actions.selectSlot(original, false);
+    }
+
+    /** 停止搭路的全部副作用：换回槽位、写回视角、清空待验证、恢复计时器。 */
+    private void stopBridging(boolean writeBack) {
+        if (rotating) {
+            if (client() != null && client().rotations() != null) {
+                client().rotations().release(ROTATION_PRIORITY);
+            }
+            ActionApi actions = actions();
+            if (writeBack && actions != null) {
+                // 只 release 会把视角永久停在反向：显式写回进入旋转前的朝向。
+                actions.setRotation(RotationController.wrap(baseYaw), restorePitch);
+            }
+            rotating = false;
+        }
+        restore();
+        pendingVerify = null;
+        GameBridge bridge = bridge();
+        if (bridge != null) {
+            bridge.setTimerSpeed(1.0f);
+        }
     }
 
     @Override
@@ -361,14 +576,54 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
 
     @Override
     protected void onStop() {
-        restore();
-        if (bridge() != null) {
-            bridge().setTimerSpeed(1.0f);
-        }
-        if (client() != null && client().rotations() != null) {
-            client().rotations().release(20);
-        }
+        stopBridging(true);
+        // 关闭时动作层可能已不可用（换不回去）：只能丢弃记录，避免下次启用时恢复过期槽位。
+        slotSwap.clear();
+        rotating = false;
+        pendingRestore = false;
+        pendingVerify = null;
         lastPlaced = null;
+    }
+
+    /**
+     * 换槽状态机。
+     *
+     * <p>"是否换过槽"必须是独立布尔：旧实现用 {@code original == -1} 同时表示"没有原槽"，
+     * 于是原槽恰好是 0 或恢复路径被提前 return 跳过时，玩家会被卡在方块槽里。
+     */
+    static final class SlotSwap {
+        private int original = -1;
+        private boolean swapped;
+
+        /** 记录进入前的槽位；读不到原槽（<0）返回 false，调用方必须放弃换槽。 */
+        boolean begin(int originalSlot, int targetSlot) {
+            if (swapped) {
+                return true;
+            }
+            if (originalSlot < 0) {
+                return false;
+            }
+            original = originalSlot;
+            swapped = originalSlot != targetSlot;
+            return true;
+        }
+
+        boolean swapped() {
+            return swapped;
+        }
+
+        /** 取出待恢复的槽位并复位；没有需要恢复的槽时返回 -1（-1 只表示"无"）。 */
+        int takeRestore() {
+            int slot = swapped ? original : -1;
+            clear();
+            return slot;
+        }
+
+        /** 丢弃记录（动作层不可用、无法换回时使用）。 */
+        void clear() {
+            swapped = false;
+            original = -1;
+        }
     }
 
     private BooleanValue bool(String name, boolean value) {

@@ -46,11 +46,15 @@ net/minecraft/client/Options
 net/minecraft/client/Options#fov
 net/minecraft/client/Options#fovEffectScale
 net/minecraft/client/Options#bobView
-net/minecraft/client/OptionInstance#set
+# 写成 `set()`：裸名会被解析成字段（OptionInstance 没有该字段），写回路径整条静默失效。
+net/minecraft/client/OptionInstance#set()
 net/minecraft/client/Options#gamma
 net/minecraft/client/Options#sensitivity
+# 人称：1.16.5+ 是 `OptionInstance<CameraType> cameraType`（上面两个字段只存在于 ≤1.14.4，
+# 旧面保留作兼容候选——GameBridge 按候选依次尝试）。
 net/minecraft/client/Options#perspective
 net/minecraft/client/Options#thirdPersonView
+net/minecraft/client/Options#cameraType
 net/minecraft/client/CameraType
 net/minecraft/client/CameraType#FIRST_PERSON
 net/minecraft/client/CameraType#THIRD_PERSON_BACK
@@ -110,6 +114,8 @@ net/minecraft/client/multiplayer/MultiPlayerGameMode#startDestroyBlock()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#stopDestroyBlock()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#useItem()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#useItemOn()
+net/minecraft/client/multiplayer/MultiPlayerGameMode#sendUseItem()
+net/minecraft/client/multiplayer/MultiPlayerGameMode#processRightClick()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#onPlayerRightClick()
 net/minecraft/client/multiplayer/MultiPlayerGameMode#processRightClickBlock()
 
@@ -155,9 +161,12 @@ net/minecraft/client/Minecraft#missTime
 net/minecraft/world/entity/LivingEntity#jumpTicks
 net/minecraft/client/renderer/GameRenderer#hurtCamera()
 net/minecraft/client/Camera
-net/minecraft/client/Camera#getMaxZoom
+# 必须是**方法**（带 `()`）：写成裸名会被需求解析成字段，表里只留 `fields.*: absent`，
+# agent 侧 `candidate.descriptor()==null` 于是整条钩子被静默 continue（CameraClip/HandView 永死）。
+# 真实签名：`Camera#getMaxZoom(F)F`；`ItemInHandRenderer#applyItemArmTransform(PoseStack,HumanoidArm,F)V`（1.14.4+）。
+net/minecraft/client/Camera#getMaxZoom()
 net/minecraft/client/renderer/ItemInHandRenderer
-net/minecraft/client/renderer/ItemInHandRenderer#applyItemArmTransform
+net/minecraft/client/renderer/ItemInHandRenderer#applyItemArmTransform()
 net/minecraft/client/renderer/ItemInHandRenderer#mainHandHeight
 net/minecraft/client/renderer/ItemInHandRenderer#offHandHeight
 net/minecraft/client/renderer/ItemInHandRenderer#mainHandItem
@@ -166,6 +175,9 @@ net/minecraft/client/Minecraft#itemInHandRenderer
 com/mojang/blaze3d/vertex/PoseStack#translate
 com/mojang/blaze3d/vertex/PoseStack#scale
 com/mojang/blaze3d/vertex/PoseStack#mulPose
+# 旋转走方法 mulPose(Quaternionf)：旧条目（裸名）只能解析成字段，HandView/TotemAnimation 的
+# 旋转因此从未生效。字段条目保留仅为兼容既有表读数。
+com/mojang/blaze3d/vertex/PoseStack#mulPose()
 org/joml/Quaternionf
 org/joml/AxisAngle4f
 net/minecraft/client/renderer/GameRenderer#setupFog()
@@ -566,9 +578,19 @@ net/minecraft/client/MouseHandler#isMouseGrabbed()
 # 滚轮：GLFW 世代唯一能拿到增量的入口（没有轮询接口）。
 net/minecraft/client/MouseHandler#onScroll()
 net/minecraft/client/MouseHandler#turnPlayer()
+# 旧世代（1.8.9/1.12.2）没有 KeyboardHandler/MouseHandler：键盘绑定走 KeyBinding，
+# 焦点抢占走 Minecraft#setIngameFocus（绝不能拦 setIngameNotInFocus）。
+net/minecraft/client/KeyMapping#setKeyBindState()
+net/minecraft/client/KeyMapping#onTick()
+net/minecraft/client/Minecraft#setIngameFocus()
+# 数值选择：26.x 的屏幕存放在 Gui.screen()；屏幕级鼠标点击派发在 ContainerEventHandler。
+net/minecraft/client/gui/Gui#screen()
+net/minecraft/client/gui/components/events/ContainerEventHandler
+net/minecraft/client/gui/components/events/ContainerEventHandler#mouseClicked()
 net/minecraft/util/MouseHelper
 net/minecraft/util/MouseHelper#mouseXYChange()
 net/minecraft/world/entity/player/Inventory#changeCurrentItem()
+net/minecraft/world/entity/player/Inventory#swapPaint()
 com/mojang/blaze3d/platform/InputConstants
 com/mojang/blaze3d/platform/InputConstants#isKeyDown()
 com/mojang/blaze3d/platform/InputConstants$Type#getOrCreate()

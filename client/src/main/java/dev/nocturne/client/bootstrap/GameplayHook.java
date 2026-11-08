@@ -1,5 +1,7 @@
 package dev.nocturne.client.bootstrap;
 
+import dev.nocturne.bootstrap.GameplaySink;
+
 /**
  * 游戏事件钩子汇。
  *
@@ -38,6 +40,11 @@ public final class GameplayHook {
 
         default boolean entityRenderGate(Object entity) {
             return true;
+        }
+
+        /** {@code shouldRender(Entity,Frustum,DDD)Z} 的两参形态；第二个形参只用于消耗签名。 */
+        default boolean entityRenderGate(Object entity, Object frustum) {
+            return entityRenderGate(entity);
         }
 
         default void entityRender(Object entity, boolean post) {
@@ -139,14 +146,23 @@ public final class GameplayHook {
         }
     }
 
-    private static volatile Sink sink;
+    /**
+     * 本类副本的直连汇：只有「安装者与本副本用同一套接口」时才非空。
+     *
+     * <p>真正的权威状态在 bootstrap 独有的 {@link GameplaySink}——不同加载器各有一份本类，
+     * 静态字段会分裂（26.3 真机 {@code sink=false} 即此）。
+     */
+    private static volatile Sink localSink;
+    /** 跨加载器适配出的代理（本副本接口）；目标变化时重建。 */
+    private static volatile Sink adaptedSink;
+    /** {@link #adaptedSink} 对应的共享目标对象。 */
+    private static volatile Object adaptedTarget;
     private static final ThreadLocal<Object[]> ATTACK_CONTEXT = new ThreadLocal<Object[]>();
     /** KeyboardInput#tick 的头部捕获值；末尾无参消费，避开 RETURN 处被裁掉的 this 槽。 */
     private static final ThreadLocal<Object> INPUT_TICK = new ThreadLocal<Object>();
     /** 实体渲染头部捕获值；末尾无参消费，避开 RETURN 处被裁掉的实体形参槽。 */
     private static final ThreadLocal<Object> CHAMS_ENTITY = new ThreadLocal<Object>();
-    /** sendPosition 是否已直接织入；false 时由玩家 tick 前沿降级产生 MotionEvent。 */
-    private static volatile boolean motionDirect;
+    /** sendPosition 是否已直接织入；状态在 bootstrap 的 {@link GameplaySink} 里跨加载器共享。 */
     /** 首个 Motion 事件是否已记录；用于区分"钩子未织入"与"事件未投递"。 */
     private static volatile boolean motionLogged;
     /** 首个 tick 事件是否已记录。 */
@@ -156,15 +172,113 @@ public final class GameplayHook {
     }
 
     public static void install(Sink replacement) {
-        sink = replacement;
+        localSink = replacement;
+        // 跨加载器共享：织入的字节码可能落在另一个副本上，必须让它们也能拿到汇。
+        GameplaySink.install(replacement);
+    }
+
+    /**
+     * 取本副本可用的汇。
+     *
+     * <p>优先直连（安装者与本副本同一接口，零开销）；否则从 bootstrap 的共享状态取目标，
+     * 目标实现的是另一个副本的 Sink 时用本副本接口的代理转发。
+     *
+     * @return 汇实例；未安装时为 {@code null}（调用方按“放行”处理）
+     */
+    private static Sink sink() {
+        // 自销毁后所有注入钩子入口统一退化为"放行"：闸门放在 bootstrap 唯一副本里，
+        // 因此无论调用方是哪个加载器的 GameplayHook 副本都能读到。
+        if (GameplaySink.isKilled()) {
+            return null;
+        }
+        Sink direct = localSink;
+        if (direct != null) {
+            return direct;
+        }
+        Object shared = GameplaySink.target();
+        if (shared == null) {
+            return null;
+        }
+        if (shared instanceof Sink) {
+            Sink typed = (Sink) shared;
+            localSink = typed;
+            return typed;
+        }
+        Sink cached = adaptedSink;
+        if (cached != null && adaptedTarget == shared) {
+            return cached;
+        }
+        Object made = GameplaySink.adapt(Sink.class);
+        if (made instanceof Sink) {
+            adaptedSink = (Sink) made;
+            adaptedTarget = shared;
+            return adaptedSink;
+        }
+        return null;
     }
 
     public static void markMotionDirect() {
-        motionDirect = true;
+        GameplaySink.markMotionDirect();
     }
 
     public static boolean isMotionDirect() {
-        return motionDirect;
+        return GameplaySink.isMotionDirect();
+    }
+
+    /**
+     * 触发自销毁闸门；幂等，可在任意线程调用。
+     *
+     * <p>只置 {@link GameplaySink#kill()} 的标志并清掉本副本的头部捕获缓存，不拆资源。
+     */
+    public static void kill() {
+        GameplaySink.kill();
+        ATTACK_CONTEXT.remove();
+        INPUT_TICK.remove();
+        CHAMS_ENTITY.remove();
+    }
+
+    /** @return 是否已进入自销毁状态 */
+    public static boolean isKilled() {
+        return GameplaySink.isKilled();
+    }
+
+    /** 登记一条"钩子已接线"。 */
+    public static void markWired(String id) {
+        GameplaySink.markWired(id);
+    }
+
+    /** 登记一条"钩子在当前版本不可用"。 */
+    public static void markUnavailable(String id, String reason) {
+        GameplaySink.markUnavailable(id, reason);
+    }
+
+    /** @return 该能力是否已真实接线 */
+    public static boolean isWired(String id) {
+        return GameplaySink.isWired(id);
+    }
+
+    /** @return 该能力是否已被明确标记为不可用 */
+    public static boolean isUnavailable(String id) {
+        return GameplaySink.isUnavailable(id);
+    }
+
+    /** @return 不可用原因；已接线或未登记时为 {@code null} */
+    public static String unavailableReason(String id) {
+        return GameplaySink.unavailableReason(id);
+    }
+
+    /** {@code shouldRender(Entity,Frustum,DDD)Z} 的两参织入点；Frustum 只占位。 */
+    public static boolean entityRenderGate(Object entity, Object frustum) {
+        if (GameplaySink.isKilled()) {
+            return true;
+        }
+        try {
+            Sink current = sink();
+            return current == null || current.entityRenderGate(entity, frustum);
+        } catch (Throwable t) {
+            failure("entityRenderGate", t);
+            return true;
+        }
     }
 
     public static boolean playerTickPre(Object player) {
@@ -172,9 +286,9 @@ public final class GameplayHook {
             if (!tickLogged) {
                 tickLogged = true;
                 System.out.println("[nocturne] gameplay hook first tick event; sink="
-                        + (sink != null));
+                        + (sink() != null));
             }
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.playerTickPre(player);
         } catch (Throwable t) {
             failure("playerTickPre", t);
@@ -184,7 +298,7 @@ public final class GameplayHook {
 
     public static void playerTickPost(Object player) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.playerTickPost(player);
             }
@@ -198,9 +312,9 @@ public final class GameplayHook {
             if (!motionLogged) {
                 motionLogged = true;
                 System.out.println("[nocturne] gameplay hook first motion event; sink="
-                        + (sink != null));
+                        + (sink() != null));
             }
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.motionPre(player);
             }
@@ -211,7 +325,7 @@ public final class GameplayHook {
 
     public static void motionPost(Object player) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.motionPost(player);
             }
@@ -240,7 +354,7 @@ public final class GameplayHook {
 
     private static void inputTick(Object input) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.inputTick(input);
             }
@@ -251,7 +365,7 @@ public final class GameplayHook {
 
     public static boolean screenOpen(Object screen) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.screenOpen(screen);
         } catch (Throwable t) {
             failure("screenOpen", t);
@@ -261,7 +375,7 @@ public final class GameplayHook {
 
     public static void handTransform(Object pose, Object arm, float inverseHeight) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.handTransform(pose, arm, inverseHeight);
             }
@@ -272,7 +386,7 @@ public final class GameplayHook {
 
     public static float cameraZoom(float distance) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null ? distance : current.cameraZoom(distance);
         } catch (Throwable t) {
             failure("cameraZoom", t);
@@ -282,7 +396,7 @@ public final class GameplayHook {
 
     public static boolean noFog() {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.noFog();
         } catch (Throwable t) {
             failure("noFog", t);
@@ -297,7 +411,7 @@ public final class GameplayHook {
 
     public static boolean noHurtCamera() {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.noHurtCamera();
         } catch (Throwable t) {
             failure("noHurtCamera", t);
@@ -312,7 +426,7 @@ public final class GameplayHook {
 
     public static float timerScale(float delta) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null ? delta : current.timerScale(delta);
         } catch (Throwable t) {
             failure("timerScale", t);
@@ -322,7 +436,7 @@ public final class GameplayHook {
 
     public static boolean xrayBlock(Object blockState, Object blockPos) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.xrayBlock(blockState, blockPos);
         } catch (Throwable t) {
             failure("xrayBlock", t);
@@ -332,7 +446,7 @@ public final class GameplayHook {
 
     public static boolean entityRenderGate(Object entity) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.entityRenderGate(entity);
         } catch (Throwable t) {
             failure("entityRenderGate", t);
@@ -341,6 +455,10 @@ public final class GameplayHook {
     }
 
     public static void chamsPre(Object entity) {
+        if (GameplaySink.isKilled()) {
+            CHAMS_ENTITY.remove();
+            return;
+        }
         if (entity == null) {
             CHAMS_ENTITY.remove();
         } else {
@@ -360,7 +478,7 @@ public final class GameplayHook {
 
     private static void entityRender(Object entity, boolean post) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.entityRender(entity, post);
             }
@@ -375,7 +493,7 @@ public final class GameplayHook {
 
     public static void entityJoin(int id, Object entity) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.entityJoin(id, entity);
             }
@@ -394,7 +512,7 @@ public final class GameplayHook {
 
     private static boolean destroy(boolean start, Object blockPos, Object direction) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || (start ? current.destroyStart(blockPos, direction)
                     : current.destroyContinue(blockPos, direction));
         } catch (Throwable t) {
@@ -405,7 +523,7 @@ public final class GameplayHook {
 
     public static void destroyStop() {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.destroyStop();
             }
@@ -416,7 +534,7 @@ public final class GameplayHook {
 
     public static Object moveVec(Object entity, Object motion) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             Object replacement = current == null ? motion : current.moveVec(entity, motion);
             return replacement == null ? motion : replacement;
         } catch (Throwable t) {
@@ -427,7 +545,7 @@ public final class GameplayHook {
 
     public static void moveLegacyCapture(Object entity, double x, double y, double z) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.moveLegacyCapture(entity, x, y, z);
             }
@@ -438,7 +556,7 @@ public final class GameplayHook {
 
     public static void moveLegacyDispatch(Object entity) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.moveLegacyDispatch(entity);
             }
@@ -461,7 +579,7 @@ public final class GameplayHook {
 
     private static double moveLegacyValue(Object entity, double value, int axis) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 return axis == 0 ? current.moveLegacyX(entity, value)
                         : axis == 1 ? current.moveLegacyY(entity, value)
@@ -475,7 +593,7 @@ public final class GameplayHook {
 
     public static boolean attack(Object player, Object target) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             boolean allowed = current == null || current.attack(player, target);
             if (!allowed) {
                 ATTACK_CONTEXT.remove();
@@ -503,7 +621,7 @@ public final class GameplayHook {
 
     public static void attackPost(Object player, Object target) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             if (current != null) {
                 current.attackPost(player, target);
             }
@@ -514,7 +632,7 @@ public final class GameplayHook {
 
     public static boolean leftClick() {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.leftClick();
         } catch (Throwable t) {
             failure("leftClick", t);
@@ -524,7 +642,7 @@ public final class GameplayHook {
 
     public static boolean useItem() {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.useItem();
         } catch (Throwable t) {
             failure("useItem", t);
@@ -534,7 +652,7 @@ public final class GameplayHook {
 
     public static boolean key(long window, int key, int scancode, int action, int modifiers) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.key(window, key, scancode, action, modifiers);
         } catch (Throwable t) {
             failure("key", t);
@@ -544,7 +662,7 @@ public final class GameplayHook {
 
     public static boolean key(long window, int action, Object event) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.key(window, action, event);
         } catch (Throwable t) {
             failure("key", t);
@@ -554,7 +672,7 @@ public final class GameplayHook {
 
     public static boolean mouse(long window, int button, int action, int modifiers) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.mouse(window, button, action, modifiers);
         } catch (Throwable t) {
             failure("mouse", t);
@@ -564,7 +682,7 @@ public final class GameplayHook {
 
     public static boolean mouse(long window, Object event, int action) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null || current.mouse(window, event, action);
         } catch (Throwable t) {
             failure("mouse", t);
@@ -574,7 +692,7 @@ public final class GameplayHook {
 
     public static Object packetSend(Object packet) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null ? packet : current.packetSend(packet);
         } catch (Throwable t) {
             failure("packetSend", t);
@@ -584,7 +702,7 @@ public final class GameplayHook {
 
     public static Object packetReceive(Object packet) {
         try {
-            Sink current = sink;
+            Sink current = sink();
             return current == null ? packet : current.packetReceive(packet);
         } catch (Throwable t) {
             failure("packetReceive", t);
@@ -592,15 +710,50 @@ public final class GameplayHook {
         }
     }
 
-    /** 钩子失败必须放行原游戏行为；日志按五秒窗口限流。 */
+    /** 钩子失败必须放行原游戏行为；日志按五秒窗口限流，每个钩子首次失败补打一次栈。 */
     private static synchronized void failure(String hook, Throwable error) {
+        Throwable cause = unwrap(error);
         long now = System.currentTimeMillis();
         if (now - lastFailureLogAt < 5000L) {
             return;
         }
         lastFailureLogAt = now;
-        System.out.println("[nocturne] gameplay hook " + hook + " failed: " + error);
+        System.out.println("[nocturne] gameplay hook " + hook + " failed: " + cause);
+        if (STACK_LOGGED.add(hook)) {
+            // 只打一次栈：每五秒刷一次完整栈会把游戏日志淹掉，但完全没有栈又查不出真因
+            // （例如 useItem 反复失败时只能看到 "UndeclaredThrowableException: null"）。
+            cause.printStackTrace(System.out);
+        }
     }
+
+    /**
+     * 剥掉反射包装：代理调用会把业务异常包成 {@link java.lang.reflect.InvocationTargetException}
+     * 或 {@link java.lang.reflect.UndeclaredThrowableException}，只打外层等于没打。
+     *
+     * @param error 原始异常
+     * @return 最内层原因（没有包装时就是它自己）
+     */
+    private static Throwable unwrap(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof java.lang.reflect.InvocationTargetException
+                    && ((java.lang.reflect.InvocationTargetException) current).getCause() != null) {
+                current = ((java.lang.reflect.InvocationTargetException) current).getCause();
+                continue;
+            }
+            if (current instanceof java.lang.reflect.UndeclaredThrowableException
+                    && ((java.lang.reflect.UndeclaredThrowableException) current).getCause() != null) {
+                current = ((java.lang.reflect.UndeclaredThrowableException) current).getCause();
+                continue;
+            }
+            return current;
+        }
+        return error;
+    }
+
+    /** 已打印过栈的钩子名；每个钩子只补一次栈。 */
+    private static final java.util.Set<String> STACK_LOGGED =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private static long lastFailureLogAt;
 }

@@ -33,9 +33,13 @@ class ActionContractTest {
                 contract.get("sendPacket").candidates().get(0).owner());
         assertEquals(2, contract.get("attack").candidates().get(0).parameters().size());
         assertEquals("empty", contract.get("readState").degrade());
-        assertEquals(2, contract.get("useItem").candidates().size());
+        // 现代 useItem 两个重载 + 1.8.9 sendUseItem + 1.9–1.13.2 processRightClick 两种形状。
+        assertEquals(5, contract.get("useItem").candidates().size());
         assertEquals(Arrays.asList("player", "level", "hand"),
                 contract.get("useItem").candidates().get(0).arguments());
+        assertEquals("sendUseItem", contract.get("useItem").candidates().get(2).method());
+        assertEquals(Arrays.asList("player", "level", "heldItem"),
+                contract.get("useItem").candidates().get(2).arguments());
         assertEquals(Arrays.asList("player", "hand", "hitResult"),
                 contract.get("place").candidates().get(1).arguments());
         assertEquals("swingFactory", contract.get("swingPacket").operation());

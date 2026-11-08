@@ -157,6 +157,20 @@
                 "neoforge": "com.mojang.blaze3d.vertex.PoseStack"
             },
             "methods": {
+                "mulPose": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_34425",
+                        "forge": "m_318714_",
+                        "neoforge": "mulPose"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lorg/joml/Matrix4f;)V",
+                        "fabric": "(Lorg/joml/Matrix4f;)V",
+                        "forge": "(Lorg/joml/Matrix4f;)V",
+                        "neoforge": "(Lorg/joml/Matrix4f;)V"
+                    }
+                },
                 "popPose": {
                     "names": {
                         "vanilla": "b",
@@ -233,12 +247,23 @@
                 "forge": "net.minecraft.client.Camera",
                 "neoforge": "net.minecraft.client.Camera"
             },
-            "methods": {},
-            "fields": {
+            "methods": {
                 "getMaxZoom": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_19318",
+                        "forge": "m_90566_",
+                        "neoforge": "getMaxZoom"
+                    },
+                    "signatures": {
+                        "vanilla": "(F)F",
+                        "fabric": "(F)F",
+                        "forge": "(F)F",
+                        "neoforge": "(F)F"
+                    }
                 }
-            }
+            },
+            "fields": {}
         },
         "net/minecraft/client/CameraType": {
             "names": {
@@ -358,6 +383,9 @@
                         "neoforge": "()Z"
                     }
                 },
+                "onTick": {
+                    "absent": true
+                },
                 "set": {
                     "names": {
                         "vanilla": "a",
@@ -385,6 +413,9 @@
                         "forge": "()V",
                         "neoforge": "()V"
                     }
+                },
+                "setKeyBindState": {
+                    "absent": true
                 }
             },
             "fields": {
@@ -476,6 +507,9 @@
                         "forge": "(Z)V",
                         "neoforge": "(Z)V"
                     }
+                },
+                "setIngameFocus": {
+                    "absent": true
                 },
                 "setScreen": {
                     "names": {
@@ -901,13 +935,24 @@
                         "forge": "()Ljava/lang/Object;",
                         "neoforge": "()Ljava/lang/Object;"
                     }
+                },
+                "set": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_41748",
+                        "forge": "m_231514_",
+                        "neoforge": "set"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ljava/lang/Object;)V",
+                        "fabric": "(Ljava/lang/Object;)V",
+                        "forge": "(Ljava/lang/Object;)V",
+                        "neoforge": "(Ljava/lang/Object;)V"
+                    }
                 }
             },
             "fields": {
                 "get": {
-                    "absent": true
-                },
-                "set": {
                     "absent": true
                 }
             }
@@ -933,6 +978,20 @@
                         "fabric": "Lnet/minecraft/class_7172;",
                         "forge": "Lnet/minecraft/client/OptionInstance;",
                         "neoforge": "Lnet/minecraft/client/OptionInstance;"
+                    }
+                },
+                "cameraType": {
+                    "names": {
+                        "vanilla": "bU",
+                        "fabric": "field_26677",
+                        "forge": "f_92111_",
+                        "neoforge": "cameraType"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lfkt;",
+                        "fabric": "Lnet/minecraft/class_5498;",
+                        "forge": "Lnet/minecraft/client/CameraType;",
+                        "neoforge": "Lnet/minecraft/client/CameraType;"
                     }
                 },
                 "fov": {
@@ -1089,6 +1148,9 @@
                 },
                 "renderGameOverlay": {
                     "absent": true
+                },
+                "screen": {
+                    "absent": true
                 }
             },
             "fields": {
@@ -1183,6 +1245,31 @@
             "absent": true,
             "names": {},
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/events/ContainerEventHandler": {
+            "names": {
+                "vanilla": "fqq",
+                "fabric": "net.minecraft.class_4069",
+                "forge": "net.minecraft.client.gui.components.events.ContainerEventHandler",
+                "neoforge": "net.minecraft.client.gui.components.events.ContainerEventHandler"
+            },
+            "methods": {
+                "mouseClicked": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_20082",
+                        "forge": "m_6375_",
+                        "neoforge": "mouseClicked"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDI)Z",
+                        "fabric": "(DDI)Z",
+                        "forge": "(DDI)Z",
+                        "neoforge": "(DDI)Z"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/gui/screens/ChatScreen": {
@@ -1702,7 +1789,13 @@
                 "onPlayerRightClick": {
                     "absent": true
                 },
+                "processRightClick": {
+                    "absent": true
+                },
                 "processRightClickBlock": {
+                    "absent": true
+                },
+                "sendUseItem": {
                     "absent": true
                 },
                 "startDestroyBlock": {
@@ -2380,11 +2473,23 @@
                 "forge": "net.minecraft.client.renderer.ItemInHandRenderer",
                 "neoforge": "net.minecraft.client.renderer.ItemInHandRenderer"
             },
-            "methods": {},
-            "fields": {
+            "methods": {
                 "applyItemArmTransform": {
-                    "absent": true
-                },
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_3224",
+                        "forge": "m_109382_",
+                        "neoforge": "applyItemArmTransform"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lffv;Lbvc;F)V",
+                        "fabric": "(Lnet/minecraft/class_4587;Lnet/minecraft/class_1306;F)V",
+                        "forge": "(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V",
+                        "neoforge": "(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V"
+                    }
+                }
+            },
+            "fields": {
                 "mainHandHeight": {
                     "names": {
                         "vanilla": "ay",
@@ -5567,6 +5672,9 @@
                     "absent": true
                 },
                 "setSelectedSlot": {
+                    "absent": true
+                },
+                "swapPaint": {
                     "absent": true
                 }
             },

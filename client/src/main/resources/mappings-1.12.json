@@ -91,11 +91,35 @@
                         "forge": "()Z"
                     }
                 },
+                "onTick": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1420",
+                        "forge": "func_74507_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)V",
+                        "fabric": "(I)V",
+                        "forge": "(I)V"
+                    }
+                },
                 "set": {
                     "absent": true
                 },
                 "setAll": {
                     "absent": true
+                },
+                "setKeyBindState": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_1416",
+                        "forge": "func_74510_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(IZ)V",
+                        "fabric": "(IZ)V",
+                        "forge": "(IZ)V"
+                    }
                 }
             },
             "fields": {
@@ -164,6 +188,18 @@
                         "vanilla": "t",
                         "fabric": "method_1574",
                         "forge": "func_71407_l"
+                    },
+                    "signatures": {
+                        "vanilla": "()V",
+                        "fabric": "()V",
+                        "forge": "()V"
+                    }
+                },
+                "setIngameFocus": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_0_2304",
+                        "forge": "func_71381_h"
                     },
                     "signatures": {
                         "vanilla": "()V",
@@ -433,6 +469,9 @@
                 "bobView": {
                     "absent": true
                 },
+                "cameraType": {
+                    "absent": true
+                },
                 "fov": {
                     "names": {
                         "vanilla": "aD",
@@ -558,6 +597,9 @@
                 },
                 "renderGameOverlay": {
                     "absent": true
+                },
+                "screen": {
+                    "absent": true
                 }
             },
             "fields": {
@@ -588,6 +630,12 @@
             "fields": {}
         },
         "net/minecraft/client/gui/Hud": {
+            "absent": true,
+            "names": {},
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/events/ContainerEventHandler": {
             "absent": true,
             "names": {},
             "methods": {},
@@ -938,6 +986,18 @@
                 "onPlayerRightClick": {
                     "absent": true
                 },
+                "processRightClick": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2919",
+                        "forge": "func_187101_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Laeb;Lams;Ltz;)Lub;",
+                        "fabric": "(Lnet/minecraft/class_1657;Lnet/minecraft/class_1937;Lnet/minecraft/class_1268;)Lnet/minecraft/class_1269;",
+                        "forge": "(Lnet/minecraft/entity/player/EntityPlayer;Lnet/minecraft/world/World;Lnet/minecraft/util/EnumHand;)Lnet/minecraft/util/EnumActionResult;"
+                    }
+                },
                 "processRightClickBlock": {
                     "names": {
                         "vanilla": "a",
@@ -949,6 +1009,9 @@
                         "fabric": "(Lnet/minecraft/class_746;Lnet/minecraft/class_638;Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;Lnet/minecraft/class_243;Lnet/minecraft/class_1268;)Lnet/minecraft/class_1269;",
                         "forge": "(Lnet/minecraft/client/entity/EntityPlayerSP;Lnet/minecraft/client/multiplayer/WorldClient;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/EnumFacing;Lnet/minecraft/util/math/Vec3d;Lnet/minecraft/util/EnumHand;)Lnet/minecraft/util/EnumActionResult;"
                     }
+                },
+                "sendUseItem": {
+                    "absent": true
                 },
                 "startDestroyBlock": {
                     "names": {
@@ -3692,6 +3755,18 @@
                 },
                 "setSelectedSlot": {
                     "absent": true
+                },
+                "swapPaint": {
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "method_7373",
+                        "forge": "func_70453_c"
+                    },
+                    "signatures": {
+                        "vanilla": "(I)V",
+                        "fabric": "(I)V",
+                        "forge": "(I)V"
+                    }
                 }
             },
             "fields": {
@@ -4434,14 +4509,14 @@
                 },
                 "checkNoEntityCollision": {
                     "names": {
-                        "vanilla": "b",
-                        "fabric": "method_0_362",
-                        "forge": "func_72855_b"
+                        "vanilla": "a",
+                        "fabric": "method_8611",
+                        "forge": "func_72917_a"
                     },
                     "signatures": {
-                        "vanilla": "(Lbgz;)Z",
-                        "fabric": "(Lnet/minecraft/class_238;)Z",
-                        "forge": "(Lnet/minecraft/util/math/AxisAlignedBB;)Z"
+                        "vanilla": "(Lbgz;Lve;)Z",
+                        "fabric": "(Lnet/minecraft/class_238;Lnet/minecraft/class_1297;)Z",
+                        "forge": "(Lnet/minecraft/util/math/AxisAlignedBB;Lnet/minecraft/entity/Entity;)Z"
                     }
                 },
                 "clip": {

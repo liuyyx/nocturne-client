@@ -357,6 +357,18 @@ public final class ObfuscatedMapping implements Mapping {
     }
 
     @Override
+    public boolean isClassAbsent(ClassType type) {
+        ClassData data = classes.get(type.canonicalName());
+        return data != null && data.absent;
+    }
+
+    @Override
+    public boolean isMemberAbsent(ClassType owner, String canonicalName) {
+        MemberData member = methodMember(owner, canonicalName);
+        return member != null && member.absent;
+    }
+
+    @Override
     public String methodName(ClassType owner, String canonicalName, String descriptor) {
         return methodCandidates(owner, canonicalName).get(0).name();
     }

@@ -52,6 +52,9 @@ class ForeignScreenGuardTest {
 
     @Test
     void restoresTheMouseOnlyWhenWeReleasedIt() {
+        // 原生 Screen（暂停菜单/背包/聊天）开着时绝不能抓取：否则光标被锁进菜单。
+        assertEquals(ForeignScreenGuard.MouseAction.NONE,
+                ForeignScreenGuard.decideMouseAction(false, true, false, true, true));
         // 我们放开过 → 关闭界面时还给游戏
         assertEquals(ForeignScreenGuard.MouseAction.GRAB,
                 ForeignScreenGuard.decideMouseAction(false, true, false, true));

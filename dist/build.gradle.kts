@@ -61,19 +61,22 @@ val packAsmPayload = tasks.register<JavaExec>("packAsmPayload") {
  * <p>只有注入这一条路径：不再产出加载器元数据，也不再有模组形态。
  */
 /**
- * 预编译的 KeySink：作为**资源**（而不是编译产物）进交付 jar，路径 {@code nocturne-bootstrap/KeySink.class}。
+ * 预编译的 bootstrap 持有类：作为**资源**（而不是编译产物）进交付 jar，路径
+ * {@code nocturne-bootstrap/<类名>.class}。
  *
- * <p>agent 的 bootstrap bridge 会把它改写成 {@code dev/nocturne/bootstrap/KeySink.class} 打进
- * bootstrap 搜索路径；交付 jar 自身不含这个类，Knot 因此拿不到第二份。
+ * <p>agent 的 bootstrap bridge 会把这些资源改写成 {@code dev/nocturne/bootstrap/<类名>.class}
+ * 打进 bootstrap 搜索路径；交付 jar 自身不含这些类，Knot 因此拿不到第二份。
+ * 目前有 {@code KeySink}（按键/滚轮/占用状态）、{@code GameplaySink}（游戏事件汇）与
+ * {@code LegacyMouse}（旧世代鼠标增量缓存清理）。
  */
 val bridgeKeySink = tasks.register<Copy>("bridgeKeySink") {
     group = "build"
-    description = "Copies the prebuilt KeySink class as a bridge resource."
+    description = "Copies the prebuilt bootstrap holder classes as bridge resources."
     // 取 client 的编译输出（agent 依赖 client，编译顺序由 Gradle 保证）。
-    from(project(":client").layout.buildDirectory.file(
-            "classes/java/main/dev/nocturne/bootstrap/KeySink.class"))
+    from(project(":client").layout.buildDirectory.dir("classes/java/main/dev/nocturne/bootstrap")) {
+        include("KeySink.class", "GameplaySink.class", "LegacyMouse.class")
+    }
     into(layout.buildDirectory.dir("generated/bridge-resources/nocturne-bootstrap"))
-    rename { "KeySink.class" }
     // 显式依赖 client 的编译输出（Gradle 不允许隐式使用其它任务的产物）。
     dependsOn(project(":client").tasks.named("compileJava"))
 }
@@ -157,6 +160,16 @@ val distJar = tasks.register<Jar>("distJar") {
     // 以子加载器解包加载 ASM，帧钩子因此不再依赖目标 JVM 是否自带 ASM，也不在 jar 里留下明文 ASM。
     exclude("org/objectweb/asm/**", "org/spongepowered/**", "com/llamalad7/**")
 
+    // Swing 布局库 MigLayout 11.x 是 Java 11 字节码（major 55）：它只服务注入器 GUI（宿主进程），
+    // 但对 Java 8 目标（1.8.9）而言，只要类进入 agent jar 的根，就存在被链接到而
+    // UnsupportedClassVersionError 的风险。agent 可见包因此保持纯 Java 8，
+    // GUI 需要的 MigLayout 由下面的 launcherJar 提供。
+    exclude("net/miginfocom/**")
+    // FlatLaf 是 multi-release jar：META-INF/versions/9/** 是 Java 9+ 专用实现（major 53）。
+    // 本 jar 清单不声明 Multi-Release，这些条目在 Java 8 上本就不可见；直接排掉，
+    // 让「全部类 ≤ 52」成为可校验的硬约束。
+    exclude("META-INF/versions/**")
+
     // 产物自检：必须内嵌 dev/nocturne/agent/asm.pack，且 jar 根不得出现展开的 ASM 类。
     // 这两个不变式一旦被破坏（例如打包任务被跳过或 exclude 失效），帧钩子会静默失效，故在此硬失败。
     doLast {
@@ -187,6 +200,118 @@ val distJar = tasks.register<Jar>("distJar") {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// GUI 启动器 jar：注入器界面需要 Java 11 的 MigLayout，而 agent jar 必须保持纯 Java 8。
+// 两者不能共处一个根，故拆成两个产物：
+//   - nocturne-<version>.jar          agent/注入载荷，全部类 major <= 52
+//   - nocturne-launcher-<version>.jar 双击启动的 GUI，= 上一个 jar + MigLayout
+// launcher 同时带上 Premain/Agent 清单：Nocturne.selfJar() 取的是「core 所在的 jar」，
+// 用户从 launcher 里点注入时，被 attach 的就是 launcher 自身。
+// ---------------------------------------------------------------------------
+val migLayoutJars = configurations.runtimeClasspath.map { files ->
+    files.filter { it.name.startsWith("miglayout-") && it.name.endsWith(".jar") }
+}
+
+val launcherJar = tasks.register<Jar>("launcherJar") {
+    group = "build"
+    description = "GUI launcher jar: the agent jar plus the Java 11 MigLayout the Swing UI needs."
+    archiveFileName.set("nocturne-launcher-${project.version}.jar")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes(
+            "Main-Class" to "dev.nocturne.injector.InjectorApp",
+            "Premain-Class" to "dev.nocturne.agent.NocturneAgent",
+            "Agent-Class" to "dev.nocturne.agent.NocturneAgent",
+            "Can-Retransform-Classes" to "true",
+            "Can-Redefine-Classes" to "true",
+            "Implementation-Title" to "nocturne-client-launcher",
+            "Implementation-Version" to project.version.toString(),
+        )
+    }
+    // 复用 agent jar 的完整内容（清单与签名文件除外，清单由本任务重新写）。
+    from(distJar.flatMap { it.archiveFile }.map { zipTree(it) }) {
+        exclude("META-INF/MANIFEST.MF", "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    }
+    from(migLayoutJars.map { files -> files.map { zipTree(it) } }) {
+        // MigLayout 是模块化 jar：根上的 module-info.class 会让 javac 把整个 launcher jar
+        // 当成模块处理（"程序包 xxx 不存在"），与 agent jar 同一处理。
+        exclude("module-info.class", "META-INF/versions/**")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 构建期断言：agent jar 里不允许出现高于 Java 8 的字节码。
+//
+// 背景：1.8.9 真机曾因高版本类被链接而 UnsupportedClassVersionError，二次 attach 直接失败。
+// 交付 jar 是 agent / bootstrap / client 三条路径共用的类来源，所以这里对**整个** jar 断言
+// major <= 52（比只查 dev/nocturne/** 更严），任何新依赖把高版本类带进根都会当场把构建搞红。
+// 用 java.util.zip 实现，跨平台、无外部依赖。
+// ---------------------------------------------------------------------------
+val verifyJarBytecode = tasks.register("verifyJarBytecode") {
+    group = "verification"
+    description = "Fails when the delivery jar has bytecode newer than Java 8, or is missing a compiled class."
+    dependsOn(distJar)
+
+    doLast {
+        val jarFile = distJar.get().archiveFile.get().asFile
+        val violations = ArrayList<String>()
+        ZipFile(jarFile).use { zip ->
+            val entries = zip.entries()
+            val present = HashSet<String>()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (!entry.name.endsWith(".class")) {
+                    continue
+                }
+                present.add(entry.name)
+                val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                if (bytes.size < 8) {
+                    violations.add("${entry.name}: truncated class header")
+                    continue
+                }
+                val major = ((bytes[6].toInt() and 0xFF) shl 8) or (bytes[7].toInt() and 0xFF)
+                if (major > 52) {
+                    violations.add("${entry.name}: major $major")
+                }
+            }
+
+            // 完整性：模块编译出的每个类都必须在交付 jar 里。
+            // 真机曾出现 NoClassDefFoundError: dev/nocturne/ui/fatality/FaPreviewCard$Effects
+            // ——外部类在 jar 里、私有嵌套类却没进去，帧动作因此每帧抛错、ClickGUI 局部失效。
+            // 这种「编译产物没被打包」的漏包无法从源码审查发现，只能在打包后逐类核对。
+            listOf(":core", ":agent", ":client", ":ui", ":injector").forEach moduleLoop@ { path ->
+                val root = project(path).layout.buildDirectory.dir("classes/java/main").get().asFile
+                if (!root.isDirectory) {
+                    return@moduleLoop
+                }
+                root.walkTopDown()
+                    .filter { it.isFile && it.name.endsWith(".class") }
+                    .forEach classLoop@ { file ->
+                        val name = file.relativeTo(root).invariantSeparatorsPath
+                        // dev/nocturne/bootstrap/** 故意不进 jar：唯一副本由 bootstrap bridge 提供。
+                        if (name.startsWith("dev/nocturne/bootstrap/")) {
+                            return@classLoop
+                        }
+                        if (name !in present) {
+                            violations.add("$name: compiled ($path) but missing from the jar")
+                        }
+                    }
+            }
+        }
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "dist jar ${jarFile.name} failed verification (${violations.size} problems):\n  " +
+                    violations.joinToString("\n  ")
+            )
+        }
+    }
+}
+
+// 单独跑 :dist:distJar 也要过这道闸；check 里再挂一次，保证 CI 的 `build` 覆盖到。
+tasks.named("check") { dependsOn(verifyJarBytecode) }
+tasks.named("assemble") { dependsOn(launcherJar) }
+distJar { finalizedBy(verifyJarBytecode) }
 
 // ---------------------------------------------------------------------------
 // 类名随机化：官方二进制的必经过道。

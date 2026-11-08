@@ -348,6 +348,12 @@ public final class ReflectiveInput implements InputSource {
     @Override
     public double scrollDelta() {
         if ("lwjgl2".equals(backend)) {
+            // 旧世代 GUI 的滚轮来自 Inventory#changeCurrentItem 的转发（界面打开时游戏自己的
+            // 轮询被短路，getDWheel 也因此拿不到值）。共享累加器有增量时优先用它。
+            double shared = dev.nocturne.client.runtime.ScrollState.take();
+            if (shared != 0d) {
+                return shared;
+            }
             Object wheel = Reflect.call(mouseGetDWheel, null);
             if (!(wheel instanceof Number)) {
                 return 0d;

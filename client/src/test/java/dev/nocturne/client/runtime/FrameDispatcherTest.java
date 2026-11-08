@@ -88,6 +88,43 @@ class FrameDispatcherTest {
         assertEquals(1, ran[0], "shutdown actions must not survive a clear");
     }
 
+    /**
+     * clear() 发生在分发途中：同一帧的快照里后续监听器必须立刻停。
+     *
+     * <p>回归：panic 从某个监听器内部调用 clear() 后，CopyOnWriteArrayList 的旧快照仍会跑完——
+     * ForeignScreenGuard 会紧接着把刚恢复的 {@code inGameHasFocus} 再写回 false，永久锁视角。
+     */
+    @Test
+    void clearDuringDispatchStopsRemainingListeners() {
+        final java.util.List<String> ran = new java.util.ArrayList<String>();
+        Runnable first = new Runnable() {
+            @Override
+            public void run() {
+                ran.add("first");
+                FrameDispatcher.clear();
+            }
+        };
+        Runnable second = new Runnable() {
+            @Override
+            public void run() {
+                ran.add("second");
+            }
+        };
+        FrameDispatcher.add(first);
+        FrameDispatcher.add(second);
+        try {
+            FrameDispatcher.dispatch();
+            assertEquals(java.util.Arrays.asList("first"), ran,
+                    "listeners after clear() must not run in the same dispatch");
+            ran.clear();
+            FrameDispatcher.dispatch();
+            assertEquals(0, ran.size(), "dispatch after clear() must be a no-op");
+        } finally {
+            FrameDispatcher.remove(first);
+            FrameDispatcher.remove(second);
+        }
+    }
+
     /** 一个恢复动作抛异常不得挡住其余动作，也不得把异常抛出 {@code clear()}。 */
     @Test
     void clearSurvivesAFailingShutdownAction() {

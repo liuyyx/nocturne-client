@@ -143,12 +143,21 @@
                 "fabric": "net.minecraft.class_4184",
                 "forge": "net.minecraft.client.renderer.ActiveRenderInfo"
             },
-            "methods": {},
-            "fields": {
+            "methods": {
                 "getMaxZoom": {
-                    "absent": true
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_19318",
+                        "forge": "func_216779_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(D)D",
+                        "fabric": "(D)D",
+                        "forge": "(D)D"
+                    }
                 }
-            }
+            },
+            "fields": {}
         },
         "net/minecraft/client/CameraType": {
             "absent": true,
@@ -193,6 +202,9 @@
                         "forge": "()Z"
                     }
                 },
+                "onTick": {
+                    "absent": true
+                },
                 "set": {
                     "names": {
                         "vanilla": "a",
@@ -216,6 +228,9 @@
                         "fabric": "()V",
                         "forge": "()V"
                     }
+                },
+                "setKeyBindState": {
+                    "absent": true
                 }
             },
             "fields": {
@@ -288,6 +303,9 @@
                         "fabric": "(Z)V",
                         "forge": "(Z)V"
                     }
+                },
+                "setIngameFocus": {
+                    "absent": true
                 },
                 "setScreen": {
                     "names": {
@@ -674,6 +692,9 @@
                         "forge": "Z"
                     }
                 },
+                "cameraType": {
+                    "absent": true
+                },
                 "fov": {
                     "names": {
                         "vanilla": "aH",
@@ -810,6 +831,9 @@
                 },
                 "renderGameOverlay": {
                     "absent": true
+                },
+                "screen": {
+                    "absent": true
                 }
             },
             "fields": {
@@ -877,6 +901,28 @@
             "absent": true,
             "names": {},
             "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/client/gui/components/events/ContainerEventHandler": {
+            "names": {
+                "vanilla": "dad",
+                "fabric": "net.minecraft.class_4069",
+                "forge": "net.minecraft.client.gui.INestedGuiEventHandler"
+            },
+            "methods": {
+                "mouseClicked": {
+                    "names": {
+                        "vanilla": "mouseClicked",
+                        "fabric": "mouseClicked",
+                        "forge": "mouseClicked"
+                    },
+                    "signatures": {
+                        "vanilla": "(DDI)Z",
+                        "fabric": "(DDI)Z",
+                        "forge": "(DDI)Z"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/client/gui/screens/ChatScreen": {
@@ -1155,7 +1201,13 @@
                 "onPlayerRightClick": {
                     "absent": true
                 },
+                "processRightClick": {
+                    "absent": true
+                },
                 "processRightClickBlock": {
+                    "absent": true
+                },
+                "sendUseItem": {
                     "absent": true
                 },
                 "startDestroyBlock": {
@@ -1755,11 +1807,21 @@
                 "fabric": "net.minecraft.class_759",
                 "forge": "net.minecraft.client.renderer.FirstPersonRenderer"
             },
-            "methods": {},
-            "fields": {
+            "methods": {
                 "applyItemArmTransform": {
-                    "absent": true
-                },
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_3224",
+                        "forge": "func_187459_b"
+                    },
+                    "signatures": {
+                        "vanilla": "(Laiw;F)V",
+                        "fabric": "(Lnet/minecraft/class_1306;F)V",
+                        "forge": "(Lnet/minecraft/util/HandSide;F)V"
+                    }
+                }
+            },
+            "fields": {
                 "mainHandHeight": {
                     "names": {
                         "vanilla": "f",
@@ -4258,6 +4320,18 @@
                 },
                 "setSelectedSlot": {
                     "absent": true
+                },
+                "swapPaint": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_7373",
+                        "forge": "func_195409_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(D)V",
+                        "fabric": "(D)V",
+                        "forge": "(D)V"
+                    }
                 }
             },
             "fields": {

@@ -413,6 +413,9 @@ public final class OverlayBootstrap implements FrameListener {
         // 自销毁前还原本守护改过的游戏状态（鼠标抓取 / inGameHasFocus）：清空分发器之后它再也不会
         // 被驱动，不还原就把 1.8.9–1.12 的鼠标视角永久留在失效状态。
         NocturneRuntime.addShutdown(guard::restore);
+        // 叠加层自己改过指针抓取（GUI 关闭帧才恢复）：panic 清空分发器后它再也不会被驱动，
+        // 必须显式还原，否则现代版本关闭 GUI 后光标一直处于释放状态。
+        NocturneRuntime.addShutdown(overlay::restoreInputState);
 
         installed = true;
         // 安装完成即退场：之后每帧的开销全部留给真正的叠加层。

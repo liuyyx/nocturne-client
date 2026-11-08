@@ -162,6 +162,15 @@ final class BoundActionApi implements ActionApi {
         if (inventory == null) {
             return false;
         }
+        Number current = number(bridge.readField(inventory, ClassType.INVENTORY, "selected"));
+        if (current != null && current.intValue() != slot) {
+            // 优先走游戏自己的换槽入口（会同步 selectedItem/属性）：现代是 swapPaint(double)，
+            // 1.8.9–1.13.2 是 changeCurrentItem(int)。两种数值形状各试一次，由映射表决定命中的重载。
+            int delta = slot - current.intValue();
+            if (!bridge.callMappedStatus(inventory, ClassType.INVENTORY, "swapPaint", (double) delta)) {
+                bridge.callMappedStatus(inventory, ClassType.INVENTORY, "swapPaint", delta);
+            }
+        }
         bridge.callMapped(inventory, ClassType.INVENTORY, "setSelectedSlot", slot);
         Number selected = number(bridge.callMapped(inventory, ClassType.INVENTORY, "getSelectedSlot"));
         if (selected != null) {

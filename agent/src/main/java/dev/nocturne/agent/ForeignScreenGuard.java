@@ -53,6 +53,12 @@ final class ForeignScreenGuard implements FrameListener {
     /** 「已关闭游戏鼠标处理」是否已提示过（只打一次）。 */
     private boolean loggedInputSuppression;
 
+    /** 是否已由 panic 恢复过：恢复后绝不能再被同一帧的残留分发改写。 */
+    private volatile boolean restored;
+
+    /** 「鼠标抓取状态读不到」是否已提示过。 */
+    private boolean warnedUnreadableGrab;
+
     /**
      * @param bridge  游戏桥（必须已可用；未解析时本守护什么都不做）
      * @param guiOpen 返回"我们的界面是否打开"的判定
@@ -83,6 +89,11 @@ final class ForeignScreenGuard implements FrameListener {
 
     @Override
     public void onFrame() {
+        if (restored) {
+            // panic 已还原过输入状态：清空分发器时同一帧的旧快照仍会跑完，
+            // 这里必须立刻退场，否则会把 inGameHasFocus 再写回 false（永久锁视角）。
+            return;
+        }
         try {
             boolean open = guiOpen.getAsBoolean();
             // 先做"接管鼠标"这件事，且必须**在早退之前**：关闭界面时同样要把它恢复回去，
@@ -155,7 +166,16 @@ final class ForeignScreenGuard implements FrameListener {
                 : bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "isMouseGrabbed");
         boolean faceAvailable = grabbed instanceof Boolean;
         boolean value = faceAvailable && ((Boolean) grabbed).booleanValue();
-        MouseAction action = decideMouseAction(guiOpen, faceAvailable, value, mouseReleased);
+        boolean nativeScreen = hasNativeScreen();
+        if (!faceAvailable && handler != null && guiOpen) {
+            if (!warnedUnreadableGrab) {
+                warnedUnreadableGrab = true;
+                System.out.println("[nocturne] WARNING: MouseHandler.isMouseGrabbed unreadable;"
+                        + " falling back to unconditional releaseMouse while our GUI is open");
+            }
+        }
+        MouseAction action = decideMouseAction(guiOpen, faceAvailable, value, mouseReleased,
+                nativeScreen);
         if (action == MouseAction.RELEASE) {
             bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "releaseMouse");
             mouseReleased = true;
@@ -164,6 +184,10 @@ final class ForeignScreenGuard implements FrameListener {
                 System.out.println("[nocturne] game mouse released while our GUI is open"
                         + " (MouseHandler.releaseMouse)");
             }
+        } else if (!faceAvailable && handler != null && guiOpen && !mouseReleased) {
+            // 读不到抓取状态：releaseMouse 本身幂等，每次界面打开期间重申一次是安全的。
+            bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "releaseMouse");
+            mouseReleased = true;
         } else if (action == MouseAction.GRAB) {
             bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "grabMouse");
             mouseReleased = false;
@@ -192,12 +216,31 @@ final class ForeignScreenGuard implements FrameListener {
      */
     static MouseAction decideMouseAction(boolean guiOpen, boolean faceAvailable, boolean grabbed,
                                          boolean suppressed) {
+        return decideMouseAction(guiOpen, faceAvailable, grabbed, suppressed, false);
+    }
+
+    /**
+     * 决定这一帧要对游戏鼠标抓取做什么。
+     *
+     * @param guiOpen       我们的界面是否打开
+     * @param faceAvailable 该版本的鼠标面是否可用（现代才有 MouseHandler）
+     * @param grabbed       游戏当前是否抓着鼠标
+     * @param suppressed    之前是否由我们放开过
+     * @param nativeScreen  当前是否显示原生 Screen（此时绝不能抓取，否则光标锁进菜单）
+     * @return 本帧要执行的动作
+     */
+    static MouseAction decideMouseAction(boolean guiOpen, boolean faceAvailable, boolean grabbed,
+                                         boolean suppressed, boolean nativeScreen) {
         if (!faceAvailable) {
             return MouseAction.NONE;
         }
         if (guiOpen) {
             // 每帧复查：游戏会在窗口重新激活等时机再把鼠标抓回去。
             return grabbed ? MouseAction.RELEASE : MouseAction.NONE;
+        }
+        if (nativeScreen) {
+            // 原生界面（暂停菜单/背包/聊天）需要可见光标；等它关闭后的下一帧再抓回。
+            return MouseAction.NONE;
         }
         return suppressed ? MouseAction.GRAB : MouseAction.NONE;
     }
@@ -263,13 +306,21 @@ final class ForeignScreenGuard implements FrameListener {
      * 异常一律吞掉：这是尽力而为的清理路径，不能把异常抛回 panic 的调用方。
      */
     public void restore() {
+        if (restored) {
+            return;
+        }
+        restored = true;
         try {
             if (mouseReleased) {
                 Object handler = mouseHandler();
-                if (handler != null) {
+                Object minecraft = bridge.minecraft();
+                boolean nativeScreen = minecraft != null && (hasNativeScreen());
+                if (handler != null && !nativeScreen) {
                     bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "grabMouse");
+                    mouseReleased = false;
                 }
-                mouseReleased = false;
+                // handler 为 null（1.8.9 没有 MouseHandler）或原生界面开着：保留标志，
+                // 但不能清掉——那会让"由我们放开过"这件事丢失。
             }
             if (savedFocus != null) {
                 Object minecraft = bridge.minecraft();
@@ -281,6 +332,21 @@ final class ForeignScreenGuard implements FrameListener {
             }
         } catch (Throwable ignored) {
             // 尽力而为：恢复失败也不该影响 panic 的其余步骤
+        }
+    }
+
+    /** @return 当前是否显示原生 Screen（映射读不到时按形状兜底）。 */
+    private boolean hasNativeScreen() {
+        try {
+            Object minecraft = bridge.minecraft();
+            if (minecraft == null) {
+                return false;
+            }
+            Object current = bridge.readField(minecraft, ClassType.MINECRAFT, "currentScreen");
+            Object legacy = bridge.readField(minecraft, ClassType.MINECRAFT, "screen");
+            return current != null || legacy != null || readScreenByShape(minecraft) != null;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

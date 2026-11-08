@@ -4,7 +4,7 @@ import dev.nocturne.client.action.ActionApi;
 import dev.nocturne.client.action.PlayerState;
 import dev.nocturne.client.control.TargetManager;
 import dev.nocturne.client.event.AttackEvent;
-import dev.nocturne.client.event.RenderEvent;
+import dev.nocturne.client.event.PlayerTickEvent;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
@@ -38,7 +38,8 @@ public final class ReachModule extends GameModule {
 
     @Override
     protected void onStart() {
-        listen(RenderEvent.class, this::onRender);
+        // 1.13+ 的准星 pick 在 tick 内刷新；渲染阶段写入会被下一 tick 覆盖，必须写在 player tick 前置。
+        listen(PlayerTickEvent.Pre.class, event -> applyHitResult());
         listen(AttackEvent.class, event -> {
             if (event.post) {
                 activeTarget = null;
@@ -46,7 +47,7 @@ public final class ReachModule extends GameModule {
         });
     }
 
-    private void onRender(RenderEvent event) {
+    private void applyHitResult() {
         GameBridge bridge = bridge();
         ActionApi actions = actions();
         PlayerState state = state();
@@ -69,7 +70,7 @@ public final class ReachModule extends GameModule {
             }
         }
         activeTarget = target.entity();
-        if (target.distance() > bounds.min()) {
+        if (shouldExtend(target.distance(), bounds.min())) {
             Object hit = bridge.construct(ClassType.ENTITY_HIT_RESULT, activeTarget);
             if (hit != null) {
                 bridge.writeField(bridge.minecraft(), ClassType.MINECRAFT, "hitResult", hit);
@@ -85,5 +86,10 @@ public final class ReachModule extends GameModule {
         if (actions != null && bridge != null) {
             bridge.writeField(bridge.minecraft(), ClassType.MINECRAFT, "hitResult", actions.pick(3.0, 1.0f));
         }
+    }
+
+    /** 只有超过原版 3.0 格距离的目标才需要替换准星命中。 */
+    static boolean shouldExtend(double distance, double min) {
+        return distance > min;
     }
 }

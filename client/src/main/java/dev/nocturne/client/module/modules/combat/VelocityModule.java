@@ -1,8 +1,10 @@
 package dev.nocturne.client.module.modules.combat;
 
+import dev.nocturne.client.action.ActionApi;
 import dev.nocturne.client.event.AttackEvent;
 import dev.nocturne.client.event.MovementInputEvent;
 import dev.nocturne.client.event.PacketEvent;
+import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
@@ -18,8 +20,6 @@ public final class VelocityModule extends GameModule {
     private final BooleanValue explosion = add(new BooleanValue("Explosion", true));
     private final BooleanValue explosionOnlyBlock = add(new BooleanValue("Explosion Only Block", false));
     private final BooleanValue noWaterPush = add(new BooleanValue("No Water Push", true));
-    private final BooleanValue noEntityPush = add(new BooleanValue("No Entity Push", true));
-    private final BooleanValue noBlockPush = add(new BooleanValue("No Block Push", true));
     private final NumberValue attackCounts = add(new NumberValue("Attack Counts", 1, 1, 5, 1));
     private final NumberValue sprintTicks = add(new NumberValue("Sprint Ticks", 3, 1, 5, 1));
     private final NumberValue maxDelay = add(new NumberValue("Max Delay", 1000, 0, 1000, 50));
@@ -83,11 +83,9 @@ public final class VelocityModule extends GameModule {
             return;
         }
         if (!motion) {
-            if (mode.is("Delay") || mode.is("Reduce")) {
+            // 爆炸包没有速度字段，Delay/Reduce 无法延迟真实击退；伪造 {0,0,0} 等于直接吞掉击退。
+            if (cancelExplosion(mode.get())) {
                 event.cancelled = true;
-                pending = new double[]{0.0, 0.0, 0.0};
-                pendingTicks = delayTicks.asInt();
-                pendingAt = System.currentTimeMillis();
             }
             return;
         }
@@ -108,25 +106,52 @@ public final class VelocityModule extends GameModule {
             return;
         }
         event.cancelled = true;
-        pending = new double[]{data[1] / 8000.0, data[2] / 8000.0, data[3] / 8000.0};
+        pending = decodeMotion(data);
         pendingTicks = mode.is("Reduce") ? sprintTicks.asInt() : delayTicks.asInt();
         pendingAt = System.currentTimeMillis();
     }
 
     @Override
     public void onTick() {
-        if (pending == null) {
+        if (pending != null) {
+            if (pendingTicks > 0) {
+                pendingTicks--;
+            }
+            if (pendingTicks <= 0 || System.currentTimeMillis() - pendingAt >= maxDelay.asInt()) {
+                applyPending();
+            }
+        }
+        cancelWaterPush();
+    }
+
+    /** 水体推动是每 tick 叠加的水平位移，必须在无 pending 时也持续抵消。 */
+    private void cancelWaterPush() {
+        GameBridge bridge = bridge();
+        ActionApi actions = actions();
+        if (!noWaterPush.get() || bridge == null || actions == null) {
             return;
         }
-        if (pendingTicks > 0) {
-            pendingTicks--;
+        Object player = bridge.player();
+        if (player == null || !bridge.inWater(player)) {
+            return;
         }
-        if (pendingTicks <= 0 || System.currentTimeMillis() - pendingAt >= maxDelay.asInt()) {
-            applyPending();
-        }
-        if (noWaterPush.get() && bridge().inWater(bridge().player())) {
-            actions().setSprinting(state().sprinting());
-        }
+        double[] motion = waterMotion(bridge.entityVelocity(player)[1]);
+        actions.setMotion(motion[0], motion[1], motion[2]);
+    }
+
+    /** 击退包速度以 1/8000 缩放；保留原始方向与垂直分量供延迟应用。 */
+    static double[] decodeMotion(int[] data) {
+        return new double[]{data[1] / 8000.0, data[2] / 8000.0, data[3] / 8000.0};
+    }
+
+    /** 只清零水平速度，垂直分量交给游戏（水中下沉/上浮不是推动）。 */
+    static double[] waterMotion(double vertical) {
+        return new double[]{0.0, vertical, 0.0};
+    }
+
+    /** 爆炸包只在 Cancel 模式被取消；Delay/Reduce 不得用零速度冒充延迟。 */
+    static boolean cancelExplosion(String mode) {
+        return "Cancel".equals(mode);
     }
 
     private void applyPending() {

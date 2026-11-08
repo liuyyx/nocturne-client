@@ -77,8 +77,7 @@ public final class SpeedModule extends GameModule {
         double speed = mode.is("Grim") ? collideSpeed.get() : strafeSpeed.get();
         speed = speed * horizontalFactor.get() + pendingBoost;
         pendingBoost = 0.0;
-        if (slowness.get() && String.valueOf(bridge().activeEffects()).toLowerCase(java.util.Locale.ROOT)
-                .contains("slowness")) {
+        if (slowness.get() && bridge().hasEffect("SLOWNESS")) {
             speed *= 0.8;
         }
         if (!mode.is("Strafe") || state().moving()) {

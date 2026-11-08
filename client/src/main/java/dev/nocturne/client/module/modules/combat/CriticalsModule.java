@@ -1,6 +1,7 @@
 package dev.nocturne.client.module.modules.combat;
 
 import dev.nocturne.client.control.TargetManager;
+import dev.nocturne.client.event.AttackEvent;
 import dev.nocturne.client.event.MovementInputEvent;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
@@ -17,6 +18,12 @@ public final class CriticalsModule extends GameModule {
 
     @Override
     protected void onStart() {
+        // 攻击前置直接退疾跑，避免等下一次移动输入 tick 才生效（那一拍已经打出非暴击）。
+        listen(AttackEvent.class, event -> {
+            if (shouldSuppressSprint(stopSprinting, event.post) && actions() != null) {
+                actions().setSprinting(false);
+            }
+        });
         listen(MovementInputEvent.class, event -> {
             if (stopSprinting && event.forward > 0.0f) {
                 event.sprint = false;
@@ -24,6 +31,11 @@ public final class CriticalsModule extends GameModule {
                 stopSprinting = false;
             }
         });
+    }
+
+    /** 只在前置攻击、且本 tick 需要退疾跑时写状态；输入事件逻辑保留为兜底。 */
+    static boolean shouldSuppressSprint(boolean stopSprinting, boolean post) {
+        return stopSprinting && !post;
     }
 
     @Override

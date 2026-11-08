@@ -1,5 +1,8 @@
 package dev.nocturne.client.module.modules.inventory;
 
+import dev.nocturne.client.action.ActionApi;
+import dev.nocturne.client.event.UseItemEvent;
+import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
 import dev.nocturne.client.module.modules.EpsilonSupport;
@@ -20,6 +23,7 @@ public final class ChestStealModule extends GameModule {
     private final List<Integer> order = new ArrayList<Integer>();
     private long nextClick;
     private long emptySince;
+    private String lastUseBlock = "";
 
     public ChestStealModule() {
         super("Stealer", Category.PLAYER);
@@ -30,6 +34,17 @@ public final class ChestStealModule extends GameModule {
         order.clear();
         emptySince = 0L;
         nextClick = 0L;
+        lastUseBlock = "";
+        // 打开容器前记下准星方块：末影箱必须靠方块 id 认，中文客户端标题不含 "ender"。
+        listen(UseItemEvent.class, event -> {
+            if (event.post) {
+                return;
+            }
+            String block = hitBlockDescription();
+            if (!block.isEmpty()) {
+                lastUseBlock = block;
+            }
+        });
     }
 
     @Override
@@ -37,9 +52,11 @@ public final class ChestStealModule extends GameModule {
         if (!bridge().containerOpen()) {
             order.clear();
             emptySince = 0L;
+            lastUseBlock = "";
             return;
         }
-        if (!enderChest.get() && bridge().screenTitle().toLowerCase(java.util.Locale.ROOT).contains("ender")) {
+        if (!enderChest.get() && isEnderContainer(blockAtHit(), bridge().screenTitle(),
+                bridge().currentScreen() == null ? "" : bridge().currentScreen().getClass().getName())) {
             return;
         }
         long now = System.currentTimeMillis();
@@ -71,6 +88,36 @@ public final class ChestStealModule extends GameModule {
             actions().closeContainer();
             emptySince = 0L;
         }
+    }
+
+    /** 末影箱判定：方块 id 最可靠；其次可读环境下的 EnderChestScreen 类名；英文标题仅作兜底。 */
+    static boolean isEnderContainer(String blockDescription, String title, String screenClass) {
+        if (blockDescription != null
+                && blockDescription.toLowerCase(java.util.Locale.ROOT).contains("ender_chest")) {
+            return true;
+        }
+        if (screenClass != null
+                && screenClass.toLowerCase(java.util.Locale.ROOT).contains("enderchest")) {
+            return true;
+        }
+        return title != null && title.toLowerCase(java.util.Locale.ROOT).contains("ender");
+    }
+
+    private String blockAtHit() {
+        if (!lastUseBlock.isEmpty()) {
+            return lastUseBlock;
+        }
+        return hitBlockDescription();
+    }
+
+    private String hitBlockDescription() {
+        GameBridge bridge = bridge();
+        ActionApi actions = actions();
+        if (bridge == null || actions == null) {
+            return "";
+        }
+        int[] pos = bridge.hitBlockPosition(actions.pick(5.0, 1.0f));
+        return pos == null ? "" : bridge.blockDescription(bridge.blockStateAt(pos[0], pos[1], pos[2]));
     }
 
     private boolean useful(Object stack) {

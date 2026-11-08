@@ -9,12 +9,14 @@ import dev.nocturne.client.value.NumberValue;
 
 /** Epsilon Auto Clicker：左右键独立 CPS、抖动、Burst/Decay、双击与 Miss。 */
 public final class AutoClickerModule extends GameModule {
+    /** 点击调度挂在 20Hz tick 上，超过 20 CPS 的配置无法变成更多点击。 */
+    static final double MAX_CPS = 20.0;
     private final ModeValue button = add(new ModeValue("Button", "Both", "Left", "Right", "Both"));
-    private final NumberValue leftMin = add(new NumberValue("Left Min CPS", 8, 1, 520, 1));
-    private final NumberValue leftMax = add(new NumberValue("Left Max CPS", 12, 1, 520, 1));
+    private final NumberValue leftMin = add(new NumberValue("Left Min CPS", 8, 1, MAX_CPS, 1));
+    private final NumberValue leftMax = add(new NumberValue("Left Max CPS", 12, 1, MAX_CPS, 1));
     private final BooleanValue leftJitter = add(new BooleanValue("Left Jitter", false));
-    private final NumberValue rightMin = add(new NumberValue("Right Min CPS", 8, 1, 520, 1));
-    private final NumberValue rightMax = add(new NumberValue("Right Max CPS", 12, 1, 520, 1));
+    private final NumberValue rightMin = add(new NumberValue("Right Min CPS", 8, 1, MAX_CPS, 1));
+    private final NumberValue rightMax = add(new NumberValue("Right Max CPS", 12, 1, MAX_CPS, 1));
     private final BooleanValue rightJitter = add(new BooleanValue("Right Jitter", false));
     private final BooleanValue enableBurst = add(new BooleanValue("Enable Burst", true));
     private final NumberValue burstChance = add(new NumberValue("Burst Chance", 15, 1, 100, 1));
@@ -68,6 +70,7 @@ public final class AutoClickerModule extends GameModule {
             state.burstEnd = 0L;
             state.decayEnd = 0L;
         }
+        cps = clampCps(cps);
         if (enableMiss.get() && EpsilonSupport.RANDOM.nextDouble() * 100.0 < missChance.get()) {
             state.next = now + (long) (1_000_000_000.0 / cps);
             return;
@@ -89,6 +92,11 @@ public final class AutoClickerModule extends GameModule {
         } else {
             actions().clickUse();
         }
+    }
+
+    /** Burst/Decay 倍率不得把调度 CPS 推出 1..20 的可见范围。 */
+    static double clampCps(double cps) {
+        return Math.max(1.0, Math.min(MAX_CPS, cps));
     }
 
     @Override

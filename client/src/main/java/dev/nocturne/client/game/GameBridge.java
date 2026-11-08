@@ -1068,6 +1068,126 @@ public final class GameBridge {
         return false;
     }
 
+    /** 本地玩家是否带有 MobEffects 中指定的效果；按效果对象/旧版 id 判断，不依赖本地化文本。 */
+    public boolean hasEffect(String canonicalField) {
+        Object expected = staticField(ClassType.MOB_EFFECTS, canonicalField);
+        Class<?> effectType = type(ClassType.MOB_EFFECT);
+        if (expected == null || effectType == null) {
+            return false;
+        }
+        Object effects = activeEffects();
+        return containsEffect(effectValues(effects), expected, effectType,
+                effect -> number(readField(effect, ClassType.MOB_EFFECT, "id")));
+    }
+
+    /** 效果集合里是否存在目标效果：对象同一性或旧版 int id 命中。 */
+    static boolean containsEffect(java.lang.Iterable<?> instances, Object expected,
+                                  Class<?> effectType,
+                                  java.util.function.Function<Object, Number> idOf) {
+        if (expected == null || effectType == null) {
+            return false;
+        }
+        Number expectedId = idOf.apply(expected);
+        for (Object instance : instances) {
+            Object effect = unwrapEffect(instance, effectType);
+            if (effect == null) {
+                continue;
+            }
+            if (effect == expected || effect.equals(expected)) {
+                return true;
+            }
+            Number id = idOf.apply(effect);
+            if (expectedId != null && id != null && expectedId.intValue() == id.intValue()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static java.util.Collection<?> effectValues(Object effects) {
+        if (effects instanceof java.util.Map) {
+            return ((java.util.Map<?, ?>) effects).values();
+        }
+        if (effects instanceof java.util.Collection) {
+            return (java.util.Collection<?>) effects;
+        }
+        if (effects instanceof Iterable) {
+            java.util.List<Object> values = new java.util.ArrayList<Object>();
+            for (Object value : (Iterable<?>) effects) {
+                values.add(value);
+            }
+            return values;
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    /** 1.8.9 是 PotionEffect#getPotion，1.20 是 getEffect，1.21+ 外层还包了一层 Holder。 */
+    private static Object unwrapEffect(Object instance, Class<?> effectType) {
+        if (instance == null) {
+            return null;
+        }
+        if (effectType.isInstance(instance)) {
+            return instance;
+        }
+        for (java.lang.reflect.Method method : instance.getClass().getMethods()) {
+            if (method.getParameterTypes().length != 0 || method.getReturnType().isPrimitive()
+                    || method.getReturnType() == String.class) {
+                continue;
+            }
+            Object value;
+            try {
+                method.setAccessible(true);
+                value = method.invoke(instance);
+            } catch (Throwable ignored) {
+                continue;
+            }
+            if (effectType.isInstance(value)) {
+                return value;
+            }
+            Object nested = memberOfType(value, effectType);
+            if (effectType.isInstance(nested)) {
+                return nested;
+            }
+        }
+        return memberOfType(instance, effectType);
+    }
+
+    private static Object memberOfType(Object target, Class<?> wanted) {
+        if (target == null) {
+            return null;
+        }
+        for (java.lang.reflect.Method method : target.getClass().getMethods()) {
+            if (method.getParameterTypes().length != 0
+                    || !wanted.isAssignableFrom(method.getReturnType())) {
+                continue;
+            }
+            try {
+                method.setAccessible(true);
+                Object value = method.invoke(target);
+                if (value != null) {
+                    return value;
+                }
+            } catch (Throwable ignored) {
+                // 继续找下一个形状匹配的成员
+            }
+        }
+        for (java.lang.reflect.Field field : target.getClass().getDeclaredFields()) {
+            if (!wanted.isAssignableFrom(field.getType())) {
+                continue;
+            }
+            try {
+                field.setAccessible(true);
+                Object value = field.get(target);
+                if (value != null) {
+                    return value;
+                }
+            } catch (Throwable ignored) {
+                // 继续找
+            }
+        }
+        return null;
+    }
+
     /** 鱼钩当前钓到的实体；没有时为 null。 */
     public Object fishingCaughtEntity() {
         return readField(fishingHook(), ClassType.FISHING_HOOK, "caughtEntity");

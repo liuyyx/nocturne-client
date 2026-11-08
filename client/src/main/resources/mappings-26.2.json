@@ -776,6 +776,14 @@
                         "forge": "screen",
                         "neoforge": "screen"
                     }
+                },
+                "setScreen": {
+                    "names": {
+                        "vanilla": "setScreen",
+                        "fabric": "setScreen",
+                        "forge": "setScreen",
+                        "neoforge": "setScreen"
+                    }
                 }
             },
             "fields": {

@@ -587,6 +587,7 @@ net/minecraft/client/Minecraft#setIngameFocus()
 net/minecraft/client/Minecraft#displayInGameMenu()
 # 数值选择：26.x 的屏幕存放在 Gui.screen()；屏幕级鼠标点击派发在 ContainerEventHandler。
 net/minecraft/client/gui/Gui#screen()
+net/minecraft/client/gui/Gui#setScreen()
 net/minecraft/client/gui/components/events/ContainerEventHandler
 net/minecraft/client/gui/components/events/ContainerEventHandler#mouseClicked()
 net/minecraft/util/MouseHelper

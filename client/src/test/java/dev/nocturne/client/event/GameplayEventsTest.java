@@ -54,6 +54,28 @@ class GameplayEventsTest {
     }
 
     @Test
+    void screenOpenPostsScreenEventForOpenAndClose() {
+        NocturneClient client = NocturneClient.boot(null);
+        AtomicReference<ScreenEvent> seen = new AtomicReference<ScreenEvent>();
+        client.events().subscribe(ScreenEvent.class, event -> seen.set(event));
+
+        Object screen = new Object();
+        assertTrue(GameplayHook.screenOpen(screen), "an uncancelled screen event must allow the switch");
+        assertSame(screen, seen.get().screen);
+
+        assertTrue(GameplayHook.screenOpen(null), "closing a screen (null) must also be delivered");
+        assertNull(seen.get().screen);
+    }
+
+    @Test
+    void cancelledScreenEventBlocksTheGate() {
+        NocturneClient client = NocturneClient.boot(null);
+        client.events().subscribe(ScreenEvent.class, event -> event.cancelled = true);
+
+        assertFalse(GameplayHook.screenOpen(new Object()));
+    }
+
+    @Test
     void keyEventUsesAwtCodesAndControlsTheGate() {
         NocturneClient client = NocturneClient.boot(null);
         AtomicReference<KeyEvent> seen = new AtomicReference<KeyEvent>();

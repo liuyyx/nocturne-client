@@ -781,6 +781,9 @@
                 },
                 "screen": {
                     "absent": true
+                },
+                "setScreen": {
+                    "absent": true
                 }
             },
             "fields": {

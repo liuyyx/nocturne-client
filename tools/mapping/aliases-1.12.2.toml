@@ -752,6 +752,7 @@ getProfile = { mcp = "getGameProfile", scope = "net/minecraft/client/network/Net
 getGameMode = { mcp = "getGameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
 
 [overrides."net/minecraft/client/gui/Gui"]
+setScreen = { unsupported = "该版本 Gui 没有 setScreen()；界面切换在 Minecraft.displayGuiScreen" }
 screen = { unsupported = "1.8.9 GuiIngame 没有 screen()；当前界面在 Minecraft.currentScreen" }
 
 [overrides."net/minecraft/world/entity/player/Inventory"]

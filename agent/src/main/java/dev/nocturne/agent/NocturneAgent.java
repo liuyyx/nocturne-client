@@ -1140,6 +1140,11 @@ public final class NocturneAgent {
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.MINECRAFT,
                 "setScreen", "(Lnet/minecraft/client/gui/screens/Screen;)V|(Lnet/minecraft/client/gui/GuiScreen;)V",
                 "screenOpen", "Z", false, false);
+        // 26.x 的屏幕切换走 Gui.setScreen(Screen)：Minecraft 侧没有 setScreen（映射 absent），
+        // 26.x 以前 Gui 没有这个方法（absent）。两者按版本互斥，不会重复投递 ScreenEvent。
+        registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.HUD,
+                "setScreen", "(Lnet/minecraft/client/gui/screens/Screen;)V",
+                "screenOpen", "Z", false, false);
         registerGate(instrumentation, asmLoader, dev.nocturne.client.mapping.ClassType.CLIENT_LEVEL,
                 "addEntity", "(Lnet/minecraft/world/entity/Entity;)V|(ILnet/minecraft/world/entity/Entity;)V",
                 "entityJoin", "V", false, false);

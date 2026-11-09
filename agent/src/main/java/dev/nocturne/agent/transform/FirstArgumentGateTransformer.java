@@ -62,7 +62,9 @@ public final class FirstArgumentGateTransformer implements ClassFileTransformer 
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
-        if (!targetClass.equals(className) || TransformGuard.containsHook(classfileBuffer, hookOwner, hookMethod)) {
+        if (!targetClass.equals(className)
+                || TransformGuard.containsHookInMethod(classfileBuffer, targetClass, method,
+                        descriptor, hookOwner, hookMethod)) {
             return null;
         }
         try {

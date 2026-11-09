@@ -88,6 +88,30 @@ class EntityRenderGateTransformerTest {
     }
 
     @Test
+    void framedMethodKeepsValidStackMapAfterHeadInjection() throws Exception {
+        byte[] patched = new EntityRenderGateTransformer(VOID_TARGET, "hit",
+                "(Ljava/lang/Object;)V", SINK)
+                .transform(getClass().getClassLoader(), VOID_TARGET, null, null,
+                        framedSubject(VOID_TARGET, "(Ljava/lang/Object;)V"));
+        assertNotNull(patched, "transformer must accept a method that already has StackMapTable frames");
+        Class<?> type = define(VOID_TARGET, patched);
+        Method hit = type.getMethod("hit", Object.class);
+
+        Sink.allow = false;
+        hit.invoke(null, "entity");
+        assertEquals(1, Sink.calls.size(), "cancelled call must not run the framed body");
+        assertEquals("gate:entity", Sink.calls.get(0));
+
+        Sink.calls.clear();
+        Sink.allow = true;
+        hit.invoke(null, (Object) null);
+        assertEquals(java.util.Arrays.asList("gate:null", "body:null"), Sink.calls);
+        hit.invoke(null, "x");
+        assertEquals(java.util.Arrays.asList("gate:null", "body:null", "gate:x", "body:x"),
+                Sink.calls);
+    }
+
+    @Test
     void unsupportedReturnShapeIsRejectedUpFront() {
         try {
             new EntityRenderGateTransformer(VOID_TARGET, "hit", "(Ljava/lang/Object;)F", SINK);
@@ -95,6 +119,30 @@ class EntityRenderGateTransformerTest {
         } catch (IllegalArgumentException expected) {
             assertFalse(expected.getMessage().isEmpty());
         }
+    }
+
+    private static byte[] framedSubject(String name, String descriptor) {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, name, null, "java/lang/Object", null);
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
+                "hit", descriptor, null, null);
+        method.visitCode();
+        method.visitVarInsn(Opcodes.ALOAD, 0);
+        org.objectweb.asm.Label notNull = new org.objectweb.asm.Label();
+        org.objectweb.asm.Label end = new org.objectweb.asm.Label();
+        method.visitJumpInsn(Opcodes.IFNONNULL, notNull);
+        method.visitInsn(Opcodes.ACONST_NULL);
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "body", "(Ljava/lang/Object;)V", false);
+        method.visitJumpInsn(Opcodes.GOTO, end);
+        method.visitLabel(notNull);
+        method.visitVarInsn(Opcodes.ALOAD, 0);
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "body", "(Ljava/lang/Object;)V", false);
+        method.visitLabel(end);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
     }
 
     private static byte[] subject(String name, String descriptor, boolean booleanResult) {

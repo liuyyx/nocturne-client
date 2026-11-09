@@ -50,11 +50,13 @@ public final class EntityRenderGateTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> beingRedefined,
                             ProtectionDomain domain, byte[] bytes) {
         if (!targetClass.equals(className)
-                || TransformGuard.containsHook(bytes, hookOwner, "entityRenderGate")) {
+                || TransformGuard.containsHookInMethod(bytes, targetClass, method, descriptor,
+                        hookOwner, "entityRenderGate")) {
             return null;
         }
         try {
             ClassReader reader = new ClassReader(bytes);
+            final int classVersion = reader.readUnsignedShort(6);
             ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
             reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
                 @Override
@@ -81,8 +83,12 @@ public final class EntityRenderGateTransformer implements ClassFileTransformer {
                                 super.visitInsn(Opcodes.RETURN);
                             }
                             super.visitLabel(proceed);
-                            Object[] locals = frameLocals(access);
-                            super.visitFrame(Opcodes.F_NEW, locals.length, locals, 0, null);
+                            if (classVersion >= Opcodes.V1_6) {
+                                Object[] locals = frameLocals(access);
+                                // 方法头只插一次 F_NEW；原始帧已全部展开（EXPAND_FRAMES），
+                                // 与原方法在 offset 0 的帧不会同址冲突。
+                                super.visitFrame(Opcodes.F_NEW, locals.length, locals, 0, null);
+                            }
                         }
                     };
                 }

@@ -300,6 +300,27 @@ class CallbackHookTransformerTest {
 
     /** 双端模式在多返回点方法里只消费一次（否则叠加层一帧会被画多遍）。 */
     @Test
+    void deferredRunsWhenTheBodyThrowsAndOnlyOnce() throws Exception {
+        CallbackHookTransformer transformer = new CallbackHookTransformer(
+                "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
+                HOOK_OWNER, "accept", false, "deferred");
+        byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample", null, null,
+                throwingClass("handle", "(Ljava/lang/Object;)V"));
+        assertNotNull(patched, "deferred transformer must accept a throwing body");
+
+        Object argument = "entity";
+        try {
+            define(patched).getMethod("handle", Object.class).invoke(null, argument);
+            throw new AssertionError("body must throw");
+        } catch (java.lang.reflect.InvocationTargetException expected) {
+            // expected
+        }
+        assertEquals(java.util.Arrays.asList("hook", "body", "deferred"), Sink.trace,
+                "post must run from the Throwable handler after a body exception");
+        assertEquals(2, Sink.calls, "hook and deferred must each run exactly once");
+    }
+
+    @Test
     void defersOnlyOnceForMultipleReturnPoints() throws Exception {
         CallbackHookTransformer transformer = new CallbackHookTransformer(
                 "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
@@ -338,6 +359,35 @@ class CallbackHookTransformerTest {
         method.visitCode();
         method.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK_OWNER, "body", "()V", false);
         method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }
+
+    /** 生成 {@code body(); throw new RuntimeException();} 的替身方法，验证 athrow 也会执行 deferred。 */
+    private static byte[] throwingClass(String methodName, String descriptor) {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "dev/nocturne/agent/transform/SubjectSample",
+                null, "java/lang/Object", null);
+
+        MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        constructor.visitCode();
+        constructor.visitVarInsn(Opcodes.ALOAD, 0);
+        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        constructor.visitInsn(Opcodes.RETURN);
+        constructor.visitMaxs(0, 0);
+        constructor.visitEnd();
+
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
+                methodName, descriptor, null, null);
+        method.visitCode();
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK_OWNER, "body", "()V", false);
+        method.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException");
+        method.visitInsn(Opcodes.DUP);
+        method.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/RuntimeException",
+                "<init>", "()V", false);
+        method.visitInsn(Opcodes.ATHROW);
         method.visitMaxs(0, 0);
         method.visitEnd();
         writer.visitEnd();

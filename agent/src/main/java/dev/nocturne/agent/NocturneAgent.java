@@ -1727,6 +1727,8 @@ public final class NocturneAgent {
         boolean chamsWired = false;
         boolean stateGeneration = false;
         boolean sawRender = false;
+        boolean sawRenderDescriptor = false;
+        boolean renderMappingEmpty = false;
         for (String className : classNameCandidates(mapping, owner)) {
             // 1) shouldRender：每个 1.21.4+ 表都有，首参是 Entity。
             for (dev.nocturne.client.mapping.MethodCandidate candidate
@@ -1775,21 +1777,28 @@ public final class NocturneAgent {
                 sawRender = true;
                 String descriptor = candidate.descriptor();
                 if (descriptor == null || descriptor.isEmpty()) {
-                    continue;
+                    renderMappingEmpty = true;
                 }
-                if (!firstParameterIsEntity(mapping, descriptor)) {
-                    // 1.21.5–1.21.8：首参是 EntityRenderState。绝不把它当实体传给任何钩子。
-                    stateGeneration = true;
-                    continue;
+                // 表里的描述符可能缺失/过版本（1.9–1.14.3 表项为空、26.x arity 变化）：
+                // 用已加载类的真实方法名+描述符兜底，否则整条门控/Chams 静默无入口。
+                java.util.LinkedHashSet<String> shapes = descriptorsFor(instrumentation, className,
+                        candidate.name(), descriptor, null);
+                for (String shape : shapes) {
+                    if (!firstParameterIsEntity(mapping, shape)) {
+                        // 1.21.5–1.21.8：首参是 EntityRenderState。绝不把它当实体传给任何钩子。
+                        stateGeneration = true;
+                        continue;
+                    }
+                    sawRenderDescriptor = true;
+                    ClassFileTransformer gate = asmLoader.createEntityRenderGateTransformer(className,
+                            candidate.name(), shape, GAMEPLAY_HOOK_OWNER);
+                    gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
+                            candidate.name(), shape, "entityRenderGate") >= HOOK_REGISTERED;
+                    ClassFileTransformer chams = asmLoader.createDeferredCallbackTransformer(className,
+                            candidate.name(), shape, GAMEPLAY_HOOK_OWNER, "chamsPre", "chamsPost");
+                    chamsWired |= registerGameplayTransformerState(instrumentation, chams, className,
+                            candidate.name(), shape, "chamsPre") >= HOOK_REGISTERED;
                 }
-                ClassFileTransformer gate = asmLoader.createEntityRenderGateTransformer(className,
-                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER);
-                gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
-                        candidate.name(), descriptor, "entityRenderGate") >= HOOK_REGISTERED;
-                ClassFileTransformer chams = asmLoader.createDeferredCallbackTransformer(className,
-                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "chamsPre", "chamsPost");
-                chamsWired |= registerGameplayTransformerState(instrumentation, chams, className,
-                        candidate.name(), descriptor, "chams") >= HOOK_REGISTERED;
             }
         }
         if (gateWired) {
@@ -1804,9 +1813,13 @@ public final class NocturneAgent {
         } else {
             String reason = stateGeneration
                     ? "entity render entry takes EntityRenderState (1.21.5-1.21.8): no entity-first draw hook"
+                    : renderMappingEmpty
+                    ? "EntityRenderDispatcher#render mapping entry empty (no name/descriptor for this version)"
                     : !sawRender
                     ? "EntityRenderDispatcher#render absent (1.21.9+): no entity-first draw hook"
-                    : "EntityRenderDispatcher#render has no usable descriptor";
+                    : !sawRenderDescriptor
+                    ? "EntityRenderDispatcher#render has no entity-first descriptor (target class not loaded or arity mismatch)"
+                    : "EntityRenderDispatcher#render hook registration failed";
             publishHookState("chams", false, reason);
             log("chams unavailable: " + reason);
         }
@@ -2131,8 +2144,8 @@ public final class NocturneAgent {
                     current = captureCurrentBytes(instrumentation, loaded);
                 }
                 String internalName = loaded.getName().replace('.', '/');
-                if (current != null && dev.nocturne.agent.transform.TransformGuard.containsHook(
-                        current, GAMEPLAY_HOOK_OWNER, hookMethod)) {
+                if (current != null && dev.nocturne.agent.transform.TransformGuard.containsHookInMethod(
+                        current, targetClass, method, descriptor, GAMEPLAY_HOOK_OWNER, hookMethod)) {
                     GAMEPLAY_BYTES.put(loaded, current);
                     log("gameplay hook already applied by retransform: " + targetClass
                             + "." + method + " -> " + hookMethod);
@@ -2145,8 +2158,9 @@ public final class NocturneAgent {
                         : patchBytes(loaded, composite, targetClass, method);
                 // 只有**真的织进去了**才算成功：转换器在方法名/描述符不匹配时会原样返回输入
                 // （非 null），旧代码把这种情况也打成 "woven"——日志说织上了、行为却完全没有。
-                if (bytes != null && dev.nocturne.agent.transform.TransformGuard.containsHook(
-                        bytes, GAMEPLAY_HOOK_OWNER, hookMethod)) {
+                if (bytes != null
+                        && dev.nocturne.agent.transform.TransformGuard.containsHookInMethod(
+                        bytes, targetClass, method, descriptor, GAMEPLAY_HOOK_OWNER, hookMethod)) {
                     instrumentation.redefineClasses(new java.lang.instrument.ClassDefinition(loaded, bytes));
                     GAMEPLAY_BYTES.put(loaded, bytes);
                     patched = true;

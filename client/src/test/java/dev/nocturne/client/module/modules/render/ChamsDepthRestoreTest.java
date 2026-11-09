@@ -12,6 +12,7 @@ import dev.nocturne.client.render.RenderCapabilities;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,6 +48,40 @@ class ChamsDepthRestoreTest {
 
         post(true);
         assertTrue(capabilities.depth, "outer post must restore the original true");
+    }
+
+    /** post 不受 valid 影响：实体在绘制期间死亡/变成其它类型时仍必须还原深度。 */
+    @Test
+    void postRestoresEvenWhenTheEntityIsNoLongerValid() {
+        DepthState capabilities = new DepthState();
+        enable(capabilities);
+
+        Object player = FakeMinecraft.instance.player;
+        NocturneClient.get().events().post(new EntityRenderEvent(player, false));
+        assertFalse(capabilities.depth, "pre on a valid self player must disable depth");
+
+        NocturneClient.get().events().post(new EntityRenderEvent(new Object(), true));
+        assertTrue(capabilities.depth, "post must restore even if valid(entity) is now false");
+    }
+
+    /** null 实体层由钩子压哨兵；模块层再压一次会和 post 失配（异常不双弹/严格配对）。 */
+    @Test
+    void nullEntityDoesNotPushASnapshot() throws Exception {
+        DepthState capabilities = new DepthState();
+        ChamsModule module = enable(capabilities);
+        ((dev.nocturne.client.value.BooleanValue) field("others").get(module)).set(Boolean.TRUE);
+
+        NocturneClient.get().events().post(new EntityRenderEvent(null, false));
+        NocturneClient.get().events().post(new EntityRenderEvent(null, true));
+
+        assertTrue(capabilities.depth, "null pre/post must not change depth");
+        assertTrue(capabilities.calls.isEmpty(), "null entity must not snapshot or write depth");
+    }
+
+    private static Field field(String name) throws Exception {
+        Field field = ChamsModule.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return field;
     }
 
     /** 进入时深度本来就是关闭的：post 之后必须仍是关闭。 */
@@ -96,7 +131,7 @@ class ChamsDepthRestoreTest {
         NocturneClient.get().events().post(new EntityRenderEvent(FakeMinecraft.instance.player, post));
     }
 
-    private static void enable(RenderCapabilities capabilities) {
+    private static ChamsModule enable(RenderCapabilities capabilities) {
         NocturneClient client = NocturneClient.boot(null);
         FakeMinecraft.reset();
         Object player = new FakePlayer();
@@ -106,6 +141,7 @@ class ChamsDepthRestoreTest {
         client.setRenderCapabilities(capabilities);
         ChamsModule module = new ChamsModule();
         module.setEnabled(true);
+        return module;
     }
 
     /** 替身玩家：只用于类型判断与“本地玩家”比较。 */

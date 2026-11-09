@@ -52,33 +52,36 @@ public final class ChamsModule extends GameModule {
     }
 
     private void onRender(EntityRenderEvent event) {
-        if (!valid(event.entity)) {
-            return;
-        }
         RenderCapabilities capabilities = client().renderCapabilities();
         if (capabilities == null) {
             return;
         }
-        if (!event.post) {
-            // 先快照原深度：不同版本的进入态不一定是 true（前一模块/游戏自己可能已经关了）。
-            // 拿不到原值时宁可不改——猜一个值会把世界画成穿透或被 HUD 遮挡。
-            Boolean previous = capabilities.depthTestEnabled();
-            if (previous == null) {
-                return;
-            }
-            java.util.ArrayDeque<Boolean> stack = depthSnapshots.get();
-            stack.push(previous);
-            try {
-                capabilities.depthTest(false);
-            } catch (RuntimeException failure) {
-                stack.pop();
-                throw failure;
-            } catch (Error failure) {
-                stack.pop();
-                throw failure;
-            }
-        } else {
+        if (event.post) {
+            // post 必须与 pre 严格配对：实体在绘制期间死亡/变为无效时仍要还原深度，
+            // 否则 Chams 关掉的深度测试会永久留在关闭状态。
             restoreOne(capabilities);
+            return;
+        }
+        if (event.entity == null || !valid(event.entity)) {
+            // null 不压栈：钩子层已经为 null 压了哨兵，模块层再压就会和 post 失配。
+            return;
+        }
+        // 先快照原深度：不同版本的进入态不一定是 true（前一模块/游戏自己可能已经关了）。
+        // 拿不到原值时宁可不改——猜一个值会把世界画成穿透或被 HUD 遮挡。
+        Boolean previous = capabilities.depthTestEnabled();
+        if (previous == null) {
+            return;
+        }
+        java.util.ArrayDeque<Boolean> stack = depthSnapshots.get();
+        stack.push(previous);
+        try {
+            capabilities.depthTest(false);
+        } catch (RuntimeException failure) {
+            stack.pop();
+            throw failure;
+        } catch (Error failure) {
+            stack.pop();
+            throw failure;
         }
     }
 

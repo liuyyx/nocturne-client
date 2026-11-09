@@ -7,6 +7,9 @@ import dev.nocturne.client.render.WorldProjection;
 
 /** 世界几何的统一投影绘制：所有后端共用同一组边和屏幕坐标。 */
 public final class WorldGeometry {
+    /** 渐隐填充的屏幕水平条带数：足够平滑，又不会让一次 HoleESP 变成上千次 rect。 */
+    private static final int FADE_STRIPS = 8;
+
     private static final int[][] EDGES = {
             {0, 1}, {0, 2}, {0, 4}, {1, 3}, {1, 5}, {2, 3},
             {2, 6}, {3, 7}, {4, 5}, {4, 6}, {5, 7}, {6, 7}
@@ -105,6 +108,61 @@ public final class WorldGeometry {
             draw.rect(minX, minY, maxX - minX, maxY - minY, sideColor);
         }
         block(draw, projection, x, y, z, width, lineColor);
+    }
+
+    /**
+     * 垂直渐隐的实心方块：屏幕包围矩形按水平条带从 {@code topColor} 过渡到 {@code bottomColor}。
+     *
+     * <p>对齐 Epsilon 的 {@code addFilledFadeBox} 语义——底面用填充色、顶面用渐隐色，而不是把
+     * 整个填充按距离混向渐隐色。{@code OverlayDraw} 没有渐变图元，这里用
+     * {@value #FADE_STRIPS} 条实心矩形近似，足够消除整块半透明色的「脏」观感。
+     */
+    public static void blockFilledFade(OverlayDraw draw, WorldProjection projection,
+                                       double minX, double minY, double minZ,
+                                       double maxX, double maxY, double maxZ,
+                                       int bottomColor, int topColor) {
+        float screenMinX = Float.MAX_VALUE;
+        float screenMinY = Float.MAX_VALUE;
+        float screenMaxX = -Float.MAX_VALUE;
+        float screenMaxY = -Float.MAX_VALUE;
+        boolean any = false;
+        for (int i = 0; i < 8; i++) {
+            WorldProjection.ScreenPoint point = projection.project(
+                    (i & 1) == 0 ? minX : maxX,
+                    (i & 2) == 0 ? minY : maxY,
+                    (i & 4) == 0 ? minZ : maxZ);
+            if (point.visible) {
+                screenMinX = Math.min(screenMinX, point.x);
+                screenMinY = Math.min(screenMinY, point.y);
+                screenMaxX = Math.max(screenMaxX, point.x);
+                screenMaxY = Math.max(screenMaxY, point.y);
+                any = true;
+            }
+        }
+        if (!any || (bottomColor >>> 24) == 0 && (topColor >>> 24) == 0) {
+            return;
+        }
+        float width = screenMaxX - screenMinX;
+        float height = screenMaxY - screenMinY;
+        if (width <= 0.0f || height <= 0.0f) {
+            return;
+        }
+        for (int i = 0; i < FADE_STRIPS; i++) {
+            float t0 = i / (float) FADE_STRIPS;
+            float t1 = (i + 1) / (float) FADE_STRIPS;
+            int color = blendArgb(topColor, bottomColor, (t0 + t1) * 0.5f);
+            draw.rect(screenMinX, screenMinY + height * t0, width, height * (t1 - t0), color);
+        }
+    }
+
+    /** 按分量在两个 ARGB 颜色之间插值；{@code amount=0} 取 {@code from}，1 取 {@code to}。 */
+    static int blendArgb(int from, int to, float amount) {
+        float t = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount);
+        int a = (int) ((from >>> 24) + ((to >>> 24) - (from >>> 24)) * t);
+        int r = (int) ((from >> 16 & 255) + ((to >> 16 & 255) - (from >> 16 & 255)) * t);
+        int g = (int) ((from >> 8 & 255) + ((to >> 8 & 255) - (from >> 8 & 255)) * t);
+        int b = (int) ((from & 255) + ((to & 255) - (from & 255)) * t);
+        return a << 24 | r << 16 | g << 8 | b;
     }
 
     public static void entity(GameBridge bridge, OverlayDraw draw, WorldProjection projection,

@@ -136,15 +136,14 @@ public final class HoleESPModule extends GameModule implements WorldOverlay {
                 drawHole(draw, projection, hole, wallHeight.get(), wallFill.get(), wallFillColor.argb(),
                         wallFade.get(), wallFadeColor.argb(), wallBox.get(), wallBoxColor.argb(), alpha);
                 if (wallSideFill.get()) {
-                    int side = withAlpha(wallSideFillColor.argb(), alpha);
-                    if (wallSideFade.get()) {
-                        side = blend(side, wallSideFadeColor.argb(), 1.0f - alpha);
-                    }
-                    WorldGeometry.blockFilled(draw, projection, hole.x, hole.y, hole.z,
-                            1.0f, side, withAlpha(wallSideBoxColor.argb(), alpha));
+                    int bottom = withAlpha(wallSideFillColor.argb(), alpha);
+                    int top = wallSideFade.get() ? withAlpha(wallSideFadeColor.argb(), alpha) : bottom;
+                    WorldGeometry.blockFilledFade(draw, projection, hole.x, hole.y, hole.z,
+                            hole.x + 1.0, hole.y + 1.0, hole.z + 1.0, bottom, top);
                 }
                 if (wallSideBox.get()) {
-                    WorldGeometry.side(draw, projection, hole.x, hole.y, hole.z, "up", 1.0f,
+                    WorldGeometry.box(draw, projection, hole.x, hole.y, hole.z,
+                            hole.x + 1.0, hole.y + 1.0, hole.z + 1.0, 1.0f,
                             withAlpha(wallSideBoxColor.argb(), alpha));
                 }
             } else {
@@ -157,31 +156,36 @@ public final class HoleESPModule extends GameModule implements WorldOverlay {
         }
     }
 
+    /**
+     * 与 Epsilon 的 {@code drawBox} 同语义：
+     * <ul>
+     *   <li>{@code fill} 关闭时只画描边；{@code outline} 关闭时只画填充；两者都关直接跳过；</li>
+     *   <li>填充是「底面填充色 → 顶面渐隐色」的垂直渐变，不是整块颜色按距离混向渐隐色；</li>
+     *   <li>距离衰减同时作用在填充和描边颜色上，而不是改写颜色本身。</li>
+     * </ul>
+     */
     private void drawHole(OverlayDraw draw, WorldProjection projection, Hole hole, double height,
                           boolean fill, int fillColor, boolean fade, int fadeColor,
                           boolean outline, int outlineColor, float alpha) {
-        int line = withAlpha(outlineColor, alpha);
-        int side = withAlpha(fill ? fillColor : 0, alpha);
-        if (fade) {
-            side = blend(side, fadeColor, 1.0f - alpha);
+        if (!fill && !outline) {
+            return;
         }
-        WorldGeometry.box(draw, projection, hole.x, hole.y, hole.z, hole.x + 1.0,
-                hole.y + height, hole.z + 1.0, 1.0f, line);
+        double minY = hole.y + Math.min(0.0, height);
+        double maxY = hole.y + Math.max(0.0, height);
         if (fill) {
-            WorldGeometry.blockFilled(draw, projection, hole.x, hole.y, hole.z, 1.0f, side, line);
+            int bottom = withAlpha(fillColor, alpha);
+            int top = fade ? withAlpha(fadeColor, alpha) : bottom;
+            WorldGeometry.blockFilledFade(draw, projection, hole.x, minY, hole.z,
+                    hole.x + 1.0, maxY, hole.z + 1.0, bottom, top);
+        }
+        if (outline) {
+            WorldGeometry.box(draw, projection, hole.x, minY, hole.z,
+                    hole.x + 1.0, maxY, hole.z + 1.0, 1.0f, withAlpha(outlineColor, alpha));
         }
     }
 
     private static int withAlpha(int color, float factor) {
         return color & 0xFFFFFF | (int) ((color >>> 24) * factor) << 24;
-    }
-
-    private static int blend(int from, int to, float amount) {
-        int a = (int) ((from >>> 24) + ((to >>> 24) - (from >>> 24)) * amount);
-        int r = (int) ((from >> 16 & 255) + ((to >> 16 & 255) - (from >> 16 & 255)) * amount);
-        int g = (int) ((from >> 8 & 255) + ((to >> 8 & 255) - (from >> 8 & 255)) * amount);
-        int b = (int) ((from & 255) + ((to & 255) - (from & 255)) * amount);
-        return a << 24 | r << 16 | g << 8 | b;
     }
 
     private NumberValue number(String name, double def, double min, double max, double step) {

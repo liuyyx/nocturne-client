@@ -55,9 +55,9 @@ public final class World3DRenderer {
     /** 快照对应的注册表 revision。 */
     private long overlayRevision = Long.MIN_VALUE;
 
-    /** 调试用示例覆盖层（仅在 {@code -Dnocturne.debug.world3d} 下启用）。 */
+    /** 调试用示例覆盖层（仅在显式 {@code -Dnocturne.debug.world3d} 下启用）。 */
     private final World3DDebugOverlay debugOverlay =
-            System.getProperty("nocturne.debug.world3d") != null ? new World3DDebugOverlay() : null;
+            debugOverlayEnabled() ? new World3DDebugOverlay() : null;
 
     private boolean beginErrorLogged;
     private boolean drawErrorLogged;
@@ -69,6 +69,33 @@ public final class World3DRenderer {
 
     public World3DRenderer(NocturneClient client) {
         this.client = client;
+        if (debugOverlay != null) {
+            // 真机日志里能直接区分「自检层被显式打开」和「模块视觉」——用户报绿框白环时先看这一行。
+            log("world3d debug overlay ENABLED by -Dnocturne.debug.world3d");
+        }
+    }
+
+    /**
+     * 自检层开关：属性缺省为关闭；显式 {@code false/0/no/off} 也视为关闭。
+     *
+     * <p>旧实现只判断属性是否存在，于是 {@code -Dnocturne.debug.world3d=false} 反而会打开自检层。
+     * 这里收紧为「存在且不是关闭值」；不设属性时生产路径永远不会创建该覆盖层。
+     *
+     * @return true 表示允许绘制绿色线框 + 白色圆环自检图形
+     */
+    static boolean debugOverlayEnabled() {
+        String value = System.getProperty("nocturne.debug.world3d");
+        if (value == null) {
+            return false;
+        }
+        String trimmed = value.trim();
+        return !("false".equalsIgnoreCase(trimmed) || "0".equals(trimmed)
+                || "no".equalsIgnoreCase(trimmed) || "off".equalsIgnoreCase(trimmed));
+    }
+
+    /** @return 当前实例是否持有自检覆盖层（单测断言默认关闭用） */
+    boolean hasDebugOverlay() {
+        return debugOverlay != null;
     }
 
     /**

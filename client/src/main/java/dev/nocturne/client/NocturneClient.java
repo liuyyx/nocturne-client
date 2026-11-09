@@ -1,5 +1,6 @@
 package dev.nocturne.client;
 
+import dev.nocturne.client.config.ModuleConfigStore;
 import dev.nocturne.client.event.EventBus;
 import dev.nocturne.client.hud.HudSink;
 import dev.nocturne.client.module.Module;
@@ -46,8 +47,15 @@ public final class NocturneClient {
     private volatile dev.nocturne.client.event.GameplayEvents gameplayEvents;
     /** 世界空间 3D 渲染器；{@link #install()} 时创建，未 boot 完成时为 {@code null}。 */
     private volatile dev.nocturne.client.render3d.World3DRenderer world3d;
+    /** 模块开关/热键/设置项的持久化；{@link #install()} 中创建。 */
+    private volatile ModuleConfigStore moduleConfig;
     /** 是否已自销毁（panic）：置位后不再接受任何驱动，见 {@link #panic()}。 */
     private volatile boolean panicked;
+
+    /** 首次运行（配置缺键）时默认开启的模块；已有配置里的显式状态优先。 */
+    private static final String[] DEFAULT_ENABLED_MODULES = {
+            "Better Chat", "Better Scoreboard", "Movement Fix"
+    };
 
     private NocturneClient(Instrumentation instrumentation) {
         this.instrumentation = instrumentation;
@@ -112,6 +120,20 @@ public final class NocturneClient {
         return rotations;
     }
 
+    /**
+     * 是否要抑制原版侧边栏（保证默认只显示一套计分板）。
+     *
+     * <p>两个来源取并集：Better Scoreboard 启用时自动隐藏原版；NoRender 的
+     * {@code Scoreboard} 开关也接到同一条路径（此前是没有任何调用点的死设置）。
+     *
+     * @return {@code true} 表示原版侧边栏应隐藏
+     */
+    public boolean hideVanillaScoreboard() {
+        Module better = modules.get("Better Scoreboard");
+        return (better != null && better.isEnabled())
+                || dev.nocturne.client.module.modules.render.NoRenderModule.hide("Scoreboard");
+    }
+
     /** 全局目标选择器。 */
     public dev.nocturne.client.control.TargetManager targets() {
         return targets;
@@ -125,6 +147,24 @@ public final class NocturneClient {
     /** 系统加载器上的游戏事件汇；未 boot 完成时为 {@code null}。 */
     public dev.nocturne.client.event.GameplayEvents gameplayEvents() {
         return gameplayEvents;
+    }
+
+    /** 模块配置存储；未 boot 完成时为 {@code null}。 */
+    public ModuleConfigStore moduleConfig() {
+        return moduleConfig;
+    }
+
+    /**
+     * 通知配置层「模块开关/设置项/热键发生了成功变更」。
+     *
+     * <p>由 {@link Module#setEnabled(boolean)} 与 {@code Value#set} 调用；存储内部去抖后落盘，
+     * 因此 GUI 连续拖动滑块也只写一次文件。
+     */
+    public void markConfigDirty() {
+        ModuleConfigStore store = moduleConfig;
+        if (store != null) {
+            store.requestSave();
+        }
     }
 
     /**
@@ -221,7 +261,17 @@ public final class NocturneClient {
     /** 执行实际安装：注册内置模块并打日志。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */
     private void install() {
         registerModules();
-        enableDebugModules();
+        // 先加载用户配置，再套用「缺键默认」，最后才处理调试开关；顺序反过来会把用户显式
+        // 关闭的模块重新打开，或把这次临时启用写进配置文件。
+        moduleConfig = new ModuleConfigStore(modules);
+        moduleConfig.load();
+        moduleConfig.applyDefaults(DEFAULT_ENABLED_MODULES);
+        moduleConfig.withSavingSuppressed(new Runnable() {
+            @Override
+            public void run() {
+                enableDebugModules();
+            }
+        });
         dev.nocturne.client.module.ModuleKeybinds.install(this);
         gameplayEvents = dev.nocturne.client.event.GameplayEvents.install(this);
         world3d = new dev.nocturne.client.render3d.World3DRenderer(this);
@@ -443,9 +493,7 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.misc.TargetFilterModule());
         modules.register(new dev.nocturne.client.module.modules.misc.TimerModule());
         modules.register(new dev.nocturne.client.module.modules.misc.ClientSettingsModule());
-        modules.get("Better Chat").setEnabled(true);
-        modules.get("Better Scoreboard").setEnabled(true);
-        modules.get("Movement Fix").setEnabled(true);
+        // 默认开启移到 ModuleConfigStore.applyDefaults：只有配置缺键时才套用，绝不覆盖用户选择。
     }
 
 
@@ -505,6 +553,12 @@ public final class NocturneClient {
      * 逐模块隔离异常：单个模块的 {@code onDisable} 失败不会让其余模块停留在已启用状态。
      */
     public synchronized void shutdown() {
+        // 必须在禁用任何模块之前落盘：panic 的语义是「看起来没注入过」，如果把随后产生的
+        // 全关状态写进配置，下次启动会把玩家此前开着的模块全部当成主动关闭。
+        ModuleConfigStore store = moduleConfig;
+        if (store != null) {
+            store.flushAndClose();
+        }
         for (Module module : modules.all()) {
             try {
                 module.setEnabled(false);

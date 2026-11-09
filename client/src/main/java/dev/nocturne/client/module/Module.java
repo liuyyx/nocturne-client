@@ -1,5 +1,6 @@
 package dev.nocturne.client.module;
 
+import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.hud.HudSink;
 import dev.nocturne.client.value.KeyValue;
 import dev.nocturne.client.value.Value;
@@ -77,6 +78,11 @@ public abstract class Module {
             onDisable();
         }
         this.enabled = value;
+        // 只在钩子成功、状态真正提交后标记脏：失败的启用不能被写进配置冒充「用户开着它」。
+        NocturneClient client = NocturneClient.get();
+        if (client != null) {
+            client.markConfigDirty();
+        }
     }
 
     /** 在启用/禁用之间切换；读-改-写在 {@link #setEnabled(boolean)} 的对象锁内完成。 */

@@ -96,6 +96,13 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   父组、子项自身条件共同决定子行可见性，六类扩展设置均有实际 Fatality 控件。
   分类为 `COMBAT` / `MOVEMENT` / `RENDER` / `WORLD` / `INVENTORY` / `PLAYER` / `MISC`；
   模块实现在 `module.modules.<分类小写>` 下分包，注册顺序按分类连续。GUI 只为非空分类建立 Tab。
+- **模块配置**：`ModuleConfigStore` 持久化 `{version, modules:{name:{enabled,bind,values}}}`，
+  `module.name()`/`value.name()` 作键、跳过默认值；路径优先游戏实例目录
+  （`user.dir/.nocturne/modules.json`，可用 `-Dnocturne.config.dir` 覆盖），不可写时回退
+  `~/.nocturne/modules.json`。启用/设置/热键的成功写入触发 300ms 去抖保存；落盘用
+  temp+fsync+备份+`ATOMIC_MOVE`。启动顺序为「加载配置 → 只对缺键模块套默认 → 调试开关」，
+  `shutdown()/panic` 在禁用前 flush 并关闭存储（自销毁不得把全关状态写盘）；损坏文件改名
+  `modules.json.corrupt[.n]` 保留现场，未知模块/项与类型不符只跳过该项。
 - **事件总线**：`EventBus`，同步、先按优先级再按同级注册顺序、逐订阅者异常隔离。
   可取消事件默认跳过后续订阅者，`skipCancelled=true` 的订阅者仍接收；分发使用增删时重建的不可变快照。
   已有 PlayerTick / Motion / Packet / Render / Key / MouseButton / Attack / UseItem / WorldChange

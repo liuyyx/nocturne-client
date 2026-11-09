@@ -41,6 +41,13 @@ subprojects {
     // 全部子模块的测试统一使用 JUnit Platform 运行器。
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+        // 模块配置会落盘；测试必须写进本模块 build 目录，且每个测试任务从空目录开始——
+        // 否则一次测试启用的模块会通过真实 user.dir/~/.nocturne 污染下一次测试或开发机。
+        val configDir = project.layout.buildDirectory.dir("nocturne-test-config")
+        systemProperty("nocturne.config.dir", configDir.get().asFile.absolutePath)
+        doFirst {
+            project.delete(configDir)
+        }
     }
 }
 

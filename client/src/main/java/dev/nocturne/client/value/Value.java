@@ -1,5 +1,7 @@
 package dev.nocturne.client.value;
 
+import dev.nocturne.client.NocturneClient;
+
 /**
  * 模块持有的具名、带类型的设置项。
  *
@@ -75,9 +77,23 @@ public abstract class Value<T> {
         return value;
     }
 
-    /** 写入新值，写入前经 {@link #coerce(Object)} 归一化，因此调用方无需自行做范围检查。 */
+    /**
+     * 写入新值，写入前经 {@link #coerce(Object)} 归一化，因此调用方无需自行做范围检查。
+     *
+     * <p>值未变化时不重复写入；真正变化后通知配置层（去抖落盘）。加载配置期间的回写会被配置
+     * 存储自己忽略，不会形成「读配置 → 反向保存」的循环。
+     */
     public void set(T newValue) {
-        this.value = coerce(newValue);
+        T coerced = coerce(newValue);
+        T previous = this.value;
+        this.value = coerced;
+        if (previous == null ? coerced == null : previous.equals(coerced)) {
+            return;
+        }
+        NocturneClient client = NocturneClient.get();
+        if (client != null) {
+            client.markConfigDirty();
+        }
     }
 
     /** @return 构造时记录并经 {@link #normaliseDefault()} 归一化后的默认值 */

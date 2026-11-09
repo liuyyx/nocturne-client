@@ -3,6 +3,7 @@ package dev.nocturne.client.runtime;
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.bootstrap.GameplayHook;
 import dev.nocturne.client.event.KeyEvent;
+import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.input.KeyMap;
 import dev.nocturne.client.value.KeyValue;
 import dev.nocturne.client.module.Module;
@@ -70,6 +71,10 @@ public final class KeyPollListener implements FrameListener {
             return;
         }
         refreshKeys();
+        // 原生 Screen 开着时按键属于界面：继续跟踪物理状态的边沿，但不投递 KeyEvent。
+        // 只 return 不跟踪的话，界面里按下并保持的绑定键会在关闭那一帧补发一次切换。
+        GameBridge bridge = client.gameBridge();
+        boolean nativeScreen = bridge != null && bridge.currentScreen() != null;
         for (int i = 0; i < keys.length; i++) {
             int code = KeyMap.lwjgl2(keys[i]);
             if (code < 0) {
@@ -85,7 +90,9 @@ public final class KeyPollListener implements FrameListener {
             }
             if (pressed != down[i]) {
                 down[i] = pressed;
-                client.events().post(new KeyEvent(keys[i], pressed));
+                if (!nativeScreen) {
+                    client.events().post(new KeyEvent(keys[i], pressed));
+                }
             }
         }
     }

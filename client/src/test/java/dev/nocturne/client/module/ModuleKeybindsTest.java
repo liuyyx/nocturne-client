@@ -3,6 +3,10 @@ package dev.nocturne.client.module;
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.TestSupport;
 import dev.nocturne.client.event.KeyEvent;
+import dev.nocturne.client.game.FakeGui;
+import dev.nocturne.client.game.FakeMinecraft;
+import dev.nocturne.client.game.GameBridge;
+import dev.nocturne.client.game.TestMapping;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +60,31 @@ class ModuleKeybindsTest {
 
         client.events().post(new KeyEvent(0x43, true));
         assertFalse(module.isEnabled());
+    }
+
+    /**
+     * 原生 Screen（背包/聊天/暂停菜单）打开时按键属于界面：绑定键不得切换模块，
+     * 更不得把事件标成已消费（否则聊天打不出字、背包按不了键）。
+     */
+    @Test
+    void nativeScreenDoesNotTriggerOrSwallowKeybinds() {
+        NocturneClient client = NocturneClient.boot(null);
+        FakeMinecraft.reset();
+        FakeGui gui = new FakeGui();
+        gui.screen = new Object();
+        FakeMinecraft.instance.gui = gui;
+        client.setGameBridge(new GameBridge(null, new TestMapping(FakeMinecraft.class)));
+
+        ProbeModule module = new ProbeModule();
+        client.modules().register(module);
+        module.bind().set(Integer.valueOf(0x42));
+        ModuleKeybinds.install(client);
+
+        KeyEvent event = new KeyEvent(0x42, true);
+        client.events().post(event);
+
+        assertFalse(module.isEnabled(), "原生界面开着时绑定键不得切换模块");
+        assertFalse(event.cancelled, "原生界面开着时不得吞掉按键");
     }
 
     /** 最小模块：只需要名字/分类与可切换的启停。 */

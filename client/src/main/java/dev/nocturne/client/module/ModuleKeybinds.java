@@ -2,6 +2,7 @@ package dev.nocturne.client.module;
 
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.event.KeyEvent;
+import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.runtime.InputBlock;
 import dev.nocturne.client.value.KeyValue;
 
@@ -31,6 +32,12 @@ public final class ModuleKeybinds {
                 }
                 // GUI 打开时按键属于界面（包括键位绑定行），不得触发模块。
                 if (InputBlock.shouldBlock()) {
+                    return;
+                }
+                // 原生 Screen（背包/聊天/暂停菜单）同理：按键属于界面。这里只跳过、不取消，
+                // 否则输入会被吞掉（聊天打不出字、背包按不了键）。
+                GameBridge bridge = client.gameBridge();
+                if (bridge != null && bridge.currentScreen() != null) {
                     return;
                 }
                 for (Module module : client.modules().all()) {

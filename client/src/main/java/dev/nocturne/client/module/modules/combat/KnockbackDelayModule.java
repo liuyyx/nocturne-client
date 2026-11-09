@@ -42,7 +42,8 @@ public final class KnockbackDelayModule extends GameModule {
             return;
         }
         PacketController packets = client().packets();
-        if (!packets.hold(PacketEvent.Direction.RECEIVE)
+        packets.hold(PacketEvent.Direction.RECEIVE, this);
+        if (!packets.isHolding(PacketEvent.Direction.RECEIVE, this)
                 || !packets.capture(PacketEvent.Direction.RECEIVE, event.packet)) {
             return;
         }
@@ -55,6 +56,10 @@ public final class KnockbackDelayModule extends GameModule {
 
     @Override
     public void onTick() {
+        if (holding && !client().packets().isHolding(PacketEvent.Direction.RECEIVE, this)) {
+            // 换世界 reset 已清掉闸门：本地状态跟着走，避免永久不再 hold。
+            holding = false;
+        }
         if (holding && System.currentTimeMillis() >= releaseAt) {
             release();
         }
@@ -62,7 +67,7 @@ public final class KnockbackDelayModule extends GameModule {
 
     private void release() {
         if (holding) {
-            client().packets().release(PacketEvent.Direction.RECEIVE);
+            client().packets().release(PacketEvent.Direction.RECEIVE, this);
         }
         holding = false;
         releaseAt = 0L;

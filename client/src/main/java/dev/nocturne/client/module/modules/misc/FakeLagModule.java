@@ -1,5 +1,6 @@
 package dev.nocturne.client.module.modules.misc;
 
+import dev.nocturne.client.control.PacketController;
 import dev.nocturne.client.control.TargetManager;
 import dev.nocturne.client.event.AttackEvent;
 import dev.nocturne.client.event.BlockEvent;
@@ -49,6 +50,11 @@ public final class FakeLagModule extends GameModule {
     @Override
     public void onTick() {
         long now = System.currentTimeMillis();
+        // 以控制器真实状态为准：换世界/panic/异线程释放后不要留下"幽灵开启"。
+        if (holding && !client().packets().isHolding(PacketEvent.Direction.SEND, this)) {
+            holding = false;
+            firstQueued = 0L;
+        }
         if (now < recoilUntil || bridge().currentScreen() != null || state().health() <= 0.0f
                 || bridge().inWater(bridge().player())) {
             flush();
@@ -72,10 +78,11 @@ public final class FakeLagModule extends GameModule {
             return;
         }
         if (!holding) {
-            holding = client().packets().hold(PacketEvent.Direction.SEND);
+            client().packets().hold(PacketEvent.Direction.SEND, this);
+            holding = client().packets().isHolding(PacketEvent.Direction.SEND, this);
             firstQueued = 0L;
         }
-        if (client().packets().queued(PacketEvent.Direction.SEND) == 0) {
+        if (client().packets().queued(PacketEvent.Direction.SEND, this) == 0) {
             firstQueued = 0L;
             return;
         }
@@ -89,8 +96,9 @@ public final class FakeLagModule extends GameModule {
     }
 
     private void flush() {
-        if (holding) {
-            client().packets().release(PacketEvent.Direction.SEND);
+        PacketController packets = client() == null ? null : client().packets();
+        if (holding && packets != null) {
+            packets.release(PacketEvent.Direction.SEND, this);
             recoilUntil = System.currentTimeMillis() + recoilTime.asInt();
         }
         holding = false;

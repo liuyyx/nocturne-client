@@ -81,8 +81,13 @@ public final class BacktrackModule extends GameModule implements WorldOverlay {
             boolean active = distance >= minRange.get() && distance <= maxRange.get()
                     && System.currentTimeMillis() >= nextCycle
                     && !(pauseHurt.get() && bridge().hurtTime(bridge().player()) >= hurtTime.get());
+            if (holding && !client().packets().isHolding(PacketEvent.Direction.RECEIVE, this)) {
+                // 换世界 reset 后本地 holding 失真：重新计时，避免一直以为在回溯。
+                holding = false;
+            }
             if (active && !holding && EpsilonSupport.RANDOM.nextDouble() * 100.0 < chance.get()) {
-                holding = client().packets().hold(PacketEvent.Direction.RECEIVE);
+                client().packets().hold(PacketEvent.Direction.RECEIVE, this);
+                holding = client().packets().isHolding(PacketEvent.Direction.RECEIVE, this);
                 releaseAt = System.currentTimeMillis() + EpsilonSupport.randomLong(minDelay.asInt(), maxDelay.asInt());
             }
         }
@@ -112,8 +117,8 @@ public final class BacktrackModule extends GameModule implements WorldOverlay {
     }
 
     private void release() {
-        if (holding) {
-            client().packets().release(PacketEvent.Direction.RECEIVE);
+        if (holding && client() != null && client().packets() != null) {
+            client().packets().release(PacketEvent.Direction.RECEIVE, this);
         }
         holding = false;
         releaseAt = 0L;

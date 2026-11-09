@@ -48,21 +48,22 @@ public final class NoSlowdownModule extends GameModule {
                 event.y *= 5.0;
             }
         });
-        listen(PacketEvent.class, event -> {
-            if (holding && event.direction == PacketEvent.Direction.SEND) {
-                event.cancelled = true;
-            }
-        });
     }
 
     @Override
     public void onTick() {
+        if (client() == null || client().packets() == null) {
+            return;
+        }
+        // 以控制器真实状态为准：换世界 reset 后本地 holding 不能继续"以为在压包"。
+        holding = client().packets().isHolding(PacketEvent.Direction.SEND, this);
         boolean blink = mode.is("GrimBlink") && bridge().usingItem(bridge().player()) && activeForHeld();
         if (blink && !holding) {
-            holding = client().packets().hold(PacketEvent.Direction.SEND);
+            client().packets().hold(PacketEvent.Direction.SEND, this);
+            holding = client().packets().isHolding(PacketEvent.Direction.SEND, this);
         } else if (!blink && holding) {
             holding = false;
-            client().packets().release(PacketEvent.Direction.SEND);
+            client().packets().release(PacketEvent.Direction.SEND, this);
         }
     }
 
@@ -83,8 +84,8 @@ public final class NoSlowdownModule extends GameModule {
 
     @Override
     protected void onStop() {
-        if (holding) {
-            client().packets().release(PacketEvent.Direction.SEND);
+        if (client() != null && client().packets() != null) {
+            client().packets().release(PacketEvent.Direction.SEND, this);
         }
         holding = false;
     }

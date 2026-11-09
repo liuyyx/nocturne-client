@@ -2,6 +2,7 @@ package dev.nocturne.client.module.modules.combat;
 
 import dev.nocturne.client.action.ActionApi;
 import dev.nocturne.client.action.PlayerState;
+import dev.nocturne.client.control.PacketController;
 import dev.nocturne.client.control.RotationController;
 import dev.nocturne.client.event.AttackEvent;
 import dev.nocturne.client.event.PacketEvent;
@@ -63,7 +64,8 @@ public final class HitFlickModule extends GameModule {
         flickPitch = state.pitch();
         actions.sendRotation(RotationController.wrap(state.yaw() + offset), state.pitch(), state.onGround());
         if (blink.get()) {
-            blinking = client().packets().hold(PacketEvent.Direction.SEND);
+            client().packets().hold(PacketEvent.Direction.SEND, this);
+            blinking = client().packets().isHolding(PacketEvent.Direction.SEND, this);
         }
         resetTicks = 2;
         nextFlick = System.currentTimeMillis() + flickDelay.asInt();
@@ -71,6 +73,10 @@ public final class HitFlickModule extends GameModule {
 
     @Override
     public void onTick() {
+        // 换世界 reset 后控制器不再持有本 owner：本地 flick 窗口结束即可，不重复释放。
+        if (blinking && !client().packets().isHolding(PacketEvent.Direction.SEND, this)) {
+            blinking = false;
+        }
         if (resetTicks > 0 && --resetTicks == 0) {
             PlayerState state = state();
             if (actions() != null) {
@@ -90,8 +96,9 @@ public final class HitFlickModule extends GameModule {
     }
 
     private void release() {
-        if (blinking) {
-            client().packets().release(PacketEvent.Direction.SEND);
+        PacketController packets = client() == null ? null : client().packets();
+        if (blinking && packets != null) {
+            packets.release(PacketEvent.Direction.SEND, this);
         }
         blinking = false;
     }

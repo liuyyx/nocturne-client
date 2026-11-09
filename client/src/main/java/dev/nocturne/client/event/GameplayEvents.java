@@ -2,15 +2,18 @@ package dev.nocturne.client.event;
 
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.bootstrap.GameplayHook;
+import dev.nocturne.client.control.PacketController;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.input.KeyMap;
 import dev.nocturne.client.input.MouseButtons;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.runtime.InputBlock;
 
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /** 把 bootstrap 钩子收到的 JDK 参数装配成客户端事件。 */
 public final class GameplayEvents implements GameplayHook.Sink {
@@ -20,6 +23,15 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     private final NocturneClient client;
     private final ThreadLocal<MoveEvent> legacyMove = new ThreadLocal<MoveEvent>();
+    /**
+     * 收到、但事件尚未在主线程投递的包。
+     *
+     * <p>{@code channelRead0} 在 Netty 事件循环上执行；直接在它里面 post 会让订阅者在 IO 线程
+     * 改写模块/游戏状态（非 volatile 字段、HashSet、setEnabled）。这里只入队，由
+     * {@link #drainReceive()} 在客户端主线程统一投递。
+     */
+    private final ConcurrentLinkedQueue<PendingReceive> pendingReceives =
+            new ConcurrentLinkedQueue<PendingReceive>();
 
     private GameplayEvents(NocturneClient client) {
         this.client = client;
@@ -141,6 +153,15 @@ public final class GameplayEvents implements GameplayHook.Sink {
         dev.nocturne.client.render3d.World3DRenderer renderer = client.world3d();
         if (renderer != null) {
             renderer.render(partialTicks);
+        }
+    }
+
+    /** 世界渲染头部：捕获世界相机矩阵，供尾部绘制复用。 */
+    @Override
+    public void worldRender3DCapture(float partialTicks) {
+        dev.nocturne.client.render3d.World3DRenderer renderer = client.world3d();
+        if (renderer != null) {
+            renderer.captureMatrices();
         }
     }
 
@@ -379,28 +400,159 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public Object packetSend(Object packet) {
-        return packet(packet, PacketEvent.Direction.SEND);
-    }
-
-    @Override
-    public Object packetReceive(Object packet) {
-        return packet(packet, PacketEvent.Direction.RECEIVE);
-    }
-
-    private Object packet(Object packet, PacketEvent.Direction direction) {
-        if (!active()) {
+        if (!active() || packet == null) {
             return packet;
         }
         if (client.packets().shouldBypass(packet)) {
             return packet;
         }
-        if (client.packets().capture(direction, packet)) {
+        hit("H3");
+        // 先投递事件（取消/替换优先于入队），未取消且闸门仍开启才压住原调用。
+        PacketEvent event = new PacketEvent(PacketEvent.Direction.SEND, packet);
+        client.events().post(event);
+        if (event.cancelled || event.packet == null) {
             return null;
         }
-        hit(direction == PacketEvent.Direction.SEND ? "H3" : "H4");
-        PacketEvent event = new PacketEvent(direction, packet);
+        if (client.packets().capture(PacketEvent.Direction.SEND, event.packet)) {
+            return null;
+        }
+        return event.packet;
+    }
+
+    /**
+     * 收包入口（Netty 线程）。
+     *
+     * <p>这里绝不 post 事件，也绝不执行模块逻辑：包只登记进队列并返回 null，原版处理与
+     * PacketEvent 统一由 {@link #drainReceive()} 在客户端主线程完成。这样订阅者（Velocity、
+     * NoRotate、ChestAura…）永远不会在 IO 线程改写模块/游戏状态，同时 cancel/setPacket 仍然
+     * 发生在原版处理之前。
+     *
+     * <p>同步丢弃走 {@link PacketController#filterReceive}（纯判断，见其契约）。进入世界前的
+     * 登录/握手包没有本地连接可绑定，直接放行给原版——推迟它们会让登录阶段失去 handler。
+     */
+    @Override
+    public Object packetReceive(Object packet) {
+        if (!active() || packet == null) {
+            return packet;
+        }
+        PacketController packets = client.packets();
+        if (packets == null || packets.shouldBypass(packet)) {
+            return packet;
+        }
+        if (packets.filterReceive(packet)) {
+            hit("H4");
+            return null;
+        }
+        Object connection = packets.connection();
+        if (connection == null || !isClientbound(packet, connection)) {
+            // 未进世界（登录/握手/断开）或这是集成服务端连接上的 serverbound 包：交还原版。
+            // 同一个 Connection 类在集成服务端也挂了这个钩子，按 handle 的监听器类型区分方向。
+            return packet;
+        }
+        pendingReceives.add(new PendingReceive(packet, connection, packets.epoch()));
+        return null;
+    }
+
+    /**
+     * 包是不是客户端收包方向。
+     *
+     * <p>{@code channelRead0} 钩子挂在 {@code Connection} 上，单机时集成服务端的同一个类也会
+     * 触发；若把 serverbound 包当成收包推迟，就会用客户端 handler 重放它。这里按包自己的
+     * {@code handle(Listener)} 形参判定：只有客户端连接实例能作为参数时才视为 clientbound。
+     *
+     * <p>形参类型按包类缓存；方向判定与映射表无关（26.3 之前是 {@code INetHandlerPlayClient}，
+     * 之后是 {@code ClientGamePacketListener}，{@code isInstance} 都成立）。
+     */
+    private static boolean isClientbound(Object packet, Object connection) {
+        Class<?> handler = HANDLE_PARAMETERS.get(packet.getClass());
+        if (handler == null) {
+            handler = Object.class;
+            for (Method method : packet.getClass().getMethods()) {
+                if (!"handle".equals(method.getName()) || method.getParameterTypes().length != 1) {
+                    continue;
+                }
+                Class<?> parameter = method.getParameterTypes()[0];
+                // 存在桥方法（handle(INetHandler)）：取更具体的那个形参。
+                if (handler == Object.class || handler.isAssignableFrom(parameter)) {
+                    handler = parameter;
+                }
+            }
+            HANDLE_PARAMETERS.put(packet.getClass(), handler);
+        }
+        return handler != Object.class && handler.isInstance(connection);
+    }
+
+    /** 包类 → handle 的最具体监听器形参；见 {@link #isClientbound}。 */
+    private static final ConcurrentHashMap<Class<?>, Class<?>> HANDLE_PARAMETERS =
+            new ConcurrentHashMap<Class<?>, Class<?>>();
+
+    /**
+     * 在客户端主线程投递积压的 RECEIVE 事件并完成原版处理；由 {@code ModuleTicker} 每帧调用。
+     *
+     * <p>顺序契约：先 post PacketEvent（cancel/setPacket 生效），未取消且闸门仍开启时进入包
+     * 队列等待放行；否则立即在主线程调用原版 {@code Packet.handle}。被 hold 的包在 release 时
+     * 由 PacketController 重放，不会重复投递事件。
+     */
+    public void drainReceive() {
+        PendingReceive pending;
+        while ((pending = pendingReceives.poll()) != null) {
+            dispatchReceive(pending);
+        }
+    }
+
+    /** panic：客户端不再驱动帧，丢弃尚未投递的收包（世界切换不得走这里——那条路径要按序处理）。 */
+    public void discardPendingReceive() {
+        pendingReceives.clear();
+    }
+
+    private void dispatchReceive(PendingReceive pending) {
+        PacketController packets = client.packets();
+        if (packets == null) {
+            return;
+        }
+        if (pending.epoch != packets.epoch()) {
+            // 世界/连接已切换：与 PacketController.reset 相同的丢弃语义，旧包不得重放。
+            return;
+        }
+        Object connection = packets.connection();
+        if (pending.connection != null && connection != null && connection != pending.connection) {
+            return;
+        }
+        hit("H4");
+        PacketEvent event = new PacketEvent(PacketEvent.Direction.RECEIVE, pending.packet);
         client.events().post(event);
-        return event.cancelled ? null : event.packet;
+        if (event.cancelled || event.packet == null) {
+            return;
+        }
+        if (packets.capture(PacketEvent.Direction.RECEIVE, event.packet)) {
+            // 闸门开启：放行时由 PacketController 走原版 handle，事件已经投递过，不再重复。
+            return;
+        }
+        if (!packets.handleReceived(event.packet, pending.connection)) {
+            warnReceive("handle", "deferred received packet could not be replayed");
+        }
+    }
+
+    private static final Set<String> RECEIVE_WARNINGS = Collections.newSetFromMap(
+            new ConcurrentHashMap<String, Boolean>());
+
+    private static void warnReceive(String key, String message) {
+        if (RECEIVE_WARNINGS.add(key)) {
+            System.out.println("[nocturne] " + message);
+        }
+    }
+
+    /** 一次延迟投递的收包任务。 */
+    private static final class PendingReceive {
+        private final Object packet;
+        private final Object connection;
+        private final long epoch;
+
+        private PendingReceive(Object packet, Object connection, long epoch) {
+            this.packet = packet;
+            this.connection = connection;
+            this.epoch = epoch;
+        }
     }
 
     private boolean postKey(int keyCode, boolean pressed) {

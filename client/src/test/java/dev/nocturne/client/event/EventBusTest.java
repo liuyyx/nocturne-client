@@ -114,6 +114,22 @@ class EventBusTest {
                 "unsubscribed listeners must not stay referenced by the throttle map");
     }
 
+    /** 退订必须真的停止投递（回归：Entry 包装让 removeAll 永远匹配不到）。 */
+    @Test
+    void unsubscribeStopsDelivery() {
+        EventBus bus = new EventBus();
+        int[] calls = new int[1];
+        EventBus.Subscription handle = bus.subscribe(PlainEvent.class, e -> calls[0]++);
+
+        bus.post(new PlainEvent());
+        assertEquals(1, calls[0]);
+
+        bus.unsubscribe(handle);
+        bus.post(new PlainEvent());
+        assertEquals(1, calls[0], "unsubscribed listener must not run again");
+        assertTrue(!bus.hasSubscribers(PlainEvent.class));
+    }
+
     /** 高优先级先执行，与注册先后无关。 */
     @Test
     void dispatchesHigherPriorityBeforeNormal() {

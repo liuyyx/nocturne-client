@@ -34,14 +34,36 @@ public abstract class GameModule extends Module {
         return category;
     }
 
+    /**
+     * 副作用是否已安装（onStart 已成功、onStop 尚未执行）。
+     *
+     * <p>启用/挂起/恢复三条路径可能并发到达：死亡界面里重新启用模块时，注册表的 suspended
+     * 列表仍持有它，重生后的 onResume 会再调一次 onEnable。没有这个闸门就会重复订阅，同一个
+     * 回调被投递两次。所有读写都在 {@code this} 对象锁内，和 {@link Module#setEnabled} 的串行化
+     * 契约一致。
+     */
+    private boolean running;
+
     @Override
     protected final void onEnable() {
+        synchronized (this) {
+            if (running) {
+                return;
+            }
+            running = true;
+        }
         try {
             onStart();
         } catch (RuntimeException failure) {
+            synchronized (this) {
+                running = false;
+            }
             unsubscribeAll();
             throw failure;
         } catch (Error failure) {
+            synchronized (this) {
+                running = false;
+            }
             unsubscribeAll();
             throw failure;
         }
@@ -49,6 +71,12 @@ public abstract class GameModule extends Module {
 
     @Override
     protected final void onDisable() {
+        synchronized (this) {
+            if (!running) {
+                return;
+            }
+            running = false;
+        }
         try {
             onStop();
         } finally {
@@ -57,13 +85,17 @@ public abstract class GameModule extends Module {
     }
 
     private void unsubscribeAll() {
+        java.util.List<EventBus.Subscription> pending;
+        synchronized (this) {
+            pending = new ArrayList<EventBus.Subscription>(subscriptions);
+            subscriptions.clear();
+        }
         NocturneClient client = NocturneClient.get();
         if (client != null) {
-            for (EventBus.Subscription subscription : subscriptions) {
+            for (EventBus.Subscription subscription : pending) {
                 client.events().unsubscribe(subscription);
             }
         }
-        subscriptions.clear();
     }
 
     protected void onStart() {
@@ -77,7 +109,10 @@ public abstract class GameModule extends Module {
         if (client == null) {
             return;
         }
-        subscriptions.add(client.events().subscribe(type, listener));
+        EventBus.Subscription subscription = client.events().subscribe(type, listener);
+        synchronized (this) {
+            subscriptions.add(subscription);
+        }
     }
 
     protected final <T> void listen(Class<T> type, EventBus.Priority priority, Consumer<T> listener) {
@@ -85,7 +120,10 @@ public abstract class GameModule extends Module {
         if (client == null) {
             return;
         }
-        subscriptions.add(client.events().subscribe(type, priority, listener));
+        EventBus.Subscription subscription = client.events().subscribe(type, priority, listener);
+        synchronized (this) {
+            subscriptions.add(subscription);
+        }
     }
 
     protected final NocturneClient client() {

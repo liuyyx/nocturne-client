@@ -1,7 +1,6 @@
 package dev.nocturne.client.module.modules.render;
 
 import dev.nocturne.client.NocturneClient;
-import dev.nocturne.client.event.PacketEvent;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
@@ -60,13 +59,15 @@ public final class NoRenderModule extends GameModule {
 
     @Override
     protected void onStart() {
-        listen(PacketEvent.class, event -> {
-            if (dropSpawnPacket.get() && event.direction == PacketEvent.Direction.RECEIVE
-                    && bridge().isInstance(event.packet, ClassType.CLIENTBOUND_ADD_ENTITY)) {
-                event.cancelled = true;
-            }
-        });
+        // 丢弃生成包必须抢在原版处理之前，故用同步收包过滤器（Netty 线程、纯判断）：
+        // 走 RECEIVE 事件会晚一帧，实体已经进了世界，再取消也不会有意义。
+        client().packets().addReceiveFilter(this, this::dropsSpawnPacket);
         reloadIfNeeded();
+    }
+
+    private boolean dropsSpawnPacket(Object packet) {
+        return dropSpawnPacket.get() && bridge() != null
+                && bridge().isInstance(packet, ClassType.CLIENTBOUND_ADD_ENTITY);
     }
 
     @Override
@@ -143,6 +144,9 @@ public final class NoRenderModule extends GameModule {
 
     @Override
     protected void onStop() {
+        if (client() != null && client().packets() != null) {
+            client().packets().removeReceiveFilter(this);
+        }
         reloadIfNeeded();
     }
 }

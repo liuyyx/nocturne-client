@@ -550,6 +550,9 @@ public final class NocturneClient {
         // 钩子汇是 bootstrap 里的另一份状态（游戏线程读的是它），必须同样置位。
         dev.nocturne.client.bootstrap.GameplayHook.kill();
         packets.onPanic();
+        if (gameplayEvents != null) {
+            gameplayEvents.discardPendingReceive();
+        }
         // 3) 状态层同步收尾：模块停用（GL 还原留在持有上下文的线程上）、驱动闸门关闭、输入放开。
         //    这些必须在 panic() 返回前完成——调用方（GUI / 模块 tick）依赖同步结论，
         //    而此刻钩子已经不会再有并发进入。

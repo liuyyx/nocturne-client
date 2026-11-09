@@ -35,8 +35,14 @@ public final class ModuleRegistry {
 
     /** 按注册顺序保存的模块表，键为模块名；所有读写都在对象锁内进行。 */
     private final Map<String, Module> modules = new LinkedHashMap<String, Module>();
-    /** 闸门关闭时被挂起的模块，待闸门打开时唤醒；受对象锁保护。 */
-    private final List<Module> suspended = new ArrayList<Module>();
+    /**
+     * 闸门关闭时被挂起的模块，待闸门打开时唤醒；受对象锁保护。
+     *
+     * <p>用身份集合而不是列表：挂起/恢复都按模块身份幂等，重复加入不会让 onResume 被调用两次
+     * （配合 {@link GameModule} 的 running 闸门，死亡界面里重新启用的模块也不会重复订阅）。
+     */
+    private final java.util.Set<Module> suspended = java.util.Collections.newSetFromMap(
+            new java.util.IdentityHashMap<Module, Boolean>());
     /** 各模块上次打印异常的时间戳；值为单元素数组充当可变槽位，避免为每次 tick 分配对象。 */
     private final Map<Module, long[]> errorLogTimes = new ConcurrentHashMap<Module, long[]>();
 
@@ -142,7 +148,9 @@ public final class ModuleRegistry {
                     }
                 }
                 suspended.clear();
-                suspended.addAll(toSuspend);
+                for (Module module : toSuspend) {
+                    suspended.add(module);
+                }
             }
         }
         // 钩子在锁外调用：模块的挂起/恢复可能触达 UI（HUD 行增删），不应把外部代码锁进注册表锁

@@ -102,9 +102,15 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   以及 MovementInput / Move / Screen / EntityJoin / Block / EntityRender 事件；PlayerTick.Pre 可取消整个本地玩家 tick，
   MoveEvent 直接改写 Entity.move 的 Vec3 或旧版 double 实参，MovementInputEvent 在每 tick 输入合成后
   修改前进/平移/跳跃/潜行/疾跑意图。26.x 的不可变 Input record 由事件层整体替换并同步 moveVector。
-- **包队列**：`PacketController` 提供双向 FIFO hold/release/clear、连接身份校验和时序敏感直发；
-  释放经 ThreadLocal 直通上下文避免嵌套 send 重入，RECEIVE 走 Packet.handle(listener) 回原版处理链。
-  世界切换与 panic 丢弃旧队列，不把积压包放进新连接。
+- **包队列**：`PacketController` 提供双向 FIFO hold/release/clear、连接身份校验和时序敏感直发。
+  所有权按 owner token（模块实例）记账：多个模块同时 hold 同一方向互不拆台，`release(owner)`
+  只放自己那一段，`releaseSome(owner,n)` 只做本 owner 的慢速放行；只有全部 owner 释放才开闸。
+  KeepAlive / TeleportConfirm / PlayerCommand / ContainerClose 永不被压（服务端超时与回弹来源）。
+  重放只用线程本地的“当前包身份”旁路这一个包，嵌套发送仍走正常事件/闸门。世界切换先
+  `onWorldChange()` 递增 epoch、清 owner 与队列，再投递 `WorldChangeEvent`；在途 capture/drain
+  因 epoch 不匹配丢弃，旧世界/旧连接包不会重放进新世界。RECEIVE 在 `channelRead0` 只入队并取消
+  原调用，事件投递与原版 `Packet.handle` 统一由主线程 `ModuleTicker` drain 完成（cancel/setPacket
+  仍先于处理）；需要同步丢弃的特例走纯判断的 `ReceiveFilter`（Netty 线程、线程安全）。
   `BlockRenderDispatcher` 的首双参门负责 XRay 的方块剔除；Timer 按版本写真实字段
   （1.8.9 `timerSpeed`、1.12.2 `tickLength=50/speed`、1.16.5+ `msPerTick=50/speed`），
   1.21+ 的 `DeltaTracker` 是接口、钩子显式标为不可用而不是假 woven，`GameRenderer` 门负责 NoFog/NoHurtCamera。

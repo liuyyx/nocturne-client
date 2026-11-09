@@ -66,7 +66,17 @@ public final class EventBus {
         }
 
         private synchronized void remove(Consumer<?> listener) {
-            if (entries.removeAll(Collections.singleton(listener))) {
+            // entries 装的是 Entry 包装对象，直接 removeAll(Collections.singleton(listener)) 永远
+            // 匹配不到（Entry 没有覆写 equals），退订会静默失效、订阅越积越多——模块每次
+            // 挂起/恢复都会新建 lambda，这里必须按 listener 身份逐条移除。
+            boolean removed = false;
+            for (int i = entries.size() - 1; i >= 0; i--) {
+                if (entries.get(i).listener == listener) {
+                    entries.remove(i);
+                    removed = true;
+                }
+            }
+            if (removed) {
                 rebuild();
             }
         }

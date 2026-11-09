@@ -32,4 +32,46 @@ public final class TransformGuard {
         }
         return false;
     }
+
+    /**
+     * 方法级幂等检查：只认目标方法体内真的调用了该钩子。
+     *
+     * <p>类级 {@link #containsHook} 会把同一个类里其它方法的钩子也算进来；
+     * 同一方法上挂多个钩子（如 World3D 的 matrixCapture + draw）时必须按方法判断。
+     * 解析失败时退回类级检查（宁可少织一次，也不要重复织入）。
+     */
+    public static boolean containsHookInMethod(byte[] bytes, String targetClass,
+                                               String method, String descriptor,
+                                               String hookOwner, String hookMethod) {
+        if (bytes == null || method == null || descriptor == null
+                || hookOwner == null || hookMethod == null) {
+            return false;
+        }
+        final String ownerInternal = hookOwner.replace('.', '/');
+        final boolean[] found = {false};
+        try {
+            new org.objectweb.asm.ClassReader(bytes).accept(new org.objectweb.asm.ClassVisitor(
+                    org.objectweb.asm.Opcodes.ASM9) {
+                @Override
+                public org.objectweb.asm.MethodVisitor visitMethod(
+                        int access, String name, String desc, String signature, String[] exceptions) {
+                    if (!method.equals(name) || !descriptor.equals(desc)) {
+                        return null;
+                    }
+                    return new org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9) {
+                        @Override
+                        public void visitMethodInsn(int opcode, String owner, String name,
+                                                    String desc, boolean itf) {
+                            if (ownerInternal.equals(owner) && hookMethod.equals(name)) {
+                                found[0] = true;
+                            }
+                        }
+                    };
+                }
+            }, org.objectweb.asm.ClassReader.SKIP_DEBUG | org.objectweb.asm.ClassReader.SKIP_FRAMES);
+        } catch (Throwable ignored) {
+            return containsHook(bytes, hookOwner, hookMethod);
+        }
+        return found[0];
+    }
 }

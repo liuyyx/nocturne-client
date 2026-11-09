@@ -64,6 +64,8 @@ public final class GlWorld3DBackend implements World3DBackend {
     private final double[] capturedProjection = new double[16];
     private final double[] capturedModelView = new double[16];
     private boolean captured;
+    /** 捕获的模型视图是否为“相机相对”形式（1.8.9 世界渲染：平移只含眼高/第三人称偏移）。 */
+    private boolean cameraRelative;
     private final int[] viewport = new int[4];
 
     private boolean entered;
@@ -202,12 +204,17 @@ public final class GlWorld3DBackend implements World3DBackend {
         gl.matrixMode(GlApi.GL_MODELVIEW);
         gl.pushMatrix();
         if (modelReuse) {
-            // 平移列清零：图元自己提交 (world - origin)，旋转（含 bobbing/F5/hurt）来自游戏。
-            System.arraycopy(modelViewMatrix, 0, rotationOnly, 0, 16);
-            rotationOnly[12] = 0.0d;
-            rotationOnly[13] = 0.0d;
-            rotationOnly[14] = 0.0d;
-            if (!gl.loadMatrix(rotationOnly)) {
+            // 相机相对模式（1.8.9）：保留游戏矩阵原样（平移是眼高/第三人称偏移）；
+            // 世界平移模式：清掉平移列，图元提交 (world - origin)。
+            double[] matrix = modelViewMatrix;
+            if (!cameraRelative) {
+                System.arraycopy(modelViewMatrix, 0, rotationOnly, 0, 16);
+                rotationOnly[12] = 0.0d;
+                rotationOnly[13] = 0.0d;
+                rotationOnly[14] = 0.0d;
+                matrix = rotationOnly;
+            }
+            if (!gl.loadMatrix(matrix)) {
                 logOnceMatrix("world3d: glLoadMatrixd failed; skipping frame");
                 gl.matrixMode(GlApi.GL_MODELVIEW);
                 gl.popMatrix();
@@ -241,6 +248,7 @@ public final class GlWorld3DBackend implements World3DBackend {
             log("world3d matrices: source=" + (capture ? "pass" : "current")
                     + " projectionReuse=" + projectionReuse
                     + " modelReuse=" + modelReuse
+                    + " cameraRelative=" + cameraRelative
                     + " origin=(" + round(originX) + "," + round(originY) + ","
                     + round(originZ) + ")"
                     + " eyeDelta=(" + round(dx) + "," + round(dy) + "," + round(dz) + ")"
@@ -315,6 +323,7 @@ public final class GlWorld3DBackend implements World3DBackend {
      * @return 是否可用；可用时写入 {@link #originX/Y/Z}
      */
     private boolean deriveCameraOrigin(double[] m, WorldCamera camera) {
+        cameraRelative = false;
         if (m == null || m.length < 16) {
             return false;
         }
@@ -358,14 +367,28 @@ public final class GlWorld3DBackend implements World3DBackend {
         double dx = cx - camera.eyeX();
         double dy = cy - camera.eyeY();
         double dz = cz - camera.eyeZ();
-        if (dx * dx + dy * dy + dz * dz > MAX_CAMERA_DELTA * MAX_CAMERA_DELTA) {
-            logDeriveFailure("camera origin too far from eye", m, cx, cy, cz);
-            return false;
+        double eyeDistanceSq = dx * dx + dy * dy + dz * dz;
+        if (eyeDistanceSq <= 8.0d * 8.0d) {
+            // 世界平移矩阵：C 就是相机世界原点，绘制时清掉平移列。
+            cameraRelative = false;
+            originX = cx;
+            originY = cy;
+            originZ = cz;
+            return true;
         }
-        originX = cx;
-        originY = cy;
-        originZ = cz;
-        return true;
+        double magnitude = length(cx, cy, cz);
+        if (magnitude < 16.0d) {
+            // 相机相对矩阵：MV = R·T(v)，C = -v 只是眼高/第三人称偏移。
+            // 真实相机原点 = eye + v = eye - C；保留矩阵平移原样。
+            cameraRelative = true;
+            originX = camera.eyeX() - cx;
+            originY = camera.eyeY() - cy;
+            originZ = camera.eyeZ() - cz;
+            return true;
+        }
+        logDeriveFailure("camera origin too far from eye and not camera-relative",
+                m, cx, cy, cz);
+        return false;
     }
 
     private static double length(double x, double y, double z) {

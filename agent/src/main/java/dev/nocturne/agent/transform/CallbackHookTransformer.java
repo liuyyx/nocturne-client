@@ -3,6 +3,7 @@ package dev.nocturne.agent.transform;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -125,13 +126,15 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
         if (className == null || !className.equals(targetClassInternalName)
-                || TransformGuard.containsHook(classfileBuffer, hookOwner, hookMethod)) {
+                || TransformGuard.containsHookInMethod(classfileBuffer, targetClassInternalName,
+                        targetMethod, targetDescriptor, hookOwner, hookMethod)) {
             return null;
         }
         try {
             ClassReader reader = new ClassReader(classfileBuffer);
             ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
             final boolean[] patched = {false};
+            final int classVersion = reader.readUnsignedShort(6);
 
             ClassVisitor visitor = new ClassVisitor(ASM_API, writer) {
                 @Override
@@ -142,8 +145,8 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                         return delegate;
                     }
                     final int firstArgumentSlot = firstArgumentSlot(access, descriptor);
-                    if (firstArgumentSlot < 0 && deferredMethod == null) {
-                        // 没有引用形参可交出去：不是我们的目标，按原样放行。
+                    if (firstArgumentSlot < 0) {
+                        // 没有引用形参可交出去：不是我们的目标，按原样放行（双端模式也不能只插 post）。
                         return delegate;
                     }
                     return new MethodVisitor(ASM_API, delegate) {
@@ -151,6 +154,10 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                         private boolean sawFrame;
                         /** 是否已记录“带帧末尾钩子跳过”日志。 */
                         private boolean tailSkipLogged;
+                        /** 双端模式的异常处理标签；非双端模式为 null。 */
+                        private final Label tryStart = deferredMethod == null ? null : new Label();
+                        private final Label tryEnd = deferredMethod == null ? null : new Label();
+                        private final Label handler = deferredMethod == null ? null : new Label();
 
                         @Override
                         public void visitFrame(int type, int numLocal, Object[] local,
@@ -170,9 +177,30 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                                             HOOK_DESCRIPTOR, false);
                                     patched[0] = true;
                                 }
+                                // 整个方法体包在 try/catch(Throwable) 里：渲染中途抛异常（含被调方法
+                                // 抛出、没有走 RETURN）也必须执行 chamsPost，否则深度/颜色永远不还原。
+                                super.visitTryCatchBlock(tryStart, tryEnd, handler, "java/lang/Throwable");
+                                super.visitLabel(tryStart);
                             } else if (!atMethodEnd) {
                                 inject();
                             }
+                        }
+
+                        @Override
+                        public void visitMaxs(int maxStack, int maxLocals) {
+                            if (deferredMethod != null) {
+                                super.visitLabel(tryEnd);
+                                super.visitLabel(handler);
+                                if (classVersion >= Opcodes.V1_6) {
+                                    Object[] locals = frameLocals(access, descriptor);
+                                    super.visitFrame(Opcodes.F_NEW, locals.length, locals, 1,
+                                            new Object[]{"java/lang/Throwable"});
+                                }
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, deferredMethod,
+                                        "()V", false);
+                                super.visitInsn(Opcodes.ATHROW);
+                            }
+                            super.visitMaxs(maxStack, maxLocals);
                         }
 
                         @Override
@@ -227,9 +255,9 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                     };
                 }
             };
-            // 保留原始 StackMapTable（SKIP_FRAMES 会让含分支的方法在 Java 6+ 校验下 VerifyError），
-            // 只插入一条栈平衡的调用，帧内容仍然有效。
-            reader.accept(visitor, 0);
+            // 双端模式会新增一个异常处理器帧（F_NEW）；所有原始帧必须统一展开为 F_NEW，
+            // 否则压缩帧与 F_NEW 混用会在校验期报错。单端模式也安全。
+            reader.accept(visitor, ClassReader.EXPAND_FRAMES);
             // 钩子"注册成功"不等于"织入成功"：类名/方法名/描述符三者对不上时这里会静默返回 null，
             // 现场表现是钩子一次都不触发。把两种结局都留痕（每个转换器只印一次）。
             if (patched[0]) {
@@ -250,6 +278,47 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
             }
             return null;
         }
+    }
+
+    /**
+     * 异常处理器帧的局部变量表：方法形参（实例方法再加 {@code this}）。
+     *
+     * <p>处理器从方法体任意位置进入；未声明的局部变量按 {@code top} 处理，因此只声明形参是安全的。
+     */
+    private Object[] frameLocals(int access, String descriptor) {
+        Type[] arguments = Type.getArgumentTypes(descriptor);
+        boolean isStatic = (access & Opcodes.ACC_STATIC) != 0;
+        Object[] locals = new Object[arguments.length + (isStatic ? 0 : 1)];
+        int at = 0;
+        if (!isStatic) {
+            locals[at++] = targetClassInternalName;
+        }
+        for (Type argument : arguments) {
+            switch (argument.getSort()) {
+                case Type.BOOLEAN:
+                case Type.CHAR:
+                case Type.BYTE:
+                case Type.SHORT:
+                case Type.INT:
+                    locals[at++] = Opcodes.INTEGER;
+                    break;
+                case Type.FLOAT:
+                    locals[at++] = Opcodes.FLOAT;
+                    break;
+                case Type.LONG:
+                    locals[at++] = Opcodes.LONG;
+                    break;
+                case Type.DOUBLE:
+                    locals[at++] = Opcodes.DOUBLE;
+                    break;
+                case Type.ARRAY:
+                    locals[at++] = argument.getDescriptor();
+                    break;
+                default:
+                    locals[at++] = argument.getInternalName();
+            }
+        }
+        return locals;
     }
 
     /**

@@ -174,8 +174,9 @@ class GlWorld3DBackendTest {
 
     @Test
     void unusableModelViewFallsBackToCameraRotationAndEye() {
-        // 平移为 0 的模型视图解出原点 (0,0,0)，与相机眼位相差约 224 格 -> 判定不是世界矩阵。
+        // 带非单位缩放的模型视图既不是世界矩阵也不是相机相对矩阵 -> 回退。
         FakeGl.modelViewMatrix = FakeGl.worldModelView(0.0d, 0.0d, 0.0d);
+        FakeGl.modelViewMatrix[0] = 2.0d;
         assertTrue(backend.begin(camera));
         assertEquals(0, FakeGl.loadMatrixdCalls);
         assertEquals(2, FakeGl.rotateCalls, "fallback must rebuild pitch + yaw");
@@ -340,6 +341,24 @@ class GlWorld3DBackendTest {
 
         public static void glActiveTexture(int unit) {
         }
+    }
+
+    @Test
+    void cameraRelativeMatrixUsesEyeOffsetAsOrigin() {
+        // 1.8.9 真实形态：平移只含眼高偏移，相机世界位置不在矩阵里。
+        FakeGl.modelViewMatrix = FakeGl.worldModelView(0.0d, -1.62d, -0.1d);
+        assertTrue(backend.begin(camera));
+        // 原矩阵平移必须保留（不能清零），否则眼高会丢。
+        assertNotNull(FakeGl.lastLoadedMatrix);
+        assertEquals(-1.62d, FakeGl.lastLoadedMatrix[13], 1e-9d);
+
+        // 原点 = eye - C，其中 C = -v = (0,1.62,0.1) -> (100,62.38,-200.1)。
+        backend.batch().box(100.0d, 63.0d, -200.0d, 100.0d, 63.0d, -200.0d);
+        // 单点盒子的最后顶点 = (100,63,-200) - (100,62.38,-200.1) = (0,0.62,0.1)
+        assertEquals(0f, FakeGl.lastVertex3[0], 1e-4f);
+        assertEquals(0.62f, FakeGl.lastVertex3[1], 1e-4f);
+        assertEquals(0.1f, FakeGl.lastVertex3[2], 1e-4f);
+        backend.end();
     }
 
     @Test

@@ -96,6 +96,16 @@ public final class WorldRenderHookTransformer implements ClassFileTransformer {
             return null;
         }
         try {
+            // 幂等：同一类的转换器链在注册第二个钩子（setupCameraTransform 与 renderWorld
+            // 同属 bfk）时会把整条链重放到已织入的字节上。这里按钩子名先检测，已存在的
+            // 头/尾钩子不再插入——否则同一帧会画两遍（真机两个 cube 偏移即此）。
+            final boolean needHead = headHookMethod != null
+                    && !TransformGuard.containsHook(classfileBuffer, hookOwner, headHookMethod);
+            final boolean needTail = tailHookMethod != null
+                    && !TransformGuard.containsHook(classfileBuffer, hookOwner, tailHookMethod);
+            if (!needHead && !needTail) {
+                return null;
+            }
             ClassReader reader = new ClassReader(classfileBuffer);
             ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
             final boolean[] changed = new boolean[1];
@@ -120,14 +130,14 @@ public final class WorldRenderHookTransformer implements ClassFileTransformer {
                         @Override
                         public void visitCode() {
                             super.visitCode();
-                            if (headHookMethod != null) {
+                            if (needHead) {
                                 emitHook(floatSlot, headHookMethod);
                             }
                         }
 
                         @Override
                         public void visitInsn(int opcode) {
-                            if (opcode == Opcodes.RETURN && tailHookMethod != null) {
+                            if (opcode == Opcodes.RETURN && needTail) {
                                 emitHook(floatSlot, tailHookMethod);
                             }
                             super.visitInsn(opcode);

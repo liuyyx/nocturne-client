@@ -38,9 +38,9 @@ final class World3DDebugOverlay implements World3DOverlay {
         batch.box(centerX - 0.5d, centerY - 0.5d, centerZ - 0.5d,
                 centerX + 0.5d, centerY + 0.5d, centerZ + 0.5d);
         batch.color(0xFFFFFFFF);
-        // 眼位下方 1.6 格约等于站立时的脚部高度；放在脚下才会显示成椭圆环，
-        // 画在眼位高度时相机在环内、投影成一条横线，截图里不易辨认。
-        batch.ring(camera.eyeX(), camera.eyeY() - 1.6d, camera.eyeZ(), 1.5d, 64);
+        // 眼位下方 1.2 格（脚上方约 0.4 格）：贴地会把环埋进地面/被草地遮挡，
+        // 画在眼位高度又会投影成一条横线；1.2 格在第三人称下是清晰的椭圆环。
+        batch.ring(camera.eyeX(), camera.eyeY() - 1.2d, camera.eyeZ(), 1.5d, 64);
         batch.flush();
 
         if (!logged) {

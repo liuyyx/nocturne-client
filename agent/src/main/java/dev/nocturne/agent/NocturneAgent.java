@@ -1799,6 +1799,24 @@ public final class NocturneAgent {
                     chamsWired |= registerGameplayTransformerState(instrumentation, chams, className,
                             candidate.name(), shape, "chamsPre") >= HOOK_REGISTERED;
                 }
+                if (!sawRenderDescriptor && renderMappingEmpty) {
+                    // 1.9–1.14.3 的映射表没有 render 名字（absent unverified），按名字永远找不到。
+                    // 目标类已加载时按「首参是 Entity、返回 void/boolean」的真实方法兜底；
+                    // premain 类未加载时仍然只能记录 mapping entry empty。
+                    for (dev.nocturne.client.mapping.MethodCandidate real
+                            : entityFirstRenderCandidates(instrumentation, mapping, className)) {
+                        sawRenderDescriptor = true;
+                        String shape = real.descriptor();
+                        ClassFileTransformer gate = asmLoader.createEntityRenderGateTransformer(className,
+                                real.name(), shape, GAMEPLAY_HOOK_OWNER);
+                        gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
+                                real.name(), shape, "entityRenderGate") >= HOOK_REGISTERED;
+                        ClassFileTransformer chams = asmLoader.createDeferredCallbackTransformer(className,
+                                real.name(), shape, GAMEPLAY_HOOK_OWNER, "chamsPre", "chamsPost");
+                        chamsWired |= registerGameplayTransformerState(instrumentation, chams, className,
+                                real.name(), shape, "chamsPre") >= HOOK_REGISTERED;
+                    }
+                }
             }
         }
         if (gateWired) {
@@ -1932,6 +1950,66 @@ public final class NocturneAgent {
         if (type == char.class) return "C";
         if (type.isArray()) return "[" + jniDescriptor(type.getComponentType());
         return "L" + type.getName().replace('.', '/') + ";";
+    }
+
+
+    /**
+     * 1.9–1.14.3 的映射表没有 {@code EntityRenderDispatcher#render} 名字时的兜底：
+     * 在已加载类里按「实例方法、首参是 Entity、返回 void/boolean」挑真实方法。
+     *
+     * <p>只在该版本映射表明确为空时调用；不会用于 1.21.5+ 的 EntityRenderState 入口。
+     */
+    private static java.util.List<dev.nocturne.client.mapping.MethodCandidate>
+    entityFirstRenderCandidates(Instrumentation instrumentation,
+                                dev.nocturne.client.mapping.Mapping mapping, String className) {
+        java.util.List<dev.nocturne.client.mapping.MethodCandidate> out =
+                new java.util.ArrayList<dev.nocturne.client.mapping.MethodCandidate>();
+        Class<?> target = null;
+        for (Class<?> loaded : instrumentation.getAllLoadedClasses()) {
+            if (className.equals(loaded.getName())) {
+                target = loaded;
+                break;
+            }
+        }
+        if (target == null) {
+            return out;
+        }
+        Class<?> entity = null;
+        for (String candidate : mapping.classNameCandidates(
+                dev.nocturne.client.mapping.ClassType.ENTITY)) {
+            try {
+                entity = Class.forName(candidate.replace('/', '.'), false,
+                        target.getClassLoader());
+                break;
+            } catch (Throwable ignored) {
+                // try next runtime name
+            }
+        }
+        if (entity == null) {
+            return out;
+        }
+        for (java.lang.reflect.Method method : target.getDeclaredMethods()) {
+            if (method.isSynthetic() || method.isBridge()
+                    || java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+                continue;
+            }
+            Class<?>[] parameters = method.getParameterTypes();
+            if (parameters.length == 0 || !entity.isAssignableFrom(parameters[0])) {
+                continue;
+            }
+            Class<?> result = method.getReturnType();
+            if (result != void.class && result != boolean.class) {
+                continue;
+            }
+            StringBuilder descriptor = new StringBuilder("(");
+            for (Class<?> parameter : parameters) {
+                descriptor.append(jniDescriptor(parameter));
+            }
+            descriptor.append(')').append(jniDescriptor(result));
+            out.add(new dev.nocturne.client.mapping.MethodCandidate(
+                    method.getName(), descriptor.toString()));
+        }
+        return out;
     }
 
 

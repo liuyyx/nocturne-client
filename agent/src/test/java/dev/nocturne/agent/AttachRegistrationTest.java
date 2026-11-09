@@ -31,10 +31,10 @@ class AttachRegistrationTest {
     private static final String HOOK_OWNER = "dev/nocturne/client/bootstrap/GameplayHook";
 
     public static final class Subject {
-        public static void shouldRender(Object entity) {
+        public void shouldRender(Object entity) {
         }
 
-        public static void render(Object entity) {
+        public void render(Object entity) {
         }
     }
 
@@ -79,6 +79,52 @@ class AttachRegistrationTest {
                         Subject.class.getName(), "render", "(Ljava/lang/Object;)V",
                         HOOK_OWNER, "chamsPre"),
                 "chams pre must be present in the final bytes");
+    }
+
+    @Test
+    void entityFirstFallbackFindsRealRenderMethodsWhenTheTableIsEmpty() throws Exception {
+        Method helper = NocturneAgent.class.getDeclaredMethod("entityFirstRenderCandidates",
+                Instrumentation.class, dev.nocturne.client.mapping.Mapping.class, String.class);
+        helper.setAccessible(true);
+        dev.nocturne.client.mapping.Mapping mapping = new dev.nocturne.client.mapping.Mapping() {
+            @Override
+            public String describe() {
+                return "attach-fallback";
+            }
+
+            @Override
+            public String className(dev.nocturne.client.mapping.ClassType type) {
+                return type == dev.nocturne.client.mapping.ClassType.ENTITY
+                        ? Object.class.getName() : type.canonicalName();
+            }
+
+            @Override
+            public String methodName(dev.nocturne.client.mapping.ClassType owner,
+                                     String canonicalName, String descriptor) {
+                return canonicalName;
+            }
+
+            @Override
+            public String fieldName(dev.nocturne.client.mapping.ClassType owner,
+                                    String canonicalName) {
+                return canonicalName;
+            }
+
+            @Override
+            public boolean isIdentity() {
+                return false;
+            }
+        };
+        @SuppressWarnings("unchecked")
+        java.util.List<dev.nocturne.client.mapping.MethodCandidate> found =
+                (java.util.List<dev.nocturne.client.mapping.MethodCandidate>) helper.invoke(null,
+                        instrumentation(), mapping, Subject.class.getName());
+        java.util.Set<String> names = new java.util.HashSet<String>();
+        for (dev.nocturne.client.mapping.MethodCandidate candidate : found) {
+            names.add(candidate.name() + candidate.descriptor());
+        }
+        assertTrue(names.contains("shouldRender(Ljava/lang/Object;)V"), names.toString());
+        assertTrue(names.contains("render(Ljava/lang/Object;)V"), names.toString());
     }
 
     private static int register(ClassFileTransformer transformer, String method, String descriptor,

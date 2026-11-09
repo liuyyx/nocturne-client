@@ -1563,7 +1563,10 @@ public final class NocturneAgent {
         }
         boolean wired = false;
         boolean tried = false;
+        boolean woven = false;
+        boolean registeredOnly = false;
         String wovenAt = null;
+        String registeredAt = null;
         for (String className : classNameCandidates(mapping, owner)) {
             for (dev.nocturne.client.mapping.MethodCandidate candidate
                     : mapping.methodCandidates(owner, "renderWorld")) {
@@ -1581,20 +1584,32 @@ public final class NocturneAgent {
                             + " (mapping face missing)");
                     continue;
                 }
+                String target = className + "." + candidate.name() + descriptor;
                 ClassFileTransformer transformer = asmLoader.createWorldRenderTransformer(
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
                         "worldRender3D");
                 int state = registerGameplayTransformerState(instrumentation, transformer, className,
                         candidate.name(), descriptor, "worldRender3D");
-                if (state >= HOOK_REGISTERED) {
-                    wired = true;
-                    wovenAt = className + "." + candidate.name() + descriptor;
+                if (state == HOOK_WOVEN) {
+                    woven = true;
+                    wovenAt = target;
+                } else if (state == HOOK_REGISTERED) {
+                    registeredOnly = true;
+                    registeredAt = target;
                 }
+                wired |= state >= HOOK_REGISTERED;
             }
         }
         if (wired) {
             publishHookState("world3d", true, null);
-            log("world 3d hook wired: " + wovenAt + " -> worldRender3D(F)");
+            if (woven) {
+                log("world 3d hook woven: " + wovenAt + " -> worldRender3D(F)");
+            }
+            if (registeredOnly) {
+                // 类尚未加载：转换器已挂链，但这一行不是「已织入」——真机日志里必须能区分。
+                log("world 3d hook registered (target class not loaded yet): "
+                        + registeredAt + " -> worldRender3D(F)");
+            }
         } else {
             String reason = tried
                     ? "EntityRenderer#renderWorld has no usable descriptor"

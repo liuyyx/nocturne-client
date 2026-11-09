@@ -13,4 +13,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     // JUnit Platform 启动器：测试运行时依赖。
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
+    // joml：跨版本姿态测试（GameBridgeTest 的 Quaternionf 替身）需要编译期类型；
+    // 只用于测试，不进交付 jar（游戏自带 joml，运行期一律反射）。
+    testImplementation("org.joml:joml:1.10.5")
 }

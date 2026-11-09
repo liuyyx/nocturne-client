@@ -203,16 +203,7 @@ public final class CameraState {
                 : bridge.readField(minecraft, ClassType.MINECRAFT, "options");
         // 有效 FOV 优先：游戏会把 FOV 按疾跑/水下/药水修正后再投影，只读 options.fov 会让
         // 冲刺时的框整体偏移。拿不到有效 FOV（映射缺失）才退回静态设置值。
-        Double fov = number(renderer == null || camera == null ? null
-                : bridge.callMapped(renderer, ClassType.GAME_RENDERER, "getFov", camera,
-                        Float.valueOf(partialTicks), Boolean.TRUE));
-        if (fov == null && renderer != null
-                && !bridge.mapping().isMemberAbsent(ClassType.ENTITY_RENDERER, "getFOVModifier")) {
-            // 1.8.9–1.12：有效 FOV 在 EntityRenderer#getFOVModifier(float, boolean) 上，
-            // 没有独立 Camera 对象、也没有 3 参 getFov。按映射能力回退（不写版本判断）。
-            fov = number(bridge.callMapped(renderer, ClassType.ENTITY_RENDERER,
-                    "getFOVModifier", Float.valueOf(partialTicks), Boolean.TRUE));
-        }
+        Double fov = effectiveFov(bridge, renderer, camera, partialTicks);
         if (fov == null) {
             fov = options == null ? null
                     : fovOf(bridge, bridge.readField(options, ClassType.OPTIONS, "fov"));
@@ -304,6 +295,32 @@ public final class CameraState {
      * @param raw {@code Options#fov} 的原始读数（可能是数字，也可能是 {@code OptionInstance}）
      * @return 视场角；两种形态都取不到时返回 {@code null}
      */
+    /**
+     * 有效 FOV：现代走 {@code GameRenderer#getFov(Camera, float, boolean)}；1.8.9–1.12
+     * 没有独立 Camera，改走 {@code EntityRenderer#getFOVModifier(float, boolean)}。
+     * 两者都拿不到时返回 {@code null}，由调用方退回 {@code options.fov} 静态值。
+     *
+     * <p>按映射能力选择（{@code isMemberAbsent}），不写版本判断。
+     *
+     * @param bridge        游戏桥
+     * @param renderer      游戏渲染器（{@code Minecraft.gameRenderer}）
+     * @param camera        26.x 的 Camera，旧版为 {@code null}
+     * @param partialTicks  插值系数
+     * @return 有效 FOV；不可用为 {@code null}
+     */
+    static Double effectiveFov(GameBridge bridge, Object renderer, Object camera,
+                               float partialTicks) {
+        Double fov = number(renderer == null || camera == null ? null
+                : bridge.callMapped(renderer, ClassType.GAME_RENDERER, "getFov", camera,
+                        Float.valueOf(partialTicks), Boolean.TRUE));
+        if (fov == null && renderer != null
+                && !bridge.mapping().isMemberAbsent(ClassType.ENTITY_RENDERER, "getFOVModifier")) {
+            fov = number(bridge.callMapped(renderer, ClassType.ENTITY_RENDERER,
+                    "getFOVModifier", Float.valueOf(partialTicks), Boolean.TRUE));
+        }
+        return fov;
+    }
+
     static Double fovOf(GameBridge bridge, Object raw) {
         Double direct = number(raw);
         if (direct != null || raw == null) {

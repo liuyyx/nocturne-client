@@ -84,6 +84,39 @@ class CameraStateTest {
         assertEquals(80d, CameraState.fovOf(BRIDGE, new FakeOption(Double.valueOf(80d))), 0.001);
     }
 
+    /** 1.8.9 形态的渲染器：只有 {@code getFOVModifier(float, boolean)}，没有 3 参 getFov。 */
+    public static final class LegacyRenderer {
+        public float getFOVModifier(float partialTicks, boolean useFovSetting) {
+            return 99.0f;
+        }
+    }
+
+    /** 现代渲染器的 3 参入口。 */
+    public static final class ModernRenderer {
+        public Object getFov(Object camera, float partialTicks, boolean useFovSetting) {
+            return Float.valueOf(72.5f);
+        }
+    }
+
+    @Test
+    void effectiveFovFallsBackToLegacyModifier() {
+        assertEquals(99.0d,
+                CameraState.effectiveFov(BRIDGE, new LegacyRenderer(), null, 0.5f), 0.001,
+                "1.8.9 必须走 getFOVModifier(float, boolean)");
+    }
+
+    @Test
+    void effectiveFovPrefersModernThreeArgumentForm() {
+        assertEquals(72.5d,
+                CameraState.effectiveFov(BRIDGE, new ModernRenderer(), new Object(), 0.5f), 0.001);
+    }
+
+    @Test
+    void effectiveFovIsNullWhenNeitherEntryExists() {
+        assertNull(CameraState.effectiveFov(BRIDGE, new Object(), new Object(), 0.5f));
+        assertNull(CameraState.effectiveFov(BRIDGE, null, null, 0.5f));
+    }
+
     @Test
     void returnsNullWhenTheValueIsNotUsable() {
         assertNull(CameraState.fovOf(BRIDGE, null));

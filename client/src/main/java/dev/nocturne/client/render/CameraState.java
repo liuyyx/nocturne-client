@@ -206,6 +206,13 @@ public final class CameraState {
         Double fov = number(renderer == null || camera == null ? null
                 : bridge.callMapped(renderer, ClassType.GAME_RENDERER, "getFov", camera,
                         Float.valueOf(partialTicks), Boolean.TRUE));
+        if (fov == null && renderer != null
+                && !bridge.mapping().isMemberAbsent(ClassType.ENTITY_RENDERER, "getFOVModifier")) {
+            // 1.8.9–1.12：有效 FOV 在 EntityRenderer#getFOVModifier(float, boolean) 上，
+            // 没有独立 Camera 对象、也没有 3 参 getFov。按映射能力回退（不写版本判断）。
+            fov = number(bridge.callMapped(renderer, ClassType.ENTITY_RENDERER,
+                    "getFOVModifier", Float.valueOf(partialTicks), Boolean.TRUE));
+        }
         if (fov == null) {
             fov = options == null ? null
                     : fovOf(bridge, bridge.readField(options, ClassType.OPTIONS, "fov"));

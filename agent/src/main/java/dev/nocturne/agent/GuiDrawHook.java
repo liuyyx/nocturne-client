@@ -49,6 +49,8 @@ public final class GuiDrawHook {
     /** 首次命中日志只打一次，避免每帧刷屏。 */
     private static final AtomicBoolean HUD_FIRST = new AtomicBoolean();
     private static final AtomicBoolean SCREEN_FIRST = new AtomicBoolean();
+    /** Screen 入口是否真的跑过：运行期 attach 时该类已加载，永远不会为 true。 */
+    private static volatile boolean screenHookSeen;
 
     /** {@code dev.nocturne.client.runtime.NocturneRuntime} 的类与缓存方法（经 system 加载器解析）。 */
     private static volatile Class<?> runtimeType;
@@ -214,6 +216,13 @@ public final class GuiDrawHook {
             } catch (Throwable ignored) {
                 // 桥缺失时输入本来就不归我们管，放行即可。
             }
+            // 运行期 attach 时 Screen 类早已加载，Screen 入口永远织不上：这时如果继续让位，
+            // 原生界面（聊天/背包）打开期间 onFrame 一次都不会执行——HUD/计分板/NameTags 全消失。
+            // 只有确认 Screen 入口从没被调用过时才在 HUD 层兜底驱动（启动期注入仍走 Screen 入口，
+            // 不会重复绘制）。
+            if (!screenHookSeen) {
+                drive(graphics);
+            }
             return;
         }
         drive(graphics);
@@ -228,6 +237,7 @@ public final class GuiDrawHook {
         if (killed()) {
             return;
         }
+        screenHookSeen = true;
         if (SCREEN_FIRST.compareAndSet(false, true)) {
             System.out.println("[nocturne] gui draw hook active via Screen.extractRenderStateWithTooltipAndSubtitles");
         }

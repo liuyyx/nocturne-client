@@ -41,6 +41,16 @@
             "names": {},
             "absentReason": "unverified"
         },
+        "net/minecraft/client/ClientClockManager": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
+        "net/minecraft/client/ClientClockManager$ClientClockInstance": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
         "net/minecraft/client/DeltaTracker": {
             "names": {
                 "vanilla": "bih",
@@ -786,6 +796,10 @@
                         "forge": "(ILnet/minecraft/entity/Entity;)V"
                     }
                 },
+                "clockManager": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "entitiesForRendering": {
                     "names": {
                         "vanilla": "L",
@@ -1119,6 +1133,11 @@
             "names": {},
             "absentReason": "unverified"
         },
+        "net/minecraft/client/player/FirstPersonHandsAndItems": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
         "net/minecraft/client/player/Input": {
             "names": {
                 "vanilla": "bub",
@@ -1209,6 +1228,10 @@
                         "fabric": "(DDD)D",
                         "forge": "(DDD)D"
                     }
+                },
+                "firstPersonHandsAndItems": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getEyePosition": {
                     "names": {
@@ -1535,6 +1558,11 @@
                     "absentReason": "unverified"
                 }
             }
+        },
+        "net/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
         },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {
@@ -4286,6 +4314,10 @@
                     "absent": true,
                     "absentReason": "unverified"
                 },
+                "dimensionType": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "entitiesForRendering": {
                     "names": {
                         "vanilla": "L",
@@ -4577,6 +4609,11 @@
                 }
             },
             "fields": {}
+        },
+        "net/minecraft/world/level/dimension/DimensionType": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
         },
         "net/minecraft/world/level/storage/LevelData": {
             "names": {

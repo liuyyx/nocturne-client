@@ -180,6 +180,15 @@ net/minecraft/client/renderer/ItemInHandRenderer#mainHandHeight
 net/minecraft/client/renderer/ItemInHandRenderer#offHandHeight
 net/minecraft/client/renderer/ItemInHandRenderer#mainHandItem
 net/minecraft/client/renderer/ItemInHandRenderer#offHandItem
+# 26.x 手部渲染与状态：渲染器方法名/描述符与旧类一致，状态字段搬到 LocalPlayer 的容器上。
+net/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer
+net/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer#applyItemArmTransform()
+net/minecraft/client/player/LocalPlayer#firstPersonHandsAndItems()
+net/minecraft/client/player/FirstPersonHandsAndItems
+net/minecraft/client/player/FirstPersonHandsAndItems#mainHandHeight!field
+net/minecraft/client/player/FirstPersonHandsAndItems#offHandHeight!field
+net/minecraft/client/player/FirstPersonHandsAndItems#mainHandItem!field
+net/minecraft/client/player/FirstPersonHandsAndItems#offHandItem!field
 net/minecraft/client/Minecraft#itemInHandRenderer
 com/mojang/blaze3d/vertex/PoseStack#translate()
 com/mojang/blaze3d/vertex/PoseStack#scale()
@@ -187,6 +196,8 @@ com/mojang/blaze3d/vertex/PoseStack#mulPose()
 # 旋转走方法 mulPose(Quaternionf)：旧条目（裸名）只能解析成字段，HandView/TotemAnimation 的
 # 旋转因此从未生效。字段条目保留仅为兼容既有表读数。
 com/mojang/blaze3d/vertex/PoseStack#mulPose()
+# 26.x 删掉了 mulPose(Quaternionf)，轴旋转只剩 rotate(Quaternionfc)。
+com/mojang/blaze3d/vertex/PoseStack#rotate()
 org/joml/Quaternionf
 org/joml/AxisAngle4f
 net/minecraft/client/renderer/GameRenderer#setupFog()
@@ -194,6 +205,16 @@ net/minecraft/client/multiplayer/ClientLevel#rainLevel
 net/minecraft/client/multiplayer/ClientLevel#thunderLevel
 net/minecraft/client/multiplayer/ClientLevel#setRainLevel()
 net/minecraft/client/multiplayer/ClientLevel#setThunderLevel()
+# 26.x 世界时间：dayTime/setDayTime 已删除，改为客户端时钟实例的私有字段。
+net/minecraft/client/multiplayer/ClientLevel#clockManager()
+net/minecraft/client/ClientClockManager
+net/minecraft/client/ClientClockManager#clocks!field
+net/minecraft/client/ClientClockManager$ClientClockInstance
+net/minecraft/client/ClientClockManager$ClientClockInstance#totalTicks!field
+net/minecraft/client/ClientClockManager$ClientClockInstance#partialTick!field
+net/minecraft/client/ClientClockManager$ClientClockInstance#rate!field
+net/minecraft/world/level/Level#dimensionType()
+net/minecraft/world/level/dimension/DimensionType#defaultClock()
 net/minecraft/client/multiplayer/ClientLevel#dayTime!field
 net/minecraft/client/multiplayer/ClientLevel#levelData
 net/minecraft/world/level/storage/LevelData

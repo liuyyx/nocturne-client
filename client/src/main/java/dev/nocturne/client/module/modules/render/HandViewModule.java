@@ -93,18 +93,29 @@ public final class HandViewModule extends GameModule {
 
     @Override
     public void onTick() {
-        Object renderer = bridge().readField(bridge().minecraft(), ClassType.MINECRAFT, "itemInHandRenderer");
-        if (renderer == null) {
+        // 26.x 没有 Minecraft#itemInHandRenderer：手部状态挂在 LocalPlayer#firstPersonHandsAndItems() 上，
+        // 字段名与旧渲染器一致；映射表标 absent 的一侧不白试（失败查找不进缓存，每 tick 重来很贵）。
+        boolean rendererAbsent = bridge().mapping().isMemberAbsent(ClassType.MINECRAFT, "itemInHandRenderer");
+        Object hands = rendererAbsent
+                ? null
+                : bridge().readField(bridge().minecraft(), ClassType.MINECRAFT, "itemInHandRenderer");
+        ClassType owner = ClassType.ITEM_IN_HAND_RENDERER;
+        if (hands == null
+                && !bridge().mapping().isMemberAbsent(ClassType.LOCAL_PLAYER, "firstPersonHandsAndItems")) {
+            hands = bridge().callMapped(bridge().player(), ClassType.LOCAL_PLAYER, "firstPersonHandsAndItems");
+            owner = ClassType.FIRST_PERSON_HANDS_AND_ITEMS;
+        }
+        if (hands == null) {
             return;
         }
         if (disableSwapMain.get()) {
-            bridge().writeField(renderer, ClassType.ITEM_IN_HAND_RENDERER, "mainHandHeight", 1.0f);
-            bridge().writeField(renderer, ClassType.ITEM_IN_HAND_RENDERER, "mainHandItem",
+            bridge().writeField(hands, owner, "mainHandHeight", 1.0f);
+            bridge().writeField(hands, owner, "mainHandItem",
                     bridge().heldItem(bridge().player(), false));
         }
         if (disableSwapOff.get()) {
-            bridge().writeField(renderer, ClassType.ITEM_IN_HAND_RENDERER, "offHandHeight", 1.0f);
-            bridge().writeField(renderer, ClassType.ITEM_IN_HAND_RENDERER, "offHandItem",
+            bridge().writeField(hands, owner, "offHandHeight", 1.0f);
+            bridge().writeField(hands, owner, "offHandItem",
                     bridge().heldItem(bridge().player(), true));
         }
     }

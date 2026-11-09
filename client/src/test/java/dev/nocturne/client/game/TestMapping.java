@@ -27,6 +27,15 @@ public final class TestMapping implements Mapping {
     private Class<?> chatHudClass;
     /** 明确标记为 absent 的成员，元素形如 {@code "HUD#getChatGUI"}。 */
     private java.util.Set<String> absentMembers = java.util.Collections.emptySet();
+    /** 指定映射类型命中的替身类（覆盖默认的规范名透传）。 */
+    private final java.util.Map<ClassType, Class<?>> classOverrides =
+            new java.util.EnumMap<ClassType, Class<?>>(ClassType.class);
+
+    /** 让某个映射类型解析到替身类，用于验证需要构造/类型检查的分支。 */
+    public TestMapping classOverride(ClassType type, Class<?> replacement) {
+        classOverrides.put(type, replacement);
+        return this;
+    }
 
     public TestMapping(Class<?> minecraftClass, Class<?> componentClass, Class<?> textComponentClass) {
         this.minecraftClass = minecraftClass;
@@ -59,6 +68,10 @@ public final class TestMapping implements Mapping {
 
     @Override
     public String className(ClassType type) {
+        Class<?> replacement = classOverrides.get(type);
+        if (replacement != null) {
+            return replacement.getName();
+        }
         if (type == ClassType.MINECRAFT) {
             return minecraftClass.getName();
         }

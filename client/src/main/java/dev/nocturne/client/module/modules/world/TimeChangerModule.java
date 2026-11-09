@@ -8,10 +8,11 @@ import dev.nocturne.client.value.NumberValue;
 /**
  * 将客户端世界时间写为配置值。
  *
- * <p>26.3 的 {@code ClientLevel#dayTime} 与 {@code LevelData#setDayTime} 均不存在，
- * {@link GameBridge#setDayTime(long)} 只会返回 {@code false}。这种“该版本没有时间入口”是
- * 能力事实而非临时失败：探测到一次就标记不可用、提示一次并停止每 tick 重试（旧实现在真机上
- * 每 tick 空转一次反射调用）。重新启用模块会重新探测。
+ * <p>26.3 的 {@code ClientLevel#dayTime} 与 {@code LevelData#setDayTime} 均不存在，时间改写成
+ * {@code ClientClockManager} 实例的私有字段（见 {@link GameBridge#setDayTime(long)}）。
+ * 时钟结构也缺席时（没有默认时钟、字段不可写），这种“该版本没有时间入口”是能力事实而非临时失败：
+ * 探测到一次就标记不可用、提示一次并停止每 tick 重试（旧实现在真机上每 tick 空转一次反射调用）。
+ * 重新启用模块会重新探测。
  */
 public final class TimeChangerModule extends GameModule {
     private final NumberValue time = add(new NumberValue("Time", 6000, 0, 24000, 1000));
@@ -41,7 +42,7 @@ public final class TimeChangerModule extends GameModule {
             return;
         }
         unavailable = true;
-        String message = "该版本无可用时间入口（dayTime/setDayTime 缺席），Time 模块已停用";
+        String message = "该版本无可用时间入口（dayTime/setDayTime/时钟字段均缺席），Time 模块已停用";
         System.out.println("[nocturne] Time: " + message);
         bridge.localMessage(message);
     }

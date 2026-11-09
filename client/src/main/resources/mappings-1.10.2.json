@@ -41,6 +41,16 @@
             "names": {},
             "absentReason": "unverified"
         },
+        "net/minecraft/client/ClientClockManager": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
+        "net/minecraft/client/ClientClockManager$ClientClockInstance": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
         "net/minecraft/client/DeltaTracker": {
             "names": {
                 "vanilla": "bdd",
@@ -928,6 +938,10 @@
                         "forge": "(ILnet/minecraft/entity/Entity;)V"
                     }
                 },
+                "clockManager": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "entitiesForRendering": {
                     "names": {
                         "vanilla": "J",
@@ -1282,6 +1296,11 @@
             "names": {},
             "absentReason": "unverified"
         },
+        "net/minecraft/client/player/FirstPersonHandsAndItems": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
         "net/minecraft/client/player/Input": {
             "names": {
                 "vanilla": "bnl",
@@ -1372,6 +1391,10 @@
                         "fabric": "(DDD)D",
                         "forge": "(DDD)D"
                     }
+                },
+                "firstPersonHandsAndItems": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getEyePosition": {
                     "names": {
@@ -1722,6 +1745,11 @@
                     "absentReason": "unverified"
                 }
             }
+        },
+        "net/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
         },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {
@@ -5034,6 +5062,10 @@
                     "absent": true,
                     "absentReason": "unverified"
                 },
+                "dimensionType": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "entitiesForRendering": {
                     "names": {
                         "vanilla": "J",
@@ -5310,6 +5342,20 @@
                         "fabric": "()Ljava/util/Map;",
                         "forge": "()Ljava/util/Map;"
                     }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/dimension/DimensionType": {
+            "names": {
+                "vanilla": "atm",
+                "fabric": "net.minecraft.class_2874",
+                "forge": "net.minecraft.world.DimensionType"
+            },
+            "methods": {
+                "defaultClock": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}

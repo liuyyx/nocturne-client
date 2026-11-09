@@ -396,11 +396,58 @@ public final class GameBridge {
     /** 设置客户端世界时间。 */
     public boolean setDayTime(long time) {
         Object world = world();
+        if (writeClockTime(world, time)) {
+            return true;
+        }
         if (writeField(world, ClassType.CLIENT_LEVEL, "dayTime", time)) {
             return true;
         }
         Object data = readField(world, ClassType.CLIENT_LEVEL, "levelData");
         return callMappedStatus(data, ClassType.LEVEL_DATA, "setDayTime", time);
+    }
+
+    /**
+     * 26.x 的世界时钟写入口：{@code ClientLevel#clockManager()} 的实例表按 Holder 存
+     * {@code ClientClockInstance}，时间只有私有字段没有 setter；表里还没有该 Holder 时自行构造并放入。
+     *
+     * <p>不走 {@code ClientClockManager#getInstance(Holder)}——它有两个返回类型不同的协变重载，
+     * 按名调用会被判成歧义。{@code rate=0} 把本地时钟冻结在目标时刻；服务端时间包仍会覆盖，
+     * 所以调用方必须每 tick 重写（TimeChanger 已是每 tick）。
+     *
+     * @return {@code totalTicks} 写入成功时为 {@code true}；版本没有时钟结构时为 {@code false}
+     */
+    @SuppressWarnings("unchecked")
+    private boolean writeClockTime(Object world, long time) {
+        Object manager = callMapped(world, ClassType.CLIENT_LEVEL, "clockManager");
+        Object clocks = readField(manager, ClassType.CLIENT_CLOCK_MANAGER, "clocks");
+        if (!(clocks instanceof java.util.Map)) {
+            return false;
+        }
+        Object dimension = callMapped(world, ClassType.LEVEL, "dimensionType");
+        Object defaultClock = callMapped(dimension, ClassType.DIMENSION_TYPE, "defaultClock");
+        if (!(defaultClock instanceof java.util.Optional)) {
+            return false;
+        }
+        Object holder = ((java.util.Optional<?>) defaultClock).orElse(null);
+        if (holder == null) {
+            // 该维度没有默认时钟：视为本版本不可写，交给调用方报 unavailable。
+            return false;
+        }
+        java.util.Map<Object, Object> instances = (java.util.Map<Object, Object>) clocks;
+        Object instance = instances.get(holder);
+        if (instance == null) {
+            instance = construct(ClassType.CLIENT_CLOCK_INSTANCE);
+            if (instance == null) {
+                return false;
+            }
+            instances.put(holder, instance);
+        }
+        boolean written = writeField(instance, ClassType.CLIENT_CLOCK_INSTANCE, "totalTicks", time);
+        if (written) {
+            writeField(instance, ClassType.CLIENT_CLOCK_INSTANCE, "partialTick", 0.0f);
+            writeField(instance, ClassType.CLIENT_CLOCK_INSTANCE, "rate", 0.0f);
+        }
+        return written;
     }
 
     /** 清除本地点击/跳跃延迟字段。 */
@@ -1992,9 +2039,11 @@ public final class GameBridge {
             Object angle = construct(ClassType.AXIS_ANGLE4F,
                     (float) Math.toRadians(rotations[axis]), ax, ay, az);
             Object quaternion = construct(ClassType.QUATERNIONF, angle);
-            if (!callMappedStatus(pose, ClassType.POSE_STACK, "mulPose", quaternion)) {
+            // 26.x 的 PoseStack 只有 rotate(Quaternionfc)：先试 rotate，再回退旧版 mulPose(Quaternionf)。
+            if (!callMappedStatus(pose, ClassType.POSE_STACK, "rotate", quaternion)
+                    && !callMappedStatus(pose, ClassType.POSE_STACK, "mulPose", quaternion)) {
                 // 不再静默：旋转丢失会让 HandView/TotemAnimation 看起来"开着但没效果"。
-                logThrottled("PoseStack#mulPose(Quaternionf) failed for rotation axis " + axis, null);
+                logThrottled("PoseStack#rotate/mulPose(Quaternionf) failed for rotation axis " + axis, null);
             }
         }
     }

@@ -5,6 +5,7 @@ import dev.nocturne.client.TestSupport;
 import dev.nocturne.client.game.FakeMinecraft;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.game.TestMapping;
+import dev.nocturne.client.mapping.ClassType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -116,6 +117,100 @@ class TimeChangerModuleTest {
             count++;
         }
         return count;
+    }
+
+    /** 时钟表里还没有该 Holder（首个时间包之前）：自行构造实例并放入，之后复用。 */
+    @Test
+    void constructsAndPutsClockInstanceWhenTheTableIsEmpty() {
+        ClockLevel level = new ClockLevel();
+        FakeMinecraft.instance.level = level;
+        TestMapping mapping = new TestMapping(FakeMinecraft.class)
+                .classOverride(ClassType.CLIENT_CLOCK_INSTANCE, FakeClockInstance.class);
+        NocturneClient.boot(null).setGameBridge(new GameBridge(null, mapping));
+
+        TimeChangerModule module = new TimeChangerModule();
+        module.setEnabled(true);
+        module.onTick();
+
+        Object stored = level.clockManager.clocks.get(level.dimension.holder);
+        assertTrue(stored instanceof FakeClockInstance, "the clock instance must be constructed and stored");
+        assertEquals(6000L, ((FakeClockInstance) stored).totalTicks, "the new instance must carry the time");
+
+        module.onTick();
+        assertEquals(1, level.clockManager.clocks.size(),
+                "the constructed instance must be reused rather than replaced every tick");
+    }
+
+    /** 26.3 的时钟表形态：写 ClientClockInstance#totalTicks，并把 rate/partialTick 归零冻结。 */
+    @Test
+    void writesTimeThroughTheClockInstanceOn26x() {
+        ClockLevel level = new ClockLevel();
+        FakeClockInstance instance = new FakeClockInstance();
+        level.clockManager.clocks.put(level.dimension.holder, instance);
+        FakeMinecraft.instance.level = level;
+        NocturneClient.boot(null).setGameBridge(new GameBridge(null, new TestMapping(FakeMinecraft.class)));
+
+        TimeChangerModule module = new TimeChangerModule();
+        module.setEnabled(true);
+        module.onTick();
+
+        assertEquals(6000L, instance.totalTicks, "the configured time must reach the clock instance");
+        assertEquals(0.0f, instance.partialTick, "partial ticks must restart from zero");
+        assertEquals(0.0f, instance.rate, "rate 0 freezes the local clock between ticks");
+        assertTrue(!output().contains("该版本无可用时间入口"),
+                "a working clock entry must not report the module as unavailable");
+    }
+
+    /** 维度没有默认时钟：写入不可能成功，模块按现状提示一次不可用。 */
+    @Test
+    void reportsUnavailableWhenTheDimensionHasNoDefaultClock() {
+        ClockLevel level = new ClockLevel();
+        level.dimension.hasClock = false;
+        FakeMinecraft.instance.level = level;
+        NocturneClient.boot(null).setGameBridge(new GameBridge(null, new TestMapping(FakeMinecraft.class)));
+
+        TimeChangerModule module = new TimeChangerModule();
+        module.setEnabled(true);
+        module.onTick();
+
+        assertEquals(1, occurrences(output(), "该版本无可用时间入口"),
+                "a dimension without a default clock cannot be written; warn once");
+    }
+
+    /** 26.3 形态的替身世界：clockManager().clocks 按 Holder 存实例。 */
+    public static final class ClockLevel {
+        public final FakeClockManager clockManager = new FakeClockManager();
+        public final FakeDimensionType dimension = new FakeDimensionType();
+
+        public FakeClockManager clockManager() {
+            return clockManager;
+        }
+
+        public FakeDimensionType dimensionType() {
+            return dimension;
+        }
+    }
+
+    /** 时钟实例表；真机上字段名就是 {@code clocks}。 */
+    public static final class FakeClockManager {
+        public final java.util.Map<Object, Object> clocks = new java.util.HashMap<Object, Object>();
+    }
+
+    /** 维度类型：{@code defaultClock()} 返回 Holder 的 Optional。 */
+    public static final class FakeDimensionType {
+        public final Object holder = new Object();
+        public boolean hasClock = true;
+
+        public java.util.Optional<Object> defaultClock() {
+            return hasClock ? java.util.Optional.of(holder) : java.util.Optional.empty();
+        }
+    }
+
+    /** 时钟实例替身；私有字段在真机上靠反射直写。 */
+    public static final class FakeClockInstance {
+        public long totalTicks;
+        public float partialTick;
+        public float rate;
     }
 
     /** 有时间入口的替身世界：{@code dayTime} 字段直接可写。 */

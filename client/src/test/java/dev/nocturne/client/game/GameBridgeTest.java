@@ -288,7 +288,63 @@ class GameBridgeTest {
         assertTrue(bridge.usingItem(new LegacyEntity()));
     }
 
-    /** 通过替身游戏类验证解析链路：resolve 成功、player 读取经映射、带参调用可命中 */
+    /**
+     * 26.x 的 PoseStack 只有 {@code rotate(Quaternionfc)}：变换必须走 rotate，
+     * 否则 HandView/TotemAnimation 的旋转会被静默丢掉。
+     */
+    @Test
+    void transformPoseUsesRotateWhenTheVersionDroppedMulPose() {
+        RotatingPose pose = new RotatingPose();
+        new GameBridge(null, new IdentityMapping())
+                .transformPose(pose, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 20.0, 0.0);
+        assertEquals(1, pose.rotates, "the quaternion rotation must be applied via rotate");
+    }
+
+    /** 旧版只有 {@code mulPose(Quaternionf)}：回退路径必须仍然生效。 */
+    @Test
+    void transformPoseFallsBackToMulPoseOnLegacyVersions() {
+        LegacyPose pose = new LegacyPose();
+        new GameBridge(null, new IdentityMapping())
+                .transformPose(pose, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 10.0, 0.0, 0.0);
+        assertEquals(1, pose.mulPoses, "the quaternion rotation must fall back to mulPose");
+    }
+
+    /** 26.x 形态：只有 rotate(Quaternionfc)。 */
+    static final class RotatingPose {
+        int rotates;
+
+        @SuppressWarnings("unused")
+        void translate(float x, float y, float z) {
+        }
+
+        @SuppressWarnings("unused")
+        void scale(float x, float y, float z) {
+        }
+
+        @SuppressWarnings("unused")
+        void rotate(org.joml.Quaternionfc quaternion) {
+            rotates++;
+        }
+    }
+
+    /** 旧版形态：只有 mulPose(Quaternionf)。 */
+    static final class LegacyPose {
+        int mulPoses;
+
+        @SuppressWarnings("unused")
+        void translate(float x, float y, float z) {
+        }
+
+        @SuppressWarnings("unused")
+        void scale(float x, float y, float z) {
+        }
+
+        @SuppressWarnings("unused")
+        void mulPose(org.joml.Quaternionf quaternion) {
+            mulPoses++;
+        }
+    }
+
     @Test
     void resolvesAgainstAFakeGameClassAndReadsItsFields() {
         ClassLoader saved = Thread.currentThread().getContextClassLoader();

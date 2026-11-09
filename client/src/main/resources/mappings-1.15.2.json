@@ -173,6 +173,10 @@
                         "forge": "()V"
                     }
                 },
+                "rotate": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "scale": {
                     "names": {
                         "vanilla": "a",
@@ -271,6 +275,16 @@
             "fields": {}
         },
         "net/minecraft/client/CameraType": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
+        "net/minecraft/client/ClientClockManager": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
+        "net/minecraft/client/ClientClockManager$ClientClockInstance": {
             "absent": true,
             "names": {},
             "absentReason": "verified"
@@ -1405,6 +1419,10 @@
                         "forge": "(ILnet/minecraft/entity/Entity;)V"
                     }
                 },
+                "clockManager": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "entitiesForRendering": {
                     "names": {
                         "vanilla": "b",
@@ -1779,6 +1797,11 @@
             "names": {},
             "absentReason": "verified"
         },
+        "net/minecraft/client/player/FirstPersonHandsAndItems": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
         "net/minecraft/client/player/Input": {
             "names": {
                 "vanilla": "dpz",
@@ -1889,6 +1912,10 @@
                         "fabric": "(DDD)D",
                         "forge": "(DDD)D"
                     }
+                },
+                "firstPersonHandsAndItems": {
+                    "absent": true,
+                    "absentReason": "verified"
                 },
                 "getEyePosition": {
                     "names": {
@@ -2236,6 +2263,11 @@
             "fields": {}
         },
         "net/minecraft/client/renderer/EntityRenderer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
+        "net/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer": {
             "absent": true,
             "names": {},
             "absentReason": "verified"
@@ -2988,6 +3020,15 @@
             "absent": true,
             "names": {},
             "absentReason": "verified"
+        },
+        "net/minecraft/network/protocol/game/ServerboundChatPacket": {
+            "names": {
+                "vanilla": "pp",
+                "fabric": "net.minecraft.class_2797",
+                "forge": "net.minecraft.network.play.client.CChatMessagePacket"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundContainerClickPacket": {
             "names": {
@@ -5188,6 +5229,10 @@
                         "forge": "Lnet/minecraft/entity/projectile/FishingBobberEntity;"
                     }
                 },
+                "getCooledAttackStrength(float)": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "inventory": {
                     "names": {
                         "vanilla": "bu",
@@ -5828,6 +5873,10 @@
                         "forge": "(Lnet/minecraft/util/math/RayTraceContext;)Lnet/minecraft/util/math/BlockRayTraceResult;"
                     }
                 },
+                "dimensionType": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "entitiesForRendering": {
                     "absent": true,
                     "absentReason": "verified"
@@ -6160,6 +6209,20 @@
                         "fabric": "()Ljava/util/Map;",
                         "forge": "()Ljava/util/Map;"
                     }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/dimension/DimensionType": {
+            "names": {
+                "vanilla": "cbi",
+                "fabric": "net.minecraft.class_2874",
+                "forge": "net.minecraft.world.dimension.DimensionType"
+            },
+            "methods": {
+                "defaultClock": {
+                    "absent": true,
+                    "absentReason": "verified"
                 }
             },
             "fields": {}

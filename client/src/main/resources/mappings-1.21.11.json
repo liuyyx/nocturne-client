@@ -198,6 +198,10 @@
                         "neoforge": "()V"
                     }
                 },
+                "rotate": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "scale": {
                     "names": {
                         "vanilla": "b",
@@ -348,6 +352,16 @@
                     }
                 }
             }
+        },
+        "net/minecraft/client/ClientClockManager": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
+        "net/minecraft/client/ClientClockManager$ClientClockInstance": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/client/DeltaTracker": {
             "names": {
@@ -1693,6 +1707,10 @@
                         "neoforge": "(Lnet/minecraft/world/entity/Entity;)V"
                     }
                 },
+                "clockManager": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "entitiesForRendering": {
                     "names": {
                         "vanilla": "f",
@@ -2187,6 +2205,11 @@
                 }
             }
         },
+        "net/minecraft/client/player/FirstPersonHandsAndItems": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
         "net/minecraft/client/player/Input": {
             "absent": true,
             "names": {},
@@ -2252,6 +2275,10 @@
                         "forge": "(DDD)D",
                         "neoforge": "(DDD)D"
                     }
+                },
+                "firstPersonHandsAndItems": {
+                    "absent": true,
+                    "absentReason": "verified"
                 },
                 "getEyePosition": {
                     "names": {
@@ -2664,6 +2691,11 @@
             "fields": {}
         },
         "net/minecraft/client/renderer/EntityRenderer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
+        "net/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer": {
             "absent": true,
             "names": {},
             "absentReason": "verified"
@@ -3601,6 +3633,16 @@
                     }
                 }
             }
+        },
+        "net/minecraft/network/protocol/game/ServerboundChatPacket": {
+            "names": {
+                "vanilla": "aik",
+                "fabric": "net.minecraft.class_2797",
+                "forge": "net.minecraft.network.protocol.game.ServerboundChatPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundChatPacket"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundContainerClickPacket": {
             "names": {
@@ -6302,6 +6344,10 @@
                         "neoforge": "Lnet/minecraft/world/entity/projectile/FishingHook;"
                     }
                 },
+                "getCooledAttackStrength(float)": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "inventory": {
                     "names": {
                         "vanilla": "cE",
@@ -7022,6 +7068,20 @@
                         "neoforge": "(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;"
                     }
                 },
+                "dimensionType": {
+                    "names": {
+                        "vanilla": "F_",
+                        "fabric": "dimensionType",
+                        "forge": "m_6042_",
+                        "neoforge": "dimensionType"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lesh;",
+                        "fabric": "()Lnet/minecraft/class_2874;",
+                        "forge": "()Lnet/minecraft/world/level/dimension/DimensionType;",
+                        "neoforge": "()Lnet/minecraft/world/level/dimension/DimensionType;"
+                    }
+                },
                 "entitiesForRendering": {
                     "absent": true,
                     "absentReason": "verified"
@@ -7397,6 +7457,21 @@
                         "forge": "()Ljava/util/Map;",
                         "neoforge": "()Ljava/util/Map;"
                     }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/dimension/DimensionType": {
+            "names": {
+                "vanilla": "esh",
+                "fabric": "net.minecraft.class_2874",
+                "forge": "net.minecraft.world.level.dimension.DimensionType",
+                "neoforge": "net.minecraft.world.level.dimension.DimensionType"
+            },
+            "methods": {
+                "defaultClock": {
+                    "absent": true,
+                    "absentReason": "verified"
                 }
             },
             "fields": {}

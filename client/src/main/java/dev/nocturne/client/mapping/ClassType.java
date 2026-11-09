@@ -22,6 +22,12 @@ public enum ClassType {
     REMOTE_PLAYER("net.minecraft.client.player.RemotePlayer"),
     /** 客户端侧的世界实例。 */
     CLIENT_LEVEL("net.minecraft.client.multiplayer.ClientLevel"),
+    /** 客户端世界时钟表（26.x 起世界时间不再存在 ClientLevel#dayTime）。 */
+    CLIENT_CLOCK_MANAGER("net.minecraft.client.ClientClockManager"),
+    /** 时钟实例：时间值在 {@code totalTicks}，且没有 setter，只能写字段。 */
+    CLIENT_CLOCK_INSTANCE("net.minecraft.client.ClientClockManager$ClientClockInstance"),
+    /** 维度类型：默认时钟（日出日落）挂在它的 {@code defaultClock()} 上。 */
+    DIMENSION_TYPE("net.minecraft.world.level.dimension.DimensionType"),
     /** 玩家实体基类。 */
     PLAYER("net.minecraft.world.entity.player.Player"),
     /** 玩家背包；快捷栏选中槽与物品读取。 */
@@ -302,6 +308,10 @@ public enum ClassType {
     GAME_RENDERER("net.minecraft.client.renderer.GameRenderer"),
     CAMERA("net.minecraft.client.Camera"),
     ITEM_IN_HAND_RENDERER("net.minecraft.client.renderer.ItemInHandRenderer"),
+    /** 26.x 的手部渲染器；{@code applyItemArmTransform} 签名与旧 ItemInHandRenderer 一致。 */
+    FIRST_PERSON_HANDS_AND_ITEMS_RENDERER("net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer"),
+    /** 26.x 的第一人称手部状态；换手抑制写这里的四个字段。 */
+    FIRST_PERSON_HANDS_AND_ITEMS("net.minecraft.client.player.FirstPersonHandsAndItems"),
     QUATERNIONF("org.joml.Quaternionf"),
     AXIS_ANGLE4F("org.joml.AxisAngle4f"),
     /** 容器菜单；背包动作需要 containerId 与物品列表。 */

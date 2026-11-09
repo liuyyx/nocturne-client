@@ -1350,44 +1350,56 @@ public final class NocturneAgent {
      * {@code descriptor()==null} 直接跳过，HandView/CameraClip 在所有版本都是死路径，模块却显示 ON。
      */
     private static void registerHandHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
-        dev.nocturne.client.mapping.ClassType owner = dev.nocturne.client.mapping.ClassType.ITEM_IN_HAND_RENDERER;
+        // 26.x 把第一人称手部渲染拆到 FirstPersonHandsAndItemsRenderer，方法名与描述符与旧类一致；
+        // 两个都试，映射表标记为 absent 的版本跳过。
+        dev.nocturne.client.mapping.ClassType[] owners = {
+                dev.nocturne.client.mapping.ClassType.FIRST_PERSON_HANDS_AND_ITEMS_RENDERER,
+                dev.nocturne.client.mapping.ClassType.ITEM_IN_HAND_RENDERER,
+        };
         dev.nocturne.client.mapping.Mapping mapping = currentMapping();
         boolean wired = false;
         boolean tried = false;
-        for (String className : classNameCandidates(mapping, owner)) {
-            for (dev.nocturne.client.mapping.MethodCandidate candidate
-                    : mapping.methodCandidates(owner, "applyItemArmTransform")) {
-                tried = true;
-                String descriptor = candidate.descriptor();
-                if (descriptor == null || descriptor.isEmpty()) {
-                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
-                            APPLY_ITEM_ARM_DESCRIPTOR);
+        for (dev.nocturne.client.mapping.ClassType owner : owners) {
+            if (mapping.isClassAbsent(owner)) {
+                continue;
+            }
+            for (String className : classNameCandidates(mapping, owner)) {
+                for (dev.nocturne.client.mapping.MethodCandidate candidate
+                        : mapping.methodCandidates(owner, "applyItemArmTransform")) {
+                    tried = true;
+                    String descriptor = candidate.descriptor();
+                    if (descriptor == null || descriptor.isEmpty()) {
+                        descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
+                                APPLY_ITEM_ARM_DESCRIPTOR);
+                    }
+                    if (descriptor == null && mapping.isIdentity()) {
+                        // 未混淆构建：规范描述符就是运行期描述符。
+                        descriptor = APPLY_ITEM_ARM_DESCRIPTOR;
+                    }
+                    if (descriptor == null) {
+                        log("hand transform hook: no descriptor for " + className + "."
+                                + candidate.name() + " (mapping face missing)");
+                        continue;
+                    }
+                    ClassFileTransformer transformer = asmLoader.createGateTransformer(className,
+                            candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
+                            "handTransform", "V", false, false);
+                    int state = registerGameplayTransformerState(instrumentation, transformer, className,
+                            candidate.name(), descriptor, "handTransform");
+                    wired |= state >= HOOK_REGISTERED;
                 }
-                if (descriptor == null && mapping.isIdentity()) {
-                    // 未混淆构建：规范描述符就是运行期描述符。
-                    descriptor = APPLY_ITEM_ARM_DESCRIPTOR;
-                }
-                if (descriptor == null) {
-                    log("hand transform hook: no descriptor for " + className + "."
-                            + candidate.name() + " (mapping face missing)");
-                    continue;
-                }
-                ClassFileTransformer transformer = asmLoader.createGateTransformer(className,
-                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
-                        "handTransform", "V", false, false);
-                int state = registerGameplayTransformerState(instrumentation, transformer, className,
-                        candidate.name(), descriptor, "handTransform");
-                wired |= state >= HOOK_REGISTERED;
             }
         }
         if (wired) {
             publishHookState("handTransform", true, null);
         } else {
             publishHookState("handTransform", false, tried
-                    ? "ItemInHandRenderer#applyItemArmTransform has no usable descriptor"
-                    : "ItemInHandRenderer#applyItemArmTransform missing from the mapping table");
-            log("hand transform hook unavailable: " + owner.canonicalName()
-                    + "#applyItemArmTransform");
+                    ? "FirstPersonHandsAndItemsRenderer/ItemInHandRenderer#applyItemArmTransform"
+                            + " has no usable descriptor"
+                    : "FirstPersonHandsAndItemsRenderer/ItemInHandRenderer#applyItemArmTransform"
+                            + " missing from the mapping table");
+            log("hand transform hook unavailable: "
+                    + "FirstPersonHandsAndItemsRenderer/ItemInHandRenderer#applyItemArmTransform");
         }
     }
 

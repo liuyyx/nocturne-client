@@ -192,6 +192,14 @@
                         "neoforge": "()V"
                     }
                 },
+                "rotate": {
+                    "names": {
+                        "vanilla": "rotate",
+                        "fabric": "rotate",
+                        "forge": "rotate",
+                        "neoforge": "rotate"
+                    }
+                },
                 "scale": {
                     "names": {
                         "vanilla": "scale",
@@ -333,6 +341,84 @@
                         "fabric": "Lnet/minecraft/client/CameraType;",
                         "forge": "Lnet/minecraft/client/CameraType;",
                         "neoforge": "Lnet/minecraft/client/CameraType;"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/ClientClockManager": {
+            "names": {
+                "vanilla": "net.minecraft.client.ClientClockManager",
+                "fabric": "net.minecraft.client.ClientClockManager",
+                "forge": "net.minecraft.client.ClientClockManager",
+                "neoforge": "net.minecraft.client.ClientClockManager"
+            },
+            "methods": {},
+            "fields": {
+                "clocks": {
+                    "names": {
+                        "vanilla": "clocks",
+                        "fabric": "clocks",
+                        "forge": "clocks",
+                        "neoforge": "clocks"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ljava/util/Map;",
+                        "fabric": "Ljava/util/Map;",
+                        "forge": "Ljava/util/Map;",
+                        "neoforge": "Ljava/util/Map;"
+                    }
+                }
+            }
+        },
+        "net/minecraft/client/ClientClockManager$ClientClockInstance": {
+            "names": {
+                "vanilla": "net.minecraft.client.ClientClockManager$ClientClockInstance",
+                "fabric": "net.minecraft.client.ClientClockManager$ClientClockInstance",
+                "forge": "net.minecraft.client.ClientClockManager$ClientClockInstance",
+                "neoforge": "net.minecraft.client.ClientClockManager$ClientClockInstance"
+            },
+            "methods": {},
+            "fields": {
+                "partialTick": {
+                    "names": {
+                        "vanilla": "partialTick",
+                        "fabric": "partialTick",
+                        "forge": "partialTick",
+                        "neoforge": "partialTick"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "rate": {
+                    "names": {
+                        "vanilla": "rate",
+                        "fabric": "rate",
+                        "forge": "rate",
+                        "neoforge": "rate"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "totalTicks": {
+                    "names": {
+                        "vanilla": "totalTicks",
+                        "fabric": "totalTicks",
+                        "forge": "totalTicks",
+                        "neoforge": "totalTicks"
+                    },
+                    "descriptors": {
+                        "vanilla": "J",
+                        "fabric": "J",
+                        "forge": "J",
+                        "neoforge": "J"
                     }
                 }
             }
@@ -1722,6 +1808,14 @@
                         "neoforge": "(Lnet/minecraft/world/entity/Entity;)V"
                     }
                 },
+                "clockManager": {
+                    "names": {
+                        "vanilla": "clockManager",
+                        "fabric": "clockManager",
+                        "forge": "clockManager",
+                        "neoforge": "clockManager"
+                    }
+                },
                 "entitiesForRendering": {
                     "names": {
                         "vanilla": "entitiesForRendering",
@@ -2204,6 +2298,73 @@
                 }
             }
         },
+        "net/minecraft/client/player/FirstPersonHandsAndItems": {
+            "names": {
+                "vanilla": "net.minecraft.client.player.FirstPersonHandsAndItems",
+                "fabric": "net.minecraft.client.player.FirstPersonHandsAndItems",
+                "forge": "net.minecraft.client.player.FirstPersonHandsAndItems",
+                "neoforge": "net.minecraft.client.player.FirstPersonHandsAndItems"
+            },
+            "methods": {},
+            "fields": {
+                "mainHandHeight": {
+                    "names": {
+                        "vanilla": "mainHandHeight",
+                        "fabric": "mainHandHeight",
+                        "forge": "mainHandHeight",
+                        "neoforge": "mainHandHeight"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "mainHandItem": {
+                    "names": {
+                        "vanilla": "mainHandItem",
+                        "fabric": "mainHandItem",
+                        "forge": "mainHandItem",
+                        "neoforge": "mainHandItem"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lnet/minecraft/world/item/ItemStack;",
+                        "fabric": "Lnet/minecraft/world/item/ItemStack;",
+                        "forge": "Lnet/minecraft/world/item/ItemStack;",
+                        "neoforge": "Lnet/minecraft/world/item/ItemStack;"
+                    }
+                },
+                "offHandHeight": {
+                    "names": {
+                        "vanilla": "offHandHeight",
+                        "fabric": "offHandHeight",
+                        "forge": "offHandHeight",
+                        "neoforge": "offHandHeight"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "offHandItem": {
+                    "names": {
+                        "vanilla": "offHandItem",
+                        "fabric": "offHandItem",
+                        "forge": "offHandItem",
+                        "neoforge": "offHandItem"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lnet/minecraft/world/item/ItemStack;",
+                        "fabric": "Lnet/minecraft/world/item/ItemStack;",
+                        "forge": "Lnet/minecraft/world/item/ItemStack;",
+                        "neoforge": "Lnet/minecraft/world/item/ItemStack;"
+                    }
+                }
+            }
+        },
         "net/minecraft/client/player/Input": {
             "absent": true,
             "names": {},
@@ -2268,6 +2429,20 @@
                         "fabric": "(DDD)D",
                         "forge": "(DDD)D",
                         "neoforge": "(DDD)D"
+                    }
+                },
+                "firstPersonHandsAndItems": {
+                    "names": {
+                        "vanilla": "firstPersonHandsAndItems",
+                        "fabric": "firstPersonHandsAndItems",
+                        "forge": "firstPersonHandsAndItems",
+                        "neoforge": "firstPersonHandsAndItems"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lnet/minecraft/client/player/FirstPersonHandsAndItems;",
+                        "fabric": "()Lnet/minecraft/client/player/FirstPersonHandsAndItems;",
+                        "forge": "()Lnet/minecraft/client/player/FirstPersonHandsAndItems;",
+                        "neoforge": "()Lnet/minecraft/client/player/FirstPersonHandsAndItems;"
                     }
                 },
                 "getEyePosition": {
@@ -2684,6 +2859,31 @@
             "absent": true,
             "names": {},
             "absentReason": "verified"
+        },
+        "net/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer": {
+            "names": {
+                "vanilla": "net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer",
+                "fabric": "net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer",
+                "forge": "net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer",
+                "neoforge": "net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer"
+            },
+            "methods": {
+                "applyItemArmTransform": {
+                    "names": {
+                        "vanilla": "applyItemArmTransform",
+                        "fabric": "applyItemArmTransform",
+                        "forge": "applyItemArmTransform",
+                        "neoforge": "applyItemArmTransform"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V",
+                        "fabric": "(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V",
+                        "forge": "(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V",
+                        "neoforge": "(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/entity/HumanoidArm;F)V"
+                    }
+                }
+            },
+            "fields": {}
         },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {
@@ -3468,6 +3668,16 @@
                     }
                 }
             }
+        },
+        "net/minecraft/network/protocol/game/ServerboundChatPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundChatPacket",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundChatPacket",
+                "forge": "net.minecraft.network.protocol.game.ServerboundChatPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundChatPacket"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundContainerClickPacket": {
             "names": {
@@ -6151,6 +6361,10 @@
                         "neoforge": "Lnet/minecraft/world/entity/projectile/FishingHook;"
                     }
                 },
+                "getCooledAttackStrength(float)": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "inventory": {
                     "names": {
                         "vanilla": "inventory",
@@ -6871,6 +7085,20 @@
                         "neoforge": "(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;"
                     }
                 },
+                "dimensionType": {
+                    "names": {
+                        "vanilla": "dimensionType",
+                        "fabric": "dimensionType",
+                        "forge": "dimensionType",
+                        "neoforge": "dimensionType"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lnet/minecraft/world/level/dimension/DimensionType;",
+                        "fabric": "()Lnet/minecraft/world/level/dimension/DimensionType;",
+                        "forge": "()Lnet/minecraft/world/level/dimension/DimensionType;",
+                        "neoforge": "()Lnet/minecraft/world/level/dimension/DimensionType;"
+                    }
+                },
                 "entitiesForRendering": {
                     "absent": true,
                     "absentReason": "verified"
@@ -7227,6 +7455,31 @@
                         "fabric": "()Ljava/util/Map;",
                         "forge": "()Ljava/util/Map;",
                         "neoforge": "()Ljava/util/Map;"
+                    }
+                }
+            },
+            "fields": {}
+        },
+        "net/minecraft/world/level/dimension/DimensionType": {
+            "names": {
+                "vanilla": "net.minecraft.world.level.dimension.DimensionType",
+                "fabric": "net.minecraft.world.level.dimension.DimensionType",
+                "forge": "net.minecraft.world.level.dimension.DimensionType",
+                "neoforge": "net.minecraft.world.level.dimension.DimensionType"
+            },
+            "methods": {
+                "defaultClock": {
+                    "names": {
+                        "vanilla": "defaultClock",
+                        "fabric": "defaultClock",
+                        "forge": "defaultClock",
+                        "neoforge": "defaultClock"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/Optional;",
+                        "fabric": "()Ljava/util/Optional;",
+                        "forge": "()Ljava/util/Optional;",
+                        "neoforge": "()Ljava/util/Optional;"
                     }
                 }
             },

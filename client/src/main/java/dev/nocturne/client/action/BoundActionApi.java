@@ -22,8 +22,14 @@ final class BoundActionApi implements ActionApi {
     public boolean attack(Object target) {
         Object player = bridge.player();
         Object gameMode = gameMode();
-        return target != null && player != null
-                && binder.invoke("attack", gameMode, player, target);
+        if (target == null || player == null) {
+            return false;
+        }
+        // 反射调用成功只说明方法进入了；HitSelect 等订阅者可能在 AttackEvent 里取消。
+        // gate 结论记录在 GameplayHook（同线程），调用前后清/读即可得到真实结果。
+        dev.nocturne.client.bootstrap.GameplayHook.resetAttackAllowed();
+        boolean invoked = binder.invoke("attack", gameMode, player, target);
+        return invoked && dev.nocturne.client.bootstrap.GameplayHook.lastAttackAllowed();
     }
 
     @Override

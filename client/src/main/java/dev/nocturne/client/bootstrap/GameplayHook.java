@@ -174,6 +174,14 @@ public final class GameplayHook {
     /** {@link #adaptedSink} 对应的共享目标对象。 */
     private static volatile Object adaptedTarget;
     private static final ThreadLocal<Object[]> ATTACK_CONTEXT = new ThreadLocal<Object[]>();
+    /**
+     * 最近一次 {@link #attack(Object, Object)} 门控结论。
+     *
+     * <p>攻击入口是游戏方法本身，动作层只能通过反射调用它；光看“方法被调用”无法区分
+     * HitSelect/其它订阅者取消的情况。这里把 gate 的返回记在本线程，动作层调用前后
+     * 清/读，就能让 {@code ActionApi.attack} 返回真实是否打出去了。
+     */
+    private static final ThreadLocal<Boolean> ATTACK_ALLOWED = new ThreadLocal<Boolean>();
     /** KeyboardInput#tick 的头部捕获值；末尾无参消费，避开 RETURN 处被裁掉的 this 槽。 */
     private static final ThreadLocal<Object> INPUT_TICK = new ThreadLocal<Object>();
     /** 实体渲染嵌套捕获栈；每个 chamsPre 压一项，chamsPost 弹一项。 */
@@ -686,14 +694,27 @@ public final class GameplayHook {
         try {
             Sink current = sink();
             boolean allowed = current == null || current.attack(player, target);
+            ATTACK_ALLOWED.set(Boolean.valueOf(allowed));
             if (!allowed) {
                 ATTACK_CONTEXT.remove();
             }
             return allowed;
         } catch (Throwable t) {
+            ATTACK_ALLOWED.set(Boolean.TRUE);
             failure("attack", t);
             return true;
         }
+    }
+
+    /** 清空本线程的攻击门控记录；动作层在调用 attack 之前调用。 */
+    public static void resetAttackAllowed() {
+        ATTACK_ALLOWED.remove();
+    }
+
+    /** @return 最近一次 attack 门控是否放行；门控未接线/尚无记录时为 true */
+    public static boolean lastAttackAllowed() {
+        Boolean allowed = ATTACK_ALLOWED.get();
+        return allowed == null || allowed.booleanValue();
     }
 
     /** attack 的头部织入点；实际形参在此仍必定位于局部变量槽。 */

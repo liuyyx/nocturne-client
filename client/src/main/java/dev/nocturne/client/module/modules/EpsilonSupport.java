@@ -47,10 +47,16 @@ public final class EpsilonSupport {
         return -1;
     }
 
-    public static void aim(GameBridge bridge, PlayerState state, double x, double y, double z,
-                           float speed, int priority) {
+    /**
+     * 请求朝目标点旋转。
+     *
+     * @return 请求是否被旋转仲裁器接受；false 表示没有动作面/被更高优先级抢占，
+     *         调用方不应在同一 tick 直接攻击
+     */
+    public static boolean aim(GameBridge bridge, PlayerState state, double x, double y, double z,
+                              float speed, int priority) {
         if (bridge == null || state == null || !state.present()) {
-            return;
+            return false;
         }
         double dx = x - state.x();
         double dz = z - state.z();
@@ -59,9 +65,7 @@ public final class EpsilonSupport {
         float pitch = RotationController.approach(state.pitch(),
                 RotationController.pitchTo(horizontal, y - state.y() - 1.62), speed);
         NocturneClient client = NocturneClient.get();
-        if (client != null) {
-            client.rotations().request(yaw, pitch, priority, 150_000_000L);
-        }
+        return client != null && client.rotations().request(yaw, pitch, priority, 150_000_000L);
     }
 
     public static TargetManager.Options targets(double range, boolean players, boolean mobs,

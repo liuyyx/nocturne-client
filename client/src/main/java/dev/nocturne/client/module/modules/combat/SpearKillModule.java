@@ -78,9 +78,11 @@ public final class SpearKillModule extends GameModule {
             actions().setMotion(dx / distance * strength, y, dz / distance * strength);
         }
         if (target.distance() <= Math.max(3.0, stopDistance.get())) {
-            actions().attack(target.entity());
-            actions().swing(false, false);
-            reset();
+            // 被 HitSelect/其它订阅者取消时不重置蓄力：否则这一轮蓄力白费且要重头再蓄。
+            if (actions().attack(target.entity())) {
+                actions().swing(false, false);
+                reset();
+            }
         }
     }
 

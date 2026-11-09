@@ -52,19 +52,53 @@ public final class RotationController {
      * @param pitch    目标 pitch，钳制到 [-90,90]
      * @param priority 数值越大越优先；同优先级后写入者覆盖
      * @param ttlNanos 有效期，钳制到 1ms..2s
+     * @return 请求是否被接受（被更高优先级且未过期的请求抢占时返回 false）
      */
-    public void request(float yaw, float pitch, int priority, long ttlNanos) {
+    public boolean request(float yaw, float pitch, int priority, long ttlNanos) {
         if (!finite(yaw) || !finite(pitch)) {
-            return;
+            return false;
         }
         long ttl = Math.max(1_000_000L, Math.min(MAX_TTL_NANOS, ttlNanos));
         Request previous = request;
         if (previous != null && previous.priority > priority && previous.expiresNanos > System.nanoTime()) {
-            return;
+            return false;
         }
         request = new Request(wrap(yaw), clampPitch(pitch), priority,
                 System.nanoTime() + ttl);
         applyToPlayer();
+        return true;
+    }
+
+    /**
+     * 当前被接受请求的 yaw 是否已经落在目标角的容差内。
+     *
+     * <p>攻击门用它判断“已经转到位”：无有效请求（未请求或已被高优先级抢走）、或实际请求角
+     * 与目标差超过 {@code toleranceDegrees} 时返回 false。调用方据此不发起攻击，避免在
+     * 视角还没收敛时打出侧面/背面的命中。
+     *
+     * @param targetYaw        期望攻击的 yaw
+     * @param toleranceDegrees 允许的角度误差（3–5° 是客户端/服务端都不易触发偏差的区间）
+     */
+    public boolean isAimedAt(float targetYaw, float toleranceDegrees) {
+        if (!finite(targetYaw)) {
+            return false;
+        }
+        Request current = request;
+        long now = System.nanoTime();
+        if (current == null || current.expiresNanos <= now) {
+            return false;
+        }
+        return Math.abs(wrap(targetYaw - current.yaw)) <= Math.max(0.0f, toleranceDegrees);
+    }
+
+    /** @return 当前有效请求的 yaw；无请求时为 {@link Float#NaN} */
+    public float activeYaw() {
+        Request current = request;
+        long now = System.nanoTime();
+        if (current == null || current.expiresNanos <= now) {
+            return Float.NaN;
+        }
+        return current.yaw;
     }
 
     /** 把当前请求写到本地玩家；没有动作层时由 Motion 钩子兜底。 */

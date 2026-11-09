@@ -103,6 +103,12 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   temp+fsync+备份+`ATOMIC_MOVE`。启动顺序为「加载配置 → 只对缺键模块套默认 → 调试开关」，
   `shutdown()/panic` 在禁用前 flush 并关闭存储（自销毁不得把全关状态写盘）；损坏文件改名
   `modules.json.corrupt[.n]` 保留现场，未知模块/项与类型不符只跳过该项。
+- **战斗目标与旋转门**：`TargetManager` 内建好友过滤（永不攻击 `Friends` 名单里的玩家）与默认开启的
+  视线过滤（`Options#lineOfSight`，映射缺失按可见处理），AntiBot/NPC 判定只对玩家求值，aura 模块
+  不再各自判断。`RotationController.request` 返回是否被更高优先级抢占，`isAimedAt(targetYaw,4°)`
+  供攻击门判断是否已收敛；KillAura 每 tick 重建目标快照，未对准/请求被抢走时不发攻击。
+  `GameplayHook` 记录攻击门结论，`ActionApi.attack` 只在原版攻击真正执行时返回 true，调用方据此
+  才推进 `nextAttack`、扣 MultiAura 配额或重置蓄力。
 - **事件总线**：`EventBus`，同步、先按优先级再按同级注册顺序、逐订阅者异常隔离。
   可取消事件默认跳过后续订阅者，`skipCancelled=true` 的订阅者仍接收；分发使用增删时重建的不可变快照。
   已有 PlayerTick / Motion / Packet / Render / Key / MouseButton / Attack / UseItem / WorldChange

@@ -1,6 +1,5 @@
 package dev.nocturne.client.module.modules.combat;
 
-import dev.nocturne.client.control.Friends;
 import dev.nocturne.client.control.RotationController;
 import dev.nocturne.client.control.TargetManager;
 import dev.nocturne.client.event.MouseButtonEvent;
@@ -54,8 +53,10 @@ public final class AimBotModule extends GameModule implements WorldOverlay {
         }
         TargetManager.Options options = EpsilonSupport.targets(8.0, true, false, !ignoreInvis.get(),
                 TargetManager.Sort.ANGLE);
+        // 好友与视线统一在 TargetManager 判定：Ignore Walls 只是把视线过滤关掉。
+        options.lineOfSight = !ignoreWalls.get();
         TargetManager.Target found = client().targets().find(client(), options);
-        if (found == null || Friends.isFriend(bridge(), found.entity())) {
+        if (found == null) {
             target = null;
             visibleSince = 0L;
             return;
@@ -64,10 +65,6 @@ public final class AimBotModule extends GameModule implements WorldOverlay {
             target = found;
             lockTicks = aimTime.asInt();
             visibleSince = 0L;
-        }
-        if (!ignoreWalls.get() && !bridge().hasLineOfSight(bridge().player(), target.entity())) {
-            visibleSince = 0L;
-            return;
         }
         long now = System.currentTimeMillis();
         if (visibleSince == 0L) {

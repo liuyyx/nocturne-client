@@ -41,23 +41,48 @@ public final class MultiAuraModule extends GameModule {
         if (pauseContainers.get() && bridge().currentScreen() != null || bridge().usingItem(bridge().player())) {
             return;
         }
-        attacks += EpsilonSupport.randomInt(minCps.asInt(), maxCps.asInt()) / 20.0;
-        if (attacks < 1.0) {
-            return;
-        }
         TargetManager.Options options = EpsilonSupport.targets(range.get(), player.get(),
                 mob.get() || animal.get() || villager.get() || ambient.get() || water.get() || others.get(),
                 invisible.get(), TargetManager.Sort.DISTANCE);
         options.maxAngle = fov.get();
         List<TargetManager.Target> targets = client().targets().list(client(), options);
-        while (attacks >= 1.0 && !targets.isEmpty()) {
-            for (TargetManager.Target target : targets) {
-                actions().attack(target.entity());
+        double gain = EpsilonSupport.randomInt(minCps.asInt(), maxCps.asInt()) / 20.0;
+        // 配额：有目标才累积且封顶 1；没目标立即清零。旧实现无上限累积，空场地挂机 60s 后
+        // 一进圈 while 循环会一次性打出几十次攻击（瞬间爆发，服务端直接判定异常）。
+        attacks = quotaAfterTick(attacks, gain, !targets.isEmpty());
+        if (!canConsume(attacks)) {
+            return;
+        }
+        boolean hit = false;
+        for (TargetManager.Target target : targets) {
+            if (actions().attack(target.entity())) {
+                hit = true;
             }
-            attacks -= 1.0;
         }
-        if (!targets.isEmpty()) {
-            actions().swing(false, !swingHand.get());
+        if (!hit) {
+            // 全部被 HitSelect/其它订阅者取消：本 tick 不扣配额，下一次再尝试。
+            return;
         }
+        attacks -= 1.0;   // 每 tick 最多消费 1 份配额
+        if (swingHand.get()) {
+            actions().swing(false, false);
+        }
+    }
+
+    /**
+     * 单 tick 配额演化：无目标归零，有目标封顶 {@code 1.0}（每 tick 最多一次）。
+     *
+     * <p>包级可见以便单测直接验证“空目标 60s 后不爆发”。
+     */
+    static double quotaAfterTick(double current, double gain, boolean hasTargets) {
+        if (!hasTargets) {
+            return 0.0;
+        }
+        return Math.min(1.0, Math.max(0.0, current + gain));
+    }
+
+    /** 配额是否足够消费一次攻击。 */
+    static boolean canConsume(double quota) {
+        return quota >= 1.0;
     }
 }

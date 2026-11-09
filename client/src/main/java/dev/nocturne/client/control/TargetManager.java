@@ -14,8 +14,9 @@ import java.util.List;
  * 共享目标选择器：AimAssist / KillAura / 后续状态机只描述“要什么”，筛选与排序集中在这里。
  *
  * <p>目标来自当前世界的实体渲染列表；只把真实存在的活体实体交出去。距离与视野都按玩家
- * 眼睛到实体脚部中心计算，不做穿墙射线检测——需要可见性过滤的模块必须自己再判定，不能
- * 把“在视野角度内”误当成“能看见”。
+ * 眼睛到实体脚部中心计算。好友过滤是内建且不可关闭的：打架误伤好友比“少一个目标”代价大得多；
+ * 视线过滤默认开启（{@link Options#lineOfSight}），模块不再各自调 hasLineOfSight/好友表。
+ * AntiBot 只对玩家目标求值——NPC 判定对动物/怪物没有意义，还会误杀合法刷怪目标。
  */
 public final class TargetManager {
 
@@ -36,6 +37,8 @@ public final class TargetManager {
         public boolean players = true;
         public boolean mobs = false;
         public boolean invisibles = false;
+        /** 是否要求与服务端一致的视线（{@code LivingEntity#hasLineOfSight}）；默认开。 */
+        public boolean lineOfSight = true;
         public Sort sort = Sort.ANGLE;
     }
 
@@ -161,15 +164,23 @@ public final class TargetManager {
                 || !bridge.isInstance(entity, ClassType.LIVING_ENTITY)) {
             return;
         }
-        if (!dev.nocturne.client.module.modules.misc.TargetFilterModule.validTarget(bridge, player, entity)
-                || dev.nocturne.client.module.modules.combat.AntiBotModule.isBot(bridge, entity)) {
-            return;
-        }
         boolean isPlayer = bridge.isInstance(entity, ClassType.PLAYER);
         if (isPlayer && !options.players) {
             return;
         }
         if (!isPlayer && !options.mobs) {
+            return;
+        }
+        if (!dev.nocturne.client.module.modules.misc.TargetFilterModule.validTarget(bridge, player, entity)) {
+            return;
+        }
+        // 好友与 NPC 判定只对玩家生效：友方玩家永不做目标；AntiBot 的 Tab/名字/属性规则套在
+        // 动物或怪物上会误杀合法目标。两者集中在这里，aura 模块不再各自过滤。
+        if (isPlayer && (Friends.isFriend(bridge, entity)
+                || dev.nocturne.client.module.modules.combat.AntiBotModule.isBot(bridge, entity))) {
+            return;
+        }
+        if (options.lineOfSight && !lineOfSight(bridge, player, entity)) {
             return;
         }
         Object healthValue = bridge.callMapped(entity, ClassType.LIVING_ENTITY, "getHealth");
@@ -202,6 +213,17 @@ public final class TargetManager {
         }
         out.add(new Target(entity, position[0], position[1], position[2],
                 distance, angle, health));
+    }
+
+    /**
+     * 视线判定；映射缺失时按“可见”处理。
+     *
+     * <p>用 `callMapped` 而不是 {@code bridge.hasLineOfSight} 是为了区分“明确不可见”(false) 与
+     * “该版本读不到”(null)——把读不到当成不可见会让整个目标系统在缺成员的版本上静默无目标。
+     */
+    private static boolean lineOfSight(GameBridge bridge, Object player, Object entity) {
+        Object visible = bridge.callMapped(player, ClassType.LIVING_ENTITY, "hasLineOfSight", entity);
+        return !Boolean.FALSE.equals(visible);
     }
 
     /** 读取实体脚部坐标；任一轴缺失时返回 {@code null}。 */

@@ -43,6 +43,7 @@ public final class AutoMaceModule extends GameModule {
         if (target == null) {
             return;
         }
+        boolean aligned = true;
         if (aim.get()) {
             double[] from = bridge.entityPosition(bridge.player());
             if (from == null) {
@@ -51,10 +52,12 @@ public final class AutoMaceModule extends GameModule {
             double dx = target.x() - from[0];
             double dz = target.z() - from[2];
             float yaw = RotationController.yawTo(dx, dz);
-            client().rotations().request(yaw, RotationController.pitchTo(
+            boolean accepted = client().rotations().request(yaw, RotationController.pitchTo(
                     Math.sqrt(dx * dx + dz * dz), target.aimY() - from[1] - 1.62), 5, 150_000_000L);
+            // 请求被高优先级抢占、或尚未收敛到目标角时不能攻击：那一击用的仍是旧朝向。
+            aligned = accepted && client().rotations().isAimedAt(yaw, 4.0f);
         }
-        if (attack.get() && state().attackStrengthScale() >= 1.0f && equipMace()) {
+        if (attack.get() && aligned && state().attackStrengthScale() >= 1.0f && equipMace()) {
             actions().attack(target.entity());
         }
     }

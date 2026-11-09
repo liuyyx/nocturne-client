@@ -86,7 +86,11 @@ public final class KillAuraModule extends GameModule implements WorldOverlay {
     private final NumberValue fireflyShaking = number("Shaking", 1.8, 0, 10, 0.1);
     private final NumberValue fireflyAmplitude = number("Amplitude", 3, 0, 10, 0.1);
     private final List<ParticleOverlay.Particle> fireflies = new ArrayList<ParticleOverlay.Particle>();
+    /** 攻击门允许的最大角度误差：未收敛到这个区间时不发攻击。 */
+    private static final float ATTACK_ALIGNMENT_DEGREES = 4.0f;
     private TargetManager.Target target;
+    /** 本 tick 请求的 yaw（与旋转仲裁器比较，判断是否已对准目标）。 */
+    private float aimYaw = Float.NaN;
     private long lastSwitch;
     private long nextAttack;
     private float yawVelocity;
@@ -112,12 +116,18 @@ public final class KillAuraModule extends GameModule implements WorldOverlay {
                 invisible.get(), sort());
         options.maxAngle = fov.get();
         List<TargetManager.Target> targets = client().targets().list(client(), options);
-        if (target == null || !containsEntity(targets, target) || targetMode.is("Switch")
-                && System.currentTimeMillis() - lastSwitch >= switchDelay.asInt()) {
+        long now = System.currentTimeMillis();
+        // 目标快照每 tick 重建：旧 Target 里的坐标/距离是上一次查询的副本，实体移动后继续用
+        // 会让 aim 对着残影、攻击距离判定也滞后。Switch 模式只额外保留“换目标节流”。
+        TargetManager.Target fresh = find(targets, target);
+        if (targetMode.is("Switch") && (fresh == null || now - lastSwitch >= switchDelay.asInt())) {
             target = targets.isEmpty() ? null : targets.get(0);
-            lastSwitch = System.currentTimeMillis();
+            lastSwitch = now;
+        } else {
+            target = fresh;
         }
         if (target == null) {
+            aimYaw = Float.NaN;
             fireflies.clear();
             return;
         }
@@ -136,6 +146,7 @@ public final class KillAuraModule extends GameModule implements WorldOverlay {
         float targetYaw = dev.nocturne.client.control.RotationController.yawTo(dx, dz);
         float targetPitch = dev.nocturne.client.control.RotationController.pitchTo(horizontal,
                 current.aimY() - state().y() - 1.62);
+        aimYaw = targetYaw;
         float yawStep = rotationSpeed.asFloat();
         float pitchStep = rotationSpeed.asFloat();
         if (aimMode.is("Polar")) {
@@ -170,6 +181,11 @@ public final class KillAuraModule extends GameModule implements WorldOverlay {
                 && state().attackStrengthScale() < 1.0f) {
             return;
         }
+        // 角度收敛门：旋转请求被更高优先级抢走、或尚未转到目标角时不要攻击——否则命中判定
+        // 用的是旧朝向，服务端会按“没对准”处理（表现为打不中/回弹）。
+        if (!client().rotations().isAimedAt(aimYaw, ATTACK_ALIGNMENT_DEGREES)) {
+            return;
+        }
         if (actions().attack(current.entity())) {
             actions().swing(false, !swingHand.get());
             double min = aimMode.is("Polar") ? polarClickMin.get() : cps.get();
@@ -184,13 +200,18 @@ public final class KillAuraModule extends GameModule implements WorldOverlay {
         }
     }
 
-    private static boolean containsEntity(List<TargetManager.Target> targets, TargetManager.Target target) {
+    /** 在最新候选列表里找回同一实体的新快照；目标离开候选时返回 null。 */
+    private static TargetManager.Target find(List<TargetManager.Target> targets,
+                                             TargetManager.Target target) {
+        if (target == null) {
+            return null;
+        }
         for (TargetManager.Target candidate : targets) {
             if (candidate.entity() == target.entity()) {
-                return true;
+                return candidate;
             }
         }
-        return false;
+        return null;
     }
 
     private TargetManager.Sort sort() {
@@ -256,6 +277,7 @@ public final class KillAuraModule extends GameModule implements WorldOverlay {
 
     private void clear() {
         target = null;
+        aimYaw = Float.NaN;
         fireflies.clear();
         yawVelocity = 0.0f;
         pitchVelocity = 0.0f;

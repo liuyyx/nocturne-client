@@ -21,8 +21,11 @@ public final class SilentAuraClickerModule extends GameModule {
         if (nextAttack != 0L && now < nextAttack) {
             return;
         }
-        aura.attackTick();
-        nextAttack = now + aura.attackDelayNanos();
+        // 只有真正打出攻击才推进节拍：未对准或被取消时下一 tick 继续尝试，
+        // 否则会出现“时间到了但没打中、还要再等一个完整间隔”的空窗。
+        if (aura.attackTick()) {
+            nextAttack = now + aura.attackDelayNanos();
+        }
     }
 
     @Override

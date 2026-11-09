@@ -1,5 +1,6 @@
 package dev.nocturne.client.module.modules.combat;
 
+import dev.nocturne.client.control.RotationController;
 import dev.nocturne.client.control.TargetManager;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
@@ -10,6 +11,8 @@ import dev.nocturne.client.value.NumberValue;
 
 /** Mace Aura：Normal/Mace、分段 VClip、Paper 包、冷却与目标过滤。 */
 public final class MaceAuraModule extends GameModule {
+    /** 攻击前允许的 yaw 误差。 */
+    private static final float ATTACK_ALIGNMENT_DEGREES = 4.0f;
     private final ModeValue mode = add(new ModeValue("Mode", "Mace", "Normal", "Mace"));
     private final NumberValue range = add(new NumberValue("Range", 3, 1, 6, 0.1));
     private final NumberValue moveDistance = add(new NumberValue("Move Distance", 8, 1, 20, 0.5));
@@ -55,7 +58,15 @@ public final class MaceAuraModule extends GameModule {
         double height = damageVClip.get() ? overrideVClip.get() : vClip.get();
         actions().sendPositionRotation(state().x(), state().y() + Math.min(moveDistance.get(), height),
                 state().z(), state().yaw(), state().pitch(), false);
-        EpsilonSupport.aim(bridge(), state(), target.x(), target.aimY(), target.z(), 180, 8);
+        float targetYaw = RotationController.yawTo(target.x() - state().x(), target.z() - state().z());
+        boolean accepted = EpsilonSupport.aim(bridge(), state(), target.x(), target.aimY(),
+                target.z(), 180, 8);
+        if (!accepted || !client().rotations().isAimedAt(targetYaw, ATTACK_ALIGNMENT_DEGREES)) {
+            // 旋转请求被更高优先级抢占（或 action 面不可用）：本次不攻击，先把位置包还原。
+            actions().sendPositionRotation(state().x(), state().y(), state().z(),
+                    state().yaw(), state().pitch(), state().onGround());
+            return;
+        }
         if (actions().attack(target.entity())) {
             actions().swing(false, !swingHand.get());
             nextAttack = System.currentTimeMillis() + attackDelay.asInt();

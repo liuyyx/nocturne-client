@@ -11,6 +11,8 @@ import dev.nocturne.client.value.NumberValue;
 
 /** 只向服务器提交瞄准朝向，再由配套 clicker 执行攻击。 */
 public final class SilentAuraModule extends GameModule {
+    /** 攻击前允许的 yaw 误差。 */
+    private static final float ATTACK_ALIGNMENT_DEGREES = 4.0f;
     private final NumberValue aimSpeed = add(new NumberValue("Aim speed", 7, 1, 10, 0.1));
     private final NumberValue attacksPerSecond = add(new NumberValue("Attacks per Second", 6, 1, 20, 0.5));
     private final NumberValue extraDistance = add(new NumberValue("Extra swing distance", 1, 0, 3, 0.1));
@@ -78,16 +80,29 @@ public final class SilentAuraModule extends GameModule {
         }
     }
 
-    void attackTick() {
+    /**
+     * 尝试一次攻击。
+     *
+     * @return 是否真的打出去了；未对准/未收敛/被 HitSelect 取消时返回 false，
+     *         调用方据此决定是否推进节拍（不能把 canceled 当成 successful）
+     */
+    boolean attackTick() {
         if (target == null || !isEnabled()) {
-            return;
+            return false;
         }
         ActionApi actions = actions();
-        if (actions == null || limitItems.get()
+        if (actions == null || !aimed || limitItems.get()
                 && !bridge().itemMatches(bridge().heldItem(state().player(), false), allowedItems.get())) {
-            return;
+            return false;
         }
-        actions.attack(target.entity());
+        // 攻击门：本模块自己平滑 yaw，未收敛到目标角（或目标已离开）时不发攻击。
+        double dx = target.x() - state().x();
+        double dz = target.z() - state().z();
+        float targetYaw = RotationController.yawTo(dx, dz);
+        if (Math.abs(RotationController.wrap(targetYaw - yaw)) > ATTACK_ALIGNMENT_DEGREES) {
+            return false;
+        }
+        return actions.attack(target.entity());
     }
 
     long attackDelayNanos() {

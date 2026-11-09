@@ -69,6 +69,8 @@ public final class GameBridge {
     private volatile boolean chunkReloadWarned;
     /** 人称写入失败是否已告警（26.x 之前 Options 没有可写的人称字段）。 */
     private volatile boolean perspectiveWarned;
+    /** 计时倍率字段全部缺失只提示一次（避免每帧刷屏）。 */
+    private volatile boolean timerSpeedWarned;
     /** 计分板槽位解析失败是否已告警；HUD 每个刷新周期都会重试。 */
     private volatile boolean scoreboardSlotWarned;
     /** 本地 HUD 播报不可用是否已告警（只在首次失败时打印）。 */
@@ -759,10 +761,51 @@ public final class GameBridge {
         return written;
     }
 
-    /** 旧版 Timer 的倍率字段；现代字段不存在时由 ASM delta 钩子接管。 */
+    /**
+     * 写计时倍率，按版本回退到真实字段。
+     *
+     * <p>各版本形状：
+     * <ul>
+     *   <li>1.8.9：{@code Timer.timerSpeed}（倍率本身）；</li>
+     *   <li>1.12.2：{@code Timer.tickLength = 50 / speed}；</li>
+     *   <li>1.16.5 / 1.20.1：{@code Minecraft.timer} 上的 {@code msPerTick = 50 / speed}；</li>
+     *   <li>1.21+：{@code Minecraft.timer} 是 {@code DeltaTracker$Timer}，同一字段 {@code msPerTick}。</li>
+     * </ul>
+     *
+     * <p>字段名/类名全部经映射表翻译；全部落空时返回 false 并只提示一次，调用方必须据此降级。
+     *
+     * @param speed 倍率（1.0 = 原速）
+     * @return 是否真的写入了某个可影响游戏速度的字段
+     */
     public boolean setTimerSpeed(float speed) {
-        Object tracker = readField(minecraft(), ClassType.MINECRAFT, "deltaTracker");
-        return writeField(tracker, ClassType.DELTA_TRACKER, "timerSpeed", speed);
+        if (!(speed > 0.0f) || Float.isInfinite(speed)) {
+            return false;
+        }
+        Object minecraft = minecraft();
+        // 1.8.9–1.12.2 的字段叫 deltaTracker，1.16.5+ 叫 timer；两者按能力回退。
+        Object timer = readField(minecraft, ClassType.MINECRAFT, "timer");
+        if (timer == null) {
+            timer = readField(minecraft, ClassType.MINECRAFT, "deltaTracker");
+        }
+        if (timer != null) {
+            if (writeField(timer, ClassType.DELTA_TRACKER, "timerSpeed", Float.valueOf(speed))) {
+                return true;
+            }
+            float perTick = 50.0f / speed;
+            if (writeField(timer, ClassType.DELTA_TIMER, "tickLength", Float.valueOf(perTick))) {
+                return true;
+            }
+            if (writeField(timer, ClassType.DELTA_TIMER, "msPerTick", Float.valueOf(perTick))) {
+                return true;
+            }
+        }
+        if (!timerSpeedWarned) {
+            timerSpeedWarned = true;
+            System.out.println("[nocturne] GameBridge: timer speed unavailable on this version"
+                    + " (timer/deltaTracker has no writable timerSpeed/tickLength/msPerTick;"
+                    + " mapping=" + mapping.describe() + ")");
+        }
+        return false;
     }
 
     /** 直接把移动意图写入 Input/ClientInput；用于 GUI 打开时的 InvWalk。 */

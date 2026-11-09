@@ -324,6 +324,11 @@
                 }
             }
         },
+        "net/minecraft/client/DeltaTracker$Timer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "dlu",

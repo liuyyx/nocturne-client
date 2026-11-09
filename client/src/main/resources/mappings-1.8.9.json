@@ -84,6 +84,24 @@
                 }
             }
         },
+        "net/minecraft/client/DeltaTracker$Timer": {
+            "names": {
+                "vanilla": "avl",
+                "fabric": "net.minecraft.class_317",
+                "forge": "net.minecraft.util.Timer"
+            },
+            "methods": {},
+            "fields": {
+                "msPerTick": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "tickLength": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                }
+            }
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "avb",

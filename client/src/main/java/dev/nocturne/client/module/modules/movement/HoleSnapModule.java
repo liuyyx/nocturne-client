@@ -42,6 +42,8 @@ public final class HoleSnapModule extends GameModule implements WorldOverlay {
     private int rubberbands;
     private int jumpTicks;
     private int boostLeft;
+    /** 计时倍率写入失败只提示一次。 */
+    private boolean timerWarned;
 
     public HoleSnapModule() {
         super("Hole Snap", Category.MOVEMENT);
@@ -68,7 +70,7 @@ public final class HoleSnapModule extends GameModule implements WorldOverlay {
         if (target == null) {
             return;
         }
-        bridge().setTimerSpeed(timer.asFloat());
+        applyTimer(timer.asFloat());
         double dx = target[0] - state().x();
         double dy = target[1] - state().y();
         double dz = target[2] - state().z();
@@ -153,6 +155,18 @@ public final class HoleSnapModule extends GameModule implements WorldOverlay {
         boolean doubleZ = shape >= 2 && holeCell(x, y, z + 1);
         return new double[]{x + 0.5 + (doubleX ? 0.5 : 0.0), y,
                 z + 0.5 + (doubleZ ? 0.5 : 0.0)};
+    }
+
+    /** 一次性提示计时倍率写入失败（该版本没有可写字段时不能假装已调速）。 */
+    private void applyTimer(float speed) {
+        if (bridge() != null && bridge().setTimerSpeed(speed)) {
+            return;
+        }
+        if (!timerWarned) {
+            timerWarned = true;
+            System.out.println("[nocturne] Hole Snap: 该版本没有可写的计时倍率字段，"
+                    + "Timer 设置不会生效");
+        }
     }
 
     private boolean holeCell(int x, int y, int z) {

@@ -85,6 +85,11 @@
                 }
             }
         },
+        "net/minecraft/client/DeltaTracker$Timer": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "bca",

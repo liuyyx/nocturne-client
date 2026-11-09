@@ -24,18 +24,15 @@ public final class TimerModule extends GameModule {
         super("Timer", Category.MOVEMENT);
     }
 
-    /** 钩子不可用时标记一次：开关照常显示，但 onTick 不再假装改速度。 */
-    private boolean unavailable;
+    /** 钩子是否可用（null=尚未判定，模块可能在 bridge 就绪前启动）。 */
+    private Boolean available;
+    /** 不可用原因只提示一次。 */
+    private boolean unavailableLogged;
 
     @Override
     protected void onStart() {
-        unavailable = !dev.nocturne.client.bootstrap.GameplayHook.isWired("timer");
-        if (unavailable) {
-            String reason = dev.nocturne.client.bootstrap.GameplayHook.unavailableReason("timer");
-            System.out.println("[nocturne] Timer: 该版本没有可用的计时倍率入口"
-                    + (reason == null ? "" : "（" + reason + "）")
-                    + "，模块切换不会改变游戏速度");
-        }
+        available = null;
+        unavailableLogged = false;
         listen(KeyEvent.class, event -> {
             if (event.keyCode == activate.get()) {
                 held = event.pressed;
@@ -53,9 +50,40 @@ public final class TimerModule extends GameModule {
         });
     }
 
+    /**
+     * 可用性 = ASM delta 钩子已接线 || {@link dev.nocturne.client.game.GameBridge#setTimerSpeed}
+     * 试写成功。1.8.9 没有 timer 钩子但 Timer.timerSpeed 可写，必须走字段路径工作。
+     *
+     * <p>bridge 尚未就绪时返回 false 但**不缓存**，等 bridge 就绪后再判定。
+     */
+    private boolean available() {
+        Boolean cached = available;
+        if (cached != null) {
+            return cached.booleanValue();
+        }
+        if (dev.nocturne.client.bootstrap.GameplayHook.isWired("timer")) {
+            available = Boolean.TRUE;
+            return true;
+        }
+        if (bridge() == null) {
+            return false;
+        }
+        // 试写中性值 1.0：失败说明该版本没有可影响速度的字段，模块必须显式降级。
+        boolean written = bridge().setTimerSpeed(1.0f);
+        available = Boolean.valueOf(written);
+        if (!written && !unavailableLogged) {
+            unavailableLogged = true;
+            String reason = dev.nocturne.client.bootstrap.GameplayHook.unavailableReason("timer");
+            System.out.println("[nocturne] Timer: 该版本既没有 timer 钩子，也没有可写的计时倍率字段"
+                    + (reason == null ? "" : "（" + reason + "）")
+                    + "，模块切换不会改变游戏速度");
+        }
+        return written;
+    }
+
     @Override
     public void onTick() {
-        if (unavailable) {
+        if (!available()) {
             return;
         }
         if (mode.is("Always")) {
@@ -73,8 +101,14 @@ public final class TimerModule extends GameModule {
             }
             currentSpeed = balance >= 1.0f ? multiplier.asFloat() : 0.96f;
         }
-        if (bridge() != null) {
-            bridge().setTimerSpeed(currentSpeed);
+        if (bridge() != null && !bridge().setTimerSpeed(currentSpeed)) {
+            // 运行期写入失败（版本/加载器差异）：立即降级，不继续每 tick 假装改速度。
+            available = Boolean.FALSE;
+            if (!unavailableLogged) {
+                unavailableLogged = true;
+                System.out.println("[nocturne] Timer: 计时倍率写入失败，已停用（mapping="
+                        + bridge().mapping().describe() + "）");
+            }
         }
     }
 

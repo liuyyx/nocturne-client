@@ -754,6 +754,11 @@ timerSpeed = { mcp = "timerSpeed", scope = "net/minecraft/util/Timer" }
 mcp = "renderPartialTicks"
 scope = "net/minecraft/util/Timer"
 
+# 1.12.2 的计时倍率字段改名为 tickLength（1.8.9 是 timerSpeed；1.13+ 是 msPerTick）。
+[fields.tickLength]
+mcp = "tickLength"
+scope = "net/minecraft/util/Timer"
+
 # 有效 FOV：旧版游戏渲染器（EntityRenderer）上的方法名。
 [methods.getFOVModifier]
 mcp = "getFOVModifier"
@@ -762,6 +767,11 @@ scope = "net/minecraft/client/renderer/EntityRenderer"
 # 世界空间 3D 渲染钩子：世界画完、HUD 之前的返回点（MCP 名 renderWorld）。
 [methods.renderWorld]
 mcp = "renderWorld"
+scope = "net/minecraft/client/renderer/EntityRenderer"
+
+# 游戏真实远平面：1.8.9/1.12.2 的 EntityRenderer 字段。
+[fields.farPlaneDistance]
+mcp = "farPlaneDistance"
 scope = "net/minecraft/client/renderer/EntityRenderer"
 
 [overrides."net/minecraft/client/multiplayer/PlayerInfo"]

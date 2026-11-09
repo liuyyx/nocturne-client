@@ -304,6 +304,11 @@ public enum ClassType {
     PERSPECTIVE("net.minecraft.client.CameraType"),
     /** 帧/ tick 插值计时器。 */
     DELTA_TRACKER("net.minecraft.client.DeltaTracker"),
+    /**
+     * 1.21+ 的计时器实现（{@code DeltaTracker$Timer}）；1.16.5–1.20.1 没有内部类，
+     * 映射表通过类别名回退到 {@code net.minecraft.client.Timer}。
+     */
+    DELTA_TIMER("net.minecraft.client.DeltaTracker$Timer"),
     /** 游戏渲染器与相机宿主。 */
     GAME_RENDERER("net.minecraft.client.renderer.GameRenderer"),
     CAMERA("net.minecraft.client.Camera"),

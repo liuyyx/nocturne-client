@@ -17,6 +17,10 @@ public final class FakeMinecraft {
     public Object gui;
     /** {@code Minecraft.level} 对应字段 */
     public Object level;
+    /** {@code Minecraft.timer} 对应字段（1.16.5+ 的计时器）。 */
+    public Object timer;
+    /** {@code Minecraft.deltaTracker} 对应字段（1.8.9–1.12.2 的计时器）。 */
+    public Object deltaTracker;
 
     private FakeMinecraft() {
     }

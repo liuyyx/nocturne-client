@@ -419,6 +419,16 @@
                 }
             }
         },
+        "net/minecraft/client/DeltaTracker$Timer": {
+            "names": {
+                "vanilla": "net.minecraft.client.DeltaTracker$Timer",
+                "fabric": "net.minecraft.client.DeltaTracker$Timer",
+                "forge": "net.minecraft.client.DeltaTracker$Timer",
+                "neoforge": "net.minecraft.client.DeltaTracker$Timer"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "net.minecraft.client.KeyMapping",

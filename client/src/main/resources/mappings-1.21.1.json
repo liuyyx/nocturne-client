@@ -411,6 +411,35 @@
                 }
             }
         },
+        "net/minecraft/client/DeltaTracker$Timer": {
+            "names": {
+                "vanilla": "fgf$b",
+                "fabric": "net.minecraft.class_9779$class_9781",
+                "forge": "net.minecraft.client.DeltaTracker$Timer",
+                "neoforge": "net.minecraft.client.DeltaTracker$Timer"
+            },
+            "methods": {},
+            "fields": {
+                "msPerTick": {
+                    "names": {
+                        "vanilla": "i",
+                        "fabric": "field_51964",
+                        "forge": "f_336794_",
+                        "neoforge": "msPerTick"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "tickLength": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "fgm",

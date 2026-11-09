@@ -372,6 +372,10 @@ public final class NocturneAgent {
                         "dev/nocturne/client/bootstrap/GameplayHook.class"},
                 {"nocturne-bootstrap/GameplayHook$Sink.class",
                         "dev/nocturne/client/bootstrap/GameplayHook$Sink.class"},
+                // CHAMS 栈的匿名 ThreadLocal 子类：GameplayHook.<clinit> 会加载它，缺一份就是
+                // NoClassDefFoundError（真机 1.8.9 实测 client initialisation failed）。
+                {"nocturne-bootstrap/GameplayHook$1.class",
+                        "dev/nocturne/client/bootstrap/GameplayHook$1.class"},
         };
         java.nio.file.Path jar;
         try {
@@ -1184,9 +1188,19 @@ public final class NocturneAgent {
     private static final String GAMEPLAY_HOOK_OWNER = "dev/nocturne/client/bootstrap/GameplayHook";
 
     /** 注册结果：失败 / 已挂转换器等类加载 / 已对当前已加载类完成改写。 */
-    private static final int HOOK_FAILED = 0;
-    private static final int HOOK_REGISTERED = 1;
-    private static final int HOOK_WOVEN = 2;
+    static final int HOOK_FAILED = 0;
+    static final int HOOK_REGISTERED = 1;
+    static final int HOOK_WOVEN = 2;
+
+    /**
+     * 注册结果是否算「已接线」。
+     *
+     * <p>premain 阶段目标类通常尚未加载，转换器只是挂在注入链上（{@link #HOOK_REGISTERED}）；
+     * 这正是常态，必须算作已接线。只有 {@link #HOOK_FAILED}（已加载却改不动）才是不可用。
+     */
+    static boolean hookWired(int state) {
+        return state >= HOOK_REGISTERED;
+    }
 
     /** {@code EntityRenderDispatcher#shouldRender(Entity, Frustum, double, double, double)Z} 规范签名。 */
     private static final String SHOULD_RENDER_DESCRIPTOR =
@@ -1443,14 +1457,38 @@ public final class NocturneAgent {
         }
     }
 
-    /** 现代 DeltaTracker 的 tick 增量在返回点缩放，旧版 Timer 走 timerSpeed 字段。 */
+    /**
+     * 现代 DeltaTracker 是否是接口（1.21+）。
+     *
+     * <p>判据用映射表语义而不是类名：这些版本同时存在 {@code getGameTimeDeltaTicks} 与
+     * {@code getGameTimeDeltaPartialTick}，而 1.16.5/1.20.1 的两个方法在表里都是 absent。
+     * 接口方法没有方法体，织入只会得到「注册成功、永不生效」的假 woven。
+     */
+    static boolean timerHookTargetsInterface(dev.nocturne.client.mapping.Mapping mapping) {
+        dev.nocturne.client.mapping.ClassType owner =
+                dev.nocturne.client.mapping.ClassType.DELTA_TRACKER;
+        return !mapping.isMemberAbsent(owner, "getGameTimeDeltaTicks")
+                && !mapping.isMemberAbsent(owner, "getGameTimeDeltaPartialTick");
+    }
+
+    /** 现代 DeltaTracker 的 tick 增量在返回点缩放，旧版 Timer 走字段（见 GameBridge.setTimerSpeed）。 */
     private static void registerTimerHooks(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader) {
         dev.nocturne.client.mapping.ClassType owner = dev.nocturne.client.mapping.ClassType.DELTA_TRACKER;
         dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        // 1.21+ 的 DeltaTracker 是接口：getGameTimeDeltaTicks 在接口上没有方法体，
+        // 织入它只会得到"注册成功、永不生效"的假 woven。真正可用的是实现类的 msPerTick 字段，
+        // 由 GameBridge.setTimerSpeed 负责；这里显式登记 hook 不可用。
+        if (timerHookTargetsInterface(mapping)) {
+            publishHookState("timer", false,
+                    "DeltaTracker is an interface on this version; timer speed uses Timer.msPerTick");
+            log("timer delta hook unavailable: " + owner.canonicalName()
+                    + " is an interface; timer speed falls back to Timer.msPerTick");
+            return;
+        }
         java.util.Set<String> classNames = new java.util.LinkedHashSet<String>(
                 mapping.classNameCandidates(owner));
         classNames.add(owner.canonicalName());
-        boolean patched = false;
+        boolean wired = false;
         for (String className : classNames) {
             for (dev.nocturne.client.mapping.MethodCandidate candidate
                     : mapping.methodCandidates(owner, "getGameTimeDeltaTicks")) {
@@ -1471,14 +1509,14 @@ public final class NocturneAgent {
                 }
                 ClassFileTransformer transformer = asmLoader.createFloatReturnTransformer(
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "timerScale");
-                patched |= registerGameplayTransformer(instrumentation, transformer, className,
-                        candidate.name(), descriptor, "timerScale");
+                // 类未加载时只是挂上转换器（HOOK_REGISTERED），必须算作已接线；只有
+                // HOOK_FAILED（目标已加载却改不动）才是不可用。旧实现把等待织入的常态误判成失败。
+                wired |= hookWired(registerGameplayTransformerState(instrumentation, transformer,
+                        className, candidate.name(), descriptor, "timerScale"));
             }
         }
-        if (!patched) {
-            // 26.x 的 DeltaTracker 接口没有 timerSpeed；描述符缺失时显式标记不可用，
-            // 模块据此提示"本版本不支持"，而不是开关亮着却毫无效果。
-            publishHookState("timer", false, "DeltaTracker timer descriptor unavailable");
+        if (!wired) {
+            publishHookState("timer", false, "DeltaTracker timer hook has no usable method");
             log("timer delta hook unavailable: " + owner.canonicalName());
         } else {
             publishHookState("timer", true, null);

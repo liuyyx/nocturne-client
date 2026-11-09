@@ -98,8 +98,9 @@
 - 所有转换器按钩子类与方法做精确幂等检查；attackPost 在头部捕获 Player/Entity、所有 RETURN
   消费捕获，取消攻击不产生 post。真实 ASM 样本覆盖 StackMapTable、pre/post 链和重复 retransform。
 - Chams 接 `EntityRenderDispatcher` 首参回调；Xray 接 `BlockRenderDispatcher` 的
-  `BlockState + BlockPos` 双参门控并支持真实 Cave Mode；Timer 同时覆盖旧版 `timerSpeed` 与现代
-  `getGameTimeDeltaTicks` 返回缩放。新增转换器均通过 JVM verifier 行为测试。
+  `BlockState + BlockPos` 双参门控并支持真实 Cave Mode；Timer 按版本写真实字段
+  （1.8.9 `timerSpeed`、1.12.2 `tickLength`、1.16.5+ `msPerTick`），1.21+ 的 `DeltaTracker`
+  接口没有可织入方法体，能力表显式报不可用而不是假 woven。新增转换器均通过 JVM verifier 行为测试。
 - `GuiOverlay` 已提供真实文本/多行 HUD、ActiveModules、后端渲染状态与帧缓冲读取；
   InventoryBlur 使用 4× 降采样，MotionBlur 使用可配权重的历史帧混合。
 - 映射要求扩展至 161 个规范类；`python tools/mapping/generate.py --javap` 对 66/66 个真实 client jar

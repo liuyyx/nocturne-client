@@ -155,7 +155,8 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
     private long verifyAt;
     private long placedAt;
     private boolean inputJump;
-    private boolean slowTicks;
+    /** 计时倍率写回失败只提示一次（该版本没有可写字段）。 */
+    private boolean timerWarned;
 
     public ScaffoldModule() {
         super("Scaffold", Category.MOVEMENT);
@@ -203,10 +204,6 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
         }
         if (pendingRestore) {
             restore();
-        }
-        if (slowTicks) {
-            bridge.setTimerSpeed(0.5f);
-            slowTicks = false;
         }
         if (now < nextPlace) {
             return;
@@ -548,8 +545,10 @@ public final class ScaffoldModule extends GameModule implements WorldOverlay {
         restore();
         pendingVerify = null;
         GameBridge bridge = bridge();
-        if (bridge != null) {
-            bridge.setTimerSpeed(1.0f);
+        if (bridge != null && !bridge.setTimerSpeed(1.0f) && !timerWarned) {
+            timerWarned = true;
+            System.out.println("[nocturne] Scaffold: 该版本没有可写的计时倍率字段，"
+                    + "无法把速度还原为 1.0（若其它模块改过速度请手动关闭）");
         }
     }
 

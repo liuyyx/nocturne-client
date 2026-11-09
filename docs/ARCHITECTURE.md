@@ -105,8 +105,9 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
 - **包队列**：`PacketController` 提供双向 FIFO hold/release/clear、连接身份校验和时序敏感直发；
   释放经 ThreadLocal 直通上下文避免嵌套 send 重入，RECEIVE 走 Packet.handle(listener) 回原版处理链。
   世界切换与 panic 丢弃旧队列，不把积压包放进新连接。
-  `BlockRenderDispatcher` 的首双参门负责 XRay 的方块剔除，`DeltaTracker` 的 float 返回钩负责 Timer，
-  `GameRenderer` 门负责 NoFog/NoHurtCamera。
+  `BlockRenderDispatcher` 的首双参门负责 XRay 的方块剔除；Timer 按版本写真实字段
+  （1.8.9 `timerSpeed`、1.12.2 `tickLength=50/speed`、1.16.5+ `msPerTick=50/speed`），
+  1.21+ 的 `DeltaTracker` 是接口、钩子显式标为不可用而不是假 woven，`GameRenderer` 门负责 NoFog/NoHurtCamera。
 - **动作层**：`ActionApi` 提供攻击/点击、精确命中点放置、主副手使用与挥手、普通/静默换槽、
   容器点击/关闭、聊天/命令、raycast、速度/跳跃/疾跑、玩家命令包、移动包与 `readState`。
   `PlayerState` 额外携带当前槽、主副手数量、血量/吸收、攻击冷却和移动状态；单项缺失独立降级。

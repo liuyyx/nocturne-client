@@ -411,6 +411,16 @@
                 }
             }
         },
+        "net/minecraft/client/DeltaTracker$Timer": {
+            "names": {
+                "vanilla": "fla$b",
+                "fabric": "net.minecraft.class_9779$class_9781",
+                "forge": "net.minecraft.client.DeltaTracker$Timer",
+                "neoforge": "net.minecraft.client.DeltaTracker$Timer"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/client/KeyMapping": {
             "names": {
                 "vanilla": "fli",

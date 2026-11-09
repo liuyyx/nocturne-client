@@ -354,9 +354,30 @@
             }
         },
         "net/minecraft/client/DeltaTracker$Timer": {
-            "absent": true,
-            "names": {},
-            "absentReason": "verified"
+            "names": {
+                "vanilla": "eoa",
+                "fabric": "net.minecraft.class_317",
+                "forge": "net.minecraft.client.Timer"
+            },
+            "methods": {},
+            "fields": {
+                "msPerTick": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_1968",
+                        "forge": "f_92521_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "tickLength": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/client/KeyMapping": {
             "names": {

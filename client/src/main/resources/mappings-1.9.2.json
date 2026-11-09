@@ -86,9 +86,22 @@
             }
         },
         "net/minecraft/client/DeltaTracker$Timer": {
-            "absent": true,
-            "names": {},
-            "absentReason": "unverified"
+            "names": {
+                "vanilla": "bci",
+                "fabric": "net.minecraft.class_317",
+                "forge": "net.minecraft.util.Timer"
+            },
+            "methods": {},
+            "fields": {
+                "msPerTick": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "tickLength": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                }
+            }
         },
         "net/minecraft/client/KeyMapping": {
             "names": {

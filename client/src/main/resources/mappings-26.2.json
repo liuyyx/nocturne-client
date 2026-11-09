@@ -427,7 +427,26 @@
                 "neoforge": "net.minecraft.client.DeltaTracker$Timer"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "msPerTick": {
+                    "names": {
+                        "vanilla": "msPerTick",
+                        "fabric": "msPerTick",
+                        "forge": "msPerTick",
+                        "neoforge": "msPerTick"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "tickLength": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/client/KeyMapping": {
             "names": {

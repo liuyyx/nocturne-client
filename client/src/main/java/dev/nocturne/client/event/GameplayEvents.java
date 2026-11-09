@@ -4,6 +4,7 @@ import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.bootstrap.GameplayHook;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.input.KeyMap;
+import dev.nocturne.client.input.MouseButtons;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.runtime.InputBlock;
 
@@ -370,8 +371,10 @@ public final class GameplayEvents implements GameplayHook.Sink {
         GameBridge bridge = client.gameBridge();
         Object button = bridge == null ? null
                 : bridge.callMapped(raw, ClassType.MOUSE_BUTTON_INFO, "button");
+        // 26.3 的 onButton 来自 SDL：MouseButtonInfo 是 1=左/2=中/3=右，必须先归一成契约
+        // 0=左/1=右/2=中，否则右键模块会被左键触发（RightClicker 真机复现）。
         return !(button instanceof Number)
-                || postMouse(((Number) button).intValue(), action != 0);
+                || postMouse(MouseButtons.fromSdl(((Number) button).intValue()), action != 0);
     }
 
     @Override

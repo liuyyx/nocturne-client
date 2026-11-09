@@ -162,6 +162,48 @@ class GameplayEventsTest {
         assertTrue(post.get().post);
     }
 
+    /** SDL（26.3）的 MouseButtonInfo 1/2/3 必须归一为契约 0/1/2。 */
+    @Test
+    void sdlMouseButtonsAreNormalisedToTheContract() {
+        NocturneClient client = NocturneClient.boot(null);
+        client.setGameBridge(new GameBridge(null, new TestMapping(FakeMinecraft.class)));
+        AtomicReference<Integer> seen = new AtomicReference<Integer>();
+        client.events().subscribe(MouseButtonEvent.class, event -> seen.set(event.button));
+
+        assertTrue(GameplayHook.mouse(0L, new FakeMouseButtonInfo(1), 1));
+        assertEquals(0, seen.get().intValue(), "SDL left (1) must arrive as contract left (0)");
+
+        assertTrue(GameplayHook.mouse(0L, new FakeMouseButtonInfo(3), 1));
+        assertEquals(1, seen.get().intValue(), "SDL right (3) must arrive as contract right (1)");
+
+        assertTrue(GameplayHook.mouse(0L, new FakeMouseButtonInfo(2), 1));
+        assertEquals(2, seen.get().intValue(), "SDL middle (2) stays contract middle (2)");
+    }
+
+    /** GLFW 世代（onPress 的 int 按钮）本来就符合契约，不得再被归一。 */
+    @Test
+    void glfwMouseButtonsArePassedThroughUnchanged() {
+        NocturneClient client = NocturneClient.boot(null);
+        AtomicReference<Integer> seen = new AtomicReference<Integer>();
+        client.events().subscribe(MouseButtonEvent.class, event -> seen.set(event.button));
+
+        assertTrue(GameplayHook.mouse(0L, 1, 1, 0));
+        assertEquals(1, seen.get().intValue(), "GLFW right button (1) must stay 1");
+    }
+
+    /** 26.x {@code MouseButtonInfo} 的最小替身：只有 button()。 */
+    public static final class FakeMouseButtonInfo {
+        private final int button;
+
+        public FakeMouseButtonInfo(int button) {
+            this.button = button;
+        }
+
+        public int button() {
+            return button;
+        }
+    }
+
     private static final class FakeVector {
         private double x;
         private final double y;

@@ -154,6 +154,14 @@ class GameBridgeCompatibilityTest {
     }
 
     @Test
+    void legacyChatPacketIsConstructible() {
+        // 1.8.9 的 sendChat/sendCommand 回退：自己构造 C01PacketChatMessage(String)。
+        Object packet = bridge.construct(ClassType.SERVERBOUND_CHAT, "hello");
+        assertTrue(packet instanceof FakeChatPacket);
+        assertEquals("hello", ((FakeChatPacket) packet).message());
+    }
+
+    @Test
     void localMessageReportsFailureWhenNoEntryExists() {
         FakeMinecraft.instance.gui = new FakeGui();
         assertFalse(bridge.localMessage("hello"));

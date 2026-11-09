@@ -853,6 +853,9 @@ net/minecraft/client/DeltaTracker#partialTick
 # 发包构造器按形状反射；类名仍由每版本表翻译。
 net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket
 net/minecraft/network/protocol/game/ServerboundSwingPacket
+net/minecraft/network/protocol/game/ServerboundChatPacket
+net/minecraft/client/renderer/EntityRenderer#getFOVModifier(float,boolean)
+net/minecraft/world/entity/player/Player#getCooledAttackStrength(float)
 net/minecraft/network/protocol/game/ServerboundPunchPacket
 net/minecraft/network/protocol/game/ServerboundContainerClosePacket
 net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket

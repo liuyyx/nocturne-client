@@ -68,6 +68,9 @@ public final class TestMapping implements Mapping {
         if (type == ClassType.TEXT_COMPONENT) {
             return textComponentClass == null ? type.canonicalName() : textComponentClass.getName();
         }
+        if (type == ClassType.SERVERBOUND_CHAT) {
+            return FakeChatPacket.class.getName();
+        }
         if (type == ClassType.HUD_CHAT) {
             return hudChatClass == null ? type.canonicalName() : hudChatClass.getName();
         }

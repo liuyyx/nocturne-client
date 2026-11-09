@@ -1576,7 +1576,12 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "getFOVModifier(float,boolean)": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                }
+            }
         },
         "net/minecraft/client/renderer/GameRenderer": {
             "names": {
@@ -2103,6 +2108,15 @@
             "absent": true,
             "names": {},
             "absentReason": "unverified"
+        },
+        "net/minecraft/network/protocol/game/ServerboundChatPacket": {
+            "names": {
+                "vanilla": "ie",
+                "fabric": "net.minecraft.class_2797",
+                "forge": "net.minecraft.network.play.client.C01PacketChatMessage"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundContainerClickPacket": {
             "absent": true,
@@ -3802,6 +3816,10 @@
                     }
                 },
                 "fishing": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getCooledAttackStrength(float)": {
                     "absent": true,
                     "absentReason": "unverified"
                 },

@@ -237,9 +237,15 @@ final class BoundActionApi implements ActionApi {
         if (player != null && binder.invoke("legacyChat", player, text)) {
             return true;
         }
-        // 1.8.9 两条入口都缺映射：不静默失败，至少让用户知道播报/排队没发出去。
-        warnOnce("sendChat", "sendChat unavailable on this version (no ClientPacketListener"
-                + "#sendChat/sendChatMessage nor LocalPlayer#sendChatMessage entry)");
+        // 1.8.9–1.12：没有 sendChatMessage 也照样能发包——自己构造
+        // C01PacketChatMessage(String) 走真实发包入口（命令同样是一个 "/cmd" 文本包）。
+        Object packet = bridge.construct(ClassType.SERVERBOUND_CHAT, text);
+        if (packet != null && sendPacket(packet)) {
+            return true;
+        }
+        // 全部入口都不可用时明确报告一次（AutoQueue/AutoBan 依此判断是否真的发出去了）。
+        warnOnce("sendChat", "sendChat unavailable on this version (no sendChat/sendChatMessage,"
+                + " no LocalPlayer#sendChatMessage, no chat packet entry)");
         return false;
     }
 
@@ -258,8 +264,13 @@ final class BoundActionApi implements ActionApi {
         if (player != null && binder.invoke("legacyChat", player, "/" + normalized)) {
             return true;
         }
-        warnOnce("sendCommand", "sendCommand unavailable on this version (no ClientPacketListener"
-                + "#sendCommand nor LocalPlayer#sendChatMessage entry)");
+        // 1.8.9 没有独立命令包：命令就是一条以 '/' 开头的聊天包。
+        Object packet = bridge.construct(ClassType.SERVERBOUND_CHAT, "/" + normalized);
+        if (packet != null && sendPacket(packet)) {
+            return true;
+        }
+        warnOnce("sendCommand", "sendCommand unavailable on this version (no sendCommand nor"
+                + " LocalPlayer#sendChatMessage nor chat packet entry)");
         return false;
     }
 

@@ -260,6 +260,16 @@ public enum ClassType {
      * 才是本地播报入口，{@code Gui#getChat} 在这些版本是 verified absent。
      */
     HUD_CHAT("net.minecraft.client.gui.Hud"),
+    /**
+     * 服务端聊天包：1.8.9 是 {@code C01PacketChatMessage(String)}（命令也用同一个包发
+     * {@code /cmd} 文本）。有它才能在旧版把 sendChat/sendCommand 落到真实发包路径。
+     */
+    SERVERBOUND_CHAT("net.minecraft.network.protocol.game.ServerboundChatPacket"),
+    /**
+     * 1.8.9–1.12 的渲染器实体类（{@code EntityRenderer}）：FOV 修正
+     * {@code getFOVModifier(float, boolean)} 在这里；1.13+ 已并入 GameRenderer。
+     */
+    ENTITY_RENDERER("net.minecraft.client.renderer.EntityRenderer"),
     MUTABLE_COMPONENT("net.minecraft.network.chat.MutableComponent"),
     STYLE("net.minecraft.network.chat.Style"),
     /** 原版声音常量；报警和命中音效共享。 */

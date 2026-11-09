@@ -69,6 +69,9 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     /** 滚轮形参转换器：取指定的 double 形参（GLFW 世代 {@code MouseHandler#onScroll}）。 */
     private static final String SCROLL_TRANSFORMER_CLASS =
             "dev.nocturne.agent.transform.ScrollHookTransformer";
+    /** 世界空间 3D 钩子：在 void 方法的每个 RETURN 前传首个 float 形参。 */
+    private static final String WORLD_RENDER_TRANSFORMER_CLASS =
+            "dev.nocturne.agent.transform.WorldRenderHookTransformer";
     /** 钩子所在类内部名（斜杠形式）。 */
     // 必须指向 bootstrap 层的中立类：Forge 的模块化 classloader 看不到 agent jar，
     // 直接调 NocturneRuntime.onFrame 会 NoClassDefFoundError（1.20.1 Forge 实测）。
@@ -339,6 +342,34 @@ public final class EmbeddedAsmLoader extends ClassLoader {
         } catch (Throwable t) {
             log("could not create move hook transformer for " + targetInternalName + "." + method
                     + ": " + t + "; move hook disabled");
+            return null;
+        }
+    }
+
+    /**
+     * 创建世界空间 3D 钩子转换器：在目标 {@code void} 方法的每个 RETURN 之前，
+     * 把首个 {@code float} 形参传给钩子 {@code (F)V}。
+     *
+     * @param targetInternalName 目标类内部名
+     * @param method             目标方法名
+     * @param descriptor         目标方法描述符（返回类型必须为 {@code V}，且含 float 形参）
+     * @param hookOwner          钩子类内部名
+     * @param hookMethod         钩子方法名（描述符固定 {@code (F)V}）
+     * @return 转换器；内嵌 ASM 缺失或类加载失败时返回 {@code null}
+     */
+    public ClassFileTransformer createWorldRenderTransformer(String targetInternalName,
+                                                              String method, String descriptor,
+                                                              String hookOwner, String hookMethod) {
+        try {
+            Class<?> transformerClass = loadClass(WORLD_RENDER_TRANSFORMER_CLASS);
+            Constructor<?> constructor = transformerClass.getConstructor(
+                    String.class, String.class, String.class, String.class, String.class);
+            Object instance = constructor.newInstance(targetInternalName, method, descriptor,
+                    hookOwner, hookMethod);
+            return (ClassFileTransformer) instance;
+        } catch (Throwable t) {
+            log("could not create world render hook transformer for " + targetInternalName
+                    + "." + method + ": " + t + "; 3D world hook disabled");
             return null;
         }
     }

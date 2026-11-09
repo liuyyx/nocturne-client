@@ -223,6 +223,20 @@ public final class GlApi {
      */
     private Method clientActiveTextureMethod;
 
+    /** {@code glVertex3f}：世界空间 3D 顶点。核心 profile 下解析不到（保持 null）。 */
+    private Method vertex3f;
+    /** {@code glRotatef}：相机朝向。 */
+    private Method rotatef;
+    /** {@code glFrustum}：世界空间透视投影。 */
+    private Method frustum;
+    /** {@code glPushClientAttrib}/{@code glPopClientAttrib}：客户态数组的完整还原。 */
+    private Method pushClientAttrib;
+    private Method popClientAttrib;
+    /** {@code glDepthMask}：深度写入开关。 */
+    private Method depthMask;
+    /** {@code glTranslated}：大世界坐标用双精度平移（{@code glTranslatef} 在 30M 处误差到米级）。 */
+    private Method translated;
+
     /**
      * 关闭所有客户态数组（顶点/法线/颜色/纹理坐标）。
      *
@@ -657,6 +671,17 @@ public final class GlApi {
         bound.readPixelsArray = Reflect.method(gl, "glReadPixels", int.class, int.class, int.class,
                 int.class, int.class, int.class, int[].class);
         bound.isEnabledMethod = Reflect.method(gl, "glIsEnabled", int.class);
+        // 世界空间 3D 通道（固定管线）：核心 profile 下这些入口不存在，句柄为 null 时后端降级。
+        bound.vertex3f = Reflect.method(gl, "glVertex3f", float.class, float.class, float.class);
+        bound.rotatef = Reflect.method(gl, "glRotatef", float.class, float.class, float.class,
+                float.class);
+        bound.frustum = Reflect.method(gl, "glFrustum", double.class, double.class, double.class,
+                double.class, double.class, double.class);
+        bound.pushClientAttrib = Reflect.method(gl, "glPushClientAttrib", int.class);
+        bound.popClientAttrib = Reflect.method(gl, "glPopClientAttrib");
+        bound.depthMask = Reflect.method(gl, "glDepthMask", boolean.class);
+        bound.translated = Reflect.method(gl, "glTranslated", double.class, double.class,
+                double.class);
         return bound;
     }
 
@@ -811,6 +836,28 @@ public final class GlApi {
         Reflect.call(vertex2f, null, x, y);
     }
 
+    /**
+     * 提交一个三维顶点（对应 {@code glVertex3f}）。
+     *
+     * <p>世界空间 3D 通道用；二维 UI 路径不要调用，避免把两套投影混在同一个批次里。
+     *
+     * @param x X 坐标（世界空间，或相机投影后的模型坐标）
+     * @param y Y 坐标
+     * @param z Z 坐标
+     */
+    public void vertex3(float x, float y, float z) {
+        if (vertex3f == null) {
+            return;
+        }
+        vertexCount++;
+        Reflect.call(vertex3f, null, x, y, z);
+    }
+
+    /** @return 是否绑定了 {@code glVertex3f}（核心 profile 下为 {@code false}） */
+    public boolean hasVertex3() {
+        return vertex3f != null;
+    }
+
     /** 开启某项 GL 能力（对应 {@code glEnable}）。 */
     public void enable(int cap) {
         setCap(cap, true);
@@ -955,6 +1002,109 @@ public final class GlApi {
     public void lineWidth(float width) {
         flushBatch();
         Reflect.call(lineWidth, null, width);
+    }
+
+    /**
+     * 双精度平移（对应 {@code glTranslated}）。世界空间 3D 通道把相机眼位取负后平移，
+     * 大坐标（数十万格以上）必须用双精度，否则框会整体抖动。
+     */
+    public void translateD(double x, double y, double z) {
+        if (translated != null) {
+            flushBatch();
+            Reflect.call(translated, null, x, y, z);
+            return;
+        }
+        translate((float) x, (float) y, (float) z);
+    }
+
+    /** @return 是否具备世界空间 3D 所需的固定管线入口（顶点/旋转/透视/属性栈） */
+    public boolean hasProjection3D() {
+        return vertex3f != null && rotatef != null && frustum != null
+                && pushAttrib != null && popAttrib != null
+                && matrixMode != null && pushMatrix != null && popMatrix != null
+                && loadIdentity != null && translated != null;
+    }
+
+    /**
+     * 旋转当前矩阵（对应 {@code glRotatef}）。世界空间 3D 通道用它建立相机朝向。
+     *
+     * @param angle 角度（度）
+     * @param x,y,z 旋转轴
+     */
+    public void rotate(float angle, float x, float y, float z) {
+        if (rotatef == null) {
+            return;
+        }
+        flushBatch();
+        Reflect.call(rotatef, null, angle, x, y, z);
+    }
+
+    /**
+     * 建立透视投影（对应 {@code glFrustum}）。世界空间 3D 通道用它替代 UI 的 {@code glOrtho}。
+     *
+     * @param left,right,bottom,top 近裁剪面四边（相机空间）
+     * @param near,far              近远裁剪面距离（正数）
+     */
+    public void frustum(double left, double right, double bottom, double top,
+                        double near, double far) {
+        if (frustum == null) {
+            return;
+        }
+        flushBatch();
+        Reflect.call(frustum, null, left, right, bottom, top, near, far);
+    }
+
+    /** 设置深度写入开关（对应 {@code glDepthMask}）。 */
+    public void depthMask(boolean enabled) {
+        if (depthMask == null) {
+            return;
+        }
+        flushBatch();
+        Reflect.call(depthMask, null, enabled);
+    }
+
+    /**
+     * 直接下发颜色，<b>不</b>经过游戏的 {@code GlStateManager} 缓存。
+     *
+     * <p>世界空间 3D 通道在属性栈保护下改状态：退出时 {@code glPopAttrib} 会把真实颜色还原，
+     * 但状态管理器的缓存仍停在我们最后一次设置的颜色。只有绕开缓存写入，缓存才会在退出后
+     * 与真实状态一致——否则游戏下一次「同色」绘制会被缓存跳过，颜色串味。
+     */
+    public void colorDirect(float r, float g, float b, float a) {
+        Reflect.call(color4f, null, r, g, b, a);
+    }
+
+    /** 直接开关能力位，不经 {@code GlStateManager} 缓存（同上，必须与属性栈配对使用）。 */
+    public void enableDirect(int cap) {
+        flushBatch();
+        Reflect.call(enable, null, cap);
+    }
+
+    /** 直接关闭能力位，不经 {@code GlStateManager} 缓存。 */
+    public void disableDirect(int cap) {
+        flushBatch();
+        Reflect.call(disable, null, cap);
+    }
+
+    /** 直接设置混合因子，不经 {@code GlStateManager} 缓存。 */
+    public void blendFuncDirect(int src, int dst) {
+        flushBatch();
+        Reflect.call(blendFunc, null, src, dst);
+    }
+
+    /** 是否支持客户态属性栈（{@code glPushClientAttrib}/{@code glPopClientAttrib}）。 */
+    public boolean hasClientAttribStack() {
+        return pushClientAttrib != null && popClientAttrib != null;
+    }
+
+    /** 压入客户态属性（对应 {@code glPushClientAttrib}）；固定管线专属。 */
+    public void pushClientAttrib(int mask) {
+        Reflect.call(pushClientAttrib, null, mask);
+    }
+
+    /** 弹出客户态属性（对应 {@code glPopClientAttrib}）。 */
+    public void popClientAttrib() {
+        Reflect.call(popClientAttrib, null);
     }
 
     /** 提交二维纹理坐标（对应 {@code glTexCoord2f}）。 */

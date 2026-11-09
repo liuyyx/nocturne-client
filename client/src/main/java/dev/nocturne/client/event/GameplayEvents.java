@@ -129,6 +129,20 @@ public final class GameplayEvents implements GameplayHook.Sink {
         }
     }
 
+    /**
+     * 世界空间 3D 绘制：交给 {@code World3DRenderer}。
+     *
+     * <p>这里不再判 {@link #active()}——3D 通道本身就是渲染回调，且 renderer 内部已有 panic /
+     * 相机 / 后端三重守卫；把判断放两处只会让「为什么没画」更难排查。
+     */
+    @Override
+    public void worldRender3D(float partialTicks) {
+        dev.nocturne.client.render3d.World3DRenderer renderer = client.world3d();
+        if (renderer != null) {
+            renderer.render(partialTicks);
+        }
+    }
+
     @Override
     public boolean xrayBlock(Object blockState, Object blockPos) {
         dev.nocturne.client.module.Module module = client.modules().get("Xray");

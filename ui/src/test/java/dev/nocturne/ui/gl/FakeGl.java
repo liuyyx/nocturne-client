@@ -64,6 +64,31 @@ public final class FakeGl {
     /** {@code glScalef} 总数 */
     public static int scaleCalls;
 
+    /** 世界空间 3D：{@code glVertex3f} 总数与最后一次坐标 */
+    public static int vertex3Calls;
+    public static float[] lastVertex3;
+    /** 世界空间 3D：{@code glRotatef} 总数与最后一次 (角度, 轴) */
+    public static int rotateCalls;
+    public static float[] lastRotate;
+    /** 旋转调用序列（按先后），用于断言 pitch → yaw 的顺序 */
+    public static final List<float[]> rotateSequence = new ArrayList<float[]>();
+    /** 世界空间 3D：{@code glFrustum} 总数与最后一次六个平面参数 */
+    public static int frustumCalls;
+    public static double[] lastFrustum;
+    /** 固定管线属性栈 */
+    public static int pushAttribCalls;
+    public static int popAttribCalls;
+    public static int lastAttribMask;
+    /** 客户态属性栈 */
+    public static int pushClientAttribCalls;
+    public static int popClientAttribCalls;
+    /** 深度写入开关 */
+    public static int depthMaskCalls;
+    public static boolean lastDepthMask;
+    /** 客户态数组开关（立即模式前置条件） */
+    public static int disableClientStateCalls;
+    public static int clientActiveTextureCalls;
+
     /**
      * 有序调用事件流，元素形如 {@code "enable:3089"}、{@code "matrixMode:5889"}、
      * {@code "ortho@5889"}（{@code @} 后缀表示该调用发生时所在的矩阵模式）。
@@ -109,7 +134,24 @@ public final class FakeGl {
         pushMatrixCalls = 0;
         popMatrixCalls = 0;
         translateCalls = 0;
+        lastTranslate = null;
         scaleCalls = 0;
+        vertex3Calls = 0;
+        lastVertex3 = null;
+        rotateCalls = 0;
+        lastRotate = null;
+        rotateSequence.clear();
+        frustumCalls = 0;
+        lastFrustum = null;
+        pushAttribCalls = 0;
+        popAttribCalls = 0;
+        lastAttribMask = 0;
+        pushClientAttribCalls = 0;
+        popClientAttribCalls = 0;
+        depthMaskCalls = 0;
+        lastDepthMask = true;
+        disableClientStateCalls = 0;
+        clientActiveTextureCalls = 0;
         events.clear();
         matrixModeSequence.clear();
         capEnableCounts.clear();
@@ -321,10 +363,86 @@ public final class FakeGl {
         events.add("translate@" + currentMatrixMode);
     }
 
+    /** 双精度平移；与 {@code glTranslatef} 共用计数（世界空间 3D 通道优先走它）。 */
+    public static void glTranslated(double x, double y, double z) {
+        translateCalls++;
+        lastTranslate = new double[]{x, y, z};
+        events.add("translateD@" + currentMatrixMode);
+    }
+
+    /** 最近一次双精度平移的实参。 */
+    public static double[] lastTranslate;
+
     /** 缩放；记录当时所处模式。 */
     public static void glScalef(float x, float y, float z) {
         scaleCalls++;
         events.add("scale@" + currentMatrixMode);
+    }
+
+    /** 三维顶点；记录坐标。世界空间 3D 通道的顶点计数也计入 {@link #vertexCalls}。 */
+    public static void glVertex3f(float x, float y, float z) {
+        vertexCalls++;
+        vertex3Calls++;
+        lastVertex3 = new float[]{x, y, z};
+        events.add("vertex3@" + currentMatrixMode);
+    }
+
+    /** 旋转；记录角度与轴。 */
+    public static void glRotatef(float angle, float x, float y, float z) {
+        rotateCalls++;
+        lastRotate = new float[]{angle, x, y, z};
+        rotateSequence.add(lastRotate);
+        events.add("rotate@" + currentMatrixMode);
+    }
+
+    /** 透视投影；记录六个平面参数。 */
+    public static void glFrustum(double left, double right, double bottom, double top,
+                                 double near, double far) {
+        frustumCalls++;
+        lastFrustum = new double[]{left, right, bottom, top, near, far};
+        events.add("frustum@" + currentMatrixMode);
+    }
+
+    /** 服务端属性栈。 */
+    public static void glPushAttrib(int mask) {
+        pushAttribCalls++;
+        lastAttribMask = mask;
+        events.add("pushAttrib");
+    }
+
+    /** 服务端属性栈。 */
+    public static void glPopAttrib() {
+        popAttribCalls++;
+        events.add("popAttrib");
+    }
+
+    /** 客户态属性栈。 */
+    public static void glPushClientAttrib(int mask) {
+        pushClientAttribCalls++;
+        events.add("pushClientAttrib");
+    }
+
+    /** 客户态属性栈。 */
+    public static void glPopClientAttrib() {
+        popClientAttribCalls++;
+        events.add("popClientAttrib");
+    }
+
+    /** 深度写入开关。 */
+    public static void glDepthMask(boolean flag) {
+        depthMaskCalls++;
+        lastDepthMask = flag;
+        events.add("depthMask:" + flag);
+    }
+
+    /** 关闭客户态数组（立即模式前置条件）。 */
+    public static void glDisableClientState(int cap) {
+        disableClientStateCalls++;
+    }
+
+    /** 切换客户态纹理单元（立即模式前置条件）。 */
+    public static void glClientActiveTexture(int unit) {
+        clientActiveTextureCalls++;
     }
 
     /** 设置纹理坐标；无操作 */

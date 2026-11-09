@@ -739,6 +739,11 @@ scope = "net/minecraft/util/Timer"
 mcp = "getFOVModifier"
 scope = "net/minecraft/client/renderer/EntityRenderer"
 
+# 世界空间 3D 渲染钩子：世界画完、HUD 之前的返回点（MCP 名 renderWorld）。
+[methods.renderWorld]
+mcp = "renderWorld"
+scope = "net/minecraft/client/renderer/EntityRenderer"
+
 [overrides."net/minecraft/client/multiplayer/PlayerInfo"]
 gameMode = { mcp = "gameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
 getProfile = { mcp = "getGameProfile", scope = "net/minecraft/client/network/NetworkPlayerInfo" }

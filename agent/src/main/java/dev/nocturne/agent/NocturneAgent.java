@@ -1204,6 +1204,13 @@ public final class NocturneAgent {
                     + "Lnet/minecraft/world/level/BlockAndTintGetter;"
                     + "Lcom/mojang/blaze3d/vertex/PoseStack;"
                     + "Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLjava/util/List;)V";
+    /**
+     * {@code EntityRenderer#renderWorld(FJ)V}：1.8.9/1.12.2 世界绘制尾点。
+     *
+     * <p>1.14.4+ 世界绘制移到 {@code LevelRenderer#renderLevel(...)}，本钩子在那里显式不可用
+     * （Phase 1 的 3D 后端也只有固定管线）。
+     */
+    private static final String RENDER_WORLD_DESCRIPTOR = "(FJ)V";
     /** 目标类 → 已注册转换器；重定义时必须重放完整链，避免后一个钩子覆盖前一个。 */
     private static final java.util.Map<String, java.util.List<ClassFileTransformer>> GAMEPLAY_TRANSFORMERS =
             new java.util.HashMap<String, java.util.List<ClassFileTransformer>>();
@@ -1308,6 +1315,7 @@ public final class NocturneAgent {
         registerMoveHooks(instrumentation, asmLoader);
         registerEntityRenderHooks(instrumentation, asmLoader);
         registerXrayHooks(instrumentation, asmLoader);
+        registerWorldRenderHooks(instrumentation, asmLoader);
         registerTimerHooks(instrumentation, asmLoader);
         registerCameraHooks(instrumentation, asmLoader);
         registerHandHooks(instrumentation, asmLoader);
@@ -1526,6 +1534,73 @@ public final class NocturneAgent {
             log("xray block culling unavailable on this version ("
                     + (sawMethod ? "no usable descriptor" : "BlockRenderDispatcher absent")
                     + "); Xray falls back to ore boxes only");
+        }
+    }
+
+    /**
+     * 世界空间 3D 渲染钩子：{@code EntityRenderer#renderWorld(FJ)V} 的每个 RETURN 之前调用
+     * {@code GameplayHook.worldRender3D(F)}。
+     *
+     * <p>选择返回点而不是方法头：世界几何已经画进深度缓冲，覆盖物能被地形正确遮挡，也不会被
+     * 随后绘制的世界内容覆盖。{@code partialTicks} 直接取方法形参，不依赖任何版本的 Timer 映射。
+     *
+     * <p>能力登记是显式的：类/成员在表里标 {@code absent}（1.14.4+ 世界绘制在
+     * {@code LevelRenderer#renderLevel}）时不注册任何转换器，直接登记 {@code world3d} 不可用并
+     * 给出原因——不会出现「日志说织入、实际没有」。
+     */
+    private static void registerWorldRenderHooks(Instrumentation instrumentation,
+                                                 EmbeddedAsmLoader asmLoader) {
+        dev.nocturne.client.mapping.ClassType owner =
+                dev.nocturne.client.mapping.ClassType.ENTITY_RENDERER;
+        dev.nocturne.client.mapping.Mapping mapping = currentMapping();
+        if (mapping.isClassAbsent(owner) || mapping.isMemberAbsent(owner, "renderWorld")) {
+            String reason = "EntityRenderer#renderWorld absent on this version"
+                    + " (1.14.4+ renders through LevelRenderer#renderLevel;"
+                    + " Phase 1 implements only the 1.8.9 GL11 3D backend)";
+            publishHookState("world3d", false, reason);
+            log("world 3d unavailable: " + reason);
+            return;
+        }
+        boolean wired = false;
+        boolean tried = false;
+        String wovenAt = null;
+        for (String className : classNameCandidates(mapping, owner)) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, "renderWorld")) {
+                tried = true;
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
+                            RENDER_WORLD_DESCRIPTOR);
+                }
+                if (descriptor == null && mapping.isIdentity()) {
+                    descriptor = RENDER_WORLD_DESCRIPTOR;
+                }
+                if (descriptor == null) {
+                    log("world 3d hook: no descriptor for " + className + "." + candidate.name()
+                            + " (mapping face missing)");
+                    continue;
+                }
+                ClassFileTransformer transformer = asmLoader.createWorldRenderTransformer(
+                        className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
+                        "worldRender3D");
+                int state = registerGameplayTransformerState(instrumentation, transformer, className,
+                        candidate.name(), descriptor, "worldRender3D");
+                if (state >= HOOK_REGISTERED) {
+                    wired = true;
+                    wovenAt = className + "." + candidate.name() + descriptor;
+                }
+            }
+        }
+        if (wired) {
+            publishHookState("world3d", true, null);
+            log("world 3d hook wired: " + wovenAt + " -> worldRender3D(F)");
+        } else {
+            String reason = tried
+                    ? "EntityRenderer#renderWorld has no usable descriptor"
+                    : "EntityRenderer#renderWorld missing from the mapping table";
+            publishHookState("world3d", false, reason);
+            log("world 3d unavailable: " + reason);
         }
     }
 

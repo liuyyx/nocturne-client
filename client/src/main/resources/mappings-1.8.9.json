@@ -1574,6 +1574,18 @@
                         "fabric": "(FZ)F",
                         "forge": "(FZ)F"
                     }
+                },
+                "renderWorld": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_3188",
+                        "forge": "func_78471_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(FJ)V",
+                        "fabric": "(FJ)V",
+                        "forge": "(FJ)V"
+                    }
                 }
             },
             "fields": {

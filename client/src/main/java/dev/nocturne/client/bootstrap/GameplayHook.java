@@ -50,6 +50,14 @@ public final class GameplayHook {
         default void entityRender(Object entity, boolean post) {
         }
 
+        /**
+         * 世界空间 3D 绘制回调；默认空实现（没有后端/模块时不产生任何副作用）。
+         *
+         * @param partialTicks 当帧渲染插值量
+         */
+        default void worldRender3D(float partialTicks) {
+        }
+
         default boolean xrayBlock(Object blockState, Object blockPos) {
             return true;
         }
@@ -451,6 +459,28 @@ public final class GameplayHook {
         } catch (Throwable t) {
             failure("entityRenderGate", t);
             return true;
+        }
+    }
+
+    /**
+     * 世界空间 3D 绘制入口：织入点传入游戏自己的 {@code partialTicks}。
+     *
+     * <p>这里只做异常隔离与转发，GL 相关的一切都在 client/ui 侧；钩子内部绝不把异常抛回
+     * 游戏的世界渲染方法。
+     *
+     * @param partialTicks 当帧渲染插值量
+     */
+    public static void worldRender3D(float partialTicks) {
+        if (GameplaySink.isKilled()) {
+            return;
+        }
+        try {
+            Sink current = sink();
+            if (current != null) {
+                current.worldRender3D(partialTicks);
+            }
+        } catch (Throwable t) {
+            failure("worldRender3D", t);
         }
     }
 

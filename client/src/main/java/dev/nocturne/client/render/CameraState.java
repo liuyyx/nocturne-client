@@ -2,6 +2,7 @@ package dev.nocturne.client.render;
 
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.render3d.WorldCamera;
 
 /**
  * 相机状态读取：把游戏里的眼位 / 朝向 / FOV 反射出来，喂给 {@link WorldProjection}。
@@ -20,6 +21,9 @@ public final class CameraState {
 
     /** 本类负责刷新的投影。 */
     private final WorldProjection projection;
+    /** 最近一次读到的相机快照（复用实例）；世界空间 3D 通道直接读取它。 */
+    private final dev.nocturne.client.render3d.WorldCamera view =
+            new dev.nocturne.client.render3d.WorldCamera();
 
     /** 是否已经就缺成员打过一次诊断（避免每帧刷屏）。 */
     private boolean missingLogged;
@@ -52,18 +56,73 @@ public final class CameraState {
      * @return 是否成功刷新（{@code false} 表示本帧不该画覆盖物）
      */
     public boolean update(GameBridge bridge, int width, int height) {
-        if (bridge == null || width <= 0 || height <= 0) {
+        return update(bridge, width, height, Float.NaN);
+    }
+
+    /**
+     * 读取相机并刷新投影，允许调用方提供当帧 {@code partialTicks}。
+     *
+     * <p>世界空间 3D 通道在游戏世界绘制时拿得到精确的插值量（方法形参），不必依赖
+     * {@code Minecraft#pausePartialTick} 之类的反射回退。
+     *
+     * @param bridge              游戏桥；为 {@code null} 或游戏未就绪时返回 {@code false}
+     * @param width               视口宽（逻辑像素）
+     * @param height              视口高（逻辑像素）
+     * @param partialTicksOverride {@code NaN} 表示自行探测；否则直接使用该值
+     * @return 是否成功刷新（{@code false} 表示本帧不该画覆盖物）
+     */
+    public boolean update(GameBridge bridge, int width, int height, float partialTicksOverride) {
+        if (width <= 0 || height <= 0) {
+            return false;
+        }
+        if (!read(bridge, partialTicksOverride)) {
+            return false;
+        }
+        WorldCamera camera = view;
+        // 不再用 Aspect Ratio 模块的 ratio 改这里的 fov：模块并没有改游戏投影，覆盖层若自行
+        // 改 fov，开关模块时框会整体移动（同一帧两种投影）。要真正改宽高比应该改游戏投影本身。
+        projection.update(camera.eyeX(), camera.eyeY(), camera.eyeZ(), camera.yaw(),
+                camera.pitch(), camera.fov(), width, height);
+        if (System.getProperty("nocturne.debug.camera") != null && !cameraProbeLogged) {
+            cameraProbeLogged = true;
+            // 一次打印相机输入：投影算错时先看这里——yaw/pitch 合理范围、eye 与玩家位置一致、
+            // fov 在 30–110，viewport 是 GUI 逻辑尺寸。
+            System.out.println("[nocturne] camera: eye=(" + Math.round(camera.eyeX() * 100) / 100.0
+                    + "," + Math.round(camera.eyeY() * 100) / 100.0 + ","
+                    + Math.round(camera.eyeZ() * 100) / 100.0 + ")"
+                    + " yaw=" + camera.yaw() + " pitch=" + camera.pitch()
+                    + " pt=" + camera.partialTicks() + " fov=" + camera.fov()
+                    + " viewport=" + width + "x" + height);
+        }
+        return true;
+    }
+
+    /**
+     * 只读取相机快照（眼位 / 朝向 / 有效 FOV / partialTicks），不碰 2D 投影。
+     *
+     * <p>世界空间 3D 后端自己设置投影与模型视图矩阵，只要这份快照；视口用帧缓冲像素，
+     * 由后端从 {@code GL_VIEWPORT} 读回。
+     *
+     * @param bridge              游戏桥；为 {@code null} 时返回 {@code false}
+     * @param partialTicksOverride {@code NaN} 表示自行探测
+     * @return 是否读到了完整相机
+     */
+    public boolean read(GameBridge bridge, float partialTicksOverride) {
+        if (bridge == null) {
+            view.clear();
             return false;
         }
         Object player = bridge.player();
         if (player == null) {
+            view.clear();
             return false;
         }
         Object minecraft = bridge.minecraft();
         // 渲染插值量：游戏按 partialTicks 在「上一个 tick」与「当前 tick」之间插值渲染，覆盖层若直接用
         // tick 末值，60-120fps 的画面里框会以 20Hz 阶梯抖动（真机表现就是「框在甩、像加速」）。
         // 1.13–1.20 从 Minecraft.pausePartialTick 取；更老/更新的版本拿不到就退回 0（等同 tick 末值）。
-        float partialTicks = partialTicks(bridge, minecraft);
+        float partialTicks = Float.isNaN(partialTicksOverride)
+                ? partialTicks(bridge, minecraft) : partialTicksOverride;
         Object eye = null;
         if (partialTicks > 0f) {
             // 有插值量时**优先**带参重载：1.16.5 的零参 getEyePosition() 返回 tick 末值，
@@ -154,20 +213,16 @@ public final class CameraState {
         if (fov == null) {
             return missing(bridge, "Options#fov / OptionInstance#get");
         }
-        if (System.getProperty("nocturne.debug.camera") != null && !cameraProbeLogged) {
-            cameraProbeLogged = true;
-            // 一次打印相机输入：投影算错时先看这里——yaw/pitch 合理范围、eye 与玩家位置一致、
-            // fov 在 30–110，viewport 是 GUI 逻辑尺寸。
-            System.out.println("[nocturne] camera: eye=(" + Math.round(eyeX * 100) / 100.0 + ","
-                    + Math.round(eyeY * 100) / 100.0 + "," + Math.round(eyeZ * 100) / 100.0 + ")"
-                    + " yaw=" + yaw + " pitch=" + pitch + " pt=" + partialTicks
-                    + " fov=" + fov + " viewport=" + width + "x" + height);
-        }
-        // 不再用 Aspect Ratio 模块的 ratio 改这里的 fov：模块并没有改游戏投影，覆盖层若自行
-        // 改 fov，开关模块时框会整体移动（同一帧两种投影）。要真正改宽高比应该改游戏投影本身。
-        projection.update(eyeX, eyeY, eyeZ, yaw.floatValue(), pitch.floatValue(), fov.floatValue(),
-                width, height);
+        view.set(eyeX.doubleValue(), eyeY.doubleValue(), eyeZ.doubleValue(),
+                yaw.floatValue(), pitch.floatValue(), fov.floatValue(), partialTicks);
         return true;
+    }
+
+    /**
+     * @return 最近一次 {@link #read} / {@link #update} 读到的相机快照（复用实例）
+     */
+    public dev.nocturne.client.render3d.WorldCamera view() {
+        return view;
     }
 
     /** @return 当帧投影（由 {@link #update} 刷新） */
@@ -258,6 +313,7 @@ public final class CameraState {
      * （例如 1.8.9 的朝向字段名不同），不说清楚就只能靠猜。
      */
     private boolean missing(GameBridge bridge, String member) {
+        view.clear();
         if (!missingLogged) {
             missingLogged = true;
             System.out.println("[nocturne] world overlay: cannot read " + member

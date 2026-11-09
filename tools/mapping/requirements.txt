@@ -843,6 +843,9 @@ net/minecraft/client/renderer/GameRenderer#getFov()
 # 1.8.9–1.12.2 的游戏渲染器就是 MCP 的 EntityRenderer，方法名 getFOVModifier(F,Z)。
 net/minecraft/client/renderer/EntityRenderer
 net/minecraft/client/renderer/EntityRenderer#getFOVModifier()
+# 世界空间 3D 渲染钩子：1.8.9/1.12.2 的 EntityRenderer#renderWorld(FJ)V。
+# 世界几何画完、HUD 之前返回；织入点在其 RETURN 之前，深度缓冲已是完整世界。
+net/minecraft/client/renderer/EntityRenderer#renderWorld()
 # 插值计时器：1.8.9/1.12.2 是 Timer#renderPartialTicks，1.13–1.20.1 改名 partialTick，
 # 1.21+ 换成 DeltaTracker#getGameTimeDeltaPartialTick(boolean)。
 net/minecraft/client/Timer

@@ -159,7 +159,35 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         if (client != null) {
             client.setHudSink(this);
             client.setRenderCapabilities(this);
+            installWorld3DBackend(client);
         }
+    }
+
+    /**
+     * 按当前绘制栈装配世界空间 3D 后端。
+     *
+     * <p>只有固定管线（{@link GlRenderer}，1.8.9–1.12.2）具备立即模式 3D；其余栈显式降级并携带
+     * 具体原因——绝不让 {@code capability()} 在没有后端时谎报可用。
+     */
+    private void installWorld3DBackend(NocturneClient client) {
+        dev.nocturne.client.render3d.World3DRenderer world3d = client.world3d();
+        if (world3d == null) {
+            return;
+        }
+        if (renderer instanceof GlRenderer) {
+            world3d.setBackend(new GlWorld3DBackend(((GlRenderer) renderer).gl()));
+            return;
+        }
+        if (renderer instanceof ModernRenderer) {
+            world3d.markUnavailable(renderer.backendName(),
+                    "GL core profile has no fixed-function immediate mode "
+                            + "(glBegin/glVertex3f/glFrustum); Phase 1 only implements the"
+                            + " 1.8.9 GL11 backend");
+            return;
+        }
+        world3d.markUnavailable(renderer.backendName(),
+                "GUI draw stack '" + renderer.backendName()
+                        + "' has no 3D world render pass wired in Phase 1");
     }
 
     @Override

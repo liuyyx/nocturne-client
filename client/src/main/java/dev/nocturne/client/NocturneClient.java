@@ -44,6 +44,8 @@ public final class NocturneClient {
             new dev.nocturne.client.control.PacketController(this);
     /** 系统加载器上的游戏事件汇；供跨加载器 sink 桥接使用。 */
     private volatile dev.nocturne.client.event.GameplayEvents gameplayEvents;
+    /** 世界空间 3D 渲染器；{@link #install()} 时创建，未 boot 完成时为 {@code null}。 */
+    private volatile dev.nocturne.client.render3d.World3DRenderer world3d;
     /** 是否已自销毁（panic）：置位后不再接受任何驱动，见 {@link #panic()}。 */
     private volatile boolean panicked;
 
@@ -123,6 +125,16 @@ public final class NocturneClient {
     /** 系统加载器上的游戏事件汇；未 boot 完成时为 {@code null}。 */
     public dev.nocturne.client.event.GameplayEvents gameplayEvents() {
         return gameplayEvents;
+    }
+
+    /**
+     * 世界空间 3D 渲染器；未 boot 完成时为 {@code null}。
+     *
+     * <p>ui 在装配绘制栈时通过 {@code setBackend} / {@code markUnavailable} 写入后端能力，
+     * 模块与诊断只读 {@code capability()}。
+     */
+    public dev.nocturne.client.render3d.World3DRenderer world3d() {
+        return world3d;
     }
 
     /**
@@ -212,6 +224,7 @@ public final class NocturneClient {
         enableDebugModules();
         dev.nocturne.client.module.ModuleKeybinds.install(this);
         gameplayEvents = dev.nocturne.client.event.GameplayEvents.install(this);
+        world3d = new dev.nocturne.client.render3d.World3DRenderer(this);
         rotations.install(this);
         dev.nocturne.client.runtime.NocturneRuntime.addListener(
                 new dev.nocturne.client.runtime.ModuleTicker(this));

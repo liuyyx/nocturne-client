@@ -283,12 +283,18 @@ public class OnlineConnectionManager {
     }
 
     public void disconnect() {
-        Channel channel = ZeusConnectionManager.T().u().D();
-        if (channel == null) {
-            return;
-        }
+        // 先记手工断开并清掉重连计划：channel 为空时旧实现直接 return，
+        // 于是 panic 后仍会按 nextReconnectAt 自动重连。
         INSTANCE.setManualDisconnectRequested(true);
-        channel.close();
+        this.nextReconnectAt = -1L;
+        Thread thread = this.connectionThread;
+        if (thread != null && thread != Thread.currentThread()) {
+            thread.interrupt();
+        }
+        Channel channel = ZeusConnectionManager.T().u().D();
+        if (channel != null) {
+            channel.close();
+        }
         INSTANCE.setConnectionState(OnlineConnectionState.OFFLINE);
     }
 
@@ -520,7 +526,9 @@ public class OnlineConnectionManager {
             }
         }
         AtomicReference<Thread> connectionThreadReference = new AtomicReference<Thread>();
-        Thread thread = new Thread(() -> this.runConnectionAttempt(connectionThreadReference));
+        Thread thread = new Thread(() -> this.runConnectionAttempt(connectionThreadReference),
+                "Vape online connection");
+        thread.setDaemon(true);
         connectionThreadReference.set(thread);
         thread.start();
         this.connectionThread = thread;

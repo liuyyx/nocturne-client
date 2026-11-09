@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class SyncThread {
     /** 单次远端保存等待上限：join() 无超时会让调用线程（保存线程/关闭钩子）永久挂住。 */
@@ -32,6 +33,8 @@ public class SyncThread {
     private SyncStoreRequestWorker storeRequestWorker;
     private final SyncDebounceWorker debounceWorker;
     private final AtomicBoolean pendingSave = new AtomicBoolean();
+    /** 脏代次：保存期间 markDirty 会推进它，保存结束不得把新的脏状态清掉。 */
+    private final AtomicLong dirtyGeneration = new AtomicLong();
     private final Vape vape;
     /** 显式运行标志；{@link Vape#isEnabled()} 的 enabled 字段全源码无赋值，不能当生命周期用。 */
     private final AtomicBoolean running = new AtomicBoolean(true);
@@ -72,6 +75,7 @@ public class SyncThread {
     }
 
     public void saveSettings() {
+        long generation = this.dirtyGeneration.get();
         try {
             SettingsSyncStatusNotification notification = new SettingsSyncStatusNotification();
             if (!this.vape.getPublicProfileSettings().autoSave.getEffectiveValue()) {
@@ -109,11 +113,20 @@ public class SyncThread {
                 this.vape.getNotificationManager().show(notification);
             }
         }
+        catch (InterruptedException interrupted) {
+            // stop()/panic 打断的是等待中的保存：恢复中断位并立刻退出，
+            // 不能落进通用 Exception 被当成一次普通保存失败继续跑。
+            Thread.currentThread().interrupt();
+            return;
+        }
         catch (Exception exception) {
             Vape.logThrowable(exception);
         }
         finally {
-            this.pendingSave.set(false);
+            // 保存期间 markDirty 必须保留：只有代次没变才能清 pending。
+            if (this.dirtyGeneration.get() == generation) {
+                this.pendingSave.set(false);
+            }
         }
     }
 
@@ -275,7 +288,6 @@ public class SyncThread {
 
     public void requestSave() {
         this.lastSaveTime = System.currentTimeMillis();
-        this.pendingSave.set(false);
         if (this.storeRequestWorker == null) {
             if (!this.running.get()) {
                 return;
@@ -380,6 +392,7 @@ public class SyncThread {
 
     public void markDirty() {
         this.pendingSave.set(true);
+        this.dirtyGeneration.incrementAndGet();
         this.debounceWorker.markChanged();
     }
 

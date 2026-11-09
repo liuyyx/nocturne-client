@@ -61,8 +61,17 @@ public class RemoteImageTextureManager {
 
 
     public RemoteImageTextureManager() {
-        new RemoteImageTextureCacheUpdateThread(this).start();
+        // 先建 cache 再启动线程：否则第一轮可能看到空 map（旧实现顺序相反）。
         this.cachesBySize.put(32, new RemoteImageTextureCache(32));
+        this.updateThread = new RemoteImageTextureCacheUpdateThread(this);
+        this.updateThread.start();
+    }
+
+    private final RemoteImageTextureCacheUpdateThread updateThread;
+
+    /** 停止头像下载线程；panic/teardown 时调用。 */
+    public void stop() {
+        this.updateThread.stopLoop();
     }
 
     static {

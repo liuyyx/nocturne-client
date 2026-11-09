@@ -393,6 +393,7 @@ public final class NocturneRuntime {
         }
         // vendor/vape 的两个同步工作线程不归分发器管：它们自旋等保存请求，不显式打断就会在自销毁后
         // 继续跑；非 daemon 时还会拖住 JVM 退出（见 gg.vape.sync.SyncThread.stop）。
+        stopVendorRuntime();
         interruptVendorWorkers();
         synchronized (WRAPPERS) {
             WRAPPERS.clear();
@@ -402,10 +403,104 @@ public final class NocturneRuntime {
         resetDispatcherHandles();
     }
 
-    /** vendor/vape 侧同步工作线程名（那边不参与本模块编译，无法共享常量）。 */
+    /** vendor/vape 侧同步/服务/连接线程名（那边不参与本模块编译，无法共享常量）。 */
     private static final String[] VENDOR_WORKER_THREADS = {
-            "Vape settings sync worker", "Vape settings save worker"
+            "Vape settings sync worker", "Vape settings save worker",
+            "Vape notification sound player", "Vape clicker worker",
+            "Vape aim assist worker", "Vape aim assist rotation worker",
+            "Vape remote image cache", "Vape online connection"
     };
+
+    /**
+     * 显式停掉 vendor 侧的服务与网络生命周期。
+     *
+     * <p>vendor/vape 不参与本模块编译，因此只能按类名反射：类不存在时静默跳过。
+     * panic 必须走 {@code SyncThread.stop()} 而不是只按线程名 interrupt——保存等待
+     * （{@code Future.get}）不会因为 interrupt 之外的路径退出；服务/连接也需要 close，
+     * 否则 8080/8091 与自动重连会在自销毁后继续。
+     */
+    private static void stopVendorRuntime() {
+        invokeStatic("gg.vape.service.VapeServiceLauncher", "stop");
+
+        Object online = staticField("gg.vape.manager.client.OnlineConnectionManager", "INSTANCE");
+        invoke(online, "cancelConnectionAttempt");
+
+        Object vape = staticField("gg.vape.Vape", "INSTANCE");
+        invoke(invoke(vape, "getSyncThread"), "stop");
+
+        Object images = invokeStaticResult("gg.vape.utils.render.RemoteImageTextureManager",
+                "getInstance");
+        invoke(images, "stop");
+    }
+
+    /** @return 类；不可用/未加载时返回 null */
+    private static Class<?> vendorClass(String name) {
+        ClassLoader[] loaders = {
+                NocturneRuntime.class.getClassLoader(),
+                Thread.currentThread().getContextClassLoader(),
+                ClassLoader.getSystemClassLoader()
+        };
+        for (ClassLoader loader : loaders) {
+            if (loader == null) {
+                continue;
+            }
+            try {
+                return Class.forName(name, false, loader);
+            } catch (Throwable ignored) {
+                // 换下一个加载器：vendor 可能由游戏隔离加载器持有
+            }
+        }
+        return null;
+    }
+
+    private static Object staticField(String className, String fieldName) {
+        Class<?> type = vendorClass(className);
+        if (type == null) {
+            return null;
+        }
+        try {
+            java.lang.reflect.Field field = type.getField(fieldName);
+            return field.get(null);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static void invokeStatic(String className, String methodName) {
+        Class<?> type = vendorClass(className);
+        if (type == null) {
+            return;
+        }
+        try {
+            type.getMethod(methodName).invoke(null);
+        } catch (Throwable ignored) {
+            // best-effort shutdown：vendor 版本差异不得影响 panic
+        }
+    }
+
+    private static Object invokeStaticResult(String className, String methodName) {
+        Class<?> type = vendorClass(className);
+        if (type == null) {
+            return null;
+        }
+        try {
+            return type.getMethod(methodName).invoke(null);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static Object invoke(Object target, String methodName) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            Method method = target.getClass().getMethod(methodName);
+            return method.invoke(target);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
 
     /** 打断 vendor 侧仍在自旋的同步线程；按线程名匹配，匹配不到时无副作用。 */
     private static void interruptVendorWorkers() {

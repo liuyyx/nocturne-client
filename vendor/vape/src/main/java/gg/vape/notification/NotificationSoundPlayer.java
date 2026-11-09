@@ -10,6 +10,13 @@ public class NotificationSoundPlayer {
     // 多槽队列：同一轮次内入队的多个音效都会被播放（可重叠），
     // 例如切换配置档时所有开关模块的音效同时出声。
     private final Queue<SoundClip> pendingSounds = new ConcurrentLinkedQueue<SoundClip>();
+    /** 显式生命周期：Vape.enabled 全源码无赋值，不能拿来当循环条件。 */
+    private final java.util.concurrent.atomic.AtomicBoolean running =
+            new java.util.concurrent.atomic.AtomicBoolean(true);
+    /** 防止构造/重复 start 产生第二个播放线程。 */
+    private final java.util.concurrent.atomic.AtomicBoolean threadStarted =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile Thread soundThread;
 
     public NotificationSoundPlayer() {
         this.startSoundThread();
@@ -58,14 +65,27 @@ public class NotificationSoundPlayer {
     }
 
     public void startSoundThread() {
-        new Thread(this::runSoundLoop, "Vape notification sound player").start();
+        if (!this.threadStarted.compareAndSet(false, true)) {
+            return;
+        }
+        Thread thread = new Thread(this::runSoundLoop, "Vape notification sound player");
+        thread.setDaemon(true);
+        this.soundThread = thread;
+        thread.start();
+    }
+
+    /** 停止播放线程：panic/teardown 时调用；幂等。 */
+    public void stop() {
+        this.running.set(false);
+        Thread thread = this.soundThread;
+        this.soundThread = null;
+        if (thread != null) {
+            thread.interrupt();
+        }
     }
 
     private void runSoundLoop() {
-        // 原实现使用 while (!Vape.INSTANCE.enabled) 作为循环条件，逻辑完全反了：
-        // 一旦客户端 enabled 被置 true，线程立刻退出，队列中的声音永远不会被播放。
-        // 改为无条件轮询，直到线程中断（JVM 关闭）。
-        while (!Thread.currentThread().isInterrupted()) {
+        while (this.running.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 Thread.sleep(100L);
                 this.playPendingSound();

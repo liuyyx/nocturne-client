@@ -10,20 +10,35 @@ public class ClickerWorker
 implements Runnable {
     private final AtomicBoolean active = new AtomicBoolean(false);
     private final Object activityMonitor = new Object();
-    private boolean started;
+    /** 显式运行标志；stop() 后循环必须退出。 */
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private volatile Thread workerThread;
     private final ClickerMod clickerModule;
 
     public ClickerWorker(ClickerMod clickerModule) {
         this.clickerModule = clickerModule;
     }
 
-    public void startOrResume() {
-        if (!this.started) {
-            this.started = true;
-            Thread workerThread = new Thread(this);
-            workerThread.start();
+    /** 启动或恢复；synchronized 保证并发调用只会创建一个线程。 */
+    public synchronized void startOrResume() {
+        if (this.workerThread == null || !this.workerThread.isAlive()) {
+            this.running.set(true);
+            Thread thread = new Thread(this, "Vape clicker worker");
+            thread.setDaemon(true);
+            this.workerThread = thread;
+            thread.start();
         }
         this.resume();
+    }
+
+    /** 停止工作线程：清运行标志 + 打断 sleep/wait；panic/teardown 时调用。 */
+    public synchronized void stop() {
+        this.running.set(false);
+        Thread thread = this.workerThread;
+        this.workerThread = null;
+        if (thread != null) {
+            thread.interrupt();
+        }
     }
 
     /*
@@ -56,8 +71,11 @@ implements Runnable {
     public void run() {
         BadlionKeyBindingEventQueue.enterClickerWorker();
         try {
-            while (true) {
+            while (this.running.get() && !Thread.currentThread().isInterrupted()) {
                 SleepUtil.sleep(5L);
+                if (!this.running.get() || Thread.currentThread().isInterrupted()) {
+                    break;
+                }
                 this.awaitActivityAndRunClickCycle();
             }
         }

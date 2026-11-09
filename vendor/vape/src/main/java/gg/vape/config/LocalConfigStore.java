@@ -20,8 +20,9 @@ import java.nio.file.StandardCopyOption;
  */
 public final class LocalConfigStore {
     private static final String FILE_NAME = "config.json";
-    private static final String TMP_NAME = "config.json.tmp";
-    private static boolean migrationAttempted = false;
+    /** 关闭钩子与保存 worker 可能并发写同一 config.json；读-改-写必须串行。 */
+    private static final Object WRITE_LOCK = new Object();
+    private static volatile boolean migrationAttempted = false;
 
     private LocalConfigStore() {
     }
@@ -107,21 +108,35 @@ public final class LocalConfigStore {
     }
 
     private static boolean write(JsonObject root) {
+        java.nio.file.Path temporary = null;
         try {
-            File target = configFile();
-            File temporary = new File(directory(), TMP_NAME);
+            File directory = directory();
+            File target = new File(directory, FILE_NAME);
+            // 每 writer 一个唯一 tmp：固定 config.json.tmp 会被并发 writer 互相截断。
+            temporary = Files.createTempFile(directory.toPath(), FILE_NAME + ".", ".tmp");
             try (OutputStreamWriter writer = new OutputStreamWriter(
-                    new FileOutputStream(temporary), StandardCharsets.UTF_8)) {
+                    new FileOutputStream(temporary.toFile()), StandardCharsets.UTF_8)) {
                 ApiHttpClient.GSON.toJson(root, writer);
             }
-            if (!temporary.renameTo(target)) {
-                Files.move(temporary.toPath(), target.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(temporary, target.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException fallback) {
+                Files.move(temporary, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
             return true;
         }
         catch (Exception ignored) {
             return false;
+        }
+        finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (Exception ignored) {
+                    // best effort: 失败时留下一个随机 tmp，不会污染 config.json
+                }
+            }
         }
     }
 
@@ -138,27 +153,33 @@ public final class LocalConfigStore {
         if (settings == null) {
             return false;
         }
-        JsonObject root = mutableRoot();
-        root.add("settings", settings);
-        return write(root);
+        synchronized (WRITE_LOCK) {
+            JsonObject root = mutableRoot();
+            root.add("settings", settings);
+            return write(root);
+        }
     }
 
     public static boolean saveProfiles(JsonObject profiles) {
         if (profiles == null) {
             return false;
         }
-        JsonObject root = mutableRoot();
-        root.add("profiles", profiles);
-        return write(root);
+        synchronized (WRITE_LOCK) {
+            JsonObject root = mutableRoot();
+            root.add("profiles", profiles);
+            return write(root);
+        }
     }
 
     public static boolean saveGlobal(JsonObject global) {
         if (global == null) {
             return false;
         }
-        JsonObject root = mutableRoot();
-        root.add("global", global);
-        return write(root);
+        synchronized (WRITE_LOCK) {
+            JsonObject root = mutableRoot();
+            root.add("global", global);
+            return write(root);
+        }
     }
 
     public static JsonObject loadSettings() {

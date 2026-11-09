@@ -80,6 +80,26 @@ class NocturneRuntimeLifecycleTest {
         assertTrue(interrupted.get(), "shutdown 应通过 interrupt 唤醒同步线程");
     }
 
+    /** shutdown/panic 必须显式停 vendor 服务、连接与 SyncThread（不能只按线程名 interrupt）。 */
+    @Test
+    void shutdownStopsVendorServiceAndConnectionLifecycles() {
+        int serviceBefore = gg.vape.service.VapeServiceLauncher.STOPS.get();
+        int onlineBefore = gg.vape.manager.client.OnlineConnectionManager.CANCELS.get();
+        int syncBefore = gg.vape.sync.SyncThread.STOPS.get();
+        int imagesBefore = gg.vape.utils.render.RemoteImageTextureManager.STOPS.get();
+
+        NocturneRuntime.shutdown();
+
+        assertTrue(gg.vape.service.VapeServiceLauncher.STOPS.get() > serviceBefore,
+                "panic 必须关闭内嵌 HTTP/Zeus 服务（8080/8091）");
+        assertTrue(gg.vape.manager.client.OnlineConnectionManager.CANCELS.get() > onlineBefore,
+                "panic 必须取消在线连接与自动重连");
+        assertTrue(gg.vape.sync.SyncThread.STOPS.get() > syncBefore,
+                "panic 必须调 SyncThread.stop()，而不是只按线程名 interrupt");
+        assertTrue(gg.vape.utils.render.RemoteImageTextureManager.STOPS.get() > imagesBefore,
+                "panic 必须停止 RemoteImage 下载线程");
+    }
+
     /** RenderEvent 每帧复用同一实例，序号单调递增；无订阅者时不改写载荷。 */
     @Test
     void renderEventIsReusedAcrossFrames() {

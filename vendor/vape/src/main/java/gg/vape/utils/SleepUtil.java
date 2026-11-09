@@ -6,7 +6,8 @@ public class SleepUtil {
             Thread.sleep(millis);
         }
         catch (InterruptedException interruptedException) {
-            // empty catch block
+            // 恢复中断位：吞掉中断会让上层循环永远注意不到 stop()/JVM shutdown。
+            Thread.currentThread().interrupt();
         }
     }
 }

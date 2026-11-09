@@ -21,6 +21,7 @@ public final class VapeServiceLauncher {
     private static volatile LegacyHttpServer httpServer;
     private static volatile ZeusServer zeusServer;
     private static volatile boolean started;
+    private static volatile Thread serviceThread;
 
     private VapeServiceLauncher() {
     }
@@ -37,6 +38,7 @@ public final class VapeServiceLauncher {
             }
         }, "vape-service");
         thread.setDaemon(true);
+        serviceThread = thread;
         thread.start();
     }
 
@@ -45,6 +47,12 @@ public final class VapeServiceLauncher {
     }
 
     public static synchronized void stop() {
+        started = false;
+        Thread thread = serviceThread;
+        serviceThread = null;
+        if (thread != null) {
+            thread.interrupt();
+        }
         LegacyHttpServer http = httpServer;
         ZeusServer zeus = zeusServer;
         httpServer = null;
@@ -87,6 +95,21 @@ public final class VapeServiceLauncher {
                     // best-effort rollback
                 }
                 throw failure;
+            }
+
+            // stop() 可能在异步启动期间被调用（panic）：不能再把已关闭/待关闭的服务发布出去。
+            if (!started || Thread.currentThread().isInterrupted()) {
+                try {
+                    http.close();
+                } catch (Throwable ignored) {
+                    // best-effort shutdown
+                }
+                try {
+                    zeus.close();
+                } catch (Throwable ignored) {
+                    // best-effort shutdown
+                }
+                return;
             }
 
             httpServer = http;

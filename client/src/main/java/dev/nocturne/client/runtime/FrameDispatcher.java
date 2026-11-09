@@ -404,9 +404,9 @@ public final class FrameDispatcher {
                 System.out.println("[nocturne] frame hook is live");
             }
             for (Runnable action : LISTENERS) {
-                if (cleared) {
-                    // panic 可能就从某个监听器内部调用 clear()：CopyOnWriteArrayList 的快照
-                    // 仍持有后续监听器，继续跑会把已经恢复的输入状态再次写坏。
+                if (KILLED || cleared) {
+                    // panic 可能就从某个监听器内部调用 kill()/clear()：CopyOnWriteArrayList
+                    // 的快照仍持有后续监听器，继续跑会把已经恢复的输入状态再次写坏。
                     break;
                 }
                 try {

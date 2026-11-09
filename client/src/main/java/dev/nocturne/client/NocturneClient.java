@@ -535,15 +535,18 @@ public final class NocturneClient {
             return;
         }
         panicked = true;
-        // 1) 先把输入还原投递到**游戏主线程**并限时等待。
-        //    必须在关闸门之前：kill() 之后帧分发直接返回，还原任务没有人执行——真机表现为
-        //    panic 后视角/光标永久失效。MouseHandler.grabMouse / Mouse.setGrabbed 只能在持有
-        //    游戏上下文的线程上调用；本方法可能从 GUI 线程或模块线程进来。
-        NocturneRuntime.restoreInputOnGameThread(1200L);
-        // 2) 再关闸门：分发器与**全部注入钩子/绘制入口**立即变成放行空操作。
+        // 1) 先关闸门：分发器与**全部注入钩子/绘制入口**立即变成放行空操作。
+        //    必须排在还原动作之前——否则还原执行期间，其它监听器/绘制钩子还在并发跑，
+        //    会把刚恢复好的输入状态再写坏（真机：panic 后视角/光标永久失效的另一条竞态）。
         //    拆除动作与 Render 线程的帧回调曾经并发（1.16.5 WER dump：拆 GL sink 时
         //    Render 线程仍在帧钩子里做 GL，疑似 use-after-free）。闸门是 volatile，跨加载器共享。
         NocturneRuntime.kill();
+        // 2) 再把输入还原投递到**游戏主线程**并限时等待。
+        //    FrameDispatcher.dispatch 即使在 KILLED 下也会先执行投递的帧任务，所以还原不会丢；
+        //    分发循环本身在 KILLED 时立即 break，后续监听器不再执行。
+        //    MouseHandler.grabMouse / Mouse.setGrabbed 只能在持有游戏上下文的线程上调用；
+        //    本方法可能从 GUI 线程或模块线程进来。
+        NocturneRuntime.restoreInputOnGameThread(1200L);
         // 钩子汇是 bootstrap 里的另一份状态（游戏线程读的是它），必须同样置位。
         dev.nocturne.client.bootstrap.GameplayHook.kill();
         packets.onPanic();

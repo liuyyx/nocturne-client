@@ -101,6 +101,23 @@ class GuiOverlayPointerRestoreTest {
     }
 
     @Test
+    void restoreInputStateRetriesWithinTheAction() {
+        // panic 已经把帧分发器 kill 掉，onFrame 不会再跑：重试必须在还原动作内部完成。
+        FlakyInput input = new FlakyInput(1, true);
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                new FakeBackend(0, 0), input, GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.onFrame();
+        overlay.setOpen(true);
+        overlay.onFrame();
+
+        overlay.restoreInputState();
+
+        assertTrue(input.isPointerGrabbed(),
+                "the restore action itself must retry the transient grab failure");
+        assertTrue(input.grabCalls >= 2, "first grab is rejected, second must be attempted");
+    }
+
+    @Test
     void restoreInputStateClearsStaleBookkeeping() throws Exception {
         FlakyInput input = new FlakyInput(0, true);
         GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),

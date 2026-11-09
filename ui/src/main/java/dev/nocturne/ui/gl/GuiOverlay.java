@@ -393,6 +393,10 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     private boolean inputRestored;
     /** 关闭/panic 后最多重试的帧数：游戏在被别的钩子打断时可能晚一两帧才接受抓取。 */
     private static final int POINTER_RESTORE_FRAMES = 20;
+    /** panic 还原动作内的有限重试次数（不依赖帧回调，kill 之后也有效）。 */
+    private static final int POINTER_RESTORE_ATTEMPTS = 5;
+    /** 还原动作内两次重试之间的间隔：给游戏状态机留出被下一帧刷新的机会。 */
+    private static final long POINTER_RESTORE_RETRY_MILLIS = 10L;
 
     /** bootstrap 层 {@code KeySink.setBlocked} 的方法句柄。 */
     private static java.lang.reflect.Method setBlockedMethod;
@@ -470,11 +474,10 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
                 boolean wantGrab = pointerGrabbedBeforeGui
                         || (inWorld() && !hasNativeScreen());
                 pointerRestoreTarget = wantGrab;
-                input.setPointerGrabbed(wantGrab);
-                // 抓取可能被游戏自身的状态机晚一两帧接受：保留最多 20 帧的重试窗口，
-                // 由 onFrame 消费（panic 的还原阶段仍在 kill 之前，帧回调还活着）。
+                // panic 已先把分发器 kill 掉：不能再把重试托付给 onFrame（它不会执行）。
+                // 还原动作自己有限重试——抓取有时会被游戏状态机晚一两帧接受。
+                pointerRestorePending = !restorePointerWithRetry(wantGrab);
                 pointerRestoreAttempts = 0;
-                pointerRestorePending = wantGrab && !input.isPointerGrabbed();
             } else {
                 pointerRestorePending = false;
             }
@@ -484,6 +487,35 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             // 真机“panic 后鼠标不能动”时这条日志是唯一的线索。
             System.out.println("[nocturne] overlay input restore failed: " + failure);
         }
+    }
+
+    /**
+     * 在还原动作内有限重试抓取/释放指针。
+     *
+     * <p>只重试“抓回”失败（释放是指令式下发，没有可验证的失败状态）。每次尝试后重新读取
+     * 真实状态；全部失败时不写任何假值，交由返回的 false 保留 pending 标记。
+     *
+     * @param grab true=抓回、false=释放
+     * @return 目标状态是否已达成（释放总是返回 true）
+     */
+    private boolean restorePointerWithRetry(boolean grab) {
+        for (int attempt = 0; attempt < POINTER_RESTORE_ATTEMPTS; attempt++) {
+            input.setPointerGrabbed(grab);
+            if (!grab || input.isPointerGrabbed()) {
+                return true;
+            }
+            if (attempt + 1 < POINTER_RESTORE_ATTEMPTS) {
+                try {
+                    Thread.sleep(POINTER_RESTORE_RETRY_MILLIS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+        }
+        System.out.println("[nocturne] overlay pointer restore still rejected after "
+                + POINTER_RESTORE_ATTEMPTS + " attempts");
+        return false;
     }
 
     /**

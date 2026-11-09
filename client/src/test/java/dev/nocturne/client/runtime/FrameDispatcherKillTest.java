@@ -43,6 +43,31 @@ class FrameDispatcherKillTest {
         assertTrue(FrameDispatcher.isKilled());
     }
 
+    /**
+     * 监听器 A 内 kill 后，同一帧快照里的监听器 B 绝不能再跑：B 可能把刚恢复的输入状态写坏。
+     * panic 的还原动作正是从监听器/模块 tick 里触发的。
+     */
+    @Test
+    void killingFromAListenerStopsLaterListenersInTheSameFrame() {
+        AtomicInteger later = new AtomicInteger();
+        FrameDispatcher.add(new Runnable() {
+            @Override
+            public void run() {
+                FrameDispatcher.kill();
+            }
+        });
+        FrameDispatcher.add(new Runnable() {
+            @Override
+            public void run() {
+                later.incrementAndGet();
+            }
+        });
+
+        FrameDispatcher.dispatch();
+
+        assertEquals(0, later.get(), "kill 后同一快照中的后续监听器必须停止执行");
+    }
+
     @Test
     void repeatedKillAndClearAreIdempotent() {
         FrameDispatcher.kill();

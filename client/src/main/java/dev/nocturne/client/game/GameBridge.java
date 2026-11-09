@@ -73,6 +73,25 @@ public final class GameBridge {
     private volatile boolean timerSpeedWarned;
     /** 计分板槽位解析失败是否已告警；HUD 每个刷新周期都会重试。 */
     private volatile boolean scoreboardSlotWarned;
+    /** 计分板分数接口解析失败是否已告警（每个刷新周期都会重试）。 */
+    private volatile boolean scoreboardRowsWarned;
+    /** 最近一次读到的侧边栏 objective；抑制原版侧边栏后仍靠它继续取分数。 */
+    private volatile Object scoreboardObjectiveCache;
+    /** 按形状解析出的「取某目标分数」方法及其宿主类（每帧都走，必须缓存）。 */
+    private volatile Method scoreboardScoreMethod;
+    private volatile Class<?> scoreboardScoreMethodOwner;
+    /** 按形状解析出的「按 owner 取队伍」方法及其宿主类。 */
+    private volatile Method scoreboardTeamMethod;
+    private volatile Class<?> scoreboardTeamMethodOwner;
+    /** 按形状解析出的队伍格式化方法（1 个 String 参数、返回 String）。 */
+    private volatile Method teamFormatMethod;
+    private volatile Class<?> teamFormatMethodOwner;
+    /** 按形状解析出的队伍颜色方法（无参、返回枚举/Optional/数字）。 */
+    private volatile Method teamColorMethod;
+    private volatile Class<?> teamColorMethodOwner;
+    /** 按形状解析出的「写显示槽」方法及其宿主类（抑制/恢复原版侧边栏）。 */
+    private volatile Method scoreboardDisplaySetter;
+    private volatile Class<?> scoreboardDisplaySetterOwner;
     /** 本地 HUD 播报不可用是否已告警（只在首次失败时打印）。 */
     private volatile boolean localMessageWarned;
 
@@ -567,8 +586,75 @@ public final class GameBridge {
         return false;
     }
 
-    /** 当前显示计分板的标题和玩家分数行。 */
+    /** 计分板一行：显示文本 + 该行颜色（队伍色；无队伍为白色）。 */
+    public static final class ScoreboardRow {
+        /** 已剥掉 {@code §} 格式码的显示文本。 */
+        public final String text;
+        /** 行颜色（ARGB）；未知时为不透明白色。 */
+        public final int color;
+
+        public ScoreboardRow(String text, int color) {
+            this.text = text;
+            this.color = color;
+        }
+    }
+
+    /** 标准 16 色表；{@code §0}–{@code §f} 与格式化枚举的序号共用。 */
+    private static final int[] MC_COLORS = {
+            0x000000, 0x0000AA, 0x00AA00, 0x00AAAA,
+            0xAA0000, 0xAA00AA, 0xFFAA00, 0xAAAAAA,
+            0x555555, 0x5555FF, 0x55FF55, 0x55FFFF,
+            0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF,
+    };
+
+    /** 原版侧边栏最多显示 15 行分数。 */
+    private static final int MAX_SCOREBOARD_ROWS = 15;
+
+    /** 一条分数（owner 名 + 分值），排序/截断都在桥接层完成。 */
+    private static final class ScoreEntry {
+        final String owner;
+        final int value;
+
+        ScoreEntry(String owner, int value) {
+            this.owner = owner;
+            this.value = value;
+        }
+    }
+
+    /** 队伍格式化后的 owner：文本（已去格式码）与颜色。 */
+    private static final class FormattedOwner {
+        final String text;
+        final int color;
+
+        FormattedOwner(String text, int color) {
+            this.text = text;
+            this.color = color;
+        }
+    }
+
+    /**
+     * 当前显示计分板的标题与分数行（纯文本，供旧调用方使用）。
+     *
+     * @return 首行为标题（仅在存在分数行时出现），其后按分值降序最多 15 行
+     */
     public java.util.List<String> scoreboardLines() {
+        java.util.List<ScoreboardRow> rows = scoreboardRows();
+        java.util.List<String> lines = new java.util.ArrayList<String>(rows.size());
+        for (ScoreboardRow row : rows) {
+            lines.add(row.text);
+        }
+        return lines;
+    }
+
+    /**
+     * 当前显示计分板的标题与分数行，包含每行颜色。
+     *
+     * <p>原版侧边栏的规则在这里集中实现：按分值降序（同分按 owner 升序）、最多 15 行、
+     * owner 走队伍前后缀/颜色、目标无分数时整块不显示。
+     *
+     * @return 空列表表示当前没有可显示的侧边栏
+     */
+    public java.util.List<ScoreboardRow> scoreboardRows() {
         Object board = callMapped(world(), ClassType.CLIENT_LEVEL, "getScoreboard");
         if (board == null) {
             return java.util.Collections.emptyList();
@@ -580,32 +666,474 @@ public final class GameBridge {
         }
         Object objective = callMapped(board, ClassType.SCOREBOARD, "getDisplayObjective", slot);
         if (objective == null) {
+            // 原版侧边栏被我们抑制后显示槽是空的，但 objective 仍然有效：继续用缓存的它取分数。
+            objective = scoreboardObjectiveCache;
+        }
+        if (objective == null) {
             return java.util.Collections.emptyList();
         }
-        java.util.List<String> lines = new java.util.ArrayList<String>();
-        String title = componentText(callMapped(objective, ClassType.OBJECTIVE, "getDisplayName"));
-        lines.add(title == null ? "Scoreboard" : title);
-        Object scores = mapping.isMemberAbsent(ClassType.SCOREBOARD, "getPlayerScores")
-                ? null
-                : callMapped(board, ClassType.SCOREBOARD, "getPlayerScores", objective);
-        if (!(scores instanceof Iterable<?>)) {
-            // 1.20.3+/26.x 换成 listPlayerScores(Objective) → Collection<PlayerScoreEntry>；
-            // 条目也不再是 Score，而是 owner()/value() 的只读记录。两个形态都要吃下来，
-            // 否则侧边栏整块空白（映射表里 getPlayerScores 在 26.x 标 absent）。
-            scores = methodAny(board, new Object[]{objective},
-                    "listPlayerScores", "getPlayerScores");
+        scoreboardObjectiveCache = objective;
+        java.util.List<ScoreEntry> entries = readScoreEntries(board, objective);
+        if (entries.isEmpty()) {
+            return java.util.Collections.emptyList();
         }
-        if (scores instanceof Iterable<?>) {
-            for (Object score : (Iterable<?>) scores) {
-                Object owner = methodAny(score, new Object[0], "owner", "getOwner", "name");
-                Number points = number(methodAny(score, new Object[0],
-                        "value", "getValue", "getScore"));
-                if (owner != null && points != null) {
-                    lines.add(owner + " " + points.intValue());
+        java.util.Collections.sort(entries, new java.util.Comparator<ScoreEntry>() {
+            @Override
+            public int compare(ScoreEntry first, ScoreEntry second) {
+                if (first.value != second.value) {
+                    return second.value - first.value;
+                }
+                return first.owner.compareToIgnoreCase(second.owner);
+            }
+        });
+        if (entries.size() > MAX_SCOREBOARD_ROWS) {
+            entries = new java.util.ArrayList<ScoreEntry>(
+                    entries.subList(0, MAX_SCOREBOARD_ROWS));
+        }
+        java.util.List<ScoreboardRow> rows = new java.util.ArrayList<ScoreboardRow>(entries.size() + 1);
+        String title = stripFormatting(componentText(
+                callMapped(objective, ClassType.OBJECTIVE, "getDisplayName")));
+        if (title != null && !title.isEmpty()) {
+            rows.add(new ScoreboardRow(title, 0xFFFFFFFF));
+        }
+        for (ScoreEntry entry : entries) {
+            FormattedOwner owner = formatScoreOwner(board, entry.owner);
+            rows.add(new ScoreboardRow(owner.text + " " + entry.value, owner.color));
+        }
+        return rows;
+    }
+
+    /**
+     * 抑制/恢复原版侧边栏（把 SIDEBAR 显示槽置空）。
+     *
+     * <p>Better Scoreboard 启用时显示槽被清空，原版不再画第二套；objective 仍缓存在桥里，
+     * 因此我们自己的侧边栏还能继续取分数。关闭抑制时把缓存的目标写回显示槽。
+     *
+     * @param hidden {@code true} 隐藏原版侧边栏
+     */
+    public void setVanillaScoreboardHidden(boolean hidden) {
+        Object board = callMapped(world(), ClassType.CLIENT_LEVEL, "getScoreboard");
+        if (board == null) {
+            return;
+        }
+        Object slot = displaySlot(board);
+        if (slot == null) {
+            return;
+        }
+        Object displayed = callMapped(board, ClassType.SCOREBOARD, "getDisplayObjective", slot);
+        if (hidden) {
+            if (displayed == null) {
+                return;
+            }
+            scoreboardObjectiveCache = displayed;
+            writeDisplayObjective(board, slot, null);
+        } else if (displayed == null && scoreboardObjectiveCache != null) {
+            writeDisplayObjective(board, slot, scoreboardObjectiveCache);
+        }
+    }
+
+    /** 收集某 objective 的分数；先按形状找重载，再退回映射名。 */
+    private java.util.List<ScoreEntry> readScoreEntries(Object board, Object objective) {
+        Object scores = callScoreMethod(board, objective);
+        if (!(scores instanceof Iterable<?>)) {
+            if (!scoreboardRowsWarned) {
+                scoreboardRowsWarned = true;
+                System.out.println("[nocturne] GameBridge: no score listing method found on "
+                        + board.getClass().getName() + " for " + objective.getClass().getName()
+                        + "; scoreboard rows disabled for this session");
+            }
+            return java.util.Collections.emptyList();
+        }
+        java.util.List<ScoreEntry> entries = new java.util.ArrayList<ScoreEntry>();
+        for (Object score : (Iterable<?>) scores) {
+            Object owner = methodAny(score, new Object[0], "owner", "getOwner", "name");
+            Number points = number(methodAny(score, new Object[0],
+                    "value", "getValue", "getScore"));
+            if (owner == null) {
+                owner = callMapped(score, ClassType.SCORE, "getOwner");
+            }
+            if (points == null) {
+                points = number(callMapped(score, ClassType.SCORE, "getScore"));
+            }
+            String name = scoreOwnerName(owner);
+            if (name == null || points == null) {
+                continue;
+            }
+            entries.add(new ScoreEntry(name, points.intValue()));
+        }
+        return entries;
+    }
+
+    /**
+     * 调用「取某 objective 的分数」。
+     *
+     * <p>各版本的方法名与重载都不同：1.8.9/1.12.2 是 {@code getSortedScores(Objective)}，
+     * 1.14–1.20.2 是 {@code getPlayerScores(Objective)}（同名还有 {@code (String)} 重载），
+     * 1.20.3+/26.x 是 {@code listPlayerScores(Objective)}。按形状（单参、目标类型、返回集合）
+     * 选重载比写死映射名可靠——映射表只记录一种签名，正好记错成 (String) 的那个。
+     */
+    private Object callScoreMethod(Object board, Object objective) {
+        Method method = scoreMethod(board, objective);
+        if (method != null) {
+            Object result = Reflect.call(method, board, objective);
+            if (result != null) {
+                return result;
+            }
+        }
+        Object result = callMapped(board, ClassType.SCOREBOARD, "listPlayerScores", objective);
+        if (result == null) {
+            result = callMapped(board, ClassType.SCOREBOARD, "getPlayerScores", objective);
+        }
+        if (result == null) {
+            result = callMapped(board, ClassType.SCOREBOARD, "getSortedScores", objective);
+        }
+        return result;
+    }
+
+    /** 按形状解析并缓存「单参目标、返回 Iterable」的分数方法。 */
+    private Method scoreMethod(Object board, Object objective) {
+        Class<?> boardType = board.getClass();
+        Method cached = scoreboardScoreMethod;
+        if (cached != null && scoreboardScoreMethodOwner == boardType) {
+            return cached;
+        }
+        Method best = null;
+        int bestRank = Integer.MAX_VALUE;
+        for (Method candidate : collectMethods(boardType)) {
+            if (candidate.getParameterCount() != 1) {
+                continue;
+            }
+            Class<?> parameter = candidate.getParameterTypes()[0];
+            if (!parameter.isInstance(objective)) {
+                continue;
+            }
+            if (!Iterable.class.isAssignableFrom(candidate.getReturnType())) {
+                continue;
+            }
+            int rank = scoreMethodRank(candidate.getName());
+            // 名字可读时优先 getSortedScores/listPlayerScores/getPlayerScores；混淆名一律排最后。
+            if (best == null || rank < bestRank) {
+                best = candidate;
+                bestRank = rank;
+            }
+        }
+        if (best != null) {
+            scoreboardScoreMethod = best;
+            scoreboardScoreMethodOwner = boardType;
+        }
+        return best;
+    }
+
+    private static int scoreMethodRank(String name) {
+        if ("getSortedScores".equals(name)) {
+            return 0;
+        }
+        if ("listPlayerScores".equals(name)) {
+            return 1;
+        }
+        if ("getPlayerScores".equals(name)) {
+            return 2;
+        }
+        return 10;
+    }
+
+    /** {@code Score#getOwner} 的归一化：String / 组件 / 26.x 的 NameAndId 形态。 */
+    private String scoreOwnerName(Object owner) {
+        if (owner == null) {
+            return null;
+        }
+        if (owner instanceof String) {
+            return (String) owner;
+        }
+        String text = componentText(owner);
+        if (text != null && !text.isEmpty()) {
+            return stripFormatting(text);
+        }
+        Object name = methodAny(owner, new Object[0], "name", "getName");
+        if (name instanceof String) {
+            return (String) name;
+        }
+        if (name != null) {
+            String viaComponent = componentText(name);
+            if (viaComponent != null && !viaComponent.isEmpty()) {
+                return stripFormatting(viaComponent);
+            }
+            return String.valueOf(name);
+        }
+        return String.valueOf(owner);
+    }
+
+    /** 取 owner 的队伍并按原版规则格式化：优先队名前缀/后缀，颜色取队伍色。 */
+    private FormattedOwner formatScoreOwner(Object board, String owner) {
+        Object team = playerTeam(board, owner);
+        if (team == null) {
+            return new FormattedOwner(owner, 0xFFFFFFFF);
+        }
+        String raw = null;
+        Object formatted = methodAny(team, new Object[]{owner}, "formatPlayerName", "formatName");
+        if (formatted instanceof String) {
+            raw = (String) formatted;
+        }
+        if (raw == null) {
+            Method format = teamFormatMethod(team);
+            if (format != null) {
+                Object value = Reflect.call(format, team, owner);
+                if (value instanceof String) {
+                    raw = (String) value;
                 }
             }
         }
-        return lines;
+        if (raw == null) {
+            String prefix = componentText(methodAny(team, new Object[0],
+                    "getPlayerPrefix", "getColorPrefix"));
+            String suffix = componentText(methodAny(team, new Object[0],
+                    "getPlayerSuffix", "getColorSuffix"));
+            raw = (prefix == null ? "" : prefix) + owner + (suffix == null ? "" : suffix);
+        }
+        int color = teamColorValue(team, raw);
+        String text = stripFormatting(raw);
+        return new FormattedOwner(text == null || text.isEmpty() ? owner : text,
+                color == -1 ? 0xFFFFFFFF : (0xFF000000 | (color & 0xFFFFFF)));
+    }
+
+    /** 按形状找 {@code getPlayersTeam(String)} / {@code getPlayerTeam(String)} 并缓存。 */
+    private Object playerTeam(Object board, String owner) {
+        Class<?> boardType = board.getClass();
+        Method method = scoreboardTeamMethod;
+        if (method == null || scoreboardTeamMethodOwner != boardType) {
+            method = null;
+            Class<?> teamType = type(ClassType.PLAYER_TEAM);
+            for (Method candidate : collectMethods(boardType)) {
+                if (candidate.getParameterCount() != 1
+                        || !candidate.getParameterTypes()[0].isAssignableFrom(String.class)) {
+                    continue;
+                }
+                Class<?> returned = candidate.getReturnType();
+                boolean teamLike = teamType != null && teamType.isAssignableFrom(returned);
+                if (!teamLike && teamType == null) {
+                    String simple = returned.getSimpleName();
+                    teamLike = simple.endsWith("Team") || simple.endsWith("PlayerTeam");
+                }
+                if (teamLike) {
+                    method = candidate;
+                    break;
+                }
+            }
+            if (method != null) {
+                scoreboardTeamMethod = method;
+                scoreboardTeamMethodOwner = boardType;
+            }
+        }
+        return method == null ? null : Reflect.call(method, board, owner);
+    }
+
+    /** 按形状解析队伍格式化方法：{@code formatPlayerName(String)} 一类的 1 参 → String。 */
+    private Method teamFormatMethod(Object team) {
+        Class<?> teamType = team.getClass();
+        Method cached = teamFormatMethod;
+        if (cached != null && teamFormatMethodOwner == teamType) {
+            return cached;
+        }
+        Method found = null;
+        for (Method candidate : collectMethods(teamType)) {
+            if (candidate.getParameterCount() == 1
+                    && candidate.getParameterTypes()[0].isAssignableFrom(String.class)
+                    && candidate.getReturnType() == String.class) {
+                found = candidate;
+                break;
+            }
+        }
+        if (found != null) {
+            teamFormatMethod = found;
+            teamFormatMethodOwner = teamType;
+        }
+        return found;
+    }
+
+    /** 按形状解析队伍颜色方法：无参、返回枚举/Optional/数字（排除 getName 一类 String）。 */
+    private Method teamColorMethod(Object team) {
+        Class<?> teamType = team.getClass();
+        Method cached = teamColorMethod;
+        if (cached != null && teamColorMethodOwner == teamType) {
+            return cached;
+        }
+        Method found = null;
+        for (Method candidate : collectMethods(teamType)) {
+            if (candidate.getParameterCount() != 0) {
+                continue;
+            }
+            Class<?> returned = candidate.getReturnType();
+            boolean looksLikeColor = returned.isEnum()
+                    || Number.class.isAssignableFrom(returned)
+                    || returned == int.class || returned == long.class
+                    || returned == short.class || returned == byte.class
+                    || returned.getName().startsWith("java.util.Optional");
+            if (looksLikeColor) {
+                found = candidate;
+                break;
+            }
+        }
+        if (found != null) {
+            teamColorMethod = found;
+            teamColorMethodOwner = teamType;
+        }
+        return found;
+    }
+
+    /** 队伍颜色：先取格式化串里的 {@code §} 码，再回退 getColor / rgb / 枚举序号。 */
+    private int teamColorValue(Object team, String formatted) {
+        int fromCodes = colorFromFormatting(formatted);
+        if (fromCodes != -1) {
+            return fromCodes;
+        }
+        Object color = methodAny(team, new Object[0], "getColor", "getChatFormat");
+        if (color == null) {
+            color = callMapped(team, ClassType.PLAYER_TEAM, "getColor");
+        }
+        if (color == null) {
+            Method getter = teamColorMethod(team);
+            if (getter != null) {
+                color = Reflect.call(getter, team);
+            }
+        }
+        color = unwrapOptional(color);
+        if (color == null) {
+            return -1;
+        }
+        if (color instanceof Number) {
+            return ((Number) color).intValue();
+        }
+        Number rgb = number(methodAny(color, new Object[0], "rgb"));
+        if (rgb == null) {
+            rgb = number(callMapped(color, ClassType.TEAM_COLOR, "rgb"));
+        }
+        if (rgb == null) {
+            Object legacy = callMapped(color, ClassType.TEAM_COLOR, "getColorValue");
+            if (legacy == null) {
+                legacy = readField(color, ClassType.TEAM_COLOR, "colorValue");
+            }
+            rgb = number(legacy);
+        }
+        if (rgb != null) {
+            return rgb.intValue();
+        }
+        return color instanceof Enum ? colorFromEnum((Enum<?>) color) : -1;
+    }
+
+    /** 26.x 的 {@code PlayerTeam.getColor()} 返回 {@code Optional<TeamColor>}。 */
+    private static Object unwrapOptional(Object value) {
+        if (value == null || !value.getClass().getName().startsWith("java.util.Optional")) {
+            return value;
+        }
+        Object present = methodAnyStatic(value, "isPresent");
+        if (!Boolean.TRUE.equals(present)) {
+            return null;
+        }
+        return methodAnyStatic(value, "get");
+    }
+
+    /** {@link #unwrapOptional} 的静态版本（不持有桥实例；Optional 的名字在各版本都稳定）。 */
+    private static Object methodAnyStatic(Object target, String name) {
+        try {
+            Method method = target.getClass().getMethod(name);
+            return Reflect.call(method, target);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** 从 {@code §} 格式串取最后一个颜色码；没有颜色码时返回 -1。 */
+    private static int colorFromFormatting(String text) {
+        if (text == null) {
+            return -1;
+        }
+        int color = -1;
+        for (int i = 0; i + 1 < text.length(); i++) {
+            if (text.charAt(i) != '\u00a7') {
+                continue;
+            }
+            int index = Character.digit(text.charAt(i + 1), 16);
+            if (index >= 0) {
+                color = MC_COLORS[index];
+            }
+            i++;
+        }
+        return color;
+    }
+
+    /** 枚举色：可读名优先，其次沿用原版 16 色序号（1.8.9–1.20.x 的格式化枚举）。 */
+    private static int colorFromEnum(Enum<?> value) {
+        switch (value.name().toUpperCase(java.util.Locale.ROOT)) {
+            case "BLACK": return MC_COLORS[0];
+            case "DARK_BLUE": return MC_COLORS[1];
+            case "DARK_GREEN": return MC_COLORS[2];
+            case "DARK_AQUA": return MC_COLORS[3];
+            case "DARK_RED": return MC_COLORS[4];
+            case "DARK_PURPLE": return MC_COLORS[5];
+            case "GOLD": return MC_COLORS[6];
+            case "GRAY": return MC_COLORS[7];
+            case "DARK_GRAY": return MC_COLORS[8];
+            case "BLUE": return MC_COLORS[9];
+            case "GREEN": return MC_COLORS[10];
+            case "AQUA": return MC_COLORS[11];
+            case "RED": return MC_COLORS[12];
+            case "LIGHT_PURPLE": return MC_COLORS[13];
+            case "YELLOW": return MC_COLORS[14];
+            case "WHITE": return MC_COLORS[15];
+            default: break;
+        }
+        int ordinal = value.ordinal();
+        return ordinal >= 0 && ordinal < MC_COLORS.length ? MC_COLORS[ordinal] : -1;
+    }
+
+    /** 去掉 {@code §} + 1 字符；UI 文本渲染器不解析格式码，留着会画成字面量。 */
+    private static String stripFormatting(String text) {
+        if (text == null || text.indexOf('\u00a7') < 0) {
+            return text;
+        }
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char current = text.charAt(i);
+            if (current == '\u00a7' && i + 1 < text.length()) {
+                i++;
+                continue;
+            }
+            out.append(current);
+        }
+        return out.toString();
+    }
+
+    /** 按形状找 {@code setDisplayObjective(slot, objective)}；找不到时静默（该版本无法抑制）。 */
+    private void writeDisplayObjective(Object board, Object slot, Object objective) {
+        Class<?> boardType = board.getClass();
+        Method setter = scoreboardDisplaySetter;
+        if (setter == null || scoreboardDisplaySetterOwner != boardType) {
+            setter = null;
+            Class<?> objectiveType = scoreboardObjectiveCache == null
+                    ? null : scoreboardObjectiveCache.getClass();
+            for (Method candidate : collectMethods(boardType)) {
+                if (candidate.getParameterCount() != 2
+                        || candidate.getReturnType() != void.class) {
+                    continue;
+                }
+                Class<?>[] parameters = candidate.getParameterTypes();
+                if (!parameters[0].isInstance(slot)) {
+                    continue;
+                }
+                if (objectiveType != null && !parameters[1].isAssignableFrom(objectiveType)) {
+                    continue;
+                }
+                setter = candidate;
+                break;
+            }
+            if (setter != null) {
+                scoreboardDisplaySetter = setter;
+                scoreboardDisplaySetterOwner = boardType;
+            }
+        }
+        if (setter != null) {
+            Reflect.call(setter, board, slot, objective);
+        }
     }
 
     /**
@@ -637,15 +1165,17 @@ public final class GameBridge {
 
     /**
      * 从形参类型取 {@code DisplaySlot.SIDEBAR}：先按名字（未混淆客户端），名字被混淆时退回
-     * 稳定序号 1（LIST=0、SIDEBAR=1 自 1.8.9 起未变）。非枚举形参返回 {@code null}。
+     * 稳定序号 1（LIST=0、SIDEBAR=1 自 1.8.9 起未变）。非枚举（且非 int 槽位）形参返回 {@code null}。
      */
     static Object sidebarSlot(Class<?> parameterType) {
         if (parameterType == null) {
             return null;
         }
-        // 1.8.9–1.12：getObjectiveInDisplaySlot(int)，0 = SIDEBAR（枚举是 1.13+ 才有的形态）。
+        // 1.8.9–1.20.2：getDisplayObjective(int)，0 = LIST（tab 列表）、1 = SIDEBAR。
+        // 旧实现写 0，于是读的是 tab 槽的 objective：通常为 null（侧边栏整块空白），
+        // 服务器在 tab 槽放了目标时又会显示错误的分数。
         if (parameterType == int.class || parameterType == Integer.class) {
-            return Integer.valueOf(0);
+            return Integer.valueOf(1);
         }
         if (!parameterType.isEnum()) {
             return null;
@@ -698,6 +1228,39 @@ public final class GameBridge {
             return writeField(options, ClassType.OPTIONS, canonicalField, value);
         }
         return callMappedStatus(field, ClassType.OPTION_INSTANCE, "set", value);
+    }
+
+    /**
+     * 移动键的实际按下状态：{@code [前进, 左, 后退, 右, 跳跃]}。
+     *
+     * <p>直接问游戏的 {@code KeyMapping#isDown()}：玩家把前进改绑到别的键时状态跟着变，
+     * 而不是按 W/A/S/D 的固定键码猜。字段名按两代模型探测（1.8.9–1.12.2 是
+     * {@code keyBindForward} 一族，1.13+ 是 {@code keyUp} 一族）；读不到时返回全 false，
+     * 由 Keystrokes 自己回退到物理键/事件状态。
+     *
+     * @return 长度为 5 的当前按下状态（不会为 {@code null}）
+     */
+    public boolean[] movementKeys() {
+        boolean[] keys = new boolean[5];
+        Object options = readField(minecraft(), ClassType.MINECRAFT, "options");
+        if (options == null) {
+            return keys;
+        }
+        keys[0] = keyMappingDown(options, "keyUp", "keyBindForward");
+        keys[1] = keyMappingDown(options, "keyLeft", "keyBindLeft");
+        keys[2] = keyMappingDown(options, "keyDown", "keyBindBack");
+        keys[3] = keyMappingDown(options, "keyRight", "keyBindRight");
+        keys[4] = keyMappingDown(options, "keyJump", "keyBindJump");
+        return keys;
+    }
+
+    /** 读一个 {@code KeyMapping} 绑定并问它当前是否按下。 */
+    private boolean keyMappingDown(Object options, String... names) {
+        Object mapping = fieldFirst(options, names);
+        if (mapping == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(callMapped(mapping, ClassType.KEY_MAPPING, "isDown"));
     }
 
     /**

@@ -139,10 +139,10 @@ public final class PlayerAlarmsModule extends GameModule {
 
     private void alert(RingState state, NumberValue rings, NumberValue delay, NumberValue volume,
                        NumberValue pitch, TextValue sound, BooleanValue chat, String message) {
-        if (chat.get() && !alertMode.is("Notification")) {
+        // Chat / Both 才写聊天，且必须尊重各事件的 Chat Message 开关。
+        // Notification 是独立通道：当前客户端没有通知渲染，绝不能把它降级成聊天输出。
+        if ((alertMode.is("Chat") || alertMode.is("Both")) && chat.get()) {
             bridge().localMessage(message);
-        } else if (!alertMode.is("Chat")) {
-            bridge().localMessage("[Nocturne] " + message);
         }
         state.remaining = rings.asInt();
         state.delay = delay.asInt();

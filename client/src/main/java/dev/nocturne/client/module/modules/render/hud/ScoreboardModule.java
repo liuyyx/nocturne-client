@@ -9,8 +9,6 @@ import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.ColorValue;
 import dev.nocturne.client.value.NumberValue;
 
-import java.util.List;
-
 /** Better Scoreboard：圆角背景、偏移、阴影和自定义模糊强度。 */
 public final class ScoreboardModule extends GameModule implements WorldOverlay {
     private final ColorValue background = add(new ColorValue("Background Color", 0x5A101114));
@@ -29,15 +27,18 @@ public final class ScoreboardModule extends GameModule implements WorldOverlay {
 
     @Override
     public void drawWorldOverlay(OverlayDraw draw, WorldProjection projection) {
-        List<String> lines = bridge().scoreboardLines();
-        if (lines.isEmpty()) {
+        // 原版侧边栏由 GuiOverlay 每帧按本模块启用状态抑制（setVanillaScoreboardHidden），
+        // 这里只负责画我们自己的那一套，避免出现两条侧栏。
+        java.util.List<dev.nocturne.client.game.GameBridge.ScoreboardRow> rows =
+                bridge().scoreboardRows();
+        if (rows.isEmpty()) {
             return;
         }
         float width = 0.0f;
-        for (String line : lines) {
-            width = Math.max(width, draw.textWidth(line));
+        for (dev.nocturne.client.game.GameBridge.ScoreboardRow row : rows) {
+            width = Math.max(width, draw.textWidth(row.text));
         }
-        float height = lines.size() * draw.textHeight() + 6.0f;
+        float height = rows.size() * draw.textHeight() + 6.0f;
         float x = draw.width() - width - 8.0f + xOffset.asFloat();
         float y = draw.height() * 0.35f + yOffset.asFloat();
         if (drawShadow.get()) {
@@ -50,8 +51,8 @@ public final class ScoreboardModule extends GameModule implements WorldOverlay {
             back = back & 0xFFFFFF | Math.min(back >>> 24, blurStrength.asInt() * 8) << 24;
         }
         draw.roundedRect(x - 4.0f, y - 3.0f, width + 8.0f, height, radius.asFloat(), back);
-        for (String line : lines) {
-            draw.text(line, x, y, 0xFFFFFFFF);
+        for (dev.nocturne.client.game.GameBridge.ScoreboardRow row : rows) {
+            draw.text(row.text, x, y, row.color);
             y += draw.textHeight();
         }
     }

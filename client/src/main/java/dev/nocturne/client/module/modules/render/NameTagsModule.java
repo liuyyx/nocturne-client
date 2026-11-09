@@ -72,9 +72,13 @@ public final class NameTagsModule extends GameModule implements WorldOverlay {
             boolean friend = Friends.isFriend(bridge(), tag.entity);
             boolean team = bridge().isAllied(bridge().player(), tag.entity);
             String prefix = friendStatus.get() && friend ? "★ " : teamStatus.get() && team ? "◆ " : "";
-            String health = showHealth.get() ? " ♥" + String.format(java.util.Locale.ROOT, "%.1f",
-                    bridge().health(tag.entity)) : "";
-            float width = draw.textWidth(prefix, size) + draw.textWidth(bridge().entityName(tag.entity), size)
+            String name = bridge().entityName(tag.entity);
+            // 读不到血量（1.21.5+/26.x 映射缺失或实体状态异常）时不画 ♥ 段，
+            // 不能把“未知”折叠成 0 显示成 ♥0.0。
+            Float healthValue = showHealth.get() ? bridge().healthOrNull(tag.entity) : null;
+            String health = healthValue == null ? "" : " ♥" + String.format(
+                    java.util.Locale.ROOT, "%.1f", healthValue.floatValue());
+            float width = draw.textWidth(prefix, size) + draw.textWidth(name, size)
                     + draw.textWidth(health, size);
             float x = point.x - width * 0.5f;
             float y = point.y - size;
@@ -93,12 +97,12 @@ public final class NameTagsModule extends GameModule implements WorldOverlay {
             }
             draw.text(prefix, x, y, size, friend ? friendColor.argb() : team ? teamColor.argb() : nameColor.argb());
             x += draw.textWidth(prefix, size);
-            draw.text(bridge().entityName(tag.entity), x, y, size, nameColor.argb());
-            x += draw.textWidth(bridge().entityName(tag.entity), size);
-            if (showHealth.get()) {
+            draw.text(name, x, y, size, nameColor.argb());
+            x += draw.textWidth(name, size);
+            if (healthValue != null) {
                 draw.text(" ♥", x, y, size, heartColor.argb());
                 x += draw.textWidth(" ♥", size);
-                draw.text(String.format(java.util.Locale.ROOT, "%.1f", bridge().health(tag.entity)),
+                draw.text(String.format(java.util.Locale.ROOT, "%.1f", healthValue.floatValue()),
                         x, y, size, healthColor.argb());
             }
         }

@@ -12,6 +12,7 @@ import dev.nocturne.client.render.WorldOverlay;
 import dev.nocturne.client.render.WorldProjection;
 import dev.nocturne.client.runtime.FrameListener;
 import dev.nocturne.client.runtime.InputBlock;
+import dev.nocturne.client.runtime.PhysicalKeys;
 import dev.nocturne.ui.fatality.FaClickGui;
 
 import java.awt.event.KeyEvent;
@@ -606,10 +607,16 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         // 否则一帧内指针移动会造成命中测试与事件坐标不一致。
         double mx = input.mouseX();
         double my = input.mouseY();
+        // 物理键快照与原生界面无关：聊天/背包打开时 HUD 也要显示真实按键状态。
+        updatePhysicalKeys();
+        // 原版侧边栏的抑制开关由「Better Scoreboard 是否启用 / NoRender 的 Scoreboard 是否勾选」
+        // 决定；放在所有早退之前，模块关掉后也能把显示槽恢复回来。
+        syncVanillaScoreboard();
 
         // 原生 Screen 优先：它出现时不能再短路 MouseHandler/KeyboardHandler，否则暂停菜单
-        // 连“回到游戏”都点不了。原生界面必须盖住自绘 GUI 与世界覆盖层（NameTags/ESP 等），
-        // 因此这一帧不调用 drawFrame()，并关闭自绘 GUI，避免“回到游戏”被标签压住。
+        // 连“回到游戏”都点不了，同时关闭自绘 GUI，避免“回到游戏”被面板压住。
+        // 但绘制不能一起让步：HUD 行（计分板/坐标/按键）、世界覆盖层（NameTags/ESP）
+        // 与 Better Chat 的背景都必须在聊天/背包/暂停界面期间继续画。
         boolean nativeScreen = hasNativeScreen();
         if (nativeScreen) {
             setBlocked(false);
@@ -625,6 +632,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             lastX = mx;
             lastY = my;
             java.util.Arrays.fill(charWasDown, false);
+            drawFrame();
             return;
         }
         setBlocked(gui.isOpen());
@@ -1072,6 +1080,34 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         }
     }
 
+    /** 把本帧的物理移动键写入快照，供 Keystrokes 等 HUD 模块读取。 */
+    private void updatePhysicalKeys() {
+        PhysicalKeys.update(
+                input.keyDown(87),   // W
+                input.keyDown(65),   // A
+                input.keyDown(83),   // S
+                input.keyDown(68),   // D
+                input.keyDown(32));  // Space
+    }
+
+    /**
+     * 每帧同步原版侧边栏的抑制状态。
+     *
+     * <p>判定放在客户端（模块开关 + NoRender 开关），这里只执行：避免 UI 层直接依赖某个模块类，
+     * 同时保证模块关闭后的第一帧就把显示槽恢复。
+     */
+    private void syncVanillaScoreboard() {
+        NocturneClient client = NocturneClient.get();
+        if (client == null || client.gameBridge() == null) {
+            return;
+        }
+        try {
+            client.gameBridge().setVanillaScoreboardHidden(client.hideVanillaScoreboard());
+        } catch (Throwable ignored) {
+            // 抑制失败只意味着原版侧边栏还在；不能让它打断整帧输入/绘制。
+        }
+    }
+
     private void drawFrame() {
         // TEMP-DIAG（定位界面不显示后删除）：界面打开时每秒打一次真实下发次数。
         long diagNow = System.currentTimeMillis();
@@ -1145,6 +1181,17 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         if (hudLines.isEmpty()) {
             return;
         }
+        dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule textGui =
+                dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule.current();
+        boolean styled = textGui != null && textGui.isEnabled();
+        // 所有 HUD 行共用一个字号：旧实现只让 Text GUI 自己那一行读 Scale，其余写死 10f。
+        // 26.x/1.20+ 的逻辑宽度约 427（1.8.9 是 854），同一个 10f 会占两倍屏宽，
+        // 因此基础字号按逻辑宽度归一，再乘玩家的 Scale。
+        float size = hudTextSize(styled ? textGui.scaleFactor() : 1f);
+        float height = overlayDraw.textHeight(size);
+        int color = styled ? textGui.color() : 0xFFFFFFFF;
+        boolean background = !styled || textGui.background();
+        boolean shadow = styled && textGui.shadow();
         float y = 4f;
         for (java.util.Map.Entry<String, java.util.function.Supplier<String>> entry
                 : new java.util.ArrayList<java.util.Map.Entry<String, java.util.function.Supplier<String>>>(
@@ -1158,27 +1205,37 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             if (text == null || text.isEmpty()) {
                 continue;
             }
-            dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule textGui =
-                    "active-modules".equals(entry.getKey())
-                    ? dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule.current() : null;
-            float size = textGui == null ? 10f : textGui.fontScale();
-            float height = overlayDraw.textHeight(size);
-            int color = textGui == null ? 0xFFFFFFFF : textGui.color();
             for (String line : text.split("\\n")) {
                 if (line.isEmpty()) {
                     continue;
                 }
                 float width = overlayDraw.textWidth(line, size);
-                if (textGui == null || textGui.background()) {
+                if (background) {
                     overlayDraw.roundedRect(3f, y - 1f, width + 6f, height + 3f, 2f, 0x90000000);
                 }
-                if (textGui != null && textGui.shadow()) {
+                if (shadow) {
                     overlayDraw.text(line, 7f, y + 2f, size, 0x80000000);
                 }
                 overlayDraw.text(line, 6f, y + 1f, size, color);
                 y += height + 5f;
             }
         }
+    }
+
+    /**
+     * HUD 基础字号：按后端逻辑宽度归一到 854 宽的设计基准，再乘玩家 Scale。
+     *
+     * @param userScale Text GUI 的 Scale（&le;0 按 1 处理）
+     * @return 不小于 3 的字号
+     */
+    private float hudTextSize(float userScale) {
+        float width = renderer.width();
+        float base = 10f;
+        if (width > 0f && width < 854f) {
+            base = 10f * width / 854f;
+        }
+        float scale = userScale > 0f ? userScale : 1f;
+        return Math.max(3f, base * scale);
     }
 
     /**

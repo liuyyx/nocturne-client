@@ -63,6 +63,8 @@ public final class TextGuiSettingsModule extends HudModule {
     }
 
     public float fontScale() { return scale.asFloat() * 10.0f; }
+    /** 玩家设置的倍率（0.1–2.0）；HUD 行统一乘它。 */
+    public float scaleFactor() { return scale.asFloat(); }
     public int color() { return color.argb(); }
     public boolean shadow() { return shadow.get(); }
     public boolean background() { return background.get(); }

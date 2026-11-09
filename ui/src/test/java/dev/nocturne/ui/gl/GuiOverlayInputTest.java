@@ -1,5 +1,9 @@
 package dev.nocturne.ui.gl;
 
+import dev.nocturne.client.NocturneClient;
+import dev.nocturne.client.game.GameBridge;
+import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.mapping.Mapping;
 import dev.nocturne.client.module.ModuleRegistry;
 import dev.nocturne.client.runtime.InputBlock;
 import dev.nocturne.ui.FakeBackend;
@@ -23,6 +27,7 @@ class GuiOverlayInputTest {
         InputBlock.consumePressed(344, Long.MAX_VALUE);
         InputBlock.consumePressed(340, Long.MAX_VALUE);
         InputBlock.consumePressed(256, Long.MAX_VALUE);
+        resetClient();
     }
 
     @Test
@@ -146,6 +151,83 @@ class GuiOverlayInputTest {
         overlay.onFrame();
         assertEquals(1, backend.scaleOverrideCalls, "新的按下沿才应缩放");
         assertEquals(2, backend.scaleValue);
+    }
+
+    /**
+     * 原生 Screen（聊天/背包/暂停）打开时 HUD 不能被输入让步逻辑一起砍掉：
+     * 早退只交接鼠标状态，绘制仍要走 drawFrame。
+     */
+    @Test
+    void hudStillDrawsWhileNativeScreenIsOpen() {
+        NocturneClient client = NocturneClient.boot(null);
+        ScreenHost host = new ScreenHost();
+        host.screen = new Object();
+        ScreenHost.instance = host;
+        client.setGameBridge(new GameBridge(null, new HostMapping()));
+
+        FakeBackend backend = new FakeBackend(320, 240);
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(), backend,
+                new FakeInput(), GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.add("test", () -> "FPS 60");
+
+        overlay.onFrame();
+
+        assertFalse(overlay.isOpen(), "原生界面期间自绘 GUI 必须关闭");
+        assertEquals(1, backend.beginCalls, "原生界面期间仍必须开启绘制帧");
+        assertTrue(backend.renderer.ofKind("text").size() > 0, "HUD 行必须画出来");
+        resetClient();
+    }
+
+    /** 清理进程级单例，避免默认模块污染后续用例。 */
+    private static void resetClient() {
+        try {
+            Field instance = NocturneClient.class.getDeclaredField("instance");
+            instance.setAccessible(true);
+            instance.set(null, null);
+        } catch (Throwable ignored) {
+            // 反射不可用时只能依赖下一个用例自行 boot
+        }
+        ScreenHost.instance = null;
+    }
+
+    /** 替身 Minecraft：只提供一个非 static 的 Screen 字段。 */
+    public static final class ScreenHost {
+        public static ScreenHost instance;
+
+        public Object screen;
+        public Object gui;
+
+        public static ScreenHost getInstance() {
+            return instance;
+        }
+    }
+
+    /** 只把 MINECRAFT 指向 ScreenHost 的映射。 */
+    private static final class HostMapping implements Mapping {
+        @Override
+        public String describe() {
+            return "host";
+        }
+
+        @Override
+        public String className(ClassType type) {
+            return type == ClassType.MINECRAFT ? ScreenHost.class.getName() : type.canonicalName();
+        }
+
+        @Override
+        public String methodName(ClassType owner, String canonicalName, String descriptor) {
+            return canonicalName;
+        }
+
+        @Override
+        public String fieldName(ClassType owner, String canonicalName) {
+            return canonicalName;
+        }
+
+        @Override
+        public boolean isIdentity() {
+            return false;
+        }
     }
 
     /** 只记录 OverlayGui 收到的事件，避免把点击坐标和实际模块布局耦合进交接测试。 */

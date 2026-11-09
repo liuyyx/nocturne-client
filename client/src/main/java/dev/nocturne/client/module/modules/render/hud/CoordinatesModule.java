@@ -22,12 +22,25 @@ public final class CoordinatesModule extends HudModule {
             if (!state.present()) {
                 return "";
             }
-            if (displayType.is("Vertical")) {
-                return String.format(Locale.ROOT, "X %.1f  Y %.1f  Z %.1f", state.x(), state.y(), state.z());
-            }
-            return String.format(Locale.ROOT, "XYZ %.1f / %.1f / %.1f", state.x(), state.y(), state.z());
+            return format(displayType.is("Vertical"), state.x(), state.y(), state.z());
         }
     };
+
+    /**
+     * 坐标文本：Horizontal 一行，Vertical 真正三行（HUD 渲染按 {@code \n} 分行）。
+     *
+     * @param vertical 是否垂直布局
+     * @param x        X
+     * @param y        Y
+     * @param z        Z
+     * @return 待显示文本
+     */
+    static String format(boolean vertical, double x, double y, double z) {
+        if (vertical) {
+            return String.format(Locale.ROOT, "X %.1f\nY %.1f\nZ %.1f", x, y, z);
+        }
+        return String.format(Locale.ROOT, "XYZ %.1f / %.1f / %.1f", x, y, z);
+    }
 
     @Override
     public String name() {

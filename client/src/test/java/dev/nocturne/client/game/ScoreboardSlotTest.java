@@ -41,15 +41,14 @@ class ScoreboardSlotTest {
     }
 
     /**
-     * 1.8.9–1.12 的形参是 {@code int}（0 = SIDEBAR），不是枚举。
+     * 1.8.9–1.20.2 的形参是 {@code int}（0 = LIST/tab、1 = SIDEBAR），不是枚举。
      *
-     * <p>旧断言把"int 形参一律返回 null"固化成了契约，结果 1.8.9 上计分板整块空白；
-     * 新契约：int/Integer 返回 0，其它非枚举仍返回 null。
+     * <p>旧断言把 0 固化成 SIDEBAR，结果侧边栏读的是 tab 槽：通常为空、偶尔显示错目标。
      */
     @Test
     void resolvesSidebarForLegacyIntParameter() {
-        assertEquals(Integer.valueOf(0), GameBridge.sidebarSlot(int.class));
-        assertEquals(Integer.valueOf(0), GameBridge.sidebarSlot(Integer.class));
+        assertEquals(Integer.valueOf(1), GameBridge.sidebarSlot(int.class));
+        assertEquals(Integer.valueOf(1), GameBridge.sidebarSlot(Integer.class));
     }
 
     @Test

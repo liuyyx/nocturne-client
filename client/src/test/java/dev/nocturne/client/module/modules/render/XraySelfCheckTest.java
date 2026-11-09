@@ -1,7 +1,10 @@
 package dev.nocturne.client.module.modules.render;
 
+import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.TestSupport;
 import dev.nocturne.client.bootstrap.GameplayHook;
+import dev.nocturne.client.event.MoveEvent;
+import dev.nocturne.client.value.BooleanValue;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -9,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,6 +68,27 @@ class XraySelfCheckTest {
             assertTrue(module.isEnabled(), "自检不得静默改写用户开关");
             // cullingDisabled 生效时 shouldRender 直接放行，不会触碰 null bridge。
             assertTrue(module.shouldRender(null, null), "内部停摆后必须放行全部方块");
+        } finally {
+            module.setEnabled(false);
+        }
+    }
+
+    /**
+     * OreDeobf 不得再改 MoveEvent：曾经把 x/z 清零，真机表现是“开 Xray 后人物走不动”。
+     * 探测/发包只在 onTick 限速执行。
+     */
+    @Test
+    void oreDeobfDoesNotRewriteMovement() throws Exception {
+        NocturneClient client = NocturneClient.boot(null);
+        XrayModule module = new XrayModule();
+        ((BooleanValue) field(module, "oreDeobf").get(module)).set(Boolean.TRUE);
+        module.setEnabled(true);
+        try {
+            MoveEvent event = new MoveEvent(1.5, 64.0, -2.5);
+            client.events().post(event);
+            assertEquals(1.5, event.x, 1e-9, "Xray 不得改写位移 x");
+            assertEquals(64.0, event.y, 1e-9, "Xray 不得改写位移 y");
+            assertEquals(-2.5, event.z, 1e-9, "Xray 不得改写位移 z");
         } finally {
             module.setEnabled(false);
         }

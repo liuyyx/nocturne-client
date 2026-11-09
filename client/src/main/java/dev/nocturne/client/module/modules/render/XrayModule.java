@@ -49,6 +49,8 @@ public final class XrayModule extends GameModule implements WorldOverlay {
     private final BooleanValue lava = add(new BooleanValue("Lava", false));
     private long nextScan;
     private long nextDeobf;
+    /** 下一輪探测的目标下标：扫描顺序固定，不轮换的话每次都只探第一个目标。 */
+    private int probeCursor;
 
     /** 渲染钩子里的剔除决策数与本窗口内放行的方块数；shouldRender 在渲染线程，onTick 在游戏线程。 */
     private final java.util.concurrent.atomic.AtomicInteger cullingDecisions =
@@ -80,6 +82,8 @@ public final class XrayModule extends GameModule implements WorldOverlay {
         cullingSelfCheckHit = false;
         cullingDisabled = false;
         cullingWindowStartedAt = System.currentTimeMillis();
+        probeCursor = 0;
+        nextDeobf = 0L;
         // 能力检查：26.1+ 的映射表把 BlockRenderDispatcher 整个标记为 absent，方块剔除钩子没有入口。
         // 此时模块只提供矿石框（overlay），并在日志里明确说明"剔除不可用"——绝不假装剔除生效。
         if (!dev.nocturne.client.bootstrap.GameplayHook.isWired("xrayBlock")) {
@@ -88,12 +92,6 @@ public final class XrayModule extends GameModule implements WorldOverlay {
                     + (reason == null ? "" : " (" + reason + ")")
                     + "; ore boxes only");
         }
-        listen(dev.nocturne.client.event.MoveEvent.class, event -> {
-            if (oreDeobf.get()) {
-                event.x = 0.0;
-                event.z = 0.0;
-            }
-        });
         if (bridge() != null) {
             bridge().reloadChunks();
         }
@@ -222,6 +220,22 @@ public final class XrayModule extends GameModule implements WorldOverlay {
                 }
             }
         }
+        // 探测/发包只在游戏线程的 tick 里做，并且按 Delay 限速。旧实现把它放在
+        // drawWorldOverlay（渲染线程）里逐目标调用，和 MoveEvent 清零一起造成卡顿/冻结。
+        if (oreDeobf.get()) {
+            probeNext(now);
+        }
+    }
+
+    /** 限速探测一个目标：每次扫描（Delay 间隔）最多发一次，多个目标轮换。 */
+    private void probeNext(long now) {
+        if (targets.isEmpty() || now < nextDeobf) {
+            return;
+        }
+        int index = probeCursor % targets.size();
+        probeCursor = (index + 1) % targets.size();
+        nextDeobf = now + delay.asInt();
+        probe(targets.get(index));
     }
 
     @Override
@@ -234,18 +248,10 @@ public final class XrayModule extends GameModule implements WorldOverlay {
             int color = oreColor(bridge().blockDescription(bridge().blockStateAt(target[0], target[1], target[2])));
             WorldGeometry.blockFilled(draw, projection, target[0], target[1], target[2], 1.0f,
                     color & 0xFFFFFF | alpha << 24, color);
-            if (oreDeobf.get()) {
-                probe(target);
-            }
         }
     }
 
     private void probe(int[] target) {
-        long now = System.currentTimeMillis();
-        if (now < nextDeobf) {
-            return;
-        }
-        nextDeobf = now + delay.asInt();
         Object pos = bridge().blockPos(target[0], target[1], target[2]);
         Object direction = bridge().staticField(ClassType.DIRECTION, "UP");
         dev.nocturne.client.module.modules.EpsilonSupport.startDestroy(bridge(), pos, direction);

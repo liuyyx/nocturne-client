@@ -52,6 +52,7 @@ class World3DRendererTest {
         boolean nullBatch;
         int begins;
         int ends;
+        int captures;
         WorldCamera seen;
         final RecordingBatch batch = new RecordingBatch();
 
@@ -86,6 +87,11 @@ class World3DRendererTest {
             if (throwEnd) {
                 throw new IllegalStateException("end boom");
             }
+        }
+
+        @Override
+        public void captureMatrices() {
+            captures++;
         }
 
         @Override
@@ -198,10 +204,37 @@ class World3DRendererTest {
     }
 
     @Test
+    void captureDelegatesToBackendAndSwallowsErrors() {
+        FakeBackend backend = new FakeBackend();
+        client.world3d().setBackend(backend);
+        client.world3d().captureMatrices();
+        assertEquals(1, backend.captures);
+
+        // 没有后端时也必须安全。
+        client.world3d().markUnavailable("gl-core", "no immediate mode");
+        client.world3d().captureMatrices();
+        assertEquals(1, backend.captures);
+    }
+
+    @Test
+    void capabilityRequiresWiredHook() {
+        FakeBackend backend = new FakeBackend();
+        World3DRenderer renderer = client.world3d();
+        renderer.setBackend(backend);
+        World3DCapability notWired = renderer.capability();
+        assertFalse(notWired.available(), "backend alone must not claim availability");
+        assertEquals("world3d hook not wired yet", notWired.reason());
+
+        GameplayHook.markWired("world3d");
+        assertTrue(renderer.capability().available());
+    }
+
+    @Test
     void capabilityReflectsHookState() {
         FakeBackend backend = new FakeBackend();
         World3DRenderer renderer = client.world3d();
         renderer.setBackend(backend);
+        GameplayHook.markWired("world3d");
         assertTrue(renderer.capability().available());
 
         GameplayHook.markUnavailable("world3d", "EntityRenderer#renderWorld absent");
@@ -223,10 +256,12 @@ class World3DRendererTest {
         final AtomicReference<WorldRenderEvent> seen = new AtomicReference<WorldRenderEvent>();
         client.events().subscribe(WorldRenderEvent.class, seen::set);
 
-        assertTrue(renderer.renderCamera(camera()));
+        WorldCamera cam = camera();
+        assertTrue(renderer.renderCamera(cam));
         assertEquals(1, module.draws);
         assertNotNull(module.lastContext);
         assertSame(backend.batch, module.lastContext.batch());
+        assertSame(cam, module.lastContext.camera());
         assertEquals(1, backend.begins);
         assertEquals(1, backend.ends);
 

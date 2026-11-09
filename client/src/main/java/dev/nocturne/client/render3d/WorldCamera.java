@@ -24,6 +24,8 @@ public final class WorldCamera {
     private float fov;
     /** 当帧渲染插值量（0–1）。 */
     private float partialTicks;
+    /** 游戏真实远平面距离（1.8.9 EntityRenderer#farPlaneDistance）；0 = 未知。 */
+    private float farPlane;
     /** 是否有一份可用快照；{@code false} 时所有 getter 返回 0。 */
     private boolean valid;
 
@@ -40,8 +42,25 @@ public final class WorldCamera {
         this.valid = true;
     }
 
-    /** 把快照标记为失效（相机读不到时调用，避免上帧的旧值继续被绘制）。 */
+    /** 写入游戏真实远平面距离（0 = 未知）；由 {@code CameraState} 在读取相机后调用。 */
+    public void setFarPlane(float farPlane) {
+        this.farPlane = farPlane > 0f ? farPlane : 0f;
+    }
+
+    /**
+     * 把快照标记为失效并清零全部字段。
+     *
+     * <p>只清 {@code valid} 会让失败帧继续暴露上一帧的数值；调试/能力诊断可能据此画错。
+     */
     public void clear() {
+        eyeX = 0d;
+        eyeY = 0d;
+        eyeZ = 0d;
+        yaw = 0f;
+        pitch = 0f;
+        fov = 0f;
+        partialTicks = 0f;
+        farPlane = 0f;
         valid = false;
     }
 
@@ -76,5 +95,10 @@ public final class WorldCamera {
 
     public float partialTicks() {
         return partialTicks;
+    }
+
+    /** @return 游戏真实远平面距离；0 表示该版本/该帧读不到 */
+    public float farPlane() {
+        return farPlane;
     }
 }

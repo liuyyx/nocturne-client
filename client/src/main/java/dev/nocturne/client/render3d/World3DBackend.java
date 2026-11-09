@@ -40,6 +40,16 @@ public interface World3DBackend {
     /** @return 当帧批次；只在成功的 {@code begin()} 之后非 null */
     World3DBatch batch();
 
+    /**
+     * 在游戏世界渲染的<b>头部</b>捕获当帧投影/模型视图矩阵。
+     *
+     * <p>为什么需要单独的捕获点：{@code renderWorld} 尾部模型视图已被手部渲染改成手空间
+     * （带缩放），直接读会解析不出相机。头部矩阵还是世界相机（含 F5/第三人称/viewBobbing），
+     * 尾部绘制时优先使用这份捕获值；实现可以不做任何事（默认空实现）。
+     */
+    default void captureMatrices() {
+    }
+
     /** @return 本帧帧缓冲宽度（像素）；未进入时返回 0 */
     int viewportWidth();
 

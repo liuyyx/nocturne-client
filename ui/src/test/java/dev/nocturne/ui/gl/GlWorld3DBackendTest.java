@@ -12,17 +12,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@link GlWorld3DBackend} 的契约：相机变换、图元顶点数、选项状态与矩阵/属性栈的成对还原。
+ * {@link GlWorld3DBackend} 的契约：复用游戏投影/模型视图、相机相对顶点精度、图元顶点数、
+ * 选项状态、残留状态清理、重入保护与矩阵/属性栈成对还原。
  *
- * <p>用 {@link FakeGl} 替身跑，不需要真实 GL 上下文。关键断言都是「有序」的：旋转顺序错了、
- * 属性栈漏 pop、深度/混合没生效，症状在真机上分别是「框方向相反」「HUD 串色」「框不可见」，
- * 只看计数抓不到。
+ * <p>用 {@link FakeGl} 替身跑。关键断言是有序/带数值的：矩阵用自造 1024 远平面、顶点不减相机、
+ * 重入压两次栈，症状在真机上分别是「远处深度错位穿墙」「大坐标抖动」「栈溢出/HUD 串色」。
  */
 class GlWorld3DBackendTest {
 
     private static final int GL_DEPTH_TEST = 0x0B71;
     private static final int GL_CULL_FACE = 0x0B44;
     private static final int GL_BLEND = 0x0BE2;
+    private static final int GL_TEXTURE_2D = 0x0DE1;
+    private static final int GL_ALPHA_TEST = 0x0BC0;
+    private static final int GL_FOG = 0x0B60;
     private static final int GL_LINES = 1;
     private static final int GL_LINE_LOOP = 2;
     private static final int GL_TRIANGLE_STRIP = 5;
@@ -35,7 +38,8 @@ class GlWorld3DBackendTest {
         FakeGl.reset();
         GlApi gl = GlApi.bind(FakeGl.class);
         assertNotNull(gl, "FakeGl must expose the GL11 subset");
-        assertTrue(gl.hasProjection3D(), "FakeGl must look like a fixed pipeline");
+        assertTrue(gl.hasProjection3D(), "FakeGl must look like a fixed pipeline with matrix access");
+        assertTrue(gl.hasFallbackProjection(), "FakeGl must expose the fallback path");
         backend = new GlWorld3DBackend(gl);
         camera = new WorldCamera();
         camera.set(100.0d, 64.0d, -200.0d, 120f, 30f, 90f, 0.25f);
@@ -52,39 +56,34 @@ class GlWorld3DBackendTest {
     }
 
     @Test
-    void beginAppliesCameraTransformAndState() {
+    void beginReusesGameMatricesAndDrawsCameraRelative() {
         assertTrue(backend.begin(camera));
 
-        // 属性栈 + 客户态栈各压一次；矩阵先切投影、再切模型视图。
-        assertEquals(1, FakeGl.pushAttribCalls);
-        assertEquals(1, FakeGl.pushClientAttribCalls);
-        assertEquals(GlApi.GL_ALL_ATTRIB_BITS, FakeGl.lastAttribMask);
+        // 投影/模型视图都读到了：不再自建 frustum/rotate，而是载入“仅旋转”的模型视图。
+        assertEquals(0, FakeGl.frustumCalls, "game projection must be reused, not rebuilt");
+        assertEquals(0, FakeGl.rotateCalls, "game modelview rotation must be reused");
+        assertEquals(1, FakeGl.loadMatrixdCalls);
+        assertNotNull(FakeGl.lastLoadedMatrix);
+        assertEquals(0.0d, FakeGl.lastLoadedMatrix[12], 1e-9d);
+        assertEquals(0.0d, FakeGl.lastLoadedMatrix[13], 1e-9d);
+        assertEquals(0.0d, FakeGl.lastLoadedMatrix[14], 1e-9d);
+
         assertEquals(2, FakeGl.matrixModeSequence.size());
         assertEquals(GlApi.GL_PROJECTION, FakeGl.matrixModeSequence.get(0).intValue());
         assertEquals(GlApi.GL_MODELVIEW, FakeGl.matrixModeSequence.get(1).intValue());
 
-        // 90° 竖直 FOV、16:9 视口：top = near * tan(45°) = 0.05，right = top * aspect。
-        assertEquals(1, FakeGl.frustumCalls);
-        assertEquals(0.05d, FakeGl.lastFrustum[3], 1e-9d);
-        assertEquals(0.05d * 1920.0d / 1080.0d, FakeGl.lastFrustum[1], 1e-9d);
+        // 残留状态：两个纹理单元都关、ALPHA_TEST/FOG 关、活动单元回到 0。
+        assertTrue(FakeGl.disableCount(GL_TEXTURE_2D) >= 2);
+        assertTrue(FakeGl.disableCount(GL_ALPHA_TEST) >= 1);
+        assertTrue(FakeGl.disableCount(GL_FOG) >= 1);
+        assertEquals(GlApi.GL_TEXTURE0, FakeGl.lastActiveTexture);
 
-        // 旋转顺序：先 pitch（绕 X），再 yaw+180（绕 Y）。
-        assertEquals(2, FakeGl.rotateCalls);
-        assertEquals(30f, FakeGl.rotateSequence.get(0)[0], 1e-4f);
-        assertEquals(1f, FakeGl.rotateSequence.get(0)[1], 1e-4f);
-        assertEquals(300f, FakeGl.rotateSequence.get(1)[0], 1e-4f);
-        assertEquals(1f, FakeGl.rotateSequence.get(1)[2], 1e-4f);
-
-        // 平移是眼位取负。
-        assertArrayEquals(new double[]{-100.0d, -64.0d, 200.0d}, FakeGl.lastTranslate, 1e-9d);
-
-        // 基线状态：深度开、混合/剔除关、深度可写、纹理关闭。
-        assertTrue(FakeGl.isCapEnabled(GL_DEPTH_TEST));
-        assertFalse(FakeGl.isCapEnabled(GL_BLEND));
-        assertFalse(FakeGl.isCapEnabled(GL_CULL_FACE));
-        assertEquals(1, FakeGl.depthMaskCalls);
-        assertTrue(FakeGl.lastDepthMask);
-        assertTrue(FakeGl.disableCount(GlApi.GL_TEXTURE_2D) >= 1);
+        // 顶点是世界坐标减去矩阵解出的相机原点：盒子上角 (101,65,-199) -> (1,1,1)。
+        assertTrue(FakeGl.disableCount(GlApi.GL_TEXTURE_2D) >= 2);
+        FakeGl.lastVertex3 = null;
+        backend.batch().box(99.0d, 63.0d, -201.0d, 101.0d, 65.0d, -199.0d);
+        assertArrayEquals(new float[]{1f, 1f, 1f}, FakeGl.lastVertex3, 1e-4f);
+        backend.end();
     }
 
     @Test
@@ -95,9 +94,18 @@ class GlWorld3DBackendTest {
         assertEquals(2, FakeGl.popMatrixCalls);
         assertEquals(1, FakeGl.popAttribCalls);
         assertEquals(1, FakeGl.popClientAttribCalls);
-        // 归零后没有批次可用。
         assertEquals(0, backend.viewportWidth());
         assertEquals(0, backend.viewportHeight());
+        // 退出后活动纹理单元也回到 0。
+        assertEquals(GlApi.GL_TEXTURE0, FakeGl.lastActiveTexture);
+    }
+
+    @Test
+    void secondBeginIsRejectedWithoutPushingAgain() {
+        assertTrue(backend.begin(camera));
+        assertFalse(backend.begin(camera), "re-entrant begin must be refused");
+        assertEquals(1, FakeGl.pushAttribCalls);
+        backend.end();
     }
 
     @Test
@@ -124,8 +132,8 @@ class GlWorld3DBackendTest {
         backend.batch().ring(0.0d, 64.0d, 0.0d, 2.5d, 32);
         assertEquals(GL_LINE_LOOP, FakeGl.lastBeginMode);
         assertEquals(32, FakeGl.vertex3Calls - before);
-        // 最后一个顶点在角度 2π*31/32 处，Y 必须仍是圆心高度。
-        assertEquals(64f, FakeGl.lastVertex3[1], 1e-4f);
+        // 相对相机原点 (100,64,-200)，Y 分量应为 0。
+        assertEquals(0f, FakeGl.lastVertex3[1], 1e-4f);
         backend.end();
     }
 
@@ -156,13 +164,182 @@ class GlWorld3DBackendTest {
         assertTrue(FakeGl.isCapEnabled(GL_CULL_FACE));
         assertTrue(FakeGl.hasEvent("blendFunc:770,771"));
 
-        // 改回默认值后再画一次：状态必须随之回退。
         batch.depthTest(true).blend(false).cull(false);
         batch.line(0, 0, 0, 1, 1, 1);
         assertTrue(FakeGl.isCapEnabled(GL_DEPTH_TEST));
         assertFalse(FakeGl.isCapEnabled(GL_BLEND));
         assertFalse(FakeGl.isCapEnabled(GL_CULL_FACE));
         backend.end();
+    }
+
+    @Test
+    void unusableModelViewFallsBackToCameraRotationAndEye() {
+        // 平移为 0 的模型视图解出原点 (0,0,0)，与相机眼位相差约 224 格 -> 判定不是世界矩阵。
+        FakeGl.modelViewMatrix = FakeGl.worldModelView(0.0d, 0.0d, 0.0d);
+        assertTrue(backend.begin(camera));
+        assertEquals(0, FakeGl.loadMatrixdCalls);
+        assertEquals(2, FakeGl.rotateCalls, "fallback must rebuild pitch + yaw");
+
+        // 回退路径以眼位为原点：盒子上角 (101,65,-199) - (100,64,-200) = (1,1,1)。
+        backend.batch().box(99.0d, 63.0d, -201.0d, 101.0d, 65.0d, -199.0d);
+        assertArrayEquals(new float[]{1f, 1f, 1f}, FakeGl.lastVertex3, 1e-4f);
+        backend.end();
+    }
+
+    @Test
+    void unusableProjectionUsesRealFarPlane() {
+        FakeGl.projectionMatrix = new double[16];
+        camera.setFarPlane(256f);
+        assertTrue(backend.begin(camera));
+        assertEquals(1, FakeGl.frustumCalls);
+        assertEquals(256.0d, FakeGl.lastFrustum[5], 1e-9d, "far must come from farPlaneDistance");
+        assertTrue(FakeGl.lastFrustum[4] > 0.0d);
+        backend.end();
+    }
+
+    @Test
+    void readsMatricesThroughBufferFormToo() {
+        // FakeGl 同时提供数组与 Buffer 形态；GlApi 优先数组，这里只验证 buffer 绑定存在时仍工作。
+        assertTrue(GlApi.bind(FakeGl.class).readMatrix(GlApi.GL_PROJECTION_MATRIX, new double[16]));
+    }
+
+    @Test
+    void vertexPrecisionAtLargeWorldCoordinates() {
+        double origin = 30000000.0d;
+        WorldCamera far = new WorldCamera();
+        far.set(origin, 70.0d, -origin, 0f, 0f, 70f, 0f);
+        FakeGl.modelViewMatrix = FakeGl.worldModelView(-origin, -70.0d, origin);
+        assertTrue(backend.begin(far));
+
+        backend.batch().box(origin + 0.25d, 70.25d, -origin + 0.25d,
+                origin + 0.75d, 70.75d, -origin + 0.75d);
+        // 最后提交的是 max 角，double 减完后应为 0.75；若先转 float 再减会得到 0 或 2。
+        assertArrayEquals(new float[]{0.75f, 0.75f, 0.75f}, FakeGl.lastVertex3, 1e-4f);
+        backend.end();
+    }
+
+    @Test
+    void capturedHeadMatricesWinOverTailState() {
+        // 头部：世界相机矩阵（平移 = -eye）。
+        FakeGl.projectionMatrix = FakeGl.perspective();
+        FakeGl.modelViewMatrix = FakeGl.worldModelView(-100.0d, -64.0d, 200.0d);
+        backend.captureMatrices();
+        // 尾部：模拟手部渲染把模型视图改成带缩放的手空间。
+        FakeGl.modelViewMatrix = FakeGl.worldModelView(3.0d, 4.0d, 5.0d);
+        FakeGl.modelViewMatrix[0] = 0.5d;
+
+        assertTrue(backend.begin(camera));
+        assertEquals(1, FakeGl.loadMatrixdCalls);
+        assertNotNull(FakeGl.lastLoadedMatrix);
+        assertEquals(1.0d, FakeGl.lastLoadedMatrix[0], 1e-9d, "captured world rotation wins");
+        backend.end();
+    }
+
+    @Test
+    void readsLwjgl2MatrixMethodNames() {
+        GlApi gl = GlApi.bind(Lwjgl2Gl.class);
+        assertNotNull(gl);
+        assertTrue(gl.hasProjection3D(), "LWJGL2 names glGetDouble/glLoadMatrix must bind");
+        GlWorld3DBackend lwjgl2 = new GlWorld3DBackend(gl);
+        assertTrue(lwjgl2.available());
+        lwjgl2.captureMatrices();
+        assertTrue(lwjgl2.begin(camera));
+        lwjgl2.end();
+    }
+
+    /** 只暴露 LWJGL2 公开方法名（无 v/d 后缀）的 GL11 替身。 */
+    public static final class Lwjgl2Gl {
+        public static void glColor4f(float r, float g, float b, float a) {
+        }
+
+        public static void glBegin(int mode) {
+        }
+
+        public static void glEnd() {
+        }
+
+        public static void glVertex2f(float x, float y) {
+        }
+
+        public static void glVertex3f(float x, float y, float z) {
+        }
+
+        public static void glEnable(int cap) {
+        }
+
+        public static void glDisable(int cap) {
+        }
+
+        public static void glBlendFunc(int src, int dst) {
+        }
+
+        public static void glPushMatrix() {
+        }
+
+        public static void glPopMatrix() {
+        }
+
+        public static void glPushAttrib(int mask) {
+        }
+
+        public static void glPopAttrib() {
+        }
+
+        public static void glPushClientAttrib(int mask) {
+        }
+
+        public static void glPopClientAttrib() {
+        }
+
+        public static void glTranslatef(float x, float y, float z) {
+        }
+
+        public static void glLineWidth(float width) {
+        }
+
+        public static void glMatrixMode(int mode) {
+        }
+
+        public static void glLoadIdentity() {
+        }
+
+        public static void glFrustum(double l, double r, double b, double t, double n, double f) {
+        }
+
+        public static void glRotatef(float angle, float x, float y, float z) {
+        }
+
+        public static void glDepthMask(boolean flag) {
+        }
+
+        public static void glGetInteger(int target, java.nio.IntBuffer out) {
+            if (out != null && out.remaining() >= 4) {
+                out.put(0, 0);
+                out.put(1, 0);
+                out.put(2, 1280);
+                out.put(3, 720);
+            }
+        }
+
+        public static void glGetDouble(int target, java.nio.DoubleBuffer out) {
+            double[] source = target == GlApi.GL_PROJECTION_MATRIX ? FakeGl.perspective()
+                    : FakeGl.worldModelView(-100.0d, -64.0d, 200.0d);
+            for (int i = 0; i < 16 && i < out.remaining(); i++) {
+                out.put(i, source[i]);
+            }
+        }
+
+        public static void glLoadMatrix(java.nio.DoubleBuffer matrix) {
+        }
+
+        public static void glDisableClientState(int cap) {
+        }
+
+        public static void glClientActiveTexture(int unit) {
+        }
+
+        public static void glActiveTexture(int unit) {
+        }
     }
 
     @Test
@@ -173,6 +350,7 @@ class GlWorld3DBackendTest {
 
         WorldCamera invalidFov = new WorldCamera();
         invalidFov.set(0d, 0d, 0d, 0f, 0f, 0f, 0f);
+        FakeGl.projectionMatrix = new double[16];
         assertTrue(backend.begin(invalidFov), "invalid FOV falls back to 70 degrees");
         // 70° 的 top = 0.05 * tan(35°)
         assertEquals(0.05d * Math.tan(Math.toRadians(35.0d)), FakeGl.lastFrustum[3], 1e-9d);

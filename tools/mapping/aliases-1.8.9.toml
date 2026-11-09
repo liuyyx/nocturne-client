@@ -744,6 +744,21 @@ scope = "net/minecraft/client/renderer/EntityRenderer"
 mcp = "renderWorld"
 scope = "net/minecraft/client/renderer/EntityRenderer"
 
+# 世界相机矩阵的捕获点（int pass, float partialTicks, long finishTimeNano）。
+[methods.renderWorldPass]
+mcp = "renderWorldPass"
+scope = "net/minecraft/client/renderer/EntityRenderer"
+
+# 相机矩阵建立点（float partialTicks, int pass）。
+[methods.setupCameraTransform]
+mcp = "setupCameraTransform"
+scope = "net/minecraft/client/renderer/EntityRenderer"
+
+# 游戏真实远平面：1.8.9/1.12.2 的 EntityRenderer 字段。
+[fields.farPlaneDistance]
+mcp = "farPlaneDistance"
+scope = "net/minecraft/client/renderer/EntityRenderer"
+
 [overrides."net/minecraft/client/multiplayer/PlayerInfo"]
 gameMode = { mcp = "gameType", scope = "net/minecraft/client/network/NetworkPlayerInfo" }
 getProfile = { mcp = "getGameProfile", scope = "net/minecraft/client/network/NetworkPlayerInfo" }

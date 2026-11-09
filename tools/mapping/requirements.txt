@@ -867,6 +867,12 @@ net/minecraft/client/renderer/EntityRenderer#getFOVModifier()
 # 世界空间 3D 渲染钩子：1.8.9/1.12.2 的 EntityRenderer#renderWorld(FJ)V。
 # 世界几何画完、HUD 之前返回；织入点在其 RETURN 之前，深度缓冲已是完整世界。
 net/minecraft/client/renderer/EntityRenderer#renderWorld()
+# 世界相机矩阵只在 renderWorldPass 内有效（renderWorld 头部/尾部都已不是世界矩阵）。
+net/minecraft/client/renderer/EntityRenderer#renderWorldPass()
+# 世界相机矩阵真正由 setupCameraTransform(float,int) 建立（renderWorldPass 尾部已重置）。
+net/minecraft/client/renderer/EntityRenderer#setupCameraTransform()
+# 矩阵读取失败时重建透视需要游戏真实远平面（1.8.9/1.12.2 的 float 字段）。
+net/minecraft/client/renderer/EntityRenderer#farPlaneDistance
 # 插值计时器：1.8.9/1.12.2 是 Timer#renderPartialTicks，1.13–1.20.1 改名 partialTick，
 # 1.21+ 换成 DeltaTracker#getGameTimeDeltaPartialTick(boolean)。
 net/minecraft/client/Timer

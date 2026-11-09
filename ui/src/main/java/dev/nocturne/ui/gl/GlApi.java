@@ -5,6 +5,7 @@ import dev.nocturne.client.game.Reflect;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.DoubleBuffer;
 import java.nio.IntBuffer;
 
 /**
@@ -234,8 +235,14 @@ public final class GlApi {
     private Method popClientAttrib;
     /** {@code glDepthMask}：深度写入开关。 */
     private Method depthMask;
-    /** {@code glTranslated}：大世界坐标用双精度平移（{@code glTranslatef} 在 30M 处误差到米级）。 */
-    private Method translated;
+    /** {@code glGetDoublev(int, DoubleBuffer|double[])}：复用游戏当帧投影/模型视图矩阵。 */
+    private Method getDoublevBuffer;
+    private Method getDoublevArray;
+    /** {@code glLoadMatrixd(DoubleBuffer|double[])}：载入仅保留旋转的模型视图。 */
+    private Method loadMatrixdBuffer;
+    private Method loadMatrixdArray;
+    /** 矩阵查询复用直接缓冲（16 个 double）。 */
+    private final DoubleBuffer matrixBuffer;
 
     /**
      * 关闭所有客户态数组（顶点/法线/颜色/纹理坐标）。
@@ -345,6 +352,9 @@ public final class GlApi {
         this.viewportBuffer = ByteBuffer.allocateDirect(16 * Integer.BYTES)
                 .order(ByteOrder.nativeOrder())
                 .asIntBuffer();
+        this.matrixBuffer = ByteBuffer.allocateDirect(16 * Double.BYTES)
+                .order(ByteOrder.nativeOrder())
+                .asDoubleBuffer();
         this.scissor = scissor;
         this.genTexturesArray = genTexturesArray;
         this.genTexturesBuffer = genTexturesBuffer;
@@ -680,8 +690,21 @@ public final class GlApi {
         bound.pushClientAttrib = Reflect.method(gl, "glPushClientAttrib", int.class);
         bound.popClientAttrib = Reflect.method(gl, "glPopClientAttrib");
         bound.depthMask = Reflect.method(gl, "glDepthMask", boolean.class);
-        bound.translated = Reflect.method(gl, "glTranslated", double.class, double.class,
-                double.class);
+        // LWJGL3 用 glGetDoublev/glLoadMatrixd；LWJGL2（1.8.9）导出的公开名是
+        // glGetDouble/glLoadMatrix（v/d 只在 native 方法名里）。两代都要绑，否则固定管线
+        // 会被误判为「缺矩阵入口」。
+        bound.getDoublevBuffer = orElse(
+                Reflect.method(gl, "glGetDoublev", int.class, java.nio.DoubleBuffer.class),
+                Reflect.method(gl, "glGetDouble", int.class, java.nio.DoubleBuffer.class));
+        bound.getDoublevArray = orElse(
+                Reflect.method(gl, "glGetDoublev", int.class, double[].class),
+                Reflect.method(gl, "glGetDouble", int.class, double[].class));
+        bound.loadMatrixdBuffer = orElse(
+                Reflect.method(gl, "glLoadMatrixd", java.nio.DoubleBuffer.class),
+                Reflect.method(gl, "glLoadMatrix", java.nio.DoubleBuffer.class));
+        bound.loadMatrixdArray = orElse(
+                Reflect.method(gl, "glLoadMatrixd", double[].class),
+                Reflect.method(gl, "glLoadMatrix", double[].class));
         return bound;
     }
 
@@ -1005,25 +1028,86 @@ public final class GlApi {
     }
 
     /**
-     * 双精度平移（对应 {@code glTranslated}）。世界空间 3D 通道把相机眼位取负后平移，
-     * 大坐标（数十万格以上）必须用双精度，否则框会整体抖动。
+     * 读取一个 4×4 GL 矩阵（列主序）。优先数组形态，其次 LWJGL2 的 Buffer 形态；
+     * 复用 {@link #matrixBuffer}，每帧零分配。
+     *
+     * @param pname {@link #GL_PROJECTION_MATRIX} / {@link #GL_MODELVIEW_MATRIX}
+     * @param out   16 个 double 的输出数组（不得为 null 或长度不足 16）
+     * @return 是否读取成功
      */
-    public void translateD(double x, double y, double z) {
-        if (translated != null) {
-            flushBatch();
-            Reflect.call(translated, null, x, y, z);
-            return;
+    public boolean readMatrix(int pname, double[] out) {
+        if (out == null || out.length < 16) {
+            return false;
         }
-        translate((float) x, (float) y, (float) z);
+        flushBatch();
+        if (getDoublevArray != null) {
+            return Reflect.callStatus(getDoublevArray, null, pname, out);
+        }
+        if (getDoublevBuffer != null) {
+            matrixBuffer.clear();
+            if (!Reflect.callStatus(getDoublevBuffer, null, pname, matrixBuffer)) {
+                return false;
+            }
+            matrixBuffer.clear();
+            for (int i = 0; i < 16; i++) {
+                out[i] = matrixBuffer.get(i);
+            }
+            return true;
+        }
+        return false;
     }
 
-    /** @return 是否具备世界空间 3D 所需的固定管线入口（顶点/旋转/透视/属性栈） */
-    public boolean hasProjection3D() {
-        return vertex3f != null && rotatef != null && frustum != null
-                && pushAttrib != null && popAttrib != null
-                && matrixMode != null && pushMatrix != null && popMatrix != null
-                && loadIdentity != null && translated != null;
+    /**
+     * 载入一个 4×4 矩阵（列主序）。
+     *
+     * @param matrix 16 个 double；长度不足时不调用
+     * @return 是否成功下发
+     */
+    public boolean loadMatrix(double[] matrix) {
+        if (matrix == null || matrix.length < 16) {
+            return false;
+        }
+        flushBatch();
+        if (loadMatrixdArray != null) {
+            return Reflect.callStatus(loadMatrixdArray, null, matrix);
+        }
+        if (loadMatrixdBuffer != null) {
+            matrixBuffer.clear();
+            for (int i = 0; i < 16; i++) {
+                matrixBuffer.put(i, matrix[i]);
+            }
+            return Reflect.callStatus(loadMatrixdBuffer, null, matrixBuffer);
+        }
+        return false;
     }
+
+    /** {@code glGetDoublev} 的取值名：投影矩阵。 */
+    public static final int GL_PROJECTION_MATRIX = 0x0BA7;
+    /** {@code glGetDoublev} 的取值名：模型视图矩阵。 */
+    public static final int GL_MODELVIEW_MATRIX = 0x0BA6;
+
+    /**
+     * @return 是否具备世界空间 3D 后端实际用到的全部固定管线入口。矩阵复用是主路径，
+     *         因此把 {@code glGetDoublev}/{@code glLoadMatrixd} 也计入；{@code glRotatef}/
+     *         {@code glFrustum} 只用于矩阵读取失败时的回退（见 {@link #hasFallbackProjection()}）。
+     */
+    public boolean hasProjection3D() {
+        boolean canReadMatrix = getDoublevArray != null || getDoublevBuffer != null;
+        boolean canLoadMatrix = loadMatrixdArray != null || loadMatrixdBuffer != null;
+        return color4f != null && begin != null && end != null && vertex3f != null
+                && pushMatrix != null && popMatrix != null && matrixMode != null
+                && loadIdentity != null && pushAttrib != null && popAttrib != null
+                && pushClientAttrib != null && popClientAttrib != null
+                && enable != null && disable != null && blendFunc != null
+                && lineWidth != null && depthMask != null
+                && canReadMatrix && canLoadMatrix;
+    }
+
+    /** @return 是否具备矩阵读取失败时的自建透视/朝向（{@code glFrustum}/{@code glRotatef}） */
+    public boolean hasFallbackProjection() {
+        return rotatef != null && frustum != null;
+    }
+
 
     /**
      * 旋转当前矩阵（对应 {@code glRotatef}）。世界空间 3D 通道用它建立相机朝向。
@@ -1147,27 +1231,45 @@ public final class GlApi {
      * @return {@code {x, y, width, height}}；句柄缺失时返回 {@code null}，查询失败时各项为 0
      */
     public int[] viewport() {
-        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         int[] out = new int[4];
+        if (viewport(out)) {
+            return out;
+        }
+        // 两种形态都没有：按契约返回 null（表示「无法查询」），而不是伪装成 0x0 的视口。
+        return getIntegerv == null && getIntegervBuffer == null ? null : out;
+    }
+
+    /**
+     * 查询视口并写入调用方数组（每帧零分配）。
+     *
+     * @param out 至少 4 个 int 的输出数组
+     * @return 是否查到有效尺寸（宽高均 &gt; 0）
+     */
+    public boolean viewport(int[] out) {
+        if (out == null || out.length < 4) {
+            return false;
+        }
+        flushBatch();   // 状态命令绝不能落在 glBegin/glEnd 之间
         if (getIntegerv != null) {
             // LWJGL3 形态：直接写进 int[]。
             Reflect.call(getIntegerv, null, GL_VIEWPORT, out);
             if (out[2] > 0 && out[3] > 0) {
-                return out;
+                return true;
             }
         }
         if (getIntegervBuffer != null) {
             // LWJGL2 形态：写进直接缓冲后再取回四个分量（GL 调用不会移动缓冲区位置）。
             viewportBuffer.clear();
-            Reflect.call(getIntegervBuffer, null, GL_VIEWPORT, viewportBuffer);
+            if (!Reflect.callStatus(getIntegervBuffer, null, GL_VIEWPORT, viewportBuffer)) {
+                return false;
+            }
             out[0] = viewportBuffer.get(0);
             out[1] = viewportBuffer.get(1);
             out[2] = viewportBuffer.get(2);
             out[3] = viewportBuffer.get(3);
-            return out;
+            return out[2] > 0 && out[3] > 0;
         }
-        // 两种形态都没有：按契约返回 null（表示「无法查询」），而不是伪装成 0x0 的视口。
-        return getIntegerv == null ? null : out;
+        return false;
     }
 
     /**

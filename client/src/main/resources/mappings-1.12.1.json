@@ -1762,9 +1762,44 @@
                         "fabric": "(FJ)V",
                         "forge": "(FJ)V"
                     }
+                },
+                "renderWorldPass": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_3178",
+                        "forge": "func_175068_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(IFJ)V",
+                        "fabric": "(IFJ)V",
+                        "forge": "(IFJ)V"
+                    }
+                },
+                "setupCameraTransform": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_3185",
+                        "forge": "func_78479_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(FI)V",
+                        "fabric": "(FI)V",
+                        "forge": "(FI)V"
+                    }
                 }
             },
             "fields": {
+                "farPlaneDistance": {
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "field_4025",
+                        "forge": "field_78530_s"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F"
+                    }
+                },
                 "getFOVModifier(float,boolean)": {
                     "absent": true,
                     "absentReason": "unverified"

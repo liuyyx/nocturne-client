@@ -1,5 +1,6 @@
 package dev.nocturne.ui.gl;
 
+import java.nio.DoubleBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -88,6 +89,17 @@ public final class FakeGl {
     /** 客户态数组开关（立即模式前置条件） */
     public static int disableClientStateCalls;
     public static int clientActiveTextureCalls;
+    /** 服务端活动纹理单元（glActiveTexture） */
+    public static int activeTextureCalls;
+    public static int lastActiveTexture = -1;
+    /** 3D 矩阵：游戏当帧投影/模型视图；测试可改写。 */
+    public static double[] projectionMatrix;
+    public static double[] modelViewMatrix;
+    public static int getDoublevCalls;
+    public static int loadMatrixdCalls;
+    public static double[] lastLoadedMatrix;
+    /** 置 true 时 glGetDoublev 不写数据，模拟查询失败。 */
+    public static boolean failMatrixQuery;
 
     /**
      * 有序调用事件流，元素形如 {@code "enable:3089"}、{@code "matrixMode:5889"}、
@@ -152,6 +164,14 @@ public final class FakeGl {
         lastDepthMask = true;
         disableClientStateCalls = 0;
         clientActiveTextureCalls = 0;
+        activeTextureCalls = 0;
+        lastActiveTexture = -1;
+        projectionMatrix = perspective();
+        modelViewMatrix = worldModelView(-100.0d, -64.0d, 200.0d);
+        getDoublevCalls = 0;
+        loadMatrixdCalls = 0;
+        lastLoadedMatrix = null;
+        failMatrixQuery = false;
         events.clear();
         matrixModeSequence.clear();
         capEnableCounts.clear();
@@ -443,6 +463,87 @@ public final class FakeGl {
     /** 切换客户态纹理单元（立即模式前置条件）。 */
     public static void glClientActiveTexture(int unit) {
         clientActiveTextureCalls++;
+    }
+
+    /** 切换服务端活动纹理单元。 */
+    public static void glActiveTexture(int unit) {
+        activeTextureCalls++;
+        lastActiveTexture = unit;
+        events.add("activeTexture:" + unit);
+    }
+
+    /** 标准透视投影：竖直 FOV 约 70°，近远平面与游戏同量级。 */
+    public static double[] perspective() {
+        double[] m = new double[16];
+        m[0] = 1.4d;
+        m[5] = 1.8d;
+        m[10] = -1.0002d;
+        m[11] = -1.0d;
+        m[14] = -0.2d;
+        m[15] = 0.0d;
+        return m;
+    }
+
+    /** 世界→视图矩阵：单位旋转 + 平移 (tx,ty,tz)。 */
+    public static double[] worldModelView(double tx, double ty, double tz) {
+        double[] m = new double[16];
+        m[0] = 1.0d;
+        m[5] = 1.0d;
+        m[10] = 1.0d;
+        m[15] = 1.0d;
+        m[12] = tx;
+        m[13] = ty;
+        m[14] = tz;
+        return m;
+    }
+
+    /** 查询矩阵（数组形态）。 */
+    public static void glGetDoublev(int pname, double[] out) {
+        getDoublevCalls++;
+        if (failMatrixQuery || out == null || out.length < 16) {
+            return;
+        }
+        double[] source = pname == GlApi.GL_PROJECTION_MATRIX ? projectionMatrix : modelViewMatrix;
+        if (source != null) {
+            System.arraycopy(source, 0, out, 0, 16);
+        }
+    }
+
+    /** 查询矩阵（LWJGL2 的 Buffer 形态）。 */
+    public static void glGetDoublev(int pname, DoubleBuffer out) {
+        getDoublevCalls++;
+        if (failMatrixQuery || out == null || out.remaining() < 16) {
+            return;
+        }
+        double[] source = pname == GlApi.GL_PROJECTION_MATRIX ? projectionMatrix : modelViewMatrix;
+        if (source == null) {
+            return;
+        }
+        for (int i = 0; i < 16; i++) {
+            out.put(i, source[i]);
+        }
+    }
+
+    /** 载入矩阵（数组形态）。 */
+    public static void glLoadMatrixd(double[] matrix) {
+        loadMatrixdCalls++;
+        lastLoadedMatrix = matrix == null ? null : matrix.clone();
+        events.add("loadMatrixd@" + currentMatrixMode);
+    }
+
+    /** 载入矩阵（LWJGL2 的 Buffer 形态）。 */
+    public static void glLoadMatrixd(DoubleBuffer matrix) {
+        loadMatrixdCalls++;
+        if (matrix == null) {
+            lastLoadedMatrix = null;
+            return;
+        }
+        double[] copy = new double[16];
+        for (int i = 0; i < 16; i++) {
+            copy[i] = matrix.get(i);
+        }
+        lastLoadedMatrix = copy;
+        events.add("loadMatrixd@" + currentMatrixMode);
     }
 
     /** 设置纹理坐标；无操作 */

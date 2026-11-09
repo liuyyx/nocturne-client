@@ -40,6 +40,8 @@ public final class World3DRenderer {
     private final WorldRenderEvent event = new WorldRenderEvent();
     /** 复用上下文。 */
     private final Context context = new Context();
+    /** 当帧相机入参；{@code renderCamera} 写入，{@code Context.camera()} 原样返回它。 */
+    private WorldCamera activeCamera;
 
     /** 已安装的后端；{@code null} 表示尚未安装或已显式降级。 */
     private volatile World3DBackend backend;
@@ -60,6 +62,7 @@ public final class World3DRenderer {
     private boolean beginErrorLogged;
     private boolean drawErrorLogged;
     private boolean endErrorLogged;
+    private boolean captureErrorLogged;
     private long beginErrorAt;
     private long drawErrorAt;
     private long endErrorAt;
@@ -113,6 +116,11 @@ public final class World3DRenderer {
                 return new World3DCapability(false, b.backendName(),
                         GameplayHook.unavailableReason("world3d"));
             }
+            // 后端可用不代表钩子已织入：两者都成立才敢报 available。
+            if (!GameplayHook.isWired("world3d")) {
+                return new World3DCapability(false, b.backendName(),
+                        "world3d hook not wired yet");
+            }
             return new World3DCapability(true, b.backendName(), null);
         }
         if (b != null) {
@@ -122,11 +130,24 @@ public final class World3DRenderer {
     }
 
     /**
-     * 由世界绘制钩子调用：读取相机并画一帧。
+     * 由世界渲染<b>头部</b>钩子调用：把当帧世界相机矩阵交给后端保存。
      *
-     * @param partialTicks 游戏传进来的当帧插值量
-     * @return 是否真的进入了绘制（相机/钩子/后端任一缺失都返回 {@code false}）
+     * <p>尾部绘制时优先用这份矩阵（尾部已被手部渲染改写）。任何异常都被吞掉，
+     * 绝不影响游戏的世界渲染。
      */
+    public void captureMatrices() {
+        World3DBackend b = backend;
+        if (b == null || !b.available()) {
+            return;
+        }
+        try {
+            b.captureMatrices();
+        } catch (Throwable t) {
+            logCaptureError(t);
+        }
+    }
+
+    /** 相机读取：用游戏传进来的 {@code partialTicks} 刷新快照。 */
     public boolean render(float partialTicks) {
         NocturneClient current = client;
         if (current == null || current.isPanicked()) {
@@ -152,6 +173,7 @@ public final class World3DRenderer {
         if (cam == null || !cam.valid()) {
             return false;
         }
+        this.activeCamera = cam;
         World3DBackend b = backend;
         if (b == null || !b.available()) {
             return false;
@@ -242,6 +264,13 @@ public final class World3DRenderer {
         return false;
     }
 
+    private void logCaptureError(Throwable error) {
+        if (!captureErrorLogged) {
+            captureErrorLogged = true;
+            log("world3d matrix capture failed: " + error);
+        }
+    }
+
     private void logBeginError(Throwable error) {
         long now = System.currentTimeMillis();
         if (beginErrorLogged && now - beginErrorAt < ERROR_LOG_INTERVAL_MS) {
@@ -281,7 +310,7 @@ public final class World3DRenderer {
 
         @Override
         public WorldCamera camera() {
-            return camera.view();
+            return activeCamera;
         }
 
         @Override

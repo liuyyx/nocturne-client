@@ -58,6 +58,14 @@ public final class GameplayHook {
         default void worldRender3D(float partialTicks) {
         }
 
+        /**
+         * 世界渲染头部：捕获当帧相机矩阵（此时仍是世界相机，未被手部渲染改写）。
+         *
+         * @param partialTicks 当帧渲染插值量
+         */
+        default void worldRender3DCapture(float partialTicks) {
+        }
+
         default boolean xrayBlock(Object blockState, Object blockPos) {
             return true;
         }
@@ -170,14 +178,26 @@ public final class GameplayHook {
     private static final ThreadLocal<Object> INPUT_TICK = new ThreadLocal<Object>();
     /** 实体渲染嵌套捕获栈；每个 chamsPre 压一项，chamsPost 弹一项。 */
     private static final ThreadLocal<java.util.ArrayDeque<Object>> CHAMS_STACK =
-            new ThreadLocal<java.util.ArrayDeque<Object>>() {
-                @Override
-                protected java.util.ArrayDeque<Object> initialValue() {
-                    return new java.util.ArrayDeque<Object>();
-                }
-            };
+            new ThreadLocal<java.util.ArrayDeque<Object>>();
     /** {@code chamsPre(null)} 的哨兵：ArrayDeque 不接受 null，且 null 也必须占一个配对位。 */
     private static final Object NO_CHAMS_ENTITY = new Object();
+
+    /**
+     * 取当前线程的捕获栈，首次使用时创建。
+     *
+     * <p>刻意不用匿名 {@code ThreadLocal} 子类：GameplayHook 被复制进 bootstrap 桥，
+     * 匿名内部类 {@code GameplayHook$1} 不会随桥条目导出，{@code <clinit>} 直接
+     * {@code NoClassDefFoundError}（1.8.9 真机实测）。普通 ThreadLocal + 显式判空可以避免
+     * 任何额外 class 资源。
+     */
+    private static java.util.ArrayDeque<Object> chamsStack() {
+        java.util.ArrayDeque<Object> stack = CHAMS_STACK.get();
+        if (stack == null) {
+            stack = new java.util.ArrayDeque<Object>();
+            CHAMS_STACK.set(stack);
+        }
+        return stack;
+    }
     /**
      * 捕获栈上限。渲染中途抛异常时注入的 RETURN 不会执行，那一项就永远配对不上；
      * 异常若持续发生，无上限的栈会每帧增长。正常嵌套深度远小于此值。
@@ -497,9 +517,30 @@ public final class GameplayHook {
         }
     }
 
+    /**
+     * 世界渲染头部入口：转发给客户端捕获当帧相机矩阵。
+     *
+     * <p>与 {@link #worldRender3D(float)} 一样只做异常隔离与转发；GL 查询在后端完成。
+     *
+     * @param partialTicks 当帧渲染插值量（当前实现只做日志/对齐，捕获不依赖它）
+     */
+    public static void worldRender3DCapture(float partialTicks) {
+        if (GameplaySink.isKilled()) {
+            return;
+        }
+        try {
+            Sink current = sink();
+            if (current != null) {
+                current.worldRender3DCapture(partialTicks);
+            }
+        } catch (Throwable t) {
+            failure("worldRender3DCapture", t);
+        }
+    }
+
     public static void chamsPre(Object entity) {
         // 即使闸门已关也要压入哨兵：post 仍会在 RETURN 前被调用，少压一次就会弹掉外层实体。
-        java.util.ArrayDeque<Object> stack = CHAMS_STACK.get();
+        java.util.ArrayDeque<Object> stack = chamsStack();
         if (stack.size() >= CHAMS_MAX_DEPTH) {
             // 只可能是异常路径留下的未配对项：清掉，别让它无限增长。
             stack.clear();
@@ -514,6 +555,9 @@ public final class GameplayHook {
     /** 末尾无参消费：弹出一项与本次 pre 配对；多个 RETURN 只有实际执行的那一个会调用。 */
     public static void chamsPost() {
         java.util.ArrayDeque<Object> stack = CHAMS_STACK.get();
+        if (stack == null) {
+            return;
+        }
         Object entity = stack.poll();
         if (stack.isEmpty()) {
             CHAMS_STACK.remove();

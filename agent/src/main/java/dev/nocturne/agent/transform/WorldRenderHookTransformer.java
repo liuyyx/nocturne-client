@@ -12,26 +12,22 @@ import java.security.ProtectionDomain;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 在某个 {@code void} 方法的每个 {@code RETURN} 之前插入一次静态调用，把该方法的
- * <b>首个 {@code float} 形参</b>原样传出去。
- *
- * <p>用途：世界空间 3D 渲染钩子。1.8.9 的 {@code EntityRenderer#renderWorld(float, long)} 在世界
- * 几何画完之后、HUD 之前返回；在返回点插一次调用，深度缓冲里已经是完整的世界，相机变换也还在
- * 有效期内。相比「方法开头」插入，返回点不会让覆盖物被后续地形盖住/参与错误的深度写入。
- *
- * <p>为什么需要专门的转换器：
+ * 在一个 {@code void} 方法上插入世界空间 3D 钩子，把该方法的首个 {@code float} 形参传出去：
  * <ul>
- *   <li>{@code FrameHookTransformer} 只插无参调用，拿不到 {@code partialTicks}；</li>
- *   <li>{@code CallbackHookTransformer} 只转发首个<b>引用</b>形参，而这里是基本类型；</li>
- *   <li>形参槽位由描述符决定（实例方法从 1 开始，静态方法从 0 开始），必须按
- *       {@link Type#getArgumentTypes} 计算，不能写死。</li>
+ *   <li><b>头部</b>（方法第一条指令前）：捕获世界相机矩阵；</li>
+ *   <li><b>尾部</b>（每个 {@code RETURN} 之前）：实际绘制。</li>
  * </ul>
  *
- * <p>平衡性：{@code FLOAD} 压入一个 float，{@code INVOKESTATIC (F)V} 消耗它，{@code RETURN} 处栈
- * 仍为空——不改变最大栈深之外的控制流，也不新增分支/异常处理器，因此用
- * {@code ClassWriter(COMPUTE_MAXS)} + {@code reader.accept(visitor, 0)} 保留原 StackMapTable 即可。
- * 任何不匹配（类名、方法名、描述符、返回类型、没有 float 形参）都返回 {@code null}，让 JVM
- * 沿用原字节码。
+ * <p>为什么必须同一个转换器：两个独立转换器注册到同一方法时，第二个会拿到已含第一个钩子的
+ * 字节再跑整条转换链，头部/尾部钩子会被重复插入（真机表现为同一帧画两遍）。这里一次访问同时
+ * 插入两者，最多各一次。
+ *
+ * <p>为什么需要头部捕获：1.8.9 的 {@code renderWorld} 尾部模型视图已被手部渲染改成手空间
+ * （带缩放），解析不出相机；头部的矩阵才是世界相机（含 F5/第三人称/viewBobbing）。
+ *
+ * <p>平衡性：{@code FLOAD} + {@code INVOKESTATIC (F)V} 在每个插入点都是栈平衡的；不新增分支/
+ * 异常处理器，因此用 {@code COMPUTE_MAXS} + {@code reader.accept(visitor, 0)} 保留原
+ * StackMapTable。任何不匹配都返回 {@code null}，让 JVM 沿用原字节码。
  */
 public final class WorldRenderHookTransformer implements ClassFileTransformer {
 
@@ -49,17 +45,41 @@ public final class WorldRenderHookTransformer implements ClassFileTransformer {
     private final String targetDescriptor;
     /** 钩子类内部名（斜杠形式）。 */
     private final String hookOwner;
-    /** 钩子方法名。 */
-    private final String hookMethod;
+    /** 方法头钩子名（{@code (F)V}）；{@code null} 表示不插头部。 */
+    private final String headHookMethod;
+    /** 每个 RETURN 前钩子名（{@code (F)V}）；{@code null} 表示不插尾部。 */
+    private final String tailHookMethod;
 
+    /** 单钩子（尾部）兼容构造器。 */
     public WorldRenderHookTransformer(String targetClassInternalName, String targetMethod,
                                       String targetDescriptor, String hookOwner,
                                       String hookMethod) {
+        this(targetClassInternalName, targetMethod, targetDescriptor, hookOwner, null, hookMethod);
+    }
+
+    /** 单钩子构造器：{@code atMethodEnd=false} 时插头部。 */
+    public WorldRenderHookTransformer(String targetClassInternalName, String targetMethod,
+                                      String targetDescriptor, String hookOwner,
+                                      String hookMethod, boolean atMethodEnd) {
+        this(targetClassInternalName, targetMethod, targetDescriptor, hookOwner,
+                atMethodEnd ? null : hookMethod, atMethodEnd ? hookMethod : null);
+    }
+
+    /**
+     * 双钩子构造器。
+     *
+     * @param headHookMethod 方法头钩子（可为 null）
+     * @param tailHookMethod 每个 RETURN 前钩子（可为 null）
+     */
+    public WorldRenderHookTransformer(String targetClassInternalName, String targetMethod,
+                                      String targetDescriptor, String hookOwner,
+                                      String headHookMethod, String tailHookMethod) {
         this.targetClassInternalName = internalize(targetClassInternalName);
         this.targetMethod = targetMethod;
         this.targetDescriptor = targetDescriptor;
         this.hookOwner = internalize(hookOwner);
-        this.hookMethod = hookMethod;
+        this.headHookMethod = headHookMethod;
+        this.tailHookMethod = tailHookMethod;
     }
 
     /** 把点号全限定名归一化为斜杠内部名；null 原样返回。 */
@@ -71,7 +91,8 @@ public final class WorldRenderHookTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
         if (classfileBuffer == null || className == null
-                || !className.equals(targetClassInternalName)) {
+                || !className.equals(targetClassInternalName)
+                || (headHookMethod == null && tailHookMethod == null)) {
             return null;
         }
         try {
@@ -97,13 +118,25 @@ public final class WorldRenderHookTransformer implements ClassFileTransformer {
                     changed[0] = true;
                     return new MethodVisitor(ASM_API, delegate) {
                         @Override
+                        public void visitCode() {
+                            super.visitCode();
+                            if (headHookMethod != null) {
+                                emitHook(floatSlot, headHookMethod);
+                            }
+                        }
+
+                        @Override
                         public void visitInsn(int opcode) {
-                            if (opcode == Opcodes.RETURN) {
-                                super.visitVarInsn(Opcodes.FLOAD, floatSlot);
-                                super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner,
-                                        hookMethod, "(F)V", false);
+                            if (opcode == Opcodes.RETURN && tailHookMethod != null) {
+                                emitHook(floatSlot, tailHookMethod);
                             }
                             super.visitInsn(opcode);
+                        }
+
+                        private void emitHook(int slot, String hook) {
+                            super.visitVarInsn(Opcodes.FLOAD, slot);
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, hook, "(F)V",
+                                    false);
                         }
                     };
                 }

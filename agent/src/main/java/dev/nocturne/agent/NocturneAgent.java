@@ -372,10 +372,6 @@ public final class NocturneAgent {
                         "dev/nocturne/client/bootstrap/GameplayHook.class"},
                 {"nocturne-bootstrap/GameplayHook$Sink.class",
                         "dev/nocturne/client/bootstrap/GameplayHook$Sink.class"},
-                // CHAMS 栈的匿名 ThreadLocal 子类：GameplayHook.<clinit> 会加载它，缺一份就是
-                // NoClassDefFoundError（真机 1.8.9 实测 client initialisation failed）。
-                {"nocturne-bootstrap/GameplayHook$1.class",
-                        "dev/nocturne/client/bootstrap/GameplayHook$1.class"},
         };
         java.nio.file.Path jar;
         try {
@@ -1225,6 +1221,8 @@ public final class NocturneAgent {
      * （Phase 1 的 3D 后端也只有固定管线）。
      */
     private static final String RENDER_WORLD_DESCRIPTOR = "(FJ)V";
+    /** {@code EntityRenderer#setupCameraTransform(FI)V}：世界相机矩阵的建立点/捕获点。 */
+    private static final String SETUP_CAMERA_DESCRIPTOR = "(FI)V";
     /** 目标类 → 已注册转换器；重定义时必须重放完整链，避免后一个钩子覆盖前一个。 */
     private static final java.util.Map<String, java.util.List<ClassFileTransformer>> GAMEPLAY_TRANSFORMERS =
             new java.util.HashMap<String, java.util.List<ClassFileTransformer>>();
@@ -1637,7 +1635,7 @@ public final class NocturneAgent {
                 String target = className + "." + candidate.name() + descriptor;
                 ClassFileTransformer transformer = asmLoader.createWorldRenderTransformer(
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
-                        "worldRender3D");
+                        null, "worldRender3D");
                 int state = registerGameplayTransformerState(instrumentation, transformer, className,
                         candidate.name(), descriptor, "worldRender3D");
                 if (state == HOOK_WOVEN) {
@@ -1650,15 +1648,54 @@ public final class NocturneAgent {
                 wired |= state >= HOOK_REGISTERED;
             }
         }
+        // 世界相机矩阵由 setupCameraTransform 建立；renderWorldPass 尾部已把它重置为单位阵。
+        // 在 setupCameraTransform 的返回点捕获，尾部绘制时复用；捕获本身不绘制。
+        boolean captureWired = false;
+        boolean captureRegistered = false;
+        String captureAt = null;
+        for (String className : classNameCandidates(mapping, owner)) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, "setupCameraTransform")) {
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
+                            SETUP_CAMERA_DESCRIPTOR);
+                }
+                if (descriptor == null && mapping.isIdentity()) {
+                    descriptor = SETUP_CAMERA_DESCRIPTOR;
+                }
+                if (descriptor == null) {
+                    continue;
+                }
+                ClassFileTransformer capture = asmLoader.createWorldRenderTransformer(
+                        className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
+                        null, "worldRender3DCapture");
+                int captureState = registerGameplayTransformerState(instrumentation, capture,
+                        className, candidate.name(), descriptor, "worldRender3DCapture");
+                if (captureState == HOOK_WOVEN) {
+                    captureWired = true;
+                    captureAt = className + "." + candidate.name() + descriptor;
+                } else if (captureState == HOOK_REGISTERED) {
+                    captureRegistered = true;
+                }
+            }
+        }
+        if (captureWired) {
+            log("world 3d matrix capture woven: " + captureAt);
+        } else if (captureRegistered) {
+            log("world 3d matrix capture registered (target class not loaded yet)");
+        } else {
+            log("world 3d matrix capture unavailable; falling back to camera approximation");
+        }
         if (wired) {
             publishHookState("world3d", true, null);
             if (woven) {
-                log("world 3d hook woven: " + wovenAt + " -> worldRender3D(F)");
+                log("world 3d hook woven: " + wovenAt + " -> matrixCapture+draw");
             }
             if (registeredOnly) {
                 // 类尚未加载：转换器已挂链，但这一行不是「已织入」——真机日志里必须能区分。
                 log("world 3d hook registered (target class not loaded yet): "
-                        + registeredAt + " -> worldRender3D(F)");
+                        + registeredAt);
             }
         } else {
             String reason = tried

@@ -213,6 +213,16 @@ public final class CameraState {
         }
         view.set(eyeX.doubleValue(), eyeY.doubleValue(), eyeZ.doubleValue(),
                 yaw.floatValue(), pitch.floatValue(), fov.floatValue(), partialTicks);
+        // 游戏真实远平面：只在固定管线世代存在（1.8.9/1.12.2 的 EntityRenderer#farPlaneDistance）。
+        // 矩阵读取失败时用它与 0.05 近平面重建同口径透视，避免自造 1024 导致深度比较错位。
+        if (renderer != null && !bridge.mapping().isMemberAbsent(
+                ClassType.ENTITY_RENDERER, "farPlaneDistance")) {
+            Double far = number(bridge.readField(renderer, ClassType.ENTITY_RENDERER,
+                    "farPlaneDistance"));
+            view.setFarPlane(far == null ? 0f : far.floatValue());
+        } else {
+            view.setFarPlane(0f);
+        }
         return true;
     }
 

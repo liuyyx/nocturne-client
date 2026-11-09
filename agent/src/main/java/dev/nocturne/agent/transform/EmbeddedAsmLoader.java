@@ -360,12 +360,28 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     public ClassFileTransformer createWorldRenderTransformer(String targetInternalName,
                                                               String method, String descriptor,
                                                               String hookOwner, String hookMethod) {
+        return createWorldRenderTransformer(targetInternalName, method, descriptor, hookOwner,
+                null, hookMethod);
+    }
+
+    /**
+     * 世界空间 3D 钩子转换器：同一个转换器一次插入头部捕获与尾部绘制，避免重复改写。
+     *
+     * @param headHookMethod 方法头钩子（可为 null）
+     * @param tailHookMethod 每个 RETURN 前钩子（可为 null）
+     */
+    public ClassFileTransformer createWorldRenderTransformer(String targetInternalName,
+                                                              String method, String descriptor,
+                                                              String hookOwner,
+                                                              String headHookMethod,
+                                                              String tailHookMethod) {
         try {
             Class<?> transformerClass = loadClass(WORLD_RENDER_TRANSFORMER_CLASS);
             Constructor<?> constructor = transformerClass.getConstructor(
-                    String.class, String.class, String.class, String.class, String.class);
+                    String.class, String.class, String.class, String.class,
+                    String.class, String.class);
             Object instance = constructor.newInstance(targetInternalName, method, descriptor,
-                    hookOwner, hookMethod);
+                    hookOwner, headHookMethod, tailHookMethod);
             return (ClassFileTransformer) instance;
         } catch (Throwable t) {
             log("could not create world render hook transformer for " + targetInternalName

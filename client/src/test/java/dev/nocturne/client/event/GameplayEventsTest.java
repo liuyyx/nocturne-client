@@ -204,6 +204,53 @@ class GameplayEventsTest {
         }
     }
 
+    /** 嵌套实体渲染：pre/post 必须成对，内层不能吞掉外层的捕获。 */
+    @Test
+    void nestedChamsCapturePairsPreAndPost() {
+        NocturneClient client = NocturneClient.boot(null);
+        java.util.List<EntityRenderEvent> events = new java.util.ArrayList<EntityRenderEvent>();
+        client.events().subscribe(EntityRenderEvent.class, events::add);
+        Object outer = new Object();
+        Object inner = new Object();
+
+        GameplayHook.chamsPre(outer);
+        GameplayHook.chamsPre(inner);
+        GameplayHook.chamsPost();
+        GameplayHook.chamsPost();
+
+        assertEquals(4, events.size(), "nested render must deliver two pre and two post events");
+        assertSame(outer, events.get(0).entity);
+        assertFalse(events.get(0).post);
+        assertSame(inner, events.get(1).entity);
+        assertFalse(events.get(1).post);
+        assertSame(inner, events.get(2).entity);
+        assertTrue(events.get(2).post);
+        assertSame(outer, events.get(3).entity);
+        assertTrue(events.get(3).post);
+    }
+
+    /** {@code chamsPre(null)} 也必须占一个配对位，post 不能因此弹掉外层实体。 */
+    @Test
+    void nullEntityCaptureKeepsTheStackBalanced() {
+        NocturneClient client = NocturneClient.boot(null);
+        java.util.List<EntityRenderEvent> events = new java.util.ArrayList<EntityRenderEvent>();
+        client.events().subscribe(EntityRenderEvent.class, events::add);
+        Object outer = new Object();
+
+        GameplayHook.chamsPre(outer);
+        GameplayHook.chamsPre(null);
+        GameplayHook.chamsPost();
+        GameplayHook.chamsPost();
+
+        assertEquals(3, events.size(), "null pre emits only its own pre; post of null emits nothing");
+        assertSame(outer, events.get(0).entity);
+        assertFalse(events.get(0).post);
+        assertNull(events.get(1).entity);
+        assertFalse(events.get(1).post);
+        assertSame(outer, events.get(2).entity);
+        assertTrue(events.get(2).post);
+    }
+
     private static final class FakeVector {
         private double x;
         private final double y;

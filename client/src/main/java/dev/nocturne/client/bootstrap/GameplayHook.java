@@ -168,8 +168,21 @@ public final class GameplayHook {
     private static final ThreadLocal<Object[]> ATTACK_CONTEXT = new ThreadLocal<Object[]>();
     /** KeyboardInput#tick 的头部捕获值；末尾无参消费，避开 RETURN 处被裁掉的 this 槽。 */
     private static final ThreadLocal<Object> INPUT_TICK = new ThreadLocal<Object>();
-    /** 实体渲染头部捕获值；末尾无参消费，避开 RETURN 处被裁掉的实体形参槽。 */
-    private static final ThreadLocal<Object> CHAMS_ENTITY = new ThreadLocal<Object>();
+    /** 实体渲染嵌套捕获栈；每个 chamsPre 压一项，chamsPost 弹一项。 */
+    private static final ThreadLocal<java.util.ArrayDeque<Object>> CHAMS_STACK =
+            new ThreadLocal<java.util.ArrayDeque<Object>>() {
+                @Override
+                protected java.util.ArrayDeque<Object> initialValue() {
+                    return new java.util.ArrayDeque<Object>();
+                }
+            };
+    /** {@code chamsPre(null)} 的哨兵：ArrayDeque 不接受 null，且 null 也必须占一个配对位。 */
+    private static final Object NO_CHAMS_ENTITY = new Object();
+    /**
+     * 捕获栈上限。渲染中途抛异常时注入的 RETURN 不会执行，那一项就永远配对不上；
+     * 异常若持续发生，无上限的栈会每帧增长。正常嵌套深度远小于此值。
+     */
+    private static final int CHAMS_MAX_DEPTH = 64;
     /** sendPosition 是否已直接织入；状态在 bootstrap 的 {@link GameplaySink} 里跨加载器共享。 */
     /** 首个 Motion 事件是否已记录；用于区分"钩子未织入"与"事件未投递"。 */
     private static volatile boolean motionLogged;
@@ -242,7 +255,7 @@ public final class GameplayHook {
         GameplaySink.kill();
         ATTACK_CONTEXT.remove();
         INPUT_TICK.remove();
-        CHAMS_ENTITY.remove();
+        CHAMS_STACK.remove();
     }
 
     /** @return 是否已进入自销毁状态 */
@@ -485,23 +498,27 @@ public final class GameplayHook {
     }
 
     public static void chamsPre(Object entity) {
-        if (GameplaySink.isKilled()) {
-            CHAMS_ENTITY.remove();
-            return;
+        // 即使闸门已关也要压入哨兵：post 仍会在 RETURN 前被调用，少压一次就会弹掉外层实体。
+        java.util.ArrayDeque<Object> stack = CHAMS_STACK.get();
+        if (stack.size() >= CHAMS_MAX_DEPTH) {
+            // 只可能是异常路径留下的未配对项：清掉，别让它无限增长。
+            stack.clear();
         }
-        if (entity == null) {
-            CHAMS_ENTITY.remove();
-        } else {
-            CHAMS_ENTITY.set(entity);
+        stack.push(entity == null ? NO_CHAMS_ENTITY : entity);
+        if (GameplaySink.isKilled()) {
+            return;
         }
         entityRender(entity, false);
     }
 
-    /** 末尾无参消费；多返回点第二次调用为空操作。 */
+    /** 末尾无参消费：弹出一项与本次 pre 配对；多个 RETURN 只有实际执行的那一个会调用。 */
     public static void chamsPost() {
-        Object entity = CHAMS_ENTITY.get();
-        CHAMS_ENTITY.remove();
-        if (entity != null) {
+        java.util.ArrayDeque<Object> stack = CHAMS_STACK.get();
+        Object entity = stack.poll();
+        if (stack.isEmpty()) {
+            CHAMS_STACK.remove();
+        }
+        if (entity != null && entity != NO_CHAMS_ENTITY) {
             entityRender(entity, true);
         }
     }

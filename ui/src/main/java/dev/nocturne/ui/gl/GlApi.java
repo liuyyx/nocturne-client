@@ -1358,6 +1358,11 @@ public final class GlApi {
     /** 已解析的 {@code glIsEnabled}，用于回读能力位的真实状态（调试校验用）。 */
     private Method isEnabledMethod;
 
+    /** @return 是否已解析 {@code glIsEnabled}；未解析时 {@link #isCapEnabled(int)} 恒为 false。 */
+    public boolean hasIsEnabled() {
+        return isEnabledMethod != null;
+    }
+
     public boolean isCapEnabled(int cap) {
         if (isEnabledMethod == null) {
             return false;

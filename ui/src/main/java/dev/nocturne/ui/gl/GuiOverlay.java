@@ -202,6 +202,21 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     }
 
     @Override
+    public Boolean depthTestEnabled() {
+        if (renderer instanceof GlRenderer) {
+            GlApi gl = ((GlRenderer) renderer).gl();
+            return gl.hasIsEnabled()
+                    ? Boolean.valueOf(gl.isCapEnabled(0x0B71)) : null;
+        }
+        if (renderer instanceof ModernRenderer) {
+            ModernGlApi gl = ((ModernRenderer) renderer).gl();
+            return gl.hasIsEnabled()
+                    ? Boolean.valueOf(gl.capabilityEnabled(0x0B71)) : null;
+        }
+        return null;
+    }
+
+    @Override
     public void texture2d(boolean enabled) {
         if (renderer instanceof GlRenderer) {
             if (enabled) ((GlRenderer) renderer).gl().enable(0x0DE1);

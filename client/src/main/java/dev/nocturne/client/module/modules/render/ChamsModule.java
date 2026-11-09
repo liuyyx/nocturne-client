@@ -1,5 +1,6 @@
 package dev.nocturne.client.module.modules.render;
 
+import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.control.Friends;
 import dev.nocturne.client.event.EntityRenderEvent;
 import dev.nocturne.client.mapping.ClassType;
@@ -19,6 +20,18 @@ public final class ChamsModule extends GameModule {
     private final BooleanValue monsters = add(new BooleanValue("Monsters", false));
     private final BooleanValue ambients = add(new BooleanValue("Ambients", false));
     private final BooleanValue others = add(new BooleanValue("Others", false));
+
+    /**
+     * 每个线程的深度状态快照栈：实体渲染可能嵌套（画 A 的过程中又画 B）。
+     * 单槽 ThreadLocal 会让内层覆盖外层，post 时把外层的“原值”写成内层的值。
+     */
+    private final ThreadLocal<java.util.ArrayDeque<Boolean>> depthSnapshots =
+            new ThreadLocal<java.util.ArrayDeque<Boolean>>() {
+                @Override
+                protected java.util.ArrayDeque<Boolean> initialValue() {
+                    return new java.util.ArrayDeque<Boolean>();
+                }
+            };
 
     public ChamsModule() {
         super("Chams", Category.RENDER);
@@ -47,9 +60,25 @@ public final class ChamsModule extends GameModule {
             return;
         }
         if (!event.post) {
-            capabilities.depthTest(false);
+            // 先快照原深度：不同版本的进入态不一定是 true（前一模块/游戏自己可能已经关了）。
+            // 拿不到原值时宁可不改——猜一个值会把世界画成穿透或被 HUD 遮挡。
+            Boolean previous = capabilities.depthTestEnabled();
+            if (previous == null) {
+                return;
+            }
+            java.util.ArrayDeque<Boolean> stack = depthSnapshots.get();
+            stack.push(previous);
+            try {
+                capabilities.depthTest(false);
+            } catch (RuntimeException failure) {
+                stack.pop();
+                throw failure;
+            } catch (Error failure) {
+                stack.pop();
+                throw failure;
+            }
         } else {
-            restore(capabilities);
+            restoreOne(capabilities);
         }
     }
 
@@ -83,16 +112,38 @@ public final class ChamsModule extends GameModule {
 
     @Override
     protected void onStop() {
-        RenderCapabilities capabilities = client().renderCapabilities();
+        NocturneClient client = client();
+        RenderCapabilities capabilities = client == null ? null : client.renderCapabilities();
         if (capabilities != null) {
-            restore(capabilities);
+            restoreAll(capabilities);
         }
     }
 
-    private void restore(RenderCapabilities capabilities) {
-        // 只恢复我们真正改过的东西：深度测试。纹理开关/多边形偏移我们从未主动修改，
-        // 强行写回"默认值"会覆盖游戏当帧的真实状态（贴图消失/深度偏移错乱）。
-        capabilities.depthTest(true);
-        capabilities.color(0xFFFFFFFF);
+    /** 内层返回：还原这一层进入前的深度。找不到快照（没有对应 pre）时不动任何状态。 */
+    private void restoreOne(RenderCapabilities capabilities) {
+        java.util.ArrayDeque<Boolean> stack = depthSnapshots.get();
+        Boolean previous = stack.poll();
+        if (previous != null) {
+            capabilities.depthTest(previous.booleanValue());
+        }
+        if (stack.isEmpty()) {
+            depthSnapshots.remove();
+        }
+    }
+
+    /**
+     * 模块停用：把没配对的 pre（渲染中途异常/提前返回）恢复成最外层进入前的值。
+     *
+     * <p>不再硬编码 {@code true}、也不再写回白色：Chams 只改过深度测试，颜色/纹理从未被修改，
+     * 写“默认值”会覆盖游戏当帧的真实状态。
+     */
+    private void restoreAll(RenderCapabilities capabilities) {
+        java.util.ArrayDeque<Boolean> stack = depthSnapshots.get();
+        Boolean original = stack.peekLast();
+        stack.clear();
+        depthSnapshots.remove();
+        if (original != null) {
+            capabilities.depthTest(original.booleanValue());
+        }
     }
 }

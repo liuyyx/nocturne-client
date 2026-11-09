@@ -17,7 +17,7 @@ import dev.nocturne.client.value.NumberValue;
 import java.util.List;
 
 /**
- * 玩家透视（Player ESP）：只画其他玩家的 2D 框（外加可选的名字）。
+ * 玩家透视（ESP）：只画其他玩家的 2D 框（外加可选的名字）。
  *
  * <p>与 Epsilon 风格的 {@link ESP2DModule}（{@code ESP 2D}）区分开：本模块是 OpenVape 风格的
  * 半透明填充 + 细描边，只处理玩家；{@code ESP 2D} 才是分类颜色 + 实心彩边 + 血条的 Epsilon 视觉。
@@ -76,7 +76,7 @@ public final class EspModule extends Module implements WorldOverlay {
     /** 模块名，注册表内唯一，也是 GUI 中的显示名。 */
     @Override
     public String name() {
-        return "Player ESP";
+        return "ESP";
     }
 
     /** 归入“渲染”分组。 */

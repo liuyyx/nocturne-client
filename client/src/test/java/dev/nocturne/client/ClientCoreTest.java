@@ -179,7 +179,7 @@ class ClientCoreTest {
         }
         Set<String> expected = new HashSet<String>(
                 Arrays.asList("Watermark", "FullBright", "Sprint", "AutoRespawn",
-                        "StorageESP", "Player ESP", "Tracers", "NameTags", "ItemESP",
+                        "StorageESP", "ESP", "Tracers", "NameTags", "ItemESP",
                         "Trajectories", "Chams", "Xray", "Search"));
         NocturneClient second = NocturneClient.boot(null);
         assertSame(first, second, "boot must return the same instance");

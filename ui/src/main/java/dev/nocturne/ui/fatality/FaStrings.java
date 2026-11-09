@@ -46,7 +46,7 @@ final class FaStrings {
         put("Sprint", "疾跑");
         put("FullBright", "夜视");
         put("Watermark", "水印");
-        put("Player ESP", "玩家透视");
+        put("ESP", "透视框");
         put("ESP 2D", "二维透视");
         put("NameTags", "名字标签");
         put("Tracers", "追踪线");
@@ -412,7 +412,7 @@ final class FaStrings {
         put("FPS", "帧率");
         put("StorageESP", "容器透视");
         put("SpawnerFinder", "刷怪笼查找");
-        put("Player ESP", "玩家透视");
+        put("ESP", "实体透视");
         put("Tracers", "追踪线");
         put("ItemESP", "物品透视");
         put("Search", "方块搜索");

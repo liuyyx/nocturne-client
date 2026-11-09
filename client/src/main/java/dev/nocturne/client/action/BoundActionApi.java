@@ -452,7 +452,7 @@ final class BoundActionApi implements ActionApi {
             return cooled;
         }
         warnOnce("attackCooldown", "attack cooldown unavailable on this version"
-                + " (no getAttackStrengthScale/getCooledAttackStrength entry); treated as 1.0");
+                + " (1.8.9 之前没有攻击冷却系统；按满冷却 1.0 处理)");
         return null;
     }
 

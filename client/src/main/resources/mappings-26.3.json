@@ -8013,6 +8013,18 @@
                 "getPlayerScores": {
                     "absent": true,
                     "absentReason": "verified"
+                },
+                "getSortedScores": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "listPlayerScores": {
+                    "names": {
+                        "vanilla": "listPlayerScores",
+                        "fabric": "listPlayerScores",
+                        "forge": "listPlayerScores",
+                        "neoforge": "listPlayerScores"
+                    }
                 }
             },
             "fields": {}

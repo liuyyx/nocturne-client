@@ -5815,6 +5815,14 @@
                         "fabric": "()Ljava/util/Collection;",
                         "forge": "()Ljava/util/Collection;"
                     }
+                },
+                "getSortedScores": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "listPlayerScores": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {}

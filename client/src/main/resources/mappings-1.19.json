@@ -6957,6 +6957,14 @@
                         "fabric": "(Ljava/lang/String;)Ljava/util/Map;",
                         "forge": "(Ljava/lang/String;)Ljava/util/Map;"
                     }
+                },
+                "getSortedScores": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "listPlayerScores": {
+                    "absent": true,
+                    "absentReason": "verified"
                 }
             },
             "fields": {}

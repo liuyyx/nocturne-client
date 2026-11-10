@@ -8020,6 +8020,24 @@
                 "getPlayerScores": {
                     "absent": true,
                     "absentReason": "verified"
+                },
+                "getSortedScores": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "listPlayerScores": {
+                    "names": {
+                        "vanilla": "i",
+                        "fabric": "method_1184",
+                        "forge": "m_306706_",
+                        "neoforge": "listPlayerScores"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lfby;)Ljava/util/Collection;",
+                        "fabric": "(Lnet/minecraft/class_266;)Ljava/util/Collection;",
+                        "forge": "(Lnet/minecraft/world/scores/Objective;)Ljava/util/Collection;",
+                        "neoforge": "(Lnet/minecraft/world/scores/Objective;)Ljava/util/Collection;"
+                    }
                 }
             },
             "fields": {}

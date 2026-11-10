@@ -151,7 +151,7 @@ public final class ModuleConfigStore {
             JsonObject root;
             try {
                 String text = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
-                JsonElement parsed = JsonParser.parseString(text);
+                JsonElement parsed = new JsonParser().parse(text);
                 if (parsed == null || !parsed.isJsonObject()) {
                     throw new JsonParseException("module config root is not an object");
                 }
@@ -545,7 +545,7 @@ public final class ModuleConfigStore {
                 valuesNode.add(value.name(), raw);
             }
         }
-        if (valuesNode.size() > 0) {
+        if (!valuesNode.entrySet().isEmpty()) {
             node.add("values", valuesNode);
         }
         return node;

@@ -212,7 +212,7 @@ class ModuleConfigStoreTest {
         assertEquals(9.0, readModuleNode("Probe").getAsJsonObject("values")
                 .get("Amount").getAsDouble());
         // 备份是上一版，仍然是完整可解析的 JSON。
-        JsonParser.parseString(new String(Files.readAllBytes(backup), StandardCharsets.UTF_8));
+        new JsonParser().parse(new String(Files.readAllBytes(backup), StandardCharsets.UTF_8));
     }
 
     /** panic：先落盘“禁用前”的开关与设置，再关闭存储；全关状态不得写进配置。 */
@@ -279,7 +279,7 @@ class ModuleConfigStoreTest {
 
     private static JsonObject readJson(Path file) throws IOException {
         String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-        return JsonParser.parseString(text).getAsJsonObject();
+        return new JsonParser().parse(text).getAsJsonObject();
     }
 
     private Path findQuarantine() throws IOException {

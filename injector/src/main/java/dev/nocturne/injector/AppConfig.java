@@ -57,7 +57,7 @@ public final class AppConfig {
             // try-with-resources 保证文件句柄在解析失败时也被关闭。
             try (InputStreamReader reader =
                          new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
-                JsonElement root = JsonParser.parseReader(reader);
+                JsonElement root = new JsonParser().parse(reader);
                 if (root != null && root.isJsonObject()) {
                     return fromJson(root.getAsJsonObject());
                 }

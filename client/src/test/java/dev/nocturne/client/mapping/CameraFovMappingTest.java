@@ -88,7 +88,7 @@ class CameraFovMappingTest {
         String resource = "/mappings-" + version + ".json";
         InputStream stream = CameraFovMappingTest.class.getResourceAsStream(resource);
         assertNotNull(stream, resource + " 不在 classpath 上");
-        return JsonParser.parseReader(
+        return new JsonParser().parse(
                 new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject();
     }
 

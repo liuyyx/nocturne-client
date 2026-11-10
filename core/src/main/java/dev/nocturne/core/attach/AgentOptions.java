@@ -228,7 +228,7 @@ public final class AgentOptions {
             String text = new String(java.nio.file.Files.readAllBytes(json.toPath()),
                     java.nio.charset.StandardCharsets.UTF_8);
             com.google.gson.JsonObject root =
-                    com.google.gson.JsonParser.parseString(text).getAsJsonObject();
+                    new com.google.gson.JsonParser().parse(text).getAsJsonObject();
             for (String key : new String[]{"clientVersion", "inheritsFrom"}) {
                 if (root.has(key) && root.get(key).isJsonPrimitive()) {
                     String family = versionFamily(root.get(key).getAsString());

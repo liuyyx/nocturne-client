@@ -79,7 +79,7 @@ class NocturneTest {
 
         String json = new String(capture.toByteArray(), Charset.forName("UTF-8")).trim();
         assertTrue(json.startsWith("[") && json.endsWith("]"), "output must be a JSON array: " + json);
-        JsonArray parsed = JsonParser.parseString(json).getAsJsonArray();
+        JsonArray parsed = new JsonParser().parse(json).getAsJsonArray();
         assertEquals(minecraft.size(), parsed.size(),
                 "list must mirror the minecraft processes only, never fall back to all JVMs");
 

@@ -166,7 +166,7 @@ class ObfuscatedMappingTest {
         }
         try {
             InputStreamReader reader = new InputStreamReader(in, Charset.forName("UTF-8"));
-            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+            JsonObject root = new JsonParser().parse(reader).getAsJsonObject();
             return root.getAsJsonObject("classes");
         } finally {
             in.close();

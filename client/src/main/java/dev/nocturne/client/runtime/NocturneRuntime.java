@@ -595,7 +595,8 @@ public final class NocturneRuntime {
         if (isKilled()) {
             return;
         }
-        if (frameHookSeen && !contextDriven) {
+        if (frameHookSeen && !contextDriven
+                && System.getProperty("nocturne.drawhook") == null) {
             if (FRAME_STAT) {
                 drawSkips.incrementAndGet();
             }

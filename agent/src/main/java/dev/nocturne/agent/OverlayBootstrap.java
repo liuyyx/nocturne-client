@@ -376,6 +376,12 @@ public final class OverlayBootstrap implements FrameListener {
             // 游戏绘制 API 后端的上下文只在绘制钩子那一次调用内有效：必须让绘制钩子驱动，
             // 不能只靠帧交换点（那时上下文已被清空）。
             NocturneRuntime.setContextDriven(true);
+        } else if (backend instanceof dev.nocturne.ui.gl.GlRenderer) {
+            // 1.8.9–1.12.2 固定管线：真机日志里 Display.update 钩子可能只命中一次甚至不命中，
+            // 而 HUD 绘制钩子（Gui.renderGameOverlay）每帧都进。固定管线不依赖游戏绘制上下文，
+            // 直接由 HUD 钩子驱动；系统属性是所有类加载器副本共享的信号。
+            System.setProperty("nocturne.drawhook", "1");
+            NocturneRuntime.setContextDriven(true);
         }
         modernBackend = backend instanceof ModernRenderer ? (ModernRenderer) backend : null;
         if (modernBackend != null && pendingGraphics != null) {

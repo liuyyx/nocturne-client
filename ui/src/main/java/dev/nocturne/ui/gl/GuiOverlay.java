@@ -1115,7 +1115,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         // 世界覆盖层（ESP/Tracers/NameTags/StorageESP…）与界面无关，必须单独计入：
         // 界面关着时本方法此前直接 return，于是 beginFrame() 根本不执行、覆盖层一帧都不画——
         // 世界里什么都看不到，日志里也没有半句线索。
-        if (!guiOpen && !hasWorldOverlays() && hudLines.isEmpty()) {
+        if (!needsFrame(guiOpen, hasWorldOverlays(), !hudLines.isEmpty())) {
             return;
         }
         Integer wantedScale = Integer.getInteger("nocturne.ui.scale", 0);
@@ -1236,6 +1236,20 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         }
         float scale = userScale > 0f ? userScale : 1f;
         return Math.max(3f, base * scale);
+    }
+
+    /**
+     * 本帧是否需要开绘制面：GUI 打开、有启用中的世界覆盖层、或有 HUD 行，任一成立都必须
+     * beginFrame + drawWorldOverlays + endFrame。否则「界面关闭 + 有 ESP + hudLines 为空」会被
+     * 误判成无事可做，1.8.9 真机上表现为模块已启用但世界覆盖层一帧都不画。
+     *
+     * @param guiOpen          自绘 GUI 是否打开
+     * @param hasWorldOverlays 是否存在启用中的 {@link WorldOverlay} 模块
+     * @param hasHudLines      HUD 行汇是否非空
+     * @return true 表示本帧必须进入绘制
+     */
+    static boolean needsFrame(boolean guiOpen, boolean hasWorldOverlays, boolean hasHudLines) {
+        return guiOpen || hasWorldOverlays || hasHudLines;
     }
 
     /**

@@ -130,10 +130,11 @@ class AttachRegistrationTest {
     private static int register(ClassFileTransformer transformer, String method, String descriptor,
                                 String hookMethod) throws Exception {
         Method register = NocturneAgent.class.getDeclaredMethod("registerGameplayTransformerState",
-                Instrumentation.class, ClassFileTransformer.class, String.class, String.class,
+                Instrumentation.class, dev.nocturne.agent.transform.EmbeddedAsmLoader.class,
+                ClassFileTransformer.class, String.class, String.class,
                 String.class, String.class);
         register.setAccessible(true);
-        return ((Integer) register.invoke(null, instrumentation(), transformer,
+        return ((Integer) register.invoke(null, instrumentation(), null, transformer,
                 Subject.class.getName(), method, descriptor, hookMethod)).intValue();
     }
 

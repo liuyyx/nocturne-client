@@ -38,6 +38,9 @@ public final class NocturneAgent {
      */
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
 
+    /** 只打印第一条 redefine 失败堆栈：根因不明时它比 132 行同样的消息有用。 */
+    private static final AtomicBoolean REDEFINE_STACK_TRACED = new AtomicBoolean(false);
+
     /**
      * GUI 开关按键。
      *
@@ -1396,7 +1399,7 @@ public final class NocturneAgent {
                     ClassFileTransformer transformer = asmLoader.createGateTransformer(className,
                             candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
                             "handTransform", "V", false, false);
-                    int state = registerGameplayTransformerState(instrumentation, transformer, className,
+                    int state = registerGameplayTransformerState(instrumentation, asmLoader, transformer, className,
                             candidate.name(), descriptor, "handTransform");
                     wired |= state >= HOOK_REGISTERED;
                 }
@@ -1440,7 +1443,7 @@ public final class NocturneAgent {
                 }
                 ClassFileTransformer transformer = asmLoader.createFloatReturnTransformer(className,
                         candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "cameraZoom");
-                int state = registerGameplayTransformerState(instrumentation, transformer, className,
+                int state = registerGameplayTransformerState(instrumentation, asmLoader, transformer, className,
                         candidate.name(), descriptor, "cameraZoom");
                 wired |= state >= HOOK_REGISTERED;
             }
@@ -1509,7 +1512,7 @@ public final class NocturneAgent {
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "timerScale");
                 // 类未加载时只是挂上转换器（HOOK_REGISTERED），必须算作已接线；只有
                 // HOOK_FAILED（目标已加载却改不动）才是不可用。旧实现把等待织入的常态误判成失败。
-                wired |= hookWired(registerGameplayTransformerState(instrumentation, transformer,
+                wired |= hookWired(registerGameplayTransformerState(instrumentation, asmLoader, transformer,
                         className, candidate.name(), descriptor, "timerScale"));
             }
         }
@@ -1568,7 +1571,7 @@ public final class NocturneAgent {
                 ClassFileTransformer transformer = asmLoader.createFirstArgumentGateTransformer(
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "xrayBlock",
                         stateIndex, posIndex);
-                int state = registerGameplayTransformerState(instrumentation, transformer, className,
+                int state = registerGameplayTransformerState(instrumentation, asmLoader, transformer, className,
                         candidate.name(), descriptor, "xrayBlock");
                 wired |= state >= HOOK_REGISTERED;
             }
@@ -1636,7 +1639,7 @@ public final class NocturneAgent {
                 ClassFileTransformer transformer = asmLoader.createWorldRenderTransformer(
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
                         null, "worldRender3D");
-                int state = registerGameplayTransformerState(instrumentation, transformer, className,
+                int state = registerGameplayTransformerState(instrumentation, asmLoader, transformer, className,
                         candidate.name(), descriptor, "worldRender3D");
                 if (state == HOOK_WOVEN) {
                     woven = true;
@@ -1670,7 +1673,7 @@ public final class NocturneAgent {
                 ClassFileTransformer capture = asmLoader.createWorldRenderTransformer(
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
                         null, "worldRender3DCapture");
-                int captureState = registerGameplayTransformerState(instrumentation, capture,
+                int captureState = registerGameplayTransformerState(instrumentation, asmLoader, capture,
                         className, candidate.name(), descriptor, "worldRender3DCapture");
                 if (captureState == HOOK_WOVEN) {
                     captureWired = true;
@@ -1751,14 +1754,14 @@ public final class NocturneAgent {
                         ClassFileTransformer gate = asmLoader.createFirstArgumentGateTransformer(
                                 className, candidate.name(), real, GAMEPLAY_HOOK_OWNER,
                                 "entityRenderGate");
-                        gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
+                        gateWired |= registerGameplayTransformerState(instrumentation, asmLoader, gate, className,
                                 candidate.name(), real, "entityRenderGate") >= HOOK_REGISTERED;
                     }
                     continue;
                 }
                 ClassFileTransformer gate = asmLoader.createFirstArgumentGateTransformer(className,
                         candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "entityRenderGate");
-                gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
+                gateWired |= registerGameplayTransformerState(instrumentation, asmLoader, gate, className,
                         candidate.name(), descriptor, "entityRenderGate") >= HOOK_REGISTERED;
                 for (String real : descriptorsFor(instrumentation, className, candidate.name(),
                         null, null)) {
@@ -1767,7 +1770,7 @@ public final class NocturneAgent {
                     }
                     ClassFileTransformer extra = asmLoader.createFirstArgumentGateTransformer(
                             className, candidate.name(), real, GAMEPLAY_HOOK_OWNER, "entityRenderGate");
-                    gateWired |= registerGameplayTransformerState(instrumentation, extra, className,
+                    gateWired |= registerGameplayTransformerState(instrumentation, asmLoader, extra, className,
                             candidate.name(), real, "entityRenderGate") >= HOOK_REGISTERED;
                 }
             }
@@ -1792,11 +1795,11 @@ public final class NocturneAgent {
                     sawRenderDescriptor = true;
                     ClassFileTransformer gate = asmLoader.createEntityRenderGateTransformer(className,
                             candidate.name(), shape, GAMEPLAY_HOOK_OWNER);
-                    gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
+                    gateWired |= registerGameplayTransformerState(instrumentation, asmLoader, gate, className,
                             candidate.name(), shape, "entityRenderGate") >= HOOK_REGISTERED;
                     ClassFileTransformer chams = asmLoader.createDeferredCallbackTransformer(className,
                             candidate.name(), shape, GAMEPLAY_HOOK_OWNER, "chamsPre", "chamsPost");
-                    chamsWired |= registerGameplayTransformerState(instrumentation, chams, className,
+                    chamsWired |= registerGameplayTransformerState(instrumentation, asmLoader, chams, className,
                             candidate.name(), shape, "chamsPre") >= HOOK_REGISTERED;
                 }
                 if (!sawRenderDescriptor && renderMappingEmpty) {
@@ -1809,11 +1812,11 @@ public final class NocturneAgent {
                         String shape = real.descriptor();
                         ClassFileTransformer gate = asmLoader.createEntityRenderGateTransformer(className,
                                 real.name(), shape, GAMEPLAY_HOOK_OWNER);
-                        gateWired |= registerGameplayTransformerState(instrumentation, gate, className,
+                        gateWired |= registerGameplayTransformerState(instrumentation, asmLoader, gate, className,
                                 real.name(), shape, "entityRenderGate") >= HOOK_REGISTERED;
                         ClassFileTransformer chams = asmLoader.createDeferredCallbackTransformer(className,
                                 real.name(), shape, GAMEPLAY_HOOK_OWNER, "chamsPre", "chamsPost");
-                        chamsWired |= registerGameplayTransformerState(instrumentation, chams, className,
+                        chamsWired |= registerGameplayTransformerState(instrumentation, asmLoader, chams, className,
                                 real.name(), shape, "chamsPre") >= HOOK_REGISTERED;
                     }
                 }
@@ -1868,7 +1871,7 @@ public final class NocturneAgent {
                 for (String shape : descriptors) {
                     ClassFileTransformer transformer = asmLoader.createMoveTransformer(className,
                             candidate.name(), shape, GAMEPLAY_HOOK_OWNER, shape.contains("DDD"));
-                    patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                    patched |= registerGameplayTransformer(instrumentation, asmLoader, transformer, className,
                             candidate.name(), shape, "move");
                 }
             }
@@ -2096,7 +2099,7 @@ public final class NocturneAgent {
                         descriptor, fallbackDescriptors)) {
                     ClassFileTransformer transformer = createGateTransformer(asmLoader, className,
                             candidate.name(), each, hookMethod, hookReturn, atMethodEnd, passThis);
-                    patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                    patched |= registerGameplayTransformer(instrumentation, asmLoader, transformer, className,
                             candidate.name(), each, hookMethod);
                 }
             }
@@ -2148,7 +2151,7 @@ public final class NocturneAgent {
                 }
                 ClassFileTransformer transformer = asmLoader.createPacketTransformer(className,
                         candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, hookMethod, packetArgument);
-                patched |= registerGameplayTransformer(instrumentation, transformer, className,
+                patched |= registerGameplayTransformer(instrumentation, asmLoader, transformer, className,
                         candidate.name(), descriptor, hookMethod);
             }
         }
@@ -2159,10 +2162,11 @@ public final class NocturneAgent {
 
     /** 注册转换器并立即改写已加载目标。 */
     private static boolean registerGameplayTransformer(Instrumentation instrumentation,
+                                                       EmbeddedAsmLoader asmLoader,
                                                        ClassFileTransformer transformer,
                                                        String targetClass, String method,
                                                        String descriptor, String hookMethod) {
-        return registerGameplayTransformerState(instrumentation, transformer, targetClass, method,
+        return registerGameplayTransformerState(instrumentation, asmLoader, transformer, targetClass, method,
                 descriptor, hookMethod) == HOOK_WOVEN;
     }
 
@@ -2174,6 +2178,7 @@ public final class NocturneAgent {
      * 会被误报成不可用。
      */
     private static int registerGameplayTransformerState(Instrumentation instrumentation,
+                                                        EmbeddedAsmLoader asmLoader,
                                                         ClassFileTransformer transformer,
                                                         String targetClass, String method,
                                                         String descriptor, String hookMethod) {
@@ -2222,8 +2227,8 @@ public final class NocturneAgent {
                     current = captureCurrentBytes(instrumentation, loaded);
                 }
                 String internalName = loaded.getName().replace('.', '/');
-                if (current != null && dev.nocturne.agent.transform.TransformGuard.containsHookInMethod(
-                        current, targetClass, method, descriptor, GAMEPLAY_HOOK_OWNER, hookMethod)) {
+                if (current != null && containsHookInMethod(asmLoader, current, targetClass, method,
+                        descriptor, GAMEPLAY_HOOK_OWNER, hookMethod)) {
                     GAMEPLAY_BYTES.put(loaded, current);
                     log("gameplay hook already applied by retransform: " + targetClass
                             + "." + method + " -> " + hookMethod);
@@ -2237,8 +2242,8 @@ public final class NocturneAgent {
                 // 只有**真的织进去了**才算成功：转换器在方法名/描述符不匹配时会原样返回输入
                 // （非 null），旧代码把这种情况也打成 "woven"——日志说织上了、行为却完全没有。
                 if (bytes != null
-                        && dev.nocturne.agent.transform.TransformGuard.containsHookInMethod(
-                        bytes, targetClass, method, descriptor, GAMEPLAY_HOOK_OWNER, hookMethod)) {
+                        && containsHookInMethod(asmLoader, bytes, targetClass, method, descriptor,
+                        GAMEPLAY_HOOK_OWNER, hookMethod)) {
                     instrumentation.redefineClasses(new java.lang.instrument.ClassDefinition(loaded, bytes));
                     GAMEPLAY_BYTES.put(loaded, bytes);
                     patched = true;
@@ -2251,6 +2256,9 @@ public final class NocturneAgent {
             } catch (Throwable t) {
                 log("gameplay hook redefine failed: " + targetClass + "." + method + descriptor
                         + " -> " + t);
+                if (REDEFINE_STACK_TRACED.compareAndSet(false, true)) {
+                    t.printStackTrace(System.out);
+                }
             }
             break;
         }
@@ -2259,6 +2267,25 @@ public final class NocturneAgent {
         }
         // 目标类已加载却改不动（redefine 被拒/校验失败）：这条钩子不会生效，必须报失败。
         return targetLoaded ? HOOK_FAILED : HOOK_REGISTERED;
+    }
+
+    /**
+     * 方法级钩子存在性检查。
+     *
+     * <p>生产路径必须把检查交给 {@link EmbeddedAsmLoader}：它定义的 {@code TransformGuard} 能看到
+     * 内嵌加密 ASM；agent 类自己的加载器看不到，直接调用会抛
+     * {@code NoClassDefFoundError: org/objectweb/asm/ClassVisitor}（1.8.9 真机：所有 gameplay
+     * 钩子因此没有一条织入）。{@code asmLoader == null} 仅用于单测（测试 classpath 有展开的 ASM）。
+     */
+    private static boolean containsHookInMethod(EmbeddedAsmLoader asmLoader, byte[] bytes,
+                                                String targetClass, String method, String descriptor,
+                                                String hookOwner, String hookMethod) {
+        if (asmLoader != null) {
+            return asmLoader.containsHookInMethod(bytes, targetClass, method, descriptor,
+                    hookOwner, hookMethod);
+        }
+        return dev.nocturne.agent.transform.TransformGuard.containsHookInMethod(bytes, targetClass,
+                method, descriptor, hookOwner, hookMethod);
     }
 
     /** 该类的全部运行期候选名（映射候选 + 规范名），去重且保持候选顺序。 */

@@ -72,6 +72,10 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     /** 世界空间 3D 钩子：在 void 方法的每个 RETURN 前传首个 float 形参。 */
     private static final String WORLD_RENDER_TRANSFORMER_CLASS =
             "dev.nocturne.agent.transform.WorldRenderHookTransformer";
+    /** 方法级幂等检查器；必须由本加载器定义，否则它看不到内嵌 ASM。 */
+    private static final String TRANSFORM_GUARD_CLASS =
+            "dev.nocturne.agent.transform.TransformGuard";
+
     /** 钩子所在类内部名（斜杠形式）。 */
     // 必须指向 bootstrap 层的中立类：Forge 的模块化 classloader 看不到 agent jar，
     // 直接调 NocturneRuntime.onFrame 会 NoClassDefFoundError（1.20.1 Forge 实测）。
@@ -113,6 +117,32 @@ public final class EmbeddedAsmLoader extends ClassLoader {
             return null;
         }
         return new EmbeddedAsmLoader(parent, asm);
+    }
+
+    /**
+     * 方法级钩子幂等检查，但强制走本加载器定义的 {@link TransformGuard}。
+     *
+     * <p><b>为什么不能直接调用</b>：agent 类（{@code NocturneAgent}）由系统加载器定义，它看不到
+     * 内嵌加密载荷里的 ASM；{@code TransformGuard} 一旦在系统加载器视角下解析
+     * {@code org.objectweb.asm.ClassVisitor} 就抛 {@code NoClassDefFoundError}。1.8.9 真机实测：
+     * 所有 gameplay 钩子因此报 {@code redefine failed}，只有由本加载器加载的转换器内部检查正常。
+     *
+     * @return 目标方法体内是否已有该钩子调用；检查器不可用时退回类级字节扫描
+     */
+    public boolean containsHookInMethod(byte[] bytes, String targetClass, String method,
+                                        String descriptor, String hookOwner, String hookMethod) {
+        try {
+            Class<?> guard = loadClass(TRANSFORM_GUARD_CLASS);
+            java.lang.reflect.Method check = guard.getMethod("containsHookInMethod",
+                    byte[].class, String.class, String.class, String.class, String.class,
+                    String.class);
+            Object result = check.invoke(null, bytes, targetClass, method, descriptor,
+                    hookOwner, hookMethod);
+            return Boolean.TRUE.equals(result);
+        } catch (Throwable t) {
+            // 保守回退：类级检查可能误报，但重复织入会让同一钩子执行两遍，比少织一次更危险。
+            return TransformGuard.containsHook(bytes, hookOwner, hookMethod);
+        }
     }
 
     /**

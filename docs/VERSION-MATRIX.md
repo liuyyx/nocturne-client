@@ -3,6 +3,31 @@
 映射表现已覆盖 **1.8.9 – 26.3 的全部 66 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
 >下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
+## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
+
+- 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；
+  该阶段没有注册视觉功能模块，正式 GUI 仍只有此前的 `Kill Aura`，不得把公共通道当作 51 项移植完成。
+- `Camera#setup` 使用头部捕获 `this`、尾部无参消费，不读取 RETURN 处的局部槽；
+  只织入映射候选的配对描述符，不枚举同混淆名的其它重载。26.x 规范 `setup` 映射到真实 `update`。
+- `gradle build --console=plain --no-daemon` **实测通过**，包括单测、ASM 载荷闸门与
+  `verifyJarBytecode`；颜色边界、分类、几何、九锚点/反向堆叠、汇迁移、绘制异常隔离、
+  相机栈配对及 HUD/菜单字体缓存共存均有测试覆盖。
+- `python tools/mapping/generate.py --check` **实测通过**：66 张表最新，177 个规范类；
+  旧版独立相机/库存 getter 等缺失按真实 `absentReason` 保留，未伪装成可用。
+- **1.8.9 真机公共 HUD 通道实测通过**：`client installed (modules=1)`、`backend=gl-fixed`；
+  关闭 ClickGUI 后两个临时元素仍持续绘制，截图 `tmp/epsilon-stage-0c-1.8.9-hud.png`，
+  日志 `tmp/epsilon-stage-0c-1.8.9.log`。独立相机按映射缺失输出 `camera aligned hook unavailable`。
+- **1.21.1 真机公共 HUD / 相机回调实测通过**：`backend=gl-core`，关闭 ClickGUI 后元素及文字可见；
+  图集仅供 core profile 使用，固定管线/游戏 API 绘制栈沿用原有文字面。
+  日志有 `camera aligned hook woven: ffy.a(Ldcc;Lbsr;ZZF)V -> cameraBegin + cameraEnd`
+  与 `stage zero camera callback verified: ffy`。
+  证据：`tmp/epsilon-stage-0c-1.21.1.log`、`tmp/epsilon-stage-0c-1.21.1-hud.png`；
+  窗口放大后的锚点重排截图 `tmp/epsilon-stage-0b-1.21.1-hud-resized.png`。
+- 临时 `HUD TOP LEFT` / `HUD BOTTOM RIGHT` 仅是通道验收标记，**不属于产品模块**，
+  验收实例已退出，探针源码与 jar 已清除；后续批次必须注册真实模块并从 GUI 验证。
+- 边界：0b 轮 1.21.1 日志仍观察到既有 Hud/Screen/Chams 重定义的 `VerifyError`；
+  本节不将这些路径或尚未落地的视觉模块记为通过，其余版本真机均**未验证**。
+
 ## Kill Aura 移植（2026-11-12，真机未验证）
 
 - 已按 eps 上游行为重写并注册 `Kill Aura`：Single/Switch 选靶、四类优先级、受限旋转、

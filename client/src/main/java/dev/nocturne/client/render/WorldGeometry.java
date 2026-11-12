@@ -17,7 +17,66 @@ public final class WorldGeometry {
     public static void box(OverlayDraw draw, WorldProjection projection,
                            double minX, double minY, double minZ,
                            double maxX, double maxY, double maxZ, float width, int argb) {
-        // 底面与顶面各按 x/z 的四种组合排列。
+        projectBox(projection, minX, minY, minZ, maxX, maxY, maxZ);
+        for (int[] edge : BOX_EDGES) {
+            line(BOX_POINTS[edge[0]], BOX_POINTS[edge[1]], draw, width, argb);
+        }
+    }
+
+    /** 用包围盒八角的屏幕包围矩形近似低透明度填充；所有角不可见时不画。 */
+    public static void silhouette(OverlayDraw draw, WorldProjection projection,
+                                  double minX, double minY, double minZ,
+                                  double maxX, double maxY, double maxZ, int argb) {
+        projectBox(projection, minX, minY, minZ, maxX, maxY, maxZ);
+        float left = Float.POSITIVE_INFINITY;
+        float top = Float.POSITIVE_INFINITY;
+        float right = Float.NEGATIVE_INFINITY;
+        float bottom = Float.NEGATIVE_INFINITY;
+        for (WorldProjection.ScreenPoint point : BOX_POINTS) {
+            if (!point.visible) {
+                continue;
+            }
+            left = Math.min(left, point.x);
+            top = Math.min(top, point.y);
+            right = Math.max(right, point.x);
+            bottom = Math.max(bottom, point.y);
+        }
+        if (left != Float.POSITIVE_INFINITY) {
+            draw.rect(left, top, right - left, bottom - top, argb);
+        }
+    }
+
+    /** 画竖直圆柱的上下圆环与四条母线，用于水晶等竖向盒的低成本近似。 */
+    public static void verticalBox(OverlayDraw draw, WorldProjection projection,
+                                   double centerX, double minY, double centerZ,
+                                   double radius, double height, int segments, float width, int argb) {
+        if (segments <= 0) {
+            return;
+        }
+        circle(draw, projection, centerX, minY, centerZ, radius, segments, width, argb);
+        circle(draw, projection, centerX, minY + height, centerZ, radius, segments, width, argb);
+        for (int i = 0; i < 4; i++) {
+            double angle = Math.PI * 0.5 * i;
+            double x = centerX + Math.cos(angle) * radius;
+            double z = centerZ + Math.sin(angle) * radius;
+            line(draw, projection, x, minY, z, x, minY + height, z, width, argb);
+        }
+    }
+
+    /** 在世界点绘制文字；点不可见时跳过。 */
+    public static void label(OverlayDraw draw, WorldProjection projection, String text,
+                             double x, double y, double z, float size, int argb) {
+        WorldProjection.ScreenPoint point = LINE_POINTS[0];
+        projection.project(x, y, z, point);
+        if (point.visible) {
+            draw.text(text, point.x, point.y, size, argb);
+        }
+    }
+
+    /** 底面与顶面各按 x/z 的四种组合排列；调用方复用同一组八角。 */
+    private static void projectBox(WorldProjection projection,
+                                   double minX, double minY, double minZ,
+                                   double maxX, double maxY, double maxZ) {
         projection.project(minX, minY, minZ, BOX_POINTS[0]);
         projection.project(maxX, minY, minZ, BOX_POINTS[1]);
         projection.project(minX, minY, maxZ, BOX_POINTS[2]);
@@ -26,9 +85,6 @@ public final class WorldGeometry {
         projection.project(maxX, maxY, minZ, BOX_POINTS[5]);
         projection.project(minX, maxY, maxZ, BOX_POINTS[6]);
         projection.project(maxX, maxY, maxZ, BOX_POINTS[7]);
-        for (int[] edge : BOX_EDGES) {
-            line(BOX_POINTS[edge[0]], BOX_POINTS[edge[1]], draw, width, argb);
-        }
     }
 
     /** 画水平圆环；segments 是闭合环的线段数。 */

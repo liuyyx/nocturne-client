@@ -310,9 +310,94 @@
                         "forge": "()F",
                         "neoforge": "()F"
                     }
+                },
+                "setup": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_19321",
+                        "forge": "m_90575_",
+                        "neoforge": "setup"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ldbf;Lbsv;ZZF)V",
+                        "fabric": "(Lnet/minecraft/class_1922;Lnet/minecraft/class_1297;ZZF)V",
+                        "forge": "(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V",
+                        "neoforge": "(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "field_18721",
+                        "forge": "f_90562_",
+                        "neoforge": "eyeHeight"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "eyeHeightOld": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "field_18722",
+                        "forge": "f_90563_",
+                        "neoforge": "eyeHeightOld"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "position": {
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "field_18712",
+                        "forge": "f_90552_",
+                        "neoforge": "position"
+                    },
+                    "descriptors": {
+                        "vanilla": "Levs;",
+                        "fabric": "Lnet/minecraft/class_243;",
+                        "forge": "Lnet/minecraft/world/phys/Vec3;",
+                        "neoforge": "Lnet/minecraft/world/phys/Vec3;"
+                    }
+                },
+                "xRot": {
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "field_18717",
+                        "forge": "f_90557_",
+                        "neoforge": "xRot"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "yRot": {
+                    "names": {
+                        "vanilla": "l",
+                        "fabric": "field_18718",
+                        "forge": "f_90558_",
+                        "neoforge": "yRot"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                }
+            }
         },
         "net/minecraft/client/CameraType": {
             "names": {
@@ -2344,6 +2429,20 @@
                         "neoforge": "()I"
                     }
                 },
+                "getInventory": {
+                    "names": {
+                        "vanilla": "gc",
+                        "fabric": "method_31548",
+                        "forge": "m_150109_",
+                        "neoforge": "getInventory"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lcmx;",
+                        "fabric": "()Lnet/minecraft/class_1661;",
+                        "forge": "()Lnet/minecraft/world/entity/player/Inventory;",
+                        "neoforge": "()Lnet/minecraft/world/entity/player/Inventory;"
+                    }
+                },
                 "getMaxHealth": {
                     "names": {
                         "vanilla": "eR",
@@ -4349,6 +4448,20 @@
                         "neoforge": "(Lnet/minecraft/world/entity/Entity;)Z"
                     }
                 },
+                "isCrouching": {
+                    "names": {
+                        "vanilla": "ca",
+                        "fabric": "method_18276",
+                        "forge": "m_6047_",
+                        "neoforge": "isCrouching"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
+                    }
+                },
                 "isInWater": {
                     "names": {
                         "vanilla": "be",
@@ -4910,6 +5023,20 @@
                         "fabric": "()Ljava/util/Collection;",
                         "forge": "()Ljava/util/Collection;",
                         "neoforge": "()Ljava/util/Collection;"
+                    }
+                },
+                "getArmorValue": {
+                    "names": {
+                        "vanilla": "eO",
+                        "fabric": "method_6096",
+                        "forge": "m_21230_",
+                        "neoforge": "getArmorValue"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
                     }
                 },
                 "getCurrentArmor": {
@@ -7102,6 +7229,20 @@
                 "playerWillDestroy": {
                     "absent": true,
                     "absentReason": "verified"
+                },
+                "players": {
+                    "names": {
+                        "vanilla": "x",
+                        "fabric": "method_18456",
+                        "forge": "m_6907_",
+                        "neoforge": "players"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/List;",
+                        "fabric": "()Ljava/util/List;",
+                        "forge": "()Ljava/util/List;",
+                        "neoforge": "()Ljava/util/List;"
+                    }
                 },
                 "setBlock": {
                     "names": {

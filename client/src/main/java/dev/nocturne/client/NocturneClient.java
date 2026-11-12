@@ -28,6 +28,8 @@ public final class NocturneClient {
     private volatile Instrumentation instrumentation;
     /** HUD 行输出汇，由 UI 模块注入；未安装前为 {@code null}。 */
     private volatile HudSink hudSink;
+    /** 复合 HUD 元素输出汇；与文本行汇并行，互不争用 id。 */
+    private volatile dev.nocturne.client.hud.HudElementSink hudElementSink;
     /** 实体渲染期间的后端状态操作；由 GuiOverlay 安装。 */
     private volatile dev.nocturne.client.render.RenderCapabilities renderCapabilities;
     /** 指向运行中游戏的反射桥；非游戏 JVM 中为 {@code null}。 */
@@ -59,6 +61,11 @@ public final class NocturneClient {
     /** 由 UI 模块提供的 HUD 行汇；未安装前为 {@code null}。 */
     public HudSink hudSink() {
         return hudSink;
+    }
+
+    /** 复合 HUD 元素汇；UI 尚未安装时为 {@code null}。 */
+    public dev.nocturne.client.hud.HudElementSink hudElementSink() {
+        return hudElementSink;
     }
 
     public dev.nocturne.client.render.RenderCapabilities renderCapabilities() {
@@ -96,6 +103,25 @@ public final class NocturneClient {
             } catch (Throwable t) {
                 // 单个模块迁移失败不得阻止其余模块，也不能静默丢弃（迁移失败意味着 HUD 行会丢）
                 log("hud sink migration failed for module '" + module.name() + "': " + t);
+            }
+        }
+    }
+
+    /** 安装或替换复合 HUD 元素汇，并把变化逐模块隔离转发。 */
+    public void setHudElementSink(dev.nocturne.client.hud.HudElementSink sink) {
+        dev.nocturne.client.hud.HudElementSink previous;
+        synchronized (this) {
+            previous = this.hudElementSink;
+            this.hudElementSink = sink;
+        }
+        if (previous == sink) {
+            return;
+        }
+        for (Module module : modules.all()) {
+            try {
+                module.onHudElementSinkChanged(previous, sink);
+            } catch (Throwable t) {
+                log("hud element sink migration failed for module '" + module.name() + "': " + t);
             }
         }
     }

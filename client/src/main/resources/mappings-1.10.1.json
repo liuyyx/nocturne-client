@@ -476,8 +476,14 @@
             "methods": {},
             "fields": {
                 "bobView": {
-                    "absent": true,
-                    "absentReason": "unverified"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "field_1891"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z"
+                    }
                 },
                 "cameraType": {
                     "absent": true,
@@ -1309,6 +1315,10 @@
                         "vanilla": "()I",
                         "fabric": "()I"
                     }
+                },
+                "getInventory": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getMaxHealth": {
                     "names": {
@@ -2716,6 +2726,16 @@
                         "fabric": "(Lnet/minecraft/class_1297;)Z"
                     }
                 },
+                "isCrouching": {
+                    "names": {
+                        "vanilla": "aM",
+                        "fabric": "method_5715"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z"
+                    }
+                },
                 "isInWater": {
                     "names": {
                         "vanilla": "aj",
@@ -3117,6 +3137,16 @@
                     "signatures": {
                         "vanilla": "()Ljava/util/Collection;",
                         "fabric": "()Ljava/util/Collection;"
+                    }
+                },
+                "getArmorValue": {
+                    "names": {
+                        "vanilla": "bX",
+                        "fabric": "method_6096"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I"
                     }
                 },
                 "getCurrentArmor": {
@@ -4598,6 +4628,10 @@
                     "absentReason": "unverified"
                 },
                 "playerWillDestroy": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "players": {
                     "absent": true,
                     "absentReason": "unverified"
                 },

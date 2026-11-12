@@ -77,6 +77,7 @@ class GuiOverlayInputTest {
     @Test
     void hudLinesDrawWhileClickGuiIsClosed() {
         FakeBackend backend = new FakeBackend(320, 240);
+        backend.renderer.textures = false;
         GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
                 backend, new FakeInput(), GuiOverlay.KEY_RIGHT_SHIFT);
         overlay.add("test", () -> "FPS 60");
@@ -166,6 +167,7 @@ class GuiOverlayInputTest {
         client.setGameBridge(new GameBridge(null, new HostMapping()));
 
         FakeBackend backend = new FakeBackend(320, 240);
+        backend.renderer.textures = false;
         GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(), backend,
                 new FakeInput(), GuiOverlay.KEY_RIGHT_SHIFT);
         overlay.add("test", () -> "FPS 60");

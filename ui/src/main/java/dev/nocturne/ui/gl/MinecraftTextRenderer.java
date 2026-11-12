@@ -187,7 +187,7 @@ public final class MinecraftTextRenderer implements TextRenderer {
      * 前两步失败不缓存失败结果，因为类/字段晚一点才可见是正常情况。
      */
     private static Object resolveFont(GameBridge bridge, Object minecraft) {
-        Object font = readField(minecraft, "font");
+        Object font = bridge.readField(minecraft, ClassType.MINECRAFT, "font");
         if (font != null) {
             return font;
         }

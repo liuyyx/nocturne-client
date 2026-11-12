@@ -692,8 +692,15 @@
             "methods": {},
             "fields": {
                 "bobView": {
-                    "absent": true,
-                    "absentReason": "unverified"
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "field_1891",
+                        "forge": "field_74336_f"
+                    },
+                    "descriptors": {
+                        "vanilla": "Z",
+                        "fabric": "Z"
+                    }
                 },
                 "cameraType": {
                     "absent": true,
@@ -1602,6 +1609,10 @@
                         "fabric": "()I",
                         "forge": "()I"
                     }
+                },
+                "getInventory": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getMaxHealth": {
                     "names": {
@@ -3155,6 +3166,18 @@
                         "forge": "(Lnet/minecraft/entity/Entity;)Z"
                     }
                 },
+                "isCrouching": {
+                    "names": {
+                        "vanilla": "aZ",
+                        "fabric": "method_5715",
+                        "forge": "func_70093_af"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
+                },
                 "isInWater": {
                     "names": {
                         "vanilla": "an",
@@ -3604,6 +3627,18 @@
                         "vanilla": "()Ljava/util/Collection;",
                         "fabric": "()Ljava/util/Collection;",
                         "forge": "()Ljava/util/Collection;"
+                    }
+                },
+                "getArmorValue": {
+                    "names": {
+                        "vanilla": "ct",
+                        "fabric": "method_6096",
+                        "forge": "func_70658_aO"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
                     }
                 },
                 "getCurrentArmor": {
@@ -5279,6 +5314,10 @@
                     "absentReason": "unverified"
                 },
                 "playerWillDestroy": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "players": {
                     "absent": true,
                     "absentReason": "unverified"
                 },

@@ -27,16 +27,18 @@ public final class FontRasterizer implements FaFont.Provider {
 
     /** 当前生效的实例（键为 renderer + 缩放）；{@link #bind} 维护。 */
     private static FontRasterizer current;
+    /** HUD 与 ClickGUI 的缩放不同，分别持有缓存，防止帧内互相失效。 */
+    private static FontRasterizer overlayCurrent;
     /** 图集缓存，键 {@code (fontId << 20) | pxSize}，{@code accessOrder} 实现 LRU。 */
-    private static final Map<Long, GlyphAtlas> ATLASES =
+    private final Map<Long, GlyphAtlas> atlases =
             new LinkedHashMap<Long, GlyphAtlas>(16, 0.75f, true) {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<Long, GlyphAtlas> eldest) {
                     if (size() <= ATLAS_LIMIT) {
                         return false;
                     }
-                    if (current != null && current.renderer != null) {
-                        eldest.getValue().dispose(current.renderer);
+                    if (renderer != null) {
+                        eldest.getValue().dispose(renderer);
                     }
                     return true;
                 }
@@ -96,6 +98,19 @@ public final class FontRasterizer implements FaFont.Provider {
         return current;
     }
 
+    /** 任意逻辑像素字号的覆盖层字体；与 ClickGUI 缓存独立，能力缺失时返回 null。 */
+    public static synchronized FaFont overlayFont(Renderer renderer, float backendScale, float size) {
+        if (overlayCurrent == null || overlayCurrent.renderer != renderer
+                || overlayCurrent.backendScale != backendScale) {
+            if (overlayCurrent != null) {
+                overlayCurrent.dispose();
+            }
+            overlayCurrent = new FontRasterizer(renderer, 1f, backendScale);
+        }
+        return overlayCurrent.atlas
+                ? overlayCurrent.font(FontRegistry.MISANS, Math.max(1f, size)) : null;
+    }
+
     /**
      * 删除全部图集纹理并清空缓存；后端切换、缩放变化或界面关闭时调用。
      *
@@ -103,17 +118,25 @@ public final class FontRasterizer implements FaFont.Provider {
      * 走图集还是退化——不复位的话，同一个 (后端, 缩放) 上永远拿到旧判断。
      */
     public static synchronized void invalidate() {
-        if (current != null && current.renderer != null) {
-            for (GlyphAtlas atlas : ATLASES.values()) {
-                atlas.dispose(current.renderer);
-            }
-        }
-        ATLASES.clear();
-        RasterTextures.invalidate();
         if (current != null) {
-            current.fonts.clear();
+            current.dispose();
             current = null;
         }
+        if (overlayCurrent != null) {
+            overlayCurrent.dispose();
+            overlayCurrent = null;
+        }
+        RasterTextures.invalidate();
+    }
+
+    private void dispose() {
+        if (renderer != null) {
+            for (GlyphAtlas entry : atlases.values()) {
+                entry.dispose(renderer);
+            }
+        }
+        atlases.clear();
+        fonts.clear();
     }
 
     /** @return 当前是否启用字形图集（决定图标是否要退化成 ASCII 别名） */
@@ -185,7 +208,7 @@ public final class FontRasterizer implements FaFont.Provider {
     /** 取（或新建）一个字形图集；已满时淘汰重建。 */
     private GlyphAtlas atlas(GlyphAtlas previous, int fontId, int pxSize) {
         long key = ((long) fontId << 20) | pxSize;
-        GlyphAtlas existing = ATLASES.get(key);
+        GlyphAtlas existing = atlases.get(key);
         if (existing != null && existing != previous) {
             return existing;
         }
@@ -194,14 +217,14 @@ public final class FontRasterizer implements FaFont.Provider {
             if (renderer != null) {
                 existing.dispose(renderer);
             }
-            ATLASES.remove(key);
+            atlases.remove(key);
         }
         Font base = FontRegistry.font(fontId);
         if (base == null) {
             return null;
         }
         GlyphAtlas created = new GlyphAtlas(base, fontId, pxSize);
-        ATLASES.put(key, created);
+        atlases.put(key, created);
         return created;
     }
 

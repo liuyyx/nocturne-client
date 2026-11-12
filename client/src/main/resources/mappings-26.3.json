@@ -302,9 +302,94 @@
                         "forge": "()F",
                         "neoforge": "()F"
                     }
+                },
+                "setup": {
+                    "names": {
+                        "vanilla": "update",
+                        "fabric": "update",
+                        "forge": "update",
+                        "neoforge": "update"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lnet/minecraft/client/DeltaTracker;)V",
+                        "fabric": "(Lnet/minecraft/client/DeltaTracker;)V",
+                        "forge": "(Lnet/minecraft/client/DeltaTracker;)V",
+                        "neoforge": "(Lnet/minecraft/client/DeltaTracker;)V"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "eyeHeight",
+                        "fabric": "eyeHeight",
+                        "forge": "eyeHeight",
+                        "neoforge": "eyeHeight"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "eyeHeightOld": {
+                    "names": {
+                        "vanilla": "eyeHeightOld",
+                        "fabric": "eyeHeightOld",
+                        "forge": "eyeHeightOld",
+                        "neoforge": "eyeHeightOld"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "position": {
+                    "names": {
+                        "vanilla": "position",
+                        "fabric": "position",
+                        "forge": "position",
+                        "neoforge": "position"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lnet/minecraft/world/phys/Vec3;",
+                        "fabric": "Lnet/minecraft/world/phys/Vec3;",
+                        "forge": "Lnet/minecraft/world/phys/Vec3;",
+                        "neoforge": "Lnet/minecraft/world/phys/Vec3;"
+                    }
+                },
+                "xRot": {
+                    "names": {
+                        "vanilla": "xRot",
+                        "fabric": "xRot",
+                        "forge": "xRot",
+                        "neoforge": "xRot"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
+                "yRot": {
+                    "names": {
+                        "vanilla": "yRot",
+                        "fabric": "yRot",
+                        "forge": "yRot",
+                        "neoforge": "yRot"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                }
+            }
         },
         "net/minecraft/client/CameraType": {
             "names": {
@@ -2502,6 +2587,20 @@
                         "neoforge": "()I"
                     }
                 },
+                "getInventory": {
+                    "names": {
+                        "vanilla": "getInventory",
+                        "fabric": "getInventory",
+                        "forge": "getInventory",
+                        "neoforge": "getInventory"
+                    },
+                    "signatures": {
+                        "vanilla": "()Lnet/minecraft/world/entity/player/Inventory;",
+                        "fabric": "()Lnet/minecraft/world/entity/player/Inventory;",
+                        "forge": "()Lnet/minecraft/world/entity/player/Inventory;",
+                        "neoforge": "()Lnet/minecraft/world/entity/player/Inventory;"
+                    }
+                },
                 "getMaxHealth": {
                     "names": {
                         "vanilla": "getMaxHealth",
@@ -4301,6 +4400,20 @@
                         "neoforge": "isAlliedTo"
                     }
                 },
+                "isCrouching": {
+                    "names": {
+                        "vanilla": "isCrouching",
+                        "fabric": "isCrouching",
+                        "forge": "isCrouching",
+                        "neoforge": "isCrouching"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
+                    }
+                },
                 "isInWater": {
                     "names": {
                         "vanilla": "isInWater",
@@ -4856,6 +4969,20 @@
                         "fabric": "()Ljava/util/Collection;",
                         "forge": "()Ljava/util/Collection;",
                         "neoforge": "()Ljava/util/Collection;"
+                    }
+                },
+                "getArmorValue": {
+                    "names": {
+                        "vanilla": "getArmorValue",
+                        "fabric": "getArmorValue",
+                        "forge": "getArmorValue",
+                        "neoforge": "getArmorValue"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
                     }
                 },
                 "getCurrentArmor": {
@@ -7155,6 +7282,20 @@
                 "playerWillDestroy": {
                     "absent": true,
                     "absentReason": "verified"
+                },
+                "players": {
+                    "names": {
+                        "vanilla": "players",
+                        "fabric": "players",
+                        "forge": "players",
+                        "neoforge": "players"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/List;",
+                        "fabric": "()Ljava/util/List;",
+                        "forge": "()Ljava/util/List;",
+                        "neoforge": "()Ljava/util/List;"
+                    }
                 },
                 "setBlock": {
                     "names": {

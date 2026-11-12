@@ -77,6 +77,10 @@ public final class GameplayHook {
             return distance;
         }
 
+        /** Camera#setup 完成后回调；相机对象由方法头捕获，末尾无参消费。 */
+        default void cameraAligned(Object camera) {
+        }
+
         default float timerScale(float delta) {
             return delta;
         }
@@ -189,6 +193,11 @@ public final class GameplayHook {
             new ThreadLocal<java.util.ArrayDeque<Object>>();
     /** {@code chamsPre(null)} 的哨兵：ArrayDeque 不接受 null，且 null 也必须占一个配对位。 */
     private static final Object NO_CHAMS_ENTITY = new Object();
+    /** Camera#setup 的头尾配对栈；末尾钩子不读取可能被 StackMapTable 裁掉的 this 槽。 */
+    private static final ThreadLocal<java.util.ArrayDeque<Object>> CAMERA_STACK =
+            new ThreadLocal<java.util.ArrayDeque<Object>>();
+    private static final Object NO_CAMERA = new Object();
+    private static final int CAMERA_MAX_DEPTH = 4;
 
     /**
      * 取当前线程的捕获栈，首次使用时创建。
@@ -284,6 +293,7 @@ public final class GameplayHook {
         ATTACK_CONTEXT.remove();
         INPUT_TICK.remove();
         CHAMS_STACK.remove();
+        CAMERA_STACK.remove();
     }
 
     /** @return 是否已进入自销毁状态 */
@@ -440,6 +450,44 @@ public final class GameplayHook {
         } catch (Throwable t) {
             failure("cameraZoom", t);
             return distance;
+        }
+    }
+
+    /** Camera#setup 方法头：无论客户端闸门状态如何都压栈，保证与末尾调用严格配对。 */
+    public static void cameraBegin(Object camera) {
+        try {
+            java.util.ArrayDeque<Object> stack = CAMERA_STACK.get();
+            if (stack == null) {
+                stack = new java.util.ArrayDeque<Object>(CAMERA_MAX_DEPTH);
+                CAMERA_STACK.set(stack);
+            }
+            if (stack.size() >= CAMERA_MAX_DEPTH) {
+                stack.clear();
+            }
+            stack.push(camera == null ? NO_CAMERA : camera);
+        } catch (Throwable t) {
+            failure("cameraBegin", t);
+        }
+    }
+
+    /** Camera#setup 返回点：弹出方法头捕获的相机，再通知客户端；空栈时无操作。 */
+    public static void cameraEnd() {
+        try {
+            java.util.ArrayDeque<Object> stack = CAMERA_STACK.get();
+            if (stack == null) {
+                return;
+            }
+            // 空栈仍保留在线程本地；下一帧复用，避免每次 setup 都分配 ArrayDeque。
+            Object camera = stack.poll();
+            if (camera == null || camera == NO_CAMERA || GameplaySink.isKilled()) {
+                return;
+            }
+            Sink current = sink();
+            if (current != null) {
+                current.cameraAligned(camera);
+            }
+        } catch (Throwable t) {
+            failure("cameraAligned", t);
         }
     }
 

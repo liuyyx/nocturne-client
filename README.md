@@ -41,9 +41,9 @@
 - `OverlayDraw` / `Renderer`：矩形、线、纹理、裁剪与世界投影共用一套绘制入口；ESP、NameTags、
   ItemEsp、Trajectories、StorageEsp、Search 已使用该路径。
 
-- 契约与映射层仍在，但**模块实现已整体删除（2026-11-12），模块层重写中**：当前构建注册 0 个模块，
-  只有 `Module` / `ModuleRegistry` / `GameModule` / `HudModule` / 值体系与 `ModuleConfigStore` 框架。
-  此前基于 OpenVape 行为的 110 个模块验收结论只属于已删除的实现，见 `docs/VERSION-MATRIX.md`。
+- 模块迁移范围、当前构建能力和逐版本验收状态统一见 `docs/VERSION-MATRIX.md`；
+  不把历史已删除实现的验收结论当作当前能力。
+  复合 HUD 通过 `HudElement` / `HudElementSink` 发布，UI 负责九锚点布局，client 不依赖 UI 类型。
 
 66 个 release 的映射由 `python tools/mapping/generate.py` 生成并受
 `--check` 门禁约束——该门禁现在**连真实 client jar 一起校验**（`--fast` 才是纯文本快路径）——

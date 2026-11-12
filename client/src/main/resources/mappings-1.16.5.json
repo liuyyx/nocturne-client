@@ -270,9 +270,82 @@
                         "fabric": "()F",
                         "forge": "()F"
                     }
+                },
+                "setup": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_19321",
+                        "forge": "m_90575_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lbrc;Laqa;ZZF)V",
+                        "fabric": "(Lnet/minecraft/class_1922;Lnet/minecraft/class_1297;ZZF)V",
+                        "forge": "(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V"
+                    }
                 }
             },
-            "fields": {}
+            "fields": {
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "n",
+                        "fabric": "field_18721",
+                        "forge": "f_90562_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "eyeHeightOld": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "field_18722",
+                        "forge": "f_90563_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "position": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_18712",
+                        "forge": "f_90552_"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ldcn;",
+                        "fabric": "Lnet/minecraft/class_243;",
+                        "forge": "Lnet/minecraft/world/phys/Vec3;"
+                    }
+                },
+                "xRot": {
+                    "names": {
+                        "vanilla": "i",
+                        "fabric": "field_18717",
+                        "forge": "f_90557_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
+                "yRot": {
+                    "names": {
+                        "vanilla": "j",
+                        "fabric": "field_18718",
+                        "forge": "f_90558_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                }
+            }
         },
         "net/minecraft/client/CameraType": {
             "names": {
@@ -2004,6 +2077,10 @@
                         "forge": "()I"
                     }
                 },
+                "getInventory": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
                 "getMaxHealth": {
                     "names": {
                         "vanilla": "dx",
@@ -3653,6 +3730,18 @@
                         "forge": "(Lnet/minecraft/world/entity/Entity;)Z"
                     }
                 },
+                "isCrouching": {
+                    "names": {
+                        "vanilla": "bz",
+                        "fabric": "method_18276",
+                        "forge": "m_6047_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
+                },
                 "isInWater": {
                     "names": {
                         "vanilla": "aE",
@@ -4140,6 +4229,18 @@
                         "vanilla": "()Ljava/util/Collection;",
                         "fabric": "()Ljava/util/Collection;",
                         "forge": "()Ljava/util/Collection;"
+                    }
+                },
+                "getArmorValue": {
+                    "names": {
+                        "vanilla": "du",
+                        "fabric": "method_6096",
+                        "forge": "m_21230_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
                     }
                 },
                 "getCurrentArmor": {
@@ -6032,6 +6133,18 @@
                 "playerWillDestroy": {
                     "absent": true,
                     "absentReason": "verified"
+                },
+                "players": {
+                    "names": {
+                        "vanilla": "x",
+                        "fabric": "method_18456",
+                        "forge": "m_6907_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/List;",
+                        "fabric": "()Ljava/util/List;",
+                        "forge": "()Ljava/util/List;"
+                    }
                 },
                 "setBlock": {
                     "names": {

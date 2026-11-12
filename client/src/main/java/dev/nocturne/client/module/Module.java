@@ -148,6 +148,11 @@ public abstract class Module {
     public void onHudSinkChanged(HudSink previous, HudSink current) {
     }
 
+    /** 复合 HUD 元素汇变化回调；只有 {@link HudElementModule} 需要覆写。 */
+    public void onHudElementSinkChanged(dev.nocturne.client.hud.HudElementSink previous,
+                                        dev.nocturne.client.hud.HudElementSink current) {
+    }
+
     /** 调试用文本表示。 */
     @Override
     public String toString() {

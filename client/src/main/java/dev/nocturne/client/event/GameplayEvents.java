@@ -179,6 +179,25 @@ public final class GameplayEvents implements GameplayHook.Sink {
     }
 
     @Override
+    public void cameraAligned(Object camera) {
+        if (!active() || camera == null) {
+            return;
+        }
+        for (dev.nocturne.client.module.Module module : client.modules().all()) {
+            if (!module.isEnabled()
+                    || !(module instanceof dev.nocturne.client.render.CameraOverride)) {
+                continue;
+            }
+            try {
+                ((dev.nocturne.client.render.CameraOverride) module).applyCamera(camera);
+            } catch (Throwable t) {
+                warnReceive("cameraAligned:" + module.name(),
+                        "camera aligned callback failed for module '" + module.name() + "': " + t);
+            }
+        }
+    }
+
+    @Override
     public float timerScale(float delta) {
         return delta;
     }

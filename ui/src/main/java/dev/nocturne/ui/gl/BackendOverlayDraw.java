@@ -2,6 +2,8 @@ package dev.nocturne.ui.gl;
 
 import dev.nocturne.client.render.OverlayDraw;
 import dev.nocturne.ui.render.Color;
+import dev.nocturne.ui.fatality.FaFont;
+import dev.nocturne.ui.text.FontRasterizer;
 import dev.nocturne.ui.render.Renderer;
 
 /**
@@ -26,6 +28,7 @@ public final class BackendOverlayDraw implements OverlayDraw {
 
     /** 已向后端下发的覆盖层图元数（仅供首帧有效绘制诊断）。 */
     private long drawCalls;
+    private boolean rasterFontsFailed;
 
     /**
      * @param backend 当帧绘制后端；同时用作 Renderer 与尺寸来源
@@ -100,34 +103,55 @@ public final class BackendOverlayDraw implements OverlayDraw {
 
     @Override
     public void text(String text, float x, float y, int argb) {
-        renderer.text(text, x, y, TEXT_SIZE, Color.of(argb));
-        drawCalls++;
+        text(text, x, y, TEXT_SIZE, argb);
     }
 
     @Override
     public float textWidth(String text) {
-        return renderer.textWidth(text, TEXT_SIZE);
+        return textWidth(text, TEXT_SIZE);
     }
 
     @Override
     public float textHeight() {
-        return renderer.textHeight(TEXT_SIZE);
+        return textHeight(TEXT_SIZE);
     }
 
     @Override
     public void text(String text, float x, float y, float size, int argb) {
-        renderer.text(text, x, y, size, Color.of(argb));
+        FaFont font = font(size);
+        if (font != null) {
+            font.draw(renderer, text, x, y, argb);
+        } else {
+            renderer.text(text, x, y, size, Color.of(argb));
+        }
         drawCalls++;
     }
 
     @Override
     public float textWidth(String text, float size) {
-        return renderer.textWidth(text, size);
+        FaFont font = font(size);
+        return font == null ? renderer.textWidth(text, size) : font.width(text);
     }
 
     @Override
     public float textHeight(float size) {
-        return renderer.textHeight(size);
+        FaFont font = font(size);
+        return font == null ? renderer.textHeight(size) : font.height();
+    }
+
+    private FaFont font(float size) {
+        // 固定管线与游戏绘制栈已有可用的原生文字面；core profile 才需要 CPU 字形图集。
+        if (!(backend instanceof ModernRenderer) || rasterFontsFailed || !renderer.supportsTextures()) {
+            return null;
+        }
+        try {
+            return FontRasterizer.overlayFont(renderer, Math.max(1, backend.rasterScale()), size);
+        } catch (Throwable failure) {
+            rasterFontsFailed = true;
+            System.out.println("[nocturne] overlay font atlas unavailable: " + failure
+                    + "; falling back to the game font");
+            return null;
+        }
     }
 
     @Override

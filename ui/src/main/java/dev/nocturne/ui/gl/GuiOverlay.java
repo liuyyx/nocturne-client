@@ -38,7 +38,7 @@ import java.awt.event.KeyEvent;
  * </ul>
  */
 public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.HudSink,
-        dev.nocturne.client.render.RenderCapabilities {
+        dev.nocturne.client.hud.HudElementSink, dev.nocturne.client.render.RenderCapabilities {
 
     /** 右 Shift 的规范键码（AWT 数值区之外的哨兵，与 {@code KeyMap.VK_RIGHT_SHIFT} 一致）。 */
     public static final int KEY_RIGHT_SHIFT = 0x1F01;
@@ -108,6 +108,21 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     /** 已注册 HUD 文本行；LinkedHashMap 保证模块注册顺序就是屏幕顺序。 */
     private final java.util.Map<String, java.util.function.Supplier<String>> hudLines =
             new java.util.LinkedHashMap<String, java.util.function.Supplier<String>>();
+    /** 复合 HUD 元素按 id 注册；LinkedHashMap 保留同 order 时的注册顺序。 */
+    private final java.util.LinkedHashMap<String, dev.nocturne.client.hud.HudElement> hudElements =
+            new java.util.LinkedHashMap<String, dev.nocturne.client.hud.HudElement>();
+    /** 排序与容量分配只在注册变化时进行，帧循环只复用数组。 */
+    private dev.nocturne.client.hud.HudElement[] sortedHudElements =
+            new dev.nocturne.client.hud.HudElement[0];
+    private float[] hudElementWidths = new float[0];
+    private float[] hudElementHeights = new float[0];
+    private dev.nocturne.client.hud.HudAnchor[] hudElementAnchors =
+            new dev.nocturne.client.hud.HudAnchor[0];
+    private static final dev.nocturne.client.hud.HudAnchor[] HUD_ANCHORS =
+            dev.nocturne.client.hud.HudAnchor.values();
+    private final float[] hudStackHeights = new float[HUD_ANCHORS.length];
+    private final float[] hudStackOffsets = new float[HUD_ANCHORS.length];
+    private final java.util.Set<String> hudElementErrors = new java.util.HashSet<String>();
     private int configuredScale;
     /** 相机状态读取器；每帧刷新它持有的投影。 */
     private final CameraState camera;
@@ -159,6 +174,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         NocturneClient client = NocturneClient.get();
         if (client != null) {
             client.setHudSink(this);
+            client.setHudElementSink(this);
             client.setRenderCapabilities(this);
             installWorld3DBackend(client);
         }
@@ -286,6 +302,47 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     @Override
     public boolean has(String id) {
         return hudLines.containsKey(id);
+    }
+
+    /** 注册或替换复合 HUD 元素；同 id 不会留下两份。 */
+    @Override
+    public void addElement(dev.nocturne.client.hud.HudElement element) {
+        if (element == null) {
+            return;
+        }
+        hudElements.put(element.id(), element);
+        rebuildHudElementOrder();
+    }
+
+    @Override
+    public void removeElement(String id) {
+        if (hudElements.remove(id) != null) {
+            rebuildHudElementOrder();
+        }
+        hudElementErrors.remove(id);
+    }
+
+    @Override
+    public boolean hasElement(String id) {
+        return hudElements.containsKey(id);
+    }
+
+    /** Collections.sort 稳定，因此只比较 order 即可保留同 order 的注册顺序。 */
+    private void rebuildHudElementOrder() {
+        java.util.List<dev.nocturne.client.hud.HudElement> sorted =
+                new java.util.ArrayList<dev.nocturne.client.hud.HudElement>(hudElements.values());
+        java.util.Collections.sort(sorted,
+                new java.util.Comparator<dev.nocturne.client.hud.HudElement>() {
+                    @Override
+                    public int compare(dev.nocturne.client.hud.HudElement first,
+                                       dev.nocturne.client.hud.HudElement second) {
+                        return Integer.compare(first.order(), second.order());
+                    }
+                });
+        sortedHudElements = sorted.toArray(new dev.nocturne.client.hud.HudElement[sorted.size()]);
+        hudElementWidths = new float[sorted.size()];
+        hudElementHeights = new float[sorted.size()];
+        hudElementAnchors = new dev.nocturne.client.hud.HudAnchor[sorted.size()];
     }
 
     /** @return 被叠加的 GUI，供外部（如验收脚本）直接操作 */
@@ -1115,7 +1172,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         // 世界覆盖层（ESP/Tracers/NameTags/StorageESP…）与界面无关，必须单独计入：
         // 界面关着时本方法此前直接 return，于是 beginFrame() 根本不执行、覆盖层一帧都不画——
         // 世界里什么都看不到，日志里也没有半句线索。
-        if (!needsFrame(guiOpen, hasWorldOverlays(), !hudLines.isEmpty())) {
+        if (!needsFrame(guiOpen, hasWorldOverlays(), !hudLines.isEmpty(), !hudElements.isEmpty())) {
             return;
         }
         Integer wantedScale = Integer.getInteger("nocturne.ui.scale", 0);
@@ -1141,6 +1198,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             drawWorldOverlays();
             lastOverlayNanos = System.nanoTime() - overlayStart;
             drawHudLines();
+            drawHudElements();
             if (guiOpen) {
                 gui.render(renderer);
             }
@@ -1219,6 +1277,60 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         }
     }
 
+    /** 按九锚点堆叠复合 HUD 元素；单元素异常不中断同帧其它元素。 */
+    private void drawHudElements() {
+        if (sortedHudElements.length == 0) {
+            return;
+        }
+        java.util.Arrays.fill(hudStackHeights, 0f);
+        java.util.Arrays.fill(hudStackOffsets, 0f);
+        for (int i = 0; i < sortedHudElements.length; i++) {
+            dev.nocturne.client.hud.HudElement element = sortedHudElements[i];
+            hudElementHeights[i] = 0f;
+            try {
+                float width = element.width(overlayDraw);
+                float height = element.height(overlayDraw);
+                dev.nocturne.client.hud.HudAnchor anchor = element.anchor();
+                if (anchor == null || !Float.isFinite(width) || !Float.isFinite(height)
+                        || width <= 0f || height <= 0f) {
+                    continue;
+                }
+                hudElementWidths[i] = width;
+                hudElementHeights[i] = height;
+                hudElementAnchors[i] = anchor;
+                int group = anchor.ordinal();
+                hudStackHeights[group] += height
+                        + (hudStackHeights[group] > 0f ? dev.nocturne.client.hud.HudLayout.GAP : 0f);
+            } catch (Throwable t) {
+                reportHudElementFailure(element, t);
+            }
+        }
+        for (int group = 0; group < HUD_ANCHORS.length; group++) {
+            dev.nocturne.client.hud.HudAnchor anchor = HUD_ANCHORS[group];
+            for (int i = 0; i < sortedHudElements.length; i++) {
+                float height = hudElementHeights[i];
+                if (height <= 0f || hudElementAnchors[i] != anchor) {
+                    continue;
+                }
+                float x = dev.nocturne.client.hud.HudLayout.x(anchor, renderer.width(), hudElementWidths[i]);
+                float y = dev.nocturne.client.hud.HudLayout.y(anchor, renderer.height(),
+                        hudStackHeights[group], hudStackOffsets[group], height);
+                try {
+                    sortedHudElements[i].draw(overlayDraw, x, y);
+                } catch (Throwable t) {
+                    reportHudElementFailure(sortedHudElements[i], t);
+                }
+                hudStackOffsets[group] += height + dev.nocturne.client.hud.HudLayout.GAP;
+            }
+        }
+    }
+
+    private void reportHudElementFailure(dev.nocturne.client.hud.HudElement element, Throwable failure) {
+        if (hudElementErrors.add(element.id())) {
+            System.out.println("[nocturne] hud element '" + element.id() + "' draw failed: " + failure);
+        }
+    }
+
     /**
      * HUD 基础字号：按后端逻辑宽度归一到 854 宽的设计基准，再乘玩家 Scale。
      *
@@ -1243,10 +1355,12 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
      * @param guiOpen          自绘 GUI 是否打开
      * @param hasWorldOverlays 是否存在启用中的 {@link WorldOverlay} 模块
      * @param hasHudLines      HUD 行汇是否非空
+     * @param hasHudElements   复合 HUD 元素汇是否非空
      * @return true 表示本帧必须进入绘制
      */
-    static boolean needsFrame(boolean guiOpen, boolean hasWorldOverlays, boolean hasHudLines) {
-        return guiOpen || hasWorldOverlays || hasHudLines;
+    static boolean needsFrame(boolean guiOpen, boolean hasWorldOverlays, boolean hasHudLines,
+                              boolean hasHudElements) {
+        return guiOpen || hasWorldOverlays || hasHudLines || hasHudElements;
     }
 
     /**

@@ -1206,6 +1206,9 @@ public final class NocturneAgent {
             "(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDD)Z";
     /** {@code Camera#getMaxZoom(F)F}（1.16.5–1.21.4 是 {@code (D)D}，那些版本表里有真实签名）。 */
     private static final String CAMERA_MAX_ZOOM_DESCRIPTOR = "(F)F";
+    /** {@code Camera#setup(BlockGetter,Entity,boolean,boolean,float)} 的现代规范签名。 */
+    private static final String CAMERA_SETUP_DESCRIPTOR =
+            "(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V";
     /** DeltaTracker#getGameTimeDeltaTicks：1.20.2+ 是 {@code ()F}，26.x 改成 {@code ()D}。 */
     private static final String TIMER_DESCRIPTOR = "()F|()D";
     /** {@code ItemInHandRenderer#applyItemArmTransform(PoseStack,HumanoidArm,F)V}（1.14.4+）。 */
@@ -1455,6 +1458,44 @@ public final class NocturneAgent {
                     ? "Camera#getMaxZoom has no usable descriptor"
                     : "Camera#getMaxZoom missing from the mapping table");
             log("camera zoom hook unavailable: " + owner.canonicalName() + "#getMaxZoom");
+        }
+
+        // setup 的 RETURN 处可能裁掉 this 局部槽：方法头捕获相机，末尾用无参 cameraEnd 消费。
+        boolean alignedWired = false;
+        boolean setupTried = false;
+        for (String className : classNameCandidates(mapping, owner)) {
+            for (dev.nocturne.client.mapping.MethodCandidate candidate
+                    : mapping.methodCandidates(owner, "setup")) {
+                setupTried = true;
+                String descriptor = candidate.descriptor();
+                if (descriptor == null || descriptor.isEmpty()) {
+                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
+                            CAMERA_SETUP_DESCRIPTOR);
+                }
+                if (descriptor == null && mapping.isIdentity()) {
+                    descriptor = CAMERA_SETUP_DESCRIPTOR;
+                }
+                if (descriptor == null) {
+                    log("camera aligned hook: no descriptor for " + className + "."
+                            + candidate.name() + " (mapping face missing)");
+                    continue;
+                }
+                ClassFileTransformer transformer = asmLoader.createInputTickTransformer(className,
+                        candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER, "cameraBegin", "cameraEnd");
+                int state = registerGameplayTransformerState(instrumentation, asmLoader, transformer,
+                        className, candidate.name(), descriptor, "cameraBegin");
+                alignedWired |= state >= HOOK_REGISTERED;
+                if (state == HOOK_WOVEN) {
+                    log("camera aligned hook woven: " + className + "." + candidate.name()
+                            + descriptor + " -> cameraBegin + cameraEnd");
+                }
+            }
+        }
+        publishHookState("cameraAligned", alignedWired, alignedWired ? null : setupTried
+                ? "Camera#setup begin/end hook pair is incomplete"
+                : "Camera#setup missing from the mapping table");
+        if (!alignedWired) {
+            log("camera aligned hook unavailable: " + owner.canonicalName() + "#setup");
         }
     }
 

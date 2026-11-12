@@ -46,6 +46,10 @@ net/minecraft/client/Camera#getYRot() = yRot()
 net/minecraft/client/Camera#getXRot() = xRot()
 net/minecraft/client/Camera#getEntity() = entity()
 net/minecraft/client/renderer/GameRenderer#getMainCamera() = mainCamera()
+# 26.x 把完整相机更新入口改为 update(DeltaTracker)；首尾回调仍按真实描述符织入。
+net/minecraft/client/Camera#setup() = update()
+# 1.14.4 的下蹲姿态叫 isVisuallySneaking；更早版本只有潜行状态。
+net/minecraft/world/entity/Entity#isCrouching() = isVisuallySneaking(), isShiftKeyDown()
 # 1.8.9–1.12.2 的有效 FOV 方法在 EntityRenderer 上叫 getFOVModifier(F,Z)。
 net/minecraft/client/renderer/GameRenderer#getFov() = getFOVModifier()
 

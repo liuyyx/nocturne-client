@@ -113,6 +113,29 @@ class FontRasterizerTest {
         assertEquals(-1, label.fontId(), "the fallback reports no atlas font id");
     }
 
+    /** HUD 与菜单字号共存时不能每帧互相重建纹理，统一失效时两者都必须释放。 */
+    @Test
+    void overlayAndClickGuiKeepIndependentStableAtlases() {
+        FaFont.Provider menu = FontRasterizer.bind(renderer, 0.8f, 2f);
+        FaFont hud = FontRasterizer.overlayFont(renderer, 2f, 10f);
+        menu.label().draw(renderer, "Menu", 0f, 0f, 0xFFFFFFFF);
+        hud.draw(renderer, "HUD", 0f, 20f, 0xFFFFFFFF);
+        int uploads = renderer.uploadCalls;
+        int deletes = renderer.deleteCalls;
+
+        for (int frame = 0; frame < 3; frame++) {
+            FontRasterizer.overlayFont(renderer, 2f, 10f)
+                    .draw(renderer, "HUD", 0f, 20f, 0xFFFFFFFF);
+            FontRasterizer.bind(renderer, 0.8f, 2f).label()
+                    .draw(renderer, "Menu", 0f, 0f, 0xFFFFFFFF);
+        }
+
+        assertEquals(uploads, renderer.uploadCalls);
+        assertEquals(deletes, renderer.deleteCalls);
+        FontRasterizer.invalidate();
+        assertTrue(renderer.liveTextures.isEmpty(), "菜单和 HUD 图集都必须被释放");
+    }
+
     /** 退化模式下没有后端时也不能抛异常（界面在首帧之前就会问字体度量）。 */
     @Test
     void detachedProviderIsUsable() {

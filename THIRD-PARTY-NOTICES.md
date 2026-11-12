@@ -66,3 +66,20 @@
 | 本机 MCP 资产（`OpenVape4.21/.../mappings/vanilla189`、`forge189` 等） | 1.8.9 / 1.12.2 的 SRG 与 MCP 人类名 | 随该工程一并提供，仅本地读取 |
 
 生成期还读取目标版本的官方 client jar（`javap` 取类继承链），同样只落在 `cache/`。
+
+---
+
+## 5. Epsilon / eps-plus（视觉模块与 HUD 行为来源）
+
+| 项 | 值 |
+|---|---|
+| 来源 | [NekoyaHouse/Epsilon](https://github.com/NekoyaHouse/Epsilon)，用户提供的 [liuyyx/eps-plus](https://github.com/liuyyx/eps-plus) 工作树 |
+| 作者 | Chen_Meng、06789（上游 `gradle.properties`） |
+| 声明许可 | `GPL-3.0-only`（上游 `gradle.properties` 的 `license` 与 `NOTICE.md`）；本项目选择 GPLv3 满足这些衍生部分的分发要求，不将其重新许可为 later |
+| 移植范围 | `common/src/main/java/com/github/epsilon/modules/impl/render/**` 的 41 个模块、`maseffects/**` 的 Mas Effects 模块/渲染行为、`elements/impl/**` 的 9 个 HUD 元素 |
+| 本项目位置 | `client/.../module/modules/render/**`、`client/.../render/**`、`client/.../hud/**`，以及 `agent` / `ui` 中对应接线 |
+| 修改说明 | 将上游 Mixin、事件与设置系统改接注入式 ASM 钩子和本项目模块/值体系；世界效果以 CPU 投影后的自绘覆盖层、描边与文字近似，不移植 shader、framebuffer 或上游贴图资源 |
+
+保留上游模块名和可接线的设置语义；不沿用 `com.github.epsilon.*` 包路径或原注释。
+Epsilon 的 `NOTICE.md` 标注 ESP 行为亦参考 GPLv3 的 Meteor Client；
+本项目按相同 GPLv3 要求保留该来源说明。未移植其 Orbit 事件总线、PacketMine 或其它非视觉模块。

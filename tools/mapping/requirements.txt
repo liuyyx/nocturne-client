@@ -857,6 +857,13 @@ net/minecraft/client/Camera#getPosition()
 net/minecraft/client/Camera#getYRot()
 net/minecraft/client/Camera#getXRot()
 net/minecraft/client/Camera#getEntity()
+# 相机对齐钩子与位姿写回：26.x 存在同名 getter，字段必须明确登记。
+net/minecraft/client/Camera#setup()
+net/minecraft/client/Camera#position!field
+net/minecraft/client/Camera#xRot!field
+net/minecraft/client/Camera#yRot!field
+net/minecraft/client/Camera#eyeHeight!field
+net/minecraft/client/Camera#eyeHeightOld!field
 net/minecraft/client/renderer/GameRenderer
 net/minecraft/client/renderer/GameRenderer#getMainCamera()
 # 有效 FOV：1.16+ 是 getFov(Camera,F,Z)；1.15 同签名；26.x 移入 Camera#getFov()。
@@ -897,3 +904,9 @@ net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action#STOP_S
 net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action#PRESS_SHIFT_KEY
 net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action#RELEASE_SHIFT_KEY
 net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action#START_FALL_FLYING
+
+# Epsilon 视觉移植：包装调用无法由字面量扫描推导的公共数据面。
+net/minecraft/world/entity/LivingEntity#getArmorValue()
+net/minecraft/world/entity/Entity#isCrouching()
+net/minecraft/client/player/LocalPlayer#getInventory()
+net/minecraft/world/level/Level#players()

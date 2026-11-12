@@ -748,6 +748,7 @@ deltaTracker = { mcp = "timer", scope = "net/minecraft/client/Minecraft" }
 
 [overrides."net/minecraft/client/Options"]
 thirdPersonView = { mcp = "thirdPersonView", scope = "net/minecraft/client/settings/GameSettings" }
+bobView = { mcp = "viewBobbing", scope = "net/minecraft/client/settings/GameSettings" }
 getWindow = { unsupported = "1.8.9 Minecraft 没有 getWindow()（窗口是 LWJGL Display）" }
 
 [overrides."net/minecraft/client/DeltaTracker"]
@@ -856,6 +857,7 @@ destroyDelay = { mcp = "blockHitDelay", scope = "net/minecraft/client/multiplaye
 isUsingItem = { mcp = "isHandActive", scope = "net/minecraft/entity/EntityLivingBase" }
 hasLineOfSight = { mcp = "canEntityBeSeen", scope = "net/minecraft/entity/EntityLivingBase" }
 getAbsorptionAmount = { mcp = "getAbsorptionAmount", scope = "net/minecraft/entity/EntityLivingBase" }
+getArmorValue = { mcp = "getTotalArmorValue", scope = "net/minecraft/entity/EntityLivingBase" }
 hurtTime = { mcp = "hurtTime", scope = "net/minecraft/entity/EntityLivingBase" }
 jumpTicks = { mcp = "jumpTicks", scope = "net/minecraft/entity/EntityLivingBase" }
 getActiveEffects = { mcp = "getActivePotionEffects", scope = "net/minecraft/entity/EntityLivingBase" }
@@ -998,6 +1000,7 @@ colorValue = { mcp = "colorValue", scope = "net/minecraft/util/EnumChatFormattin
 [overrides."net/minecraft/world/level/Level"]
 checkNoEntityCollision = { mcp = "checkNoEntityCollision", srg = "func_72917_a", scope = "net/minecraft/world/World", note = "固定到两参重载 (AABB,Entity)：一参重载把盒子覆盖到的玩家自己算成碰撞" }
 checkBlockCollision = { mcp = "checkBlockCollision", scope = "net/minecraft/world/World" }
+players = { unsupported = "1.12.2 玩家集合是 World.playerEntities 字段，没有无参玩家集合方法" }
 
 [overrides."net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action"]
 START_SPRINTING = { mcp = "START_SPRINTING", scope = "net/minecraft/network/play/client/CPacketEntityAction$Action" }
@@ -1021,6 +1024,7 @@ send = { mcp = "addToSendQueue", scope = "net/minecraft/client/network/NetHandle
 getOnlinePlayers = { mcp = "getPlayerInfoMap", scope = "net/minecraft/client/network/NetHandlerPlayClient" }
 
 [overrides."net/minecraft/client/player/LocalPlayer"]
+getInventory = { unsupported = "1.12.2 Inventory 对象仅通过 Player.inventory 字段提供，没有 getInventory() 方法" }
 closeContainer = { mcp = "closeScreen", scope = "net/minecraft/client/entity/EntityPlayerSP" }
 sendChatMessage = { mcp = "sendChatMessage", scope = "net/minecraft/client/entity/EntityPlayerSP" }
 input = { mcp = "movementInput", scope = "net/minecraft/client/entity/EntityPlayerSP" }

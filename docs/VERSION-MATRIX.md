@@ -3,6 +3,17 @@
 映射表现已覆盖 **1.8.9 – 26.3 的全部 66 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
 >下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
+## 模块层清空（2026-11-12，待重写）
+
+模块实现（`client/.../module/modules/**`，211 个 main 源文件 + 33 个测试）已整体删除，**模块层重写中**。
+框架保留且单测覆盖：`Module` / `ModuleRegistry` / `GameModule` / `HudModule` / `ModuleKeybinds` / `Category` /
+`ModuleConfigStore`、`TargetManager` 的好友与视线过滤、`HudModuleTest` 的 HUD 行迁移。
+随之删除的挂钩点：`NocturneClient.registerModules` / `DEFAULT_ENABLED_MODULES` / `-Dnocturne.debug.modules`、
+`GameplayEvents` 的 Xray/HandView/Totem/CameraClip/Timer/NoFog/NoRender 分支、`FrameEffects` 的
+AntiAlias/Filter/CustomSky/Shaders 后处理与 Game Animation 动画、`GuiOverlay` 的 HUD 文本设置样式、
+`TargetManager` 的 TargetFilter/AntiBot 过滤。本节之前所有「N 个注册模块」的验收结论**只属于已删除的实现**，
+不得当成当前构建的能力。
+
 ## 映射生成器强化（2026-11-08，仅离线/单测，**未真机**）
 
 本批不碰渲染数学，只把"表里的名字和描述符真的存在吗"这件事变成可执行的门禁：

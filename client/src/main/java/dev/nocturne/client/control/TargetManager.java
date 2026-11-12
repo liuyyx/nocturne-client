@@ -171,13 +171,8 @@ public final class TargetManager {
         if (!isPlayer && !options.mobs) {
             return;
         }
-        if (!dev.nocturne.client.module.modules.misc.TargetFilterModule.validTarget(bridge, player, entity)) {
-            return;
-        }
-        // 好友与 NPC 判定只对玩家生效：友方玩家永不做目标；AntiBot 的 Tab/名字/属性规则套在
-        // 动物或怪物上会误杀合法目标。两者集中在这里，aura 模块不再各自过滤。
-        if (isPlayer && (Friends.isFriend(bridge, entity)
-                || dev.nocturne.client.module.modules.combat.AntiBotModule.isBot(bridge, entity))) {
+        // 好友判定只对玩家生效：友方玩家永不做目标；集中在这里，aura 模块不再各自过滤。
+        if (isPlayer && Friends.isFriend(bridge, entity)) {
             return;
         }
         if (options.lineOfSight && !lineOfSight(bridge, player, entity)) {

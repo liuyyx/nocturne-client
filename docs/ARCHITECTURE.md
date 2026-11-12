@@ -95,7 +95,8 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   每个 `Value` 都可用 `visibleWhen` 声明动态 GUI 条件；隐藏行高度归零。`GroupValue` 的展开状态与
   父组、子项自身条件共同决定子行可见性，六类扩展设置均有实际 Fatality 控件。
   分类为 `COMBAT` / `MOVEMENT` / `RENDER` / `WORLD` / `INVENTORY` / `PLAYER` / `MISC`；
-  模块实现在 `module.modules.<分类小写>` 下分包，注册顺序按分类连续。GUI 只为非空分类建立 Tab。
+  **模块实现已于 2026-11-12 整体删除，重写中**（当前注册 0 个模块，框架与值体系保留），
+  重写时仍按 `module.modules.<分类小写>` 分包、按分类连续注册。GUI 只为非空分类建立 Tab。
 - **模块配置**：`ModuleConfigStore` 持久化 `{version, modules:{name:{enabled,bind,values}}}`，
   `module.name()`/`value.name()` 作键、跳过默认值；路径优先游戏实例目录
   （`user.dir/.nocturne/modules.json`，可用 `-Dnocturne.config.dir` 覆盖），不可写时回退
@@ -104,8 +105,7 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   `shutdown()/panic` 在禁用前 flush 并关闭存储（自销毁不得把全关状态写盘）；损坏文件改名
   `modules.json.corrupt[.n]` 保留现场，未知模块/项与类型不符只跳过该项。
 - **战斗目标与旋转门**：`TargetManager` 内建好友过滤（永不攻击 `Friends` 名单里的玩家）与默认开启的
-  视线过滤（`Options#lineOfSight`，映射缺失按可见处理），AntiBot/NPC 判定只对玩家求值，aura 模块
-  不再各自判断。`RotationController.request` 返回是否被更高优先级抢占，`isAimedAt(targetYaw,4°)`
+  视线过滤（`Options#lineOfSight`，映射缺失按可见处理）。`RotationController.request` 返回是否被更高优先级抢占，`isAimedAt(targetYaw,4°)`
   供攻击门判断是否已收敛；KillAura 每 tick 重建目标快照，未对准/请求被抢走时不发攻击。
   `GameplayHook` 记录攻击门结论，`ActionApi.attack` 只在原版攻击真正执行时返回 true，调用方据此
   才推进 `nextAttack`、扣 MultiAura 配额或重置蓄力。

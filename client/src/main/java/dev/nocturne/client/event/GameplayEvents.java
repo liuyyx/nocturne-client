@@ -125,8 +125,7 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public boolean entityRenderGate(Object entity) {
-        return dev.nocturne.client.module.modules.render.NoRenderModule.shouldRender(entity)
-                && dev.nocturne.client.module.modules.render.YsmModelModule.originalAllowed(entity);
+        return true;
     }
 
     /** {@code EntityRenderDispatcher#shouldRender(Entity,Frustum,DDD)Z} 的两参形态：Frustum 只占位。 */
@@ -167,44 +166,26 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public boolean xrayBlock(Object blockState, Object blockPos) {
-        dev.nocturne.client.module.Module module = client.modules().get("Xray");
-        return !(module instanceof dev.nocturne.client.module.modules.render.XrayModule)
-                || !module.isEnabled()
-                || ((dev.nocturne.client.module.modules.render.XrayModule) module)
-                .shouldRender(blockState, blockPos);
+        return true;
     }
 
     @Override
     public void handTransform(Object pose, Object arm, float inverseHeight) {
-        dev.nocturne.client.module.Module hand = client.modules().get("Hand View");
-        if (hand instanceof dev.nocturne.client.module.modules.render.HandViewModule && hand.isEnabled()) {
-            ((dev.nocturne.client.module.modules.render.HandViewModule) hand).apply(pose, arm, inverseHeight);
-        }
-        dev.nocturne.client.module.Module totem = client.modules().get("Totem Animation");
-        if (totem instanceof dev.nocturne.client.module.modules.render.TotemAnimationModule && totem.isEnabled()) {
-            ((dev.nocturne.client.module.modules.render.TotemAnimationModule) totem).apply(pose);
-        }
     }
 
     @Override
     public float cameraZoom(float distance) {
-        dev.nocturne.client.module.Module module = client.modules().get("Camera Clip");
-        return module instanceof dev.nocturne.client.module.modules.render.CameraClipModule && module.isEnabled()
-                ? ((dev.nocturne.client.module.modules.render.CameraClipModule) module).zoom(distance) : distance;
+        return distance;
     }
 
     @Override
     public float timerScale(float delta) {
-        dev.nocturne.client.module.Module module = client.modules().get("Timer");
-        return module instanceof dev.nocturne.client.module.modules.misc.TimerModule && module.isEnabled()
-                ? delta * ((dev.nocturne.client.module.modules.misc.TimerModule) module).speed() : delta;
+        return delta;
     }
 
     @Override
     public boolean noFog() {
-        dev.nocturne.client.module.Module module = client.modules().get("NoFog");
-        return (module == null || !module.isEnabled())
-                && !dev.nocturne.client.module.modules.render.NoRenderModule.fog();
+        return true;
     }
 
     @Override

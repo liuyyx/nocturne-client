@@ -890,10 +890,6 @@
                         "fabric": "()Ljava/util/List;"
                     }
                 },
-                "getBlockEntity": {
-                    "absent": true,
-                    "absentReason": "unverified"
-                },
                 "getBlockState": {
                     "absent": true,
                     "absentReason": "unverified"
@@ -2686,10 +2682,6 @@
                     "absent": true,
                     "absentReason": "unverified"
                 },
-                "getScale": {
-                    "absent": true,
-                    "absentReason": "unverified"
-                },
                 "getTeam": {
                     "names": {
                         "vanilla": "aQ",
@@ -3097,16 +3089,6 @@
                 "fabric": "net.minecraft.class_1309"
             },
             "methods": {
-                "addEffect": {
-                    "names": {
-                        "vanilla": "c",
-                        "fabric": "method_6092"
-                    },
-                    "signatures": {
-                        "vanilla": "(Lrq;)V",
-                        "fabric": "(Lnet/minecraft/class_1293;)V"
-                    }
-                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "e",

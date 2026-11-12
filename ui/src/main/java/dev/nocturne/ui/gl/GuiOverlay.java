@@ -1181,17 +1181,14 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         if (hudLines.isEmpty()) {
             return;
         }
-        dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule textGui =
-                dev.nocturne.client.module.modules.render.hud.TextGuiSettingsModule.current();
-        boolean styled = textGui != null && textGui.isEnabled();
-        // 所有 HUD 行共用一个字号：旧实现只让 Text GUI 自己那一行读 Scale，其余写死 10f。
-        // 26.x/1.20+ 的逻辑宽度约 427（1.8.9 是 854），同一个 10f 会占两倍屏宽，
-        // 因此基础字号按逻辑宽度归一，再乘玩家的 Scale。
-        float size = hudTextSize(styled ? textGui.scaleFactor() : 1f);
+        // 模块层重写中：HUD 文本设置模块已删除，样式取固定默认值（白色 / 带底板 / 无阴影）。
+        // 所有 HUD 行共用一个字号：26.x/1.20+ 的逻辑宽度约 427（1.8.9 是 854），同一个 10f
+        // 会占两倍屏宽，因此基础字号按逻辑宽度归一。
+        float size = hudTextSize(1f);
         float height = overlayDraw.textHeight(size);
-        int color = styled ? textGui.color() : 0xFFFFFFFF;
-        boolean background = !styled || textGui.background();
-        boolean shadow = styled && textGui.shadow();
+        int color = 0xFFFFFFFF;
+        boolean background = true;
+        boolean shadow = false;
         float y = 4f;
         for (java.util.Map.Entry<String, java.util.function.Supplier<String>> entry
                 : new java.util.ArrayList<java.util.Map.Entry<String, java.util.function.Supplier<String>>>(

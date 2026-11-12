@@ -1461,18 +1461,6 @@
                         "forge": "()Ljava/lang/Iterable;"
                     }
                 },
-                "getBlockEntity": {
-                    "names": {
-                        "vanilla": "c",
-                        "fabric": "method_8496",
-                        "forge": "func_175625_s"
-                    },
-                    "signatures": {
-                        "vanilla": "(Lfu;)Lcdl;",
-                        "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_2586;",
-                        "forge": "(Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/tileentity/TileEntity;"
-                    }
-                },
                 "getBlockState": {
                     "names": {
                         "vanilla": "d_",
@@ -3580,10 +3568,6 @@
                         "forge": "()Lnet/minecraft/util/text/ITextComponent;"
                     }
                 },
-                "getScale": {
-                    "absent": true,
-                    "absentReason": "verified"
-                },
                 "getTeam": {
                     "names": {
                         "vanilla": "bC",
@@ -4085,18 +4069,6 @@
                 "forge": "net.minecraft.entity.LivingEntity"
             },
             "methods": {
-                "addEffect": {
-                    "names": {
-                        "vanilla": "c",
-                        "fabric": "method_6092",
-                        "forge": "func_195064_c"
-                    },
-                    "signatures": {
-                        "vanilla": "(Laog;)Z",
-                        "fabric": "(Lnet/minecraft/class_1293;)Z",
-                        "forge": "(Lnet/minecraft/potion/EffectInstance;)Z"
-                    }
-                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "g",

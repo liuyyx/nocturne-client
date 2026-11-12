@@ -32,8 +32,8 @@ Fabric 形态由同一个 jar 里的 `fabric.mod.json` + `nocturne.mixins.json` 
 ```bash
 export JAVA_HOME="C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot"   # 必须 JDK 21
 gradlew.bat build --console=plain --no-daemon    # 编译 + 单测 + 打包（实测 BUILD SUCCESSFUL）
-gradlew.bat test  --console=plain --no-daemon    # 仅单测（--rerun-tasks 实测 617 项 = agent 79 /
-                                                 # client 269 / ui 153 / core 70 / injector 46，0 失败）
+gradlew.bat test  --console=plain --no-daemon    # 仅单测（实测 658 项 = agent 88 /
+                                                 # client 278 / ui 176 / core 70 / injector 46，0 失败）
 python tools/mapping/generate.py --check         # 映射表门禁：陈旧 **或** 描述符与 jar 不符 → exit 1
 python tools/mapping/generate.py --check --fast  # 只比文本的快速路径（没装 javap 的机器用）
 python tools/mapping/generate.py --javap         # 只做逐版本 jar 交叉校验

@@ -1724,20 +1724,6 @@
                         "neoforge": "()Ljava/lang/Iterable;"
                     }
                 },
-                "getBlockEntity": {
-                    "names": {
-                        "vanilla": "c_",
-                        "fabric": "getBlockEntity",
-                        "forge": "m_7702_",
-                        "neoforge": "getBlockEntity"
-                    },
-                    "signatures": {
-                        "vanilla": "(Ljh;)Lduw;",
-                        "fabric": "(Lnet/minecraft/class_2338;)Lnet/minecraft/class_2586;",
-                        "forge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;",
-                        "neoforge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;"
-                    }
-                },
                 "getBlockState": {
                     "names": {
                         "vanilla": "a_",
@@ -4250,10 +4236,6 @@
                         "neoforge": "()Lnet/minecraft/network/chat/Component;"
                     }
                 },
-                "getScale": {
-                    "absent": true,
-                    "absentReason": "verified"
-                },
                 "getTeam": {
                     "names": {
                         "vanilla": "cr",
@@ -4831,20 +4813,6 @@
                 "neoforge": "net.minecraft.world.entity.LivingEntity"
             },
             "methods": {
-                "addEffect": {
-                    "names": {
-                        "vanilla": "a",
-                        "fabric": "method_6092",
-                        "forge": "m_7292_",
-                        "neoforge": "addEffect"
-                    },
-                    "signatures": {
-                        "vanilla": "(Lbuo;)Z",
-                        "fabric": "(Lnet/minecraft/class_1293;)Z",
-                        "forge": "(Lnet/minecraft/world/effect/MobEffectInstance;)Z",
-                        "neoforge": "(Lnet/minecraft/world/effect/MobEffectInstance;)Z"
-                    }
-                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "i",

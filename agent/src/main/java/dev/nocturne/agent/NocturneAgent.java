@@ -3856,6 +3856,12 @@ public final class NocturneAgent {
      * @return 是否要在装好叠加层后直接打开界面
      */
     private static boolean parseOpenGui(String agentArgs) {
+        // 系统属性通道方便真机验收：注入器 CLI 没有透传 openGui 的入口，而 LWJGL2 DirectInput
+        // 让合成按键到不了游戏；加上 -Dnocturne.openGui=true 就能在注入后直接看到界面。
+        String property = System.getProperty("nocturne.openGui");
+        if (property != null && !"false".equalsIgnoreCase(property) && !"0".equals(property)) {
+            return true;
+        }
         if (agentArgs == null || agentArgs.isEmpty()) {
             return false;
         }

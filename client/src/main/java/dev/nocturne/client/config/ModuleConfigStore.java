@@ -214,20 +214,6 @@ public final class ModuleConfigStore {
         }
     }
 
-    /** 在回调期间禁止把变更标记为待保存（用于启动参数等非用户意图的临时切换）。 */
-    public void withSavingSuppressed(Runnable action) {
-        if (action == null) {
-            return;
-        }
-        boolean previous = loading;
-        loading = true;
-        try {
-            action.run();
-        } finally {
-            loading = previous;
-        }
-    }
-
     private int readVersion(JsonObject root) {
         JsonElement version = root.get("version");
         if (version == null || !version.isJsonPrimitive() || !version.getAsJsonPrimitive().isNumber()) {

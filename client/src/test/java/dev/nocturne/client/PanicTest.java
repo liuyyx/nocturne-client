@@ -7,9 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -80,14 +78,27 @@ class PanicTest {
         TestSupport.resetClient();
     }
 
+    /** 供 panic 测试使用的可启停模块。 */
+    static final class ProbeModule extends Module {
+        @Override
+        public String name() {
+            return "Panic Probe";
+        }
+
+        @Override
+        public Category category() {
+            return Category.MISC;
+        }
+    }
+
     /** panic 必须把每个模块都关掉，并关掉驱动闸门；重复调用幂等。 */
     @Test
     void panicDisablesEveryModuleAndStopsDriving() {
         NocturneClient client = NocturneClient.boot(null);
-        Module watermark = client.modules().get("Watermark");
-        assertNotNull(watermark, "precondition: Watermark module is registered");
-        watermark.setEnabled(true);
-        assertTrue(watermark.isEnabled(), "precondition: a module is on");
+        ProbeModule probe = new ProbeModule();
+        client.modules().register(probe);
+        probe.setEnabled(true);
+        assertTrue(probe.isEnabled(), "precondition: a module is on");
 
         client.panic();
 
@@ -100,14 +111,5 @@ class PanicTest {
         // 幂等：再调一次不得抛异常，也不得改变结论。
         client.panic();
         assertTrue(client.isPanicked());
-    }
-
-    /** Panic 模块必须注册在 MISC 分类下——GUI 里要能点到它。 */
-    @Test
-    void panicModuleIsRegisteredUnderMisc() {
-        NocturneClient client = NocturneClient.boot(null);
-        Module panic = client.modules().get("Panic");
-        assertNotNull(panic, "Panic module must be registered");
-        assertEquals(Category.MISC, panic.category());
     }
 }

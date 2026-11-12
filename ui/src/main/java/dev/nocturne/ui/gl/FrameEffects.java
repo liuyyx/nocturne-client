@@ -2,15 +2,10 @@ package dev.nocturne.ui.gl;
 
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.module.Module;
-import dev.nocturne.client.module.modules.render.AntiAliasModule;
-import dev.nocturne.client.module.modules.render.CustomSkyModule;
-import dev.nocturne.client.module.modules.render.FilterModule;
-import dev.nocturne.client.module.modules.render.MotionBlurModule;
-import dev.nocturne.client.module.modules.render.ShadersModule;
 import dev.nocturne.client.render.OverlayDraw;
 import dev.nocturne.client.render.RenderCapabilities;
 
-/** 真实帧捕获、Epsilon 滤镜/抗锯齿/天空/Shader、4× 降采样与历史帧混合。 */
+/** 真实帧捕获、4× 降采样与历史帧混合（InventoryBlur / Motion Blur 的整帧通道）。 */
 public final class FrameEffects {
     private int texture;
     private int[] current;
@@ -18,37 +13,23 @@ public final class FrameEffects {
     private int[] small;
     private int width;
     private int height;
-    private long lastFrame;
-    private float hotbarX = -1.0f;
-    private int lastSlot = -1;
     /** 极暗帧阈值（0–255 平均亮度）：低于它视为回读失败，直接跳过整帧后处理。 */
     static final int TOO_DARK_LUMA = 6;
     /** 上一次绘制时所在的世界；用于切换维度/世界时作废历史帧。 */
     private Object lastWorld;
-    private long inventoryOpenedAt;
     /** 固定管线跳过整帧后处理的提示是否已打印（只打一次）。 */
     private final java.util.concurrent.atomic.AtomicBoolean fixedPipelineNotice =
             new java.util.concurrent.atomic.AtomicBoolean();
 
     public void render(OverlayDraw draw, NocturneClient client) {
-        // Game Animation 是独立于整帧后期的 HUD 动画：必须在任何 return 之前执行，
-        // 否则没开后期模块时它永远不画（旧代码把它放在最后，被下面的门控误伤）。
-        if (client != null) {
-            renderAnimations(draw, client);
-        }
         Module inventory = client == null ? null : client.modules().get("InventoryBlur");
         Module motion = client == null ? null : client.modules().get("Motion Blur");
-        Module antiAlias = client == null ? null : client.modules().get("Anti Alias");
-        Module filter = client == null ? null : client.modules().get("Filter");
-        Module sky = client == null ? null : client.modules().get("CustomSky");
-        Module shaders = client == null ? null : client.modules().get("Shaders");
         boolean inventoryActive = inventory != null && inventory.isEnabled()
                 && client.gameBridge() != null && client.gameBridge().containerOpen();
-        boolean motionActive = motion != null && motion.isEnabled() && motion instanceof MotionBlurModule
-                && (((MotionBlurModule) motion).thirdPerson() || client.gameBridge().perspective() == 0);
-        boolean postActive = antiAlias != null && antiAlias.isEnabled() || filter != null && filter.isEnabled()
-                || sky != null && sky.isEnabled() || shaders != null && shaders.isEnabled();
-        if (!inventoryActive && !motionActive && !postActive) {
+        // 第三人称开关随 MotionBlur 模块删除，这里只按第一人称混合。
+        boolean motionActive = motion != null && motion.isEnabled()
+                && client.gameBridge() != null && client.gameBridge().perspective() == 0;
+        if (!inventoryActive && !motionActive) {
             history = null;
             return;
         }
@@ -95,7 +76,6 @@ public final class FrameEffects {
             history = null;
             return;
         }
-        applyPost(current, w, h, client, antiAlias, filter, sky, shaders);
         int smallW = Math.max(1, w / 4);
         int smallH = Math.max(1, h / 4);
         int required = smallW * smallH;
@@ -103,8 +83,7 @@ public final class FrameEffects {
             small = new int[required];
         }
         boolean blend = motionActive && history != null;
-        float historyWeight = motionActive ? motionWeight((MotionBlurModule) motion) : 0.65f;
-        downsample(current, blend ? history : null, w, h, small, smallW, smallH, historyWeight);
+        downsample(current, blend ? history : null, w, h, small, smallW, smallH, 0.65f);
         texture = draw.uploadTexture(texture, smallW, smallH, small);
         if (texture > 0) {
             draw.texturedQuad(texture, 0, 0, draw.width(), draw.height(),
@@ -117,42 +96,6 @@ public final class FrameEffects {
             System.arraycopy(current, 0, history, 0, current.length);
         } else {
             history = null;
-        }
-    }
-
-    private void renderAnimations(OverlayDraw draw, NocturneClient client) {
-        Module module = client.modules().get("Game Animation");
-        if (!(module instanceof dev.nocturne.client.module.modules.render.GameAnimationModule)
-                || !module.isEnabled() || client.actions() == null) {
-            hotbarX = -1.0f;
-            return;
-        }
-        dev.nocturne.client.module.modules.render.GameAnimationModule animation =
-                (dev.nocturne.client.module.modules.render.GameAnimationModule) module;
-        if (animation.hotbar()) {
-            int slot = client.actions().readState().selectedSlot();
-            float target = draw.width() * 0.5f - 90.0f + slot * 20.0f;
-            if (lastSlot != slot) {
-                if (hotbarX < 0.0f || Math.abs(target - hotbarX) > 240.0f) {
-                    hotbarX = target;
-                }
-                lastSlot = slot;
-            }
-            hotbarX += (target - hotbarX) * 0.35f;
-            draw.outline(hotbarX, draw.height() - 23.0f, 20.0f, 2.0f, 1.0f, 0xFFFFB7C5);
-        }
-        if (animation.inventory() && client.gameBridge().containerOpen()) {
-            if (inventoryOpenedAt == 0L) {
-                inventoryOpenedAt = System.currentTimeMillis();
-            }
-            float progress = Math.min(1.0f, (System.currentTimeMillis() - inventoryOpenedAt) / 180.0f);
-            float scale = 0.85f + 0.15f * (1.0f - (float) Math.pow(1.0f - progress, 3));
-            float width = draw.width() * scale;
-            float height = draw.height() * scale;
-            draw.outline((draw.width() - width) * 0.5f, (draw.height() - height) * 0.5f,
-                    width, height, 1.0f, 0x80FFFFFF);
-        } else {
-            inventoryOpenedAt = 0L;
         }
     }
 
@@ -178,106 +121,6 @@ public final class FrameEffects {
             count++;
         }
         return count == 0 || sum / count < TOO_DARK_LUMA;
-    }
-
-    private float motionWeight(MotionBlurModule module) {
-        float weight = module.strength();
-        if (module.centered()) {
-            weight *= 0.5f;
-        }
-        if (module.depthBlur()) {
-            weight *= 0.95f;
-        }
-        weight += module.samples() / 10000.0f;
-        if (module.refreshRateScaling()) {
-            long now = System.currentTimeMillis();
-            long delta = lastFrame == 0L ? 16L : now - lastFrame;
-            lastFrame = now;
-            weight *= Math.max(0.5f, Math.min(1.5f, delta / 16.0f));
-        }
-        return Math.max(0.0f, Math.min(0.95f, weight));
-    }
-
-    private static void applyPost(int[] pixels, int width, int height, NocturneClient client,
-                                  Module antiAlias, Module filter, Module sky, Module shaders) {
-        if (antiAlias instanceof AntiAliasModule && antiAlias.isEnabled()) {
-            fxaa(pixels, width, height);
-        }
-        if (filter instanceof FilterModule && filter.isEnabled()) {
-            FilterModule module = (FilterModule) filter;
-            tint(pixels, module.color(), module.mode().equals("LightMap") ? 0.65f : 0.35f);
-        }
-        if (sky instanceof CustomSkyModule && sky.isEnabled()) {
-            CustomSkyModule module = (CustomSkyModule) sky;
-            float phase = (float) (System.currentTimeMillis() / 1000.0 * module.speed());
-            for (int y = 0; y < height / 2; y++) {
-                float amount = y / (float) Math.max(1, height / 2);
-                int color = module.shader().equals("Local")
-                        ? blend(module.background(), module.color(), amount)
-                        : blend(module.color(), 0xFF87CEEB, (float) (0.5 + 0.5 * Math.sin(phase + amount * 4.0)));
-                tintRow(pixels, width, y, color, 0.18f);
-            }
-        }
-        if (shaders instanceof ShadersModule && shaders.isEnabled()
-                && ((ShadersModule) shaders).targetEnabled()) {
-            shader(pixels, width, height, (ShadersModule) shaders);
-        }
-    }
-
-    private static void fxaa(int[] pixels, int width, int height) {
-        for (int y = 1; y < height - 1; y++) {
-            for (int x = 1; x < width - 1; x++) {
-                int at = y * width + x;
-                int color = pixels[at];
-                int horizontal = Math.abs((pixels[at - 1] & 255) - (pixels[at + 1] & 255));
-                int vertical = Math.abs((pixels[at - width] & 255) - (pixels[at + width] & 255));
-                if (horizontal + vertical > 48) {
-                    pixels[at] = blend(color, pixels[at - 1], 0.125f);
-                    pixels[at] = blend(pixels[at], pixels[at + 1], 0.125f);
-                    pixels[at] = blend(pixels[at], pixels[at - width], 0.125f);
-                    pixels[at] = blend(pixels[at], pixels[at + width], 0.125f);
-                }
-            }
-        }
-    }
-
-    private static void shader(int[] pixels, int width, int height, ShadersModule module) {
-        String mode = module.entityMode();
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int at = y * width + x;
-                int color = module.glowGradient()
-                        ? blend(module.primaryColor(), module.secondaryColor(), y / (float) height)
-                        : module.primaryColor();
-                float strength = module.glow() ? Math.min(0.5f, module.glowRadius() * module.exposure() / 100.0f)
-                        : 0.12f;
-                if (mode.equals("Snow")) {
-                    boolean snow = (x * 31 + y * 17 + (int) (System.currentTimeMillis() / 100L)) % 997 == 0;
-                    if (!snow) continue;
-                    color = 0xFFFFFFFF;
-                    strength = 0.8f;
-                } else if (mode.equals("Smoke")) {
-                    strength *= 0.5 + 0.5 * Math.sin(x * 0.03 + y * 0.02
-                            + System.currentTimeMillis() * 0.001);
-                } else if (mode.equals("Fade")) {
-                    strength *= 1.0f - y / (float) height;
-                }
-                pixels[at] = blend(pixels[at], color, strength);
-            }
-        }
-    }
-
-    private static void tint(int[] pixels, int color, float amount) {
-        for (int i = 0; i < pixels.length; i++) {
-            pixels[i] = blend(pixels[i], color, amount * (color >>> 24) / 255.0f);
-        }
-    }
-
-    private static void tintRow(int[] pixels, int width, int y, int color, float amount) {
-        int start = y * width;
-        for (int x = 0; x < width; x++) {
-            pixels[start + x] = blend(pixels[start + x], color, amount);
-        }
     }
 
     /** CPU 区域平均；有历史帧时按配置的历史权重混合。 */

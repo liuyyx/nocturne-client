@@ -1121,10 +1121,6 @@
                     "absent": true,
                     "absentReason": "unverified"
                 },
-                "getBlockEntity": {
-                    "absent": true,
-                    "absentReason": "unverified"
-                },
                 "getBlockState": {
                     "absent": true,
                     "absentReason": "unverified"
@@ -3111,10 +3107,6 @@
                     "absent": true,
                     "absentReason": "unverified"
                 },
-                "getScale": {
-                    "absent": true,
-                    "absentReason": "unverified"
-                },
                 "getTeam": {
                     "names": {
                         "vanilla": "be",
@@ -3570,18 +3562,6 @@
                 "forge": "net.minecraft.entity.EntityLivingBase"
             },
             "methods": {
-                "addEffect": {
-                    "names": {
-                        "vanilla": "c",
-                        "fabric": "method_6092",
-                        "forge": "func_195064_c"
-                    },
-                    "signatures": {
-                        "vanilla": "(Laek;)Z",
-                        "fabric": "(Lnet/minecraft/class_1293;)Z",
-                        "forge": "(Lnet/minecraft/potion/PotionEffect;)Z"
-                    }
-                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "d",

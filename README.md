@@ -41,8 +41,11 @@
 - `OverlayDraw` / `Renderer`：矩形、线、纹理、裁剪与世界投影共用一套绘制入口；ESP、NameTags、
   ItemEsp、Trajectories、StorageEsp、Search 已使用该路径。
 
-这些依赖已接入 **OpenVape 的 108 个去重顶层注册模块**，并保留 Nocturne 的 Watermark/AutoRespawn
-两个扩展模块（注册总数 110）。66 个 release 的映射由 `python tools/mapping/generate.py` 生成并受
+- 契约与映射层仍在，但**模块实现已整体删除（2026-11-12），模块层重写中**：当前构建注册 0 个模块，
+  只有 `Module` / `ModuleRegistry` / `GameModule` / `HudModule` / 值体系与 `ModuleConfigStore` 框架。
+  此前基于 OpenVape 行为的 110 个模块验收结论只属于已删除的实现，见 `docs/VERSION-MATRIX.md`。
+
+66 个 release 的映射由 `python tools/mapping/generate.py` 生成并受
 `--check` 门禁约束——该门禁现在**连真实 client jar 一起校验**（`--fast` 才是纯文本快路径）——
 目前覆盖 **165 个规范类**（成员级 resolved / absent：26.3 407/103，另有 22 个类整缺；
 1.20.1 418/80；1.8.9 311/120）。

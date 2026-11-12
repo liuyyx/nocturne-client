@@ -5,7 +5,6 @@ import dev.nocturne.client.TestSupport;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.game.TestMapping;
 import dev.nocturne.client.mapping.ClassType;
-import dev.nocturne.client.module.Module;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,15 +13,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 目标选择器内建的好友/视线/NPC 过滤。
+ * 目标选择器内建的好友/视线过滤。
  *
  * <p>回归：好友过滤只存在于 AimBot 内部、视线由各模块自己判断，KillAura/MultiAura 等会
- * 直接攻击好友；AntiBot 又对动物/怪物也求值，在 Default 模式下把它们全部当成“不在 Tab 的
- * 玩家”误杀。
+ * 直接攻击好友。两者现已集中到 {@link TargetManager}，模块不再各自过滤。
  */
 class TargetManagerFilterTest {
 
@@ -189,22 +186,5 @@ class TargetManagerFilterTest {
         List<TargetManager.Target> throughWall = manager.list(client, options);
         assertEquals(1, throughWall.size());
         assertTrue(throughWall.get(0).entity() == behindWall);
-    }
-
-    /** AntiBot 的 Default（不在 Tab 列表）只淘汰玩家，动物/怪物照常可作为目标。 */
-    @Test
-    void antiBotOnlyFiltersPlayers() {
-        Module antiBot = client.modules().get("Anti Bot");
-        assertNotNull(antiBot);
-        antiBot.setEnabled(true);
-
-        Player npcPlayer = addPlayer("FakePlayer");
-        Living cow = addMob("Cow");
-
-        List<TargetManager.Target> found = targets(true, true);
-
-        assertEquals(1, found.size(), "player filtered as bot, mob must survive");
-        assertTrue(found.get(0).entity() == cow, "mob must not be judged by AntiBot");
-        assertTrue(npcPlayer != found.get(0).entity());
     }
 }

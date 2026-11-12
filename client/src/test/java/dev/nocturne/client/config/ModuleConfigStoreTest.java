@@ -224,42 +224,43 @@ class ModuleConfigStoreTest {
         System.setProperty(ModuleConfigStore.CONFIG_DIR_PROPERTY, panicDir.toString());
 
         NocturneClient client = NocturneClient.boot(null);
-        Module blink = client.modules().get("Blink");
-        assertNotNull(blink, "precondition: Blink is registered");
-        blink.setEnabled(true);
-        blink.bind().set(82);
+        ProbeModule probe = new ProbeModule();
+        client.modules().register(probe);
+        probe.setEnabled(true);
+        probe.bind().set(82);
 
         client.panic();
-        assertFalse(blink.isEnabled(), "panic still disables modules in memory");
+        assertFalse(probe.isEnabled(), "panic still disables modules in memory");
 
         JsonObject root = readJson(panicDir.resolve(ModuleConfigStore.FILE_NAME));
-        JsonObject modules = root.getAsJsonObject("modules");
-        JsonObject blinkNode = modules.getAsJsonObject("Blink");
-        assertTrue(blinkNode.get("enabled").getAsBoolean(),
+        JsonObject probeNode = root.getAsJsonObject("modules").getAsJsonObject("Probe");
+        assertTrue(probeNode.get("enabled").getAsBoolean(),
                 "panic must persist the pre-disable state, not the all-off state");
-        assertEquals(82, blinkNode.get("bind").getAsInt());
-        assertTrue(modules.getAsJsonObject("Better Chat").get("enabled").getAsBoolean(),
-                "default-enabled modules must not be persisted as off after panic");
+        assertEquals(82, probeNode.get("bind").getAsInt());
     }
 
     /** 默认开启只在配置缺键时生效：显式关闭后重启必须保持关闭。 */
     @Test
-    void defaultsOnlyApplyToMissingKeys() {
-        Path configDir = tempDir.resolve("defaults");
-        NocturneClient first = bootWithConfigDir(configDir);
-        Module betterChat = first.modules().get("Better Chat");
-        assertNotNull(betterChat);
-        assertTrue(betterChat.isEnabled(), "first run applies the default");
+    void defaultsOnlyApplyToMissingKeys() throws IOException {
+        ModuleRegistry registry = new ModuleRegistry();
+        ProbeModule probe = new ProbeModule();
+        registry.register(probe);
+        ModuleConfigStore store = new ModuleConfigStore(registry, path);
+        store.load();
+        store.applyDefaults("Probe");
+        assertTrue(probe.isEnabled(), "first run applies the default");
+        store.flush();
 
-        betterChat.setEnabled(false);
-        first.moduleConfig().flush();
+        probe.setEnabled(false);
+        store.flush();
 
-        NocturneClient second = bootWithConfigDir(configDir);
-        Module reloaded = second.modules().get("Better Chat");
-        assertNotNull(reloaded);
+        ModuleRegistry reloadedRegistry = new ModuleRegistry();
+        ProbeModule reloaded = new ProbeModule();
+        reloadedRegistry.register(reloaded);
+        ModuleConfigStore reopened = new ModuleConfigStore(reloadedRegistry, path);
+        reopened.load();
+        reopened.applyDefaults("Probe");
         assertFalse(reloaded.isEnabled(), "explicit user choice must beat the default");
-        assertTrue(second.modules().get("Better Scoreboard").isEnabled(),
-                "untouched default stays on");
     }
 
     private NocturneClient bootWithConfigDir(Path configDir) {

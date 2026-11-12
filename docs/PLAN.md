@@ -53,7 +53,7 @@
 | P4 绘制 | A（≤1.12 固定管线）✅ 真机；B（1.13–1.21）⏳ **仍打开**（1.21.11 文字黑块/旧后端未收尾）；C（26.x extractor）✅ 真机，26.3 运行中 attach 也已复验 | B 未关闭 |
 | P4-D 绘制层重构 | D1 完成；D2 已重新接线并在 26.3 真机可见；1.20.1 HUD 钩子/末尾注入已修，但合成键盘无法验收 GUI；D3 已落地，1.16.5 真机验收后**改为默认 gl-core**（`gui-stack` 观感粗糙，降为兜底；双端钩子 + PoseStack 文本缩放 + RenderSystem 裁剪回退仍保留）；D4 未完成 | ⏳ 进行中（= B 的关闭路径） |
 | P5 输入 | 1.8.9 / 26.3 真机；GUI 打开时 1.8.9 压 `inGameHasFocus`、26.3 屏蔽 `MouseHandler#grabMouse`；SDL 滚轮已落地；1.8.9/1.16.5 滚轮与真实点击仍待真人 | 部分 |
-| P6 模块 | 21 个注册模块（Chams 与 Xray 因渲染拦截点未接入而暂不注册，避免"开了没反应"）；ActionApi/ActionBinder + RotationController/TargetManager；B1–B9 已验收；KillAura/Scaffold/AimAssist 已移植 | 部分 |
+| P6 模块 | 模块实现已整体删除（2026-11-12），框架与 `HudModule` 单测保留；模块层待重写 | 待重做 |
 | P7 自实现 attach | Windows 真机；Linux/macOS 已实现未实机；`PayloadPack` 已接生产 | ✅ 已完成（平台待验） |
 | P8 模组形态 | Fabric/Forge/NeoForge 入口 | 未开始（依赖 P4-D） |
 

@@ -218,6 +218,12 @@ public enum ClassType {
     ANIMAL("net.minecraft.world.entity.animal.Animal"),
     /** 环境生物分类（蝙蝠等）。 */
     AMBIENT("net.minecraft.world.entity.ambient.AmbientCreature"),
+    /** 村民；1.14–1.21.11 的规范路径是 net.minecraft.world.entity.npc.Villager（见 member-aliases）。 */
+    VILLAGER("net.minecraft.world.entity.npc.villager.Villager"),
+    /** 敌对生物基类；1.8.9/1.12.2 与 MOB 都落到 MCP 的 EntityMob。 */
+    MONSTER("net.minecraft.world.entity.monster.Monster"),
+    /** 水生生物基类；1.14–1.21.11 的规范路径是 net.minecraft.world.entity.animal.WaterAnimal（见 member-aliases）。 */
+    WATER_MOB("net.minecraft.world.entity.animal.fish.WaterAnimal"),
     /** 盔甲架；目标选择通常要显式排除。 */
     ARMOR_STAND("net.minecraft.world.entity.decoration.ArmorStand"),
     /** 末影水晶；CrystalAura 与命中特效的目标。 */

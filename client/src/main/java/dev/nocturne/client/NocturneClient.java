@@ -252,9 +252,15 @@ public final class NocturneClient {
         }
     }
 
+    /** 注册已完成移植的内置模块；必须在配置读取前执行。 */
+    private void registerModules() {
+        modules.register(new dev.nocturne.client.module.modules.combat.KillAuraModule());
+    }
+
     /** 执行实际安装：装载配置并挂接运行时回调。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */
     private void install() {
-        // 模块层正在重写，当前没有任何内置模块；框架（注册表、配置、键位、tick）保留。
+        registerModules();
+        // 只注册已移植模块；框架（注册表、配置、键位、tick）保留。
         // 先加载用户配置，再处理调试开关；顺序反过来会把用户显式关闭的模块重新打开。
         moduleConfig = new ModuleConfigStore(modules);
         moduleConfig.load();

@@ -13,8 +13,8 @@ import java.util.List;
 /**
  * 共享目标选择器：AimAssist / KillAura / 后续状态机只描述“要什么”，筛选与排序集中在这里。
  *
- * <p>目标来自当前世界的实体渲染列表；只把真实存在的活体实体交出去。距离与视野都按玩家
- * 眼睛到实体脚部中心计算。好友过滤是内建且不可关闭的：打架误伤好友比“少一个目标”代价大得多；
+ * <p>目标来自当前世界的实体渲染列表；只把真实存在的活体实体交出去。距离按玩家眼睛到实体
+ * 包围盒的三轴外距计算，包围盒不可读时退回脚部中心距离；视野按实体脚部中心计算。好友过滤是内建且不可关闭的：打架误伤好友比“少一个目标”代价大得多；
  * 视线过滤默认开启（{@link Options#lineOfSight}），模块不再各自调 hasLineOfSight/好友表。
  * AntiBot 只对玩家目标求值——NPC 判定对动物/怪物没有意义，还会误杀合法刷怪目标。
  */
@@ -36,6 +36,11 @@ public final class TargetManager {
         public double maxAngle = 180.0;
         public boolean players = true;
         public boolean mobs = false;
+        public boolean animals = false;
+        public boolean villagers = false;
+        public boolean ambient = false;
+        public boolean water = false;
+        public boolean others = false;
         public boolean invisibles = false;
         /** 是否要求与服务端一致的视线（{@code LivingEntity#hasLineOfSight}）；默认开。 */
         public boolean lineOfSight = true;
@@ -51,9 +56,13 @@ public final class TargetManager {
         private final double distance;
         private final double angle;
         private final double health;
+        private final double height;
+        private final double width;
+        private final double aimY;
 
         private Target(Object entity, double x, double y, double z,
-                       double distance, double angle, double health) {
+                       double distance, double angle, double health,
+                       double height, double width, double aimY) {
             this.entity = entity;
             this.x = x;
             this.y = y;
@@ -61,6 +70,9 @@ public final class TargetManager {
             this.distance = distance;
             this.angle = angle;
             this.health = health;
+            this.height = height;
+            this.width = width;
+            this.aimY = aimY;
         }
 
         public Object entity() {
@@ -92,9 +104,17 @@ public final class TargetManager {
             return health;
         }
 
-        /** 瞄准点：脚部中心上方 1.2 格，作为没有实体高度映射时的稳定近似。 */
+        public double height() {
+            return height;
+        }
+
+        public double width() {
+            return width;
+        }
+
+        /** 瞄准点：玩家眼睛高度在目标包围盒内的位置，最高不超过盒高的 90%。 */
         public double aimY() {
-            return y + 1.2;
+            return aimY;
         }
     }
 
@@ -137,38 +157,55 @@ public final class TargetManager {
         }
 
         List<Target> found = new ArrayList<Target>();
-        collect(bridge, player, entities, origin, yaw, options, found);
+        double[] eye = eyePosition(bridge, player, origin);
+        collect(bridge, player, entities, eye, yaw, options, found);
         Collections.sort(found, comparator(options.sort));
         return found;
     }
 
-    private void collect(GameBridge bridge, Object player, Object entities, double[] origin,
+    private void collect(GameBridge bridge, Object player, Object entities, double[] eye,
                          float yaw, Options options, List<Target> out) {
         if (entities instanceof Iterable<?>) {
             Iterator<?> iterator = ((Iterable<?>) entities).iterator();
             while (iterator.hasNext()) {
-                consider(bridge, player, iterator.next(), origin, yaw, options, out);
+                consider(bridge, player, iterator.next(), eye, yaw, options, out);
             }
             return;
         }
         if (entities instanceof Object[]) {
             for (Object entity : (Object[]) entities) {
-                consider(bridge, player, entity, origin, yaw, options, out);
+                consider(bridge, player, entity, eye, yaw, options, out);
             }
         }
     }
 
-    private void consider(GameBridge bridge, Object player, Object entity, double[] origin,
+    private void consider(GameBridge bridge, Object player, Object entity, double[] eye,
                           float yaw, Options options, List<Target> out) {
         if (entity == null || entity == player
-                || !bridge.isInstance(entity, ClassType.LIVING_ENTITY)) {
+                || !bridge.isInstance(entity, ClassType.LIVING_ENTITY)
+                || bridge.isInstance(entity, ClassType.ARMOR_STAND)) {
             return;
         }
         boolean isPlayer = bridge.isInstance(entity, ClassType.PLAYER);
-        if (isPlayer && !options.players) {
-            return;
+        final boolean accepted;
+        if (isPlayer) {
+            accepted = options.players;
+        } else if (bridge.isInstance(entity, ClassType.VILLAGER)) {
+            accepted = options.villagers;
+        } else if (bridge.isInstance(entity, ClassType.WATER_MOB)) {
+            // WaterAnimal 在现代版本继承 Animal，必须先于动物开关判定。
+            accepted = options.water;
+        } else if (bridge.isInstance(entity, ClassType.ANIMAL)) {
+            accepted = options.animals;
+        } else if (bridge.isInstance(entity, ClassType.AMBIENT)) {
+            accepted = options.ambient;
+        } else if (bridge.isInstance(entity, ClassType.MONSTER)
+                || bridge.isInstance(entity, ClassType.MOB)) {
+            accepted = options.mobs;
+        } else {
+            accepted = options.others;
         }
-        if (!isPlayer && !options.mobs) {
+        if (!accepted) {
             return;
         }
         // 好友判定只对玩家生效：友方玩家永不做目标；集中在这里，aura 模块不再各自过滤。
@@ -186,7 +223,7 @@ public final class TargetManager {
         if (!(health > 0.0)) {
             return;
         }
-        if (!options.invisibles
+        if (isPlayer && !options.invisibles
                 && Boolean.TRUE.equals(bridge.callMapped(entity, ClassType.ENTITY, "isInvisible"))) {
             return;
         }
@@ -194,20 +231,38 @@ public final class TargetManager {
         if (position == null) {
             return;
         }
-        double dx = position[0] - origin[0];
-        double dy = position[1] - origin[1];
-        double dz = position[2] - origin[2];
-        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double[] box = boundingBox(bridge, entity);
+        final double distance;
+        final double aimY;
+        final double height;
+        final double width;
+        if (box != null) {
+            double dx = Math.max(Math.max(box[0] - eye[0], 0.0), eye[0] - box[3]);
+            double dy = Math.max(Math.max(box[1] - eye[1], 0.0), eye[1] - box[4]);
+            double dz = Math.max(Math.max(box[2] - eye[2], 0.0), eye[2] - box[5]);
+            distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            height = box[4] - box[1];
+            width = box[3] - box[0];
+            aimY = position[1] + Math.max(0.0, Math.min(eye[1] - position[1], height * 0.9));
+        } else {
+            double dx = position[0] - eye[0];
+            double dy = position[1] - eye[1];
+            double dz = position[2] - eye[2];
+            distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            aimY = position[1] + 1.2;
+            height = bridge.entityHeight(entity);
+            width = bridge.entityWidth(entity);
+        }
         if (distance > options.range) {
             return;
         }
-        float targetYaw = RotationController.yawTo(dx, dz);
+        float targetYaw = RotationController.yawTo(position[0] - eye[0], position[2] - eye[2]);
         double angle = Math.abs(RotationController.wrap(targetYaw - yaw));
         if (angle > Math.max(0.0, options.maxAngle) * 0.5) {
             return;
         }
         out.add(new Target(entity, position[0], position[1], position[2],
-                distance, angle, health));
+                distance, angle, health, height, width, aimY));
     }
 
     /**
@@ -223,23 +278,61 @@ public final class TargetManager {
 
     /** 读取实体脚部坐标；任一轴缺失时返回 {@code null}。 */
     static double[] position(GameBridge bridge, Object entity) {
-        Object position = bridge.callMapped(entity, ClassType.ENTITY, "position");
-        if (position == null) {
+        return vector(bridge, bridge.callMapped(entity, ClassType.ENTITY, "position"));
+    }
+
+    /** 眼睛位置优先带 partialTicks 调用，随后尝试零参形式，最后退回脚部。 */
+    private static double[] eyePosition(GameBridge bridge, Object player, double[] fallback) {
+        Object eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition", Float.valueOf(0.0f));
+        if (eye == null) {
+            eye = bridge.callMapped(player, ClassType.ENTITY, "getEyePosition");
+        }
+        double[] parsed = vector(bridge, eye);
+        return parsed == null ? fallback : parsed;
+    }
+
+    /** 读取实体 AABB；映射缺失或字段不完整时返回 {@code null}。 */
+    private static double[] boundingBox(GameBridge bridge, Object entity) {
+        Object box = bridge.callMapped(entity, ClassType.ENTITY, "getBoundingBox");
+        if (box == null) {
             return null;
         }
-        Object x = bridge.readField(position, ClassType.VEC3, "x");
-        Object y = bridge.readField(position, ClassType.VEC3, "y");
-        Object z = bridge.readField(position, ClassType.VEC3, "z");
-        if (!(x instanceof Number) || !(y instanceof Number) || !(z instanceof Number)) {
+        Number minX = number(bridge.readField(box, ClassType.AABB, "minX"));
+        Number minY = number(bridge.readField(box, ClassType.AABB, "minY"));
+        Number minZ = number(bridge.readField(box, ClassType.AABB, "minZ"));
+        Number maxX = number(bridge.readField(box, ClassType.AABB, "maxX"));
+        Number maxY = number(bridge.readField(box, ClassType.AABB, "maxY"));
+        Number maxZ = number(bridge.readField(box, ClassType.AABB, "maxZ"));
+        if (minX == null || minY == null || minZ == null
+                || maxX == null || maxY == null || maxZ == null) {
             return null;
         }
-        double px = ((Number) x).doubleValue();
-        double py = ((Number) y).doubleValue();
-        double pz = ((Number) z).doubleValue();
-        if (!finite(px) || !finite(py) || !finite(pz)) {
+        double[] result = {minX.doubleValue(), minY.doubleValue(), minZ.doubleValue(),
+                maxX.doubleValue(), maxY.doubleValue(), maxZ.doubleValue()};
+        for (double value : result) {
+            if (!finite(value)) {
+                return null;
+            }
+        }
+        return result;
+    }
+
+    private static double[] vector(GameBridge bridge, Object vector) {
+        if (vector == null) {
             return null;
         }
-        return new double[]{px, py, pz};
+        Number x = number(bridge.readField(vector, ClassType.VEC3, "x"));
+        Number y = number(bridge.readField(vector, ClassType.VEC3, "y"));
+        Number z = number(bridge.readField(vector, ClassType.VEC3, "z"));
+        if (x == null || y == null || z == null) {
+            return null;
+        }
+        double[] result = {x.doubleValue(), y.doubleValue(), z.doubleValue()};
+        return finite(result[0]) && finite(result[1]) && finite(result[2]) ? result : null;
+    }
+
+    private static Number number(Object value) {
+        return value instanceof Number ? (Number) value : null;
     }
 
     private static Comparator<Target> comparator(final Sort sort) {

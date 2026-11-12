@@ -48,3 +48,7 @@ net/minecraft/client/Camera#getEntity() = entity()
 net/minecraft/client/renderer/GameRenderer#getMainCamera() = mainCamera()
 # 1.8.9–1.12.2 的有效 FOV 方法在 EntityRenderer 上叫 getFOVModifier(F,Z)。
 net/minecraft/client/renderer/GameRenderer#getFov() = getFOVModifier()
+
+# 目标分类：这些基类在 1.14–1.21.11 的 Mojmap 路径与最新规范名不同。
+VILLAGER = net/minecraft/world/entity/npc/Villager
+WATER_MOB = net/minecraft/world/entity/animal/WaterAnimal

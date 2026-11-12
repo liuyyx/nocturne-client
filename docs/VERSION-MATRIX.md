@@ -3,6 +3,22 @@
 映射表现已覆盖 **1.8.9 – 26.3 的全部 66 个 release**（含 vanilla/Fabric/Forge/NeoForge 四套命名空间）；
 >下面标注"真机"的行指**实际在机器上跑过**的版本：**1.8.9 / 1.12.2 / 1.16.5 / 1.20.1 / 1.21.1 / 1.21.4 / 1.21.10 / 1.21.11 / 26.2 / 26.3**。
 
+## Kill Aura 移植（2026-11-12，真机未验证）
+
+- 已按 eps 上游行为重写并注册 `Kill Aura`：Single/Switch 选靶、四类优先级、受限旋转、
+  1.8 CPS 与 1.9+ 冷却攻击、Hit Select、进食/Scaffold 暂停，以及 CaptureMark / Circle /
+  Firefly / Deobf 四种文字或线条 ESP。`Pause On Eat` 当前以“正在使用任意物品”近似，
+  Deobf 不依赖上游纹理资源。
+- `TargetManager` 新增 Players / Mobs / Animals / Villagers / Ambient / Water / Others 七类开关，
+  水生生物优先于动物分类，盔甲架始终排除；距离改为眼睛到 AABB 的三轴外距，缺少包围盒时退回脚部。
+- 映射面新增 `VILLAGER / MONSTER / WATER_MOB` 及 modern 别名、1.8.9/1.12.2 legacy 桥接；
+  66 份表已重写，`python tools/mapping/generate.py --check`（含 javap）全部通过。
+- 定向目标/几何测试、完整 `gradle test` 与 `gradle build` 均通过；`verifyJarBytecode` 通过，
+  agent 与 launcher 两个 jar 均已生成。新增测试覆盖分类开关、Water 优先级、盔甲架排除、
+  眼到 AABB 距离、box 12 边与 circle 分段数。
+- **真机未验证**：本次没有运行中的游戏进程，未执行 1.21.1 注入；旋转、实际攻击与四种 ESP
+  的真机表现均不得视为通过。
+
 ## 模块层清空（2026-11-12，待重写）
 
 模块实现（`client/.../module/modules/**`，211 个 main 源文件 + 33 个测试）已整体删除，**模块层重写中**。

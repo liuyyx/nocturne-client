@@ -5709,6 +5709,16 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/entity/animal/fish/WaterAnimal": {
+            "names": {
+                "vanilla": "cld",
+                "fabric": "net.minecraft.class_1480",
+                "forge": "net.minecraft.world.entity.animal.WaterAnimal",
+                "neoforge": "net.minecraft.world.entity.animal.WaterAnimal"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/boss/enderdragon/EndCrystal": {
             "names": {
                 "vanilla": "cnf",
@@ -5783,6 +5793,26 @@
                     "absentReason": "verified"
                 }
             }
+        },
+        "net/minecraft/world/entity/monster/Monster": {
+            "names": {
+                "vanilla": "cpk",
+                "fabric": "net.minecraft.class_1588",
+                "forge": "net.minecraft.world.entity.monster.Monster",
+                "neoforge": "net.minecraft.world.entity.monster.Monster"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/entity/npc/villager/Villager": {
+            "names": {
+                "vanilla": "cru",
+                "fabric": "net.minecraft.class_1646",
+                "forge": "net.minecraft.world.entity.npc.Villager",
+                "neoforge": "net.minecraft.world.entity.npc.Villager"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/world/entity/player/Abilities": {
             "names": {

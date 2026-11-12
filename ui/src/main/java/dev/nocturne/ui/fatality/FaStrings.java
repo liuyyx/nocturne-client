@@ -120,6 +120,8 @@ final class FaStrings {
         put("Hide Bots", "隐藏机器人");
         put("Highlight if focusing", "锁定高亮");
         put("Ghost Bow Charge", "拉弓残影");
+        put("Medium", "中");
+        put("Highest", "最高");
         // 新移植模块的参数
         put("CPS", "每秒点击");
         put("Randomization", "随机化");

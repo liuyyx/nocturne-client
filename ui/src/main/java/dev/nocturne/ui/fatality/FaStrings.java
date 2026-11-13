@@ -49,6 +49,7 @@ final class FaStrings {
         put("ESP", "透视框");
         put("ESP 2D", "二维透视");
         put("NameTags", "名字标签");
+        put("Name Tags", "名字标签");
         put("Tracers", "追踪线");
         put("Trajectories", "弹道");
         put("Chams", "穿墙高亮");
@@ -369,6 +370,7 @@ final class FaStrings {
         put("Mas Effects", "MAS 特效");
         put("Motion Blur", "动态模糊");
         put("NameTags", "名字标签");
+        put("Name Tags", "名字标签");
         put("No Ghost Blocks", "无幽灵方块");
         put("No Render", "隐藏渲染");
         put("Particles", "粒子");

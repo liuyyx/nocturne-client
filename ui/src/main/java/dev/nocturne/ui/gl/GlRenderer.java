@@ -536,6 +536,8 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
         if (value == null || value.isEmpty()) {
             return;
         }
+        // 游戏字体会直接切换纹理与绑定；若几何仍在 glBegin/glEnd 中就是 GL_INVALID_OPERATION。
+        gl.flushBatch();
         text.draw(value, x, y, size, color);
     }
 

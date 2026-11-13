@@ -28,6 +28,27 @@
 - 边界：0b 轮 1.21.1 日志仍观察到既有 Hud/Screen/Chams 重定义的 `VerifyError`；
   本节不将这些路径或尚未落地的视觉模块记为通过，其余版本真机均**未验证**。
 
+## Epsilon 视觉移植：阶段 1 实体/世界覆盖层（2026-11-13）
+
+- 注册 `ESP 2D`、`Name Tags`、`Health`、`Jump Circle`、`Hat`、`Block Highlight`、`TNT Timer`、
+  `Logout Spots`，连同既有 `Kill Aura` 共 9 个模块。反射快照、实体缓存淘汰、屏外名牌剔除与
+  TNT 屏幕细分均在客户端层完成，不引入版本分支或新 Mixin。
+- `python tools/mapping/generate.py --check`（含 66 版 jar 交叉校验）与完整 `gradle build`
+  **实测通过**。修复固定管线几何批次后直接绘制游戏文字导致的 `GL_INVALID_OPERATION`，
+  `GlRendererTest.textClosesPendingGeometryBatch` 覆盖该切换。
+- **1.21.1 真机通过覆盖层验收**：`client installed (modules=9)`，随后
+  `world overlay: drawing (427x240): 59 draw call(s) from 8 module(s)`；画面可见实体框/血条、
+  血量、第三人称名牌与帽子。证据 `tmp/epsilon-stage-1-final-1.21.1.log`、
+  `tmp/epsilon-stage-1-final-1.21.1.png`。既有 Hud/Screen/Chams 重定义 `VerifyError` 仍按阶段 0
+  的边界记录，本批不声称修复这些路径。
+- **1.8.9 真机通过覆盖层验收**：`client installed (modules=9)`、`backend=gl-fixed`，最终日志为
+  `world overlay: drawing (1280x720): 167 draw call(s) from 8 module(s)`；实体框/血条与文字同帧
+  可见，修复后未再出现 1282。证据 `tmp/epsilon-stage-1-final-fixed-1.8.9.log`、
+  `tmp/epsilon-stage-1-final-fixed-1.8.9.png`。
+- 本轮未构造可辨识的 TNT 引爆与多人退服/重进场景；`TNT Timer` 的引爆表现和 `Logout Spots`
+  的包驱动行为均为**未验证**。1.8.9 映射表缺少独立玩家移除包，不得据此声称该版退服标记可用。
+  其余版本真机均未验证。
+
 ## Kill Aura 移植（2026-11-12，真机未验证）
 
 - 已按 eps 上游行为重写并注册 `Kill Aura`：Single/Switch 选靶、四类优先级、受限旋转、

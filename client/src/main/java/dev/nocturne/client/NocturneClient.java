@@ -281,6 +281,14 @@ public final class NocturneClient {
     /** 注册已完成移植的内置模块；必须在配置读取前执行。 */
     private void registerModules() {
         modules.register(new dev.nocturne.client.module.modules.combat.KillAuraModule());
+        modules.register(new dev.nocturne.client.module.modules.render.Esp2DModule());
+        modules.register(new dev.nocturne.client.module.modules.render.NameTagsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.HealthModule());
+        modules.register(new dev.nocturne.client.module.modules.render.JumpCircleModule());
+        modules.register(new dev.nocturne.client.module.modules.render.HatModule());
+        modules.register(new dev.nocturne.client.module.modules.render.BlockHighlightModule());
+        modules.register(new dev.nocturne.client.module.modules.render.TntTimerModule());
+        modules.register(new dev.nocturne.client.module.modules.render.LogoutSpotsModule());
     }
 
     /** 执行实际安装：装载配置并挂接运行时回调。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */

@@ -1838,7 +1838,20 @@
                 "vanilla": "cs",
                 "fabric": "net.minecraft.class_2350"
             },
-            "methods": {},
+            "methods": {
+                "getStepX": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getStepY": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getStepZ": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                }
+            },
             "fields": {
                 "DOWN": {
                     "names": {

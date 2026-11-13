@@ -2170,6 +2170,24 @@ public final class GameBridge {
                 : new double[]{x.doubleValue(), y.doubleValue(), z.doubleValue()};
     }
 
+    /** 读取脚部坐标到调用方复用的三轴数组；读取失败时不改输出，覆盖层热路径不分配坐标数组。 */
+    public boolean entityPosition(Object entity, double[] out) {
+        if (entity == null || out == null || out.length < 3) {
+            return false;
+        }
+        Object position = callMapped(entity, ClassType.ENTITY, "position");
+        Number x = number(readField(position, ClassType.VEC3, "x"));
+        Number y = number(readField(position, ClassType.VEC3, "y"));
+        Number z = number(readField(position, ClassType.VEC3, "z"));
+        if (x == null || y == null || z == null) {
+            return false;
+        }
+        out[0] = x.doubleValue();
+        out[1] = y.doubleValue();
+        out[2] = z.doubleValue();
+        return true;
+    }
+
     /** 实体三轴速度；不可读取时返回零向量。 */
     public double[] entityVelocity(Object entity) {
         Object delta = callMapped(entity, ClassType.ENTITY, "getDeltaMovement");

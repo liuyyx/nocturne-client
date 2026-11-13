@@ -3055,7 +3055,50 @@
                 "forge": "net.minecraft.core.Direction",
                 "neoforge": "net.minecraft.core.Direction"
             },
-            "methods": {},
+            "methods": {
+                "getStepX": {
+                    "names": {
+                        "vanilla": "j",
+                        "fabric": "method_10148",
+                        "forge": "m_122429_",
+                        "neoforge": "getStepX"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                },
+                "getStepY": {
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "method_10164",
+                        "forge": "m_122430_",
+                        "neoforge": "getStepY"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                },
+                "getStepZ": {
+                    "names": {
+                        "vanilla": "l",
+                        "fabric": "method_10165",
+                        "forge": "m_122431_",
+                        "neoforge": "getStepZ"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                }
+            },
             "fields": {
                 "DOWN": {
                     "names": {
@@ -3498,7 +3541,22 @@
                 "neoforge": "net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "profileIds": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "comp_1105",
+                        "forge": "f_244383_",
+                        "neoforge": "profileIds"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ljava/util/List;",
+                        "fabric": "Ljava/util/List;",
+                        "forge": "Ljava/util/List;",
+                        "neoforge": "Ljava/util/List;"
+                    }
+                }
+            }
         },
         "net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket": {
             "names": {

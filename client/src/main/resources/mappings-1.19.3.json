@@ -2711,7 +2711,44 @@
                 "fabric": "net.minecraft.class_2350",
                 "forge": "net.minecraft.core.Direction"
             },
-            "methods": {},
+            "methods": {
+                "getStepX": {
+                    "names": {
+                        "vanilla": "j",
+                        "fabric": "method_10148",
+                        "forge": "m_122429_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                },
+                "getStepY": {
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "method_10164",
+                        "forge": "m_122430_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                },
+                "getStepZ": {
+                    "names": {
+                        "vanilla": "l",
+                        "fabric": "method_10165",
+                        "forge": "m_122431_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                }
+            },
             "fields": {
                 "DOWN": {
                     "names": {
@@ -3099,7 +3136,20 @@
                 "forge": "net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket"
             },
             "methods": {},
-            "fields": {}
+            "fields": {
+                "profileIds": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "comp_1105",
+                        "forge": "f_244383_"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ljava/util/List;",
+                        "fabric": "Ljava/util/List;",
+                        "forge": "Ljava/util/List;"
+                    }
+                }
+            }
         },
         "net/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket": {
             "names": {

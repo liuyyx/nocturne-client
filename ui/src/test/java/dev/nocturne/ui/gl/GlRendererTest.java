@@ -185,6 +185,19 @@ class GlRendererTest {
         assertEquals(1, text.drawn.size(), "empty text is skipped");
     }
 
+    /** 游戏字体改变纹理状态前必须结束几何批次，否则固定管线直接报 GL_INVALID_OPERATION。 */
+    @Test
+    void textClosesPendingGeometryBatch() {
+        renderer.rect(0f, 0f, 10f, 10f, Color.WHITE);
+        assertEquals(0, FakeGl.endCalls);
+
+        renderer.text("10.0", 1f, 2f, 10f, Color.WHITE);
+
+        assertEquals(1, FakeGl.endCalls);
+        assertEquals(1, text.drawn.size());
+        renderer.endFrame();
+    }
+
     /** 接缝为 null 时不抛异常，文本宽度回退到按字号推算的估算值 */
     @Test
     void nullTextRendererIsTolerated() {

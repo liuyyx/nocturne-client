@@ -2048,7 +2048,20 @@
                 "fabric": "net.minecraft.class_2350",
                 "forge": "net.minecraft.util.EnumFacing"
             },
-            "methods": {},
+            "methods": {
+                "getStepX": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getStepY": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getStepZ": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                }
+            },
             "fields": {
                 "DOWN": {
                     "names": {

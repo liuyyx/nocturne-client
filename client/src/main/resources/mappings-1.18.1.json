@@ -2658,7 +2658,44 @@
                 "fabric": "net.minecraft.class_2350",
                 "forge": "net.minecraft.core.Direction"
             },
-            "methods": {},
+            "methods": {
+                "getStepX": {
+                    "names": {
+                        "vanilla": "i",
+                        "fabric": "method_10148",
+                        "forge": "m_122429_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                },
+                "getStepY": {
+                    "names": {
+                        "vanilla": "j",
+                        "fabric": "method_10164",
+                        "forge": "m_122430_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                },
+                "getStepZ": {
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "method_10165",
+                        "forge": "m_122431_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
+                    }
+                }
+            },
             "fields": {
                 "DOWN": {
                     "names": {

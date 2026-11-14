@@ -293,6 +293,7 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.render.HoleEspModule());
         modules.register(new dev.nocturne.client.module.modules.render.XrayModule());
         modules.register(new dev.nocturne.client.module.modules.render.NoGhostBlocksModule());
+        modules.register(new dev.nocturne.client.module.modules.render.TrajectoriesModule());
     }
 
     /** 执行实际安装：装载配置并挂接运行时回调。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */

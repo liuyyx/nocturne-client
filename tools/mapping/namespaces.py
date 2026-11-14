@@ -1025,6 +1025,11 @@ class AnchorResolver:
                        shape_hint: "int | None") -> "dict[str, tuple] | None":
         key = canonical.replace(".", "/")
         inter = self.anchor.methods.get((key, name))
+        if (key == "net/minecraft/world/level/Level" and name == "isLoaded"
+                and self.version in {"1.13", "1.13.1", "1.13.2",
+                                     "1.14", "1.14.1", "1.14.2", "1.14.3"}):
+            # Legacy intermediary 在 1.13 换用与 1.14.4 相同的世界加载方法 ID。
+            inter = "method_8477"
         if (key == "net/minecraft/world/phys/BlockHitResult"
                 and self.version in {"1.14", "1.14.1", "1.14.2", "1.14.3"}):
             if name == "getBlockPos":

@@ -89,6 +89,35 @@
   修复后 top 帧 `Field.copy/getDeclaredFields` 的采样栈 5 帧且不含 nocturne 帧，
   归为原版/JDK 反射内部；未再观察到 <30 FPS 退化。
 
+## Epsilon 视觉移植：阶段 3 弹道（进行中，2026-11-14）
+
+- `Trajectories` 与 `ProjectileSimulator` 已接入；完整构建和 66 版映射及 jar 交叉校验实测通过。
+- 隔离世界的中间构建中，1.8.9 手持弓可见轨迹与命中标记，日志
+  `tmp/epsilon-stage-3traj-fixed-1.8.9.log` 记录 6 次绘制，截图
+  `tmp/epsilon-stage-3-1.8.9-trajectory.png`。
+- 同一中间构建的 1.21.1 在负高度手持弓可见轨迹，日志
+  `tmp/epsilon-stage-3traj-fixed-1.21.1.log` 记录 7 次绘制，截图
+  `tmp/epsilon-stage-3-1.21.1-trajectory.png`。
+- 眼高与命中面修复后的构建在 1.21.1 显示手持弓轨迹，日志
+  `tmp/epsilon-stage-3traj-final-1.21.1.log` 记录 25 次绘制，截图
+  `tmp/epsilon-stage-3-final-1.21.1.png`。
+- 路径与目标快照改为缓冲池后，1.21.1 仍显示弓轨迹，日志
+  `tmp/epsilon-stage-3pool-1.21.1.log` 记录 25 次绘制，截图
+  `tmp/epsilon-stage-3pool-1.21.1.png`；加入惰性实体扫描后，1.8.9 显示弓轨迹与四角命中面，
+  日志 `tmp/epsilon-stage-3pool-final-1.8.9.log` 记录 6 次绘制，截图
+  `tmp/epsilon-stage-3pool-final-1.8.9.png`。
+- 区块边界现使用映射 `Level#isLoaded(BlockPos)`，无法解析时停止模拟并记录 unavailable；
+  未加载目标不读取水状态的回归测试通过。1.13–1.14.3 用实际 intermediary 的
+  `method_8477` 跨代桥接，66 版映射与 jar 交叉校验通过。
+- 接入区块检查后，1.21.1 手持弓仍可见轨迹，日志
+  `tmp/epsilon-stage-3loaded-1.21.1.log` 记录 25 次绘制，截图
+  `tmp/epsilon-stage-3loaded-1.21.1.png`；该构建的 1.8.9、其他弹射物和其他版本尚未真机验证。
+  桥接调用仍有分配，不将阶段 3 的零分配要求记为完成。
+- 本轮重新启动 1.8.9 时，隔离测试窗口在注入前消失，已取消该次注入；因此不将此次
+  区块检查构建记为 1.8.9 真机通过。
+- 后续修正穿越未加载区块的 DDA 截断和遍历上限，并避免未加载起点产生虚假线段；
+  对应回归测试、完整构建与 66 版映射和 jar 交叉校验通过。此构建尚未真机验证。
+
 ## Kill Aura 移植（2026-11-12，真机未验证）
 
 - 已按 eps 上游行为重写并注册 `Kill Aura`：Single/Switch 选靶、四类优先级、受限旋转、

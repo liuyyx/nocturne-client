@@ -169,6 +169,34 @@ final class FaStrings {
         put("Normal Hit Sprint", "普通命中疾跑");
         put("Buffer Abuse", "缓冲滥用");
         put("Only In Air", "仅空中");
+        // Trajectories 的参数
+        put("Items", "物品");
+        put("Other Players", "其他玩家");
+        put("Fired Projectiles", "已发射弹道");
+        put("Ignore Wither Skulls", "忽略凋灵头颅");
+        put("Simulation Steps", "模拟步数");
+        put("Ignore First Ticks", "忽略前导 Tick");
+        put("Line Color", "线条颜色");
+        put("Line Width", "线宽");
+        put("Impact Fill", "命中点填充");
+        put("Impact Outline", "命中点描边");
+        put("Impact Fill Color", "命中点填充色");
+        put("Impact Outline Color", "命中点描边色");
+        put("Render Position Boxes", "绘制位置盒");
+        put("Position Box Size", "位置盒尺寸");
+        put("Position Fill Color", "位置盒填充色");
+        put("Position Outline Color", "位置盒描边色");
+        put("Bow", "弓");
+        put("Crossbow", "弩");
+        put("Trident", "三叉戟");
+        put("Fishing Rod", "钓鱼竿");
+        put("Snowball", "雪球");
+        put("Egg", "鸡蛋");
+        put("Ender Pearl", "末影珍珠");
+        put("Experience Bottle", "经验瓶");
+        put("Splash Potion", "喷溅药水");
+        put("Lingering Potion", "滞留药水");
+        put("Wind Charge", "风弹");
         // 界面文案
         put("Preview", "预览");
         put("Preview unavailable", "预览不可用");

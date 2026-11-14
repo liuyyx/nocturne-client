@@ -380,6 +380,12 @@ note = "声明在 World（ClientLevel 的 1.8.9 名 WorldClient 继承自它）"
 mcp = "getBlockState"
 scope = "net/minecraft/world/World"
 
+# 世界坐标是否处于已加载区块；固定单参数重载。
+[methods.isLoaded]
+mcp = "isBlockLoaded"
+srg = "func_175667_e"
+scope = "net/minecraft/world/World"
+
 [methods.getChunk]
 mcp = "getChunkFromChunkCoords"
 scope = "net/minecraft/world/World"
@@ -986,6 +992,11 @@ colorValue = { mcp = "colorValue", scope = "net/minecraft/util/EnumChatFormattin
 checkNoEntityCollision = { mcp = "checkNoEntityCollision", srg = "func_72917_a", scope = "net/minecraft/world/World", note = "固定到两参重载 (AABB,Entity)：一参重载把盒子覆盖到的玩家自己算成碰撞" }
 checkBlockCollision = { mcp = "checkBlockCollision", scope = "net/minecraft/world/World" }
 players = { unsupported = "1.8.9 玩家集合是 World.playerEntities 字段，没有无参玩家集合方法" }
+
+# Trajectories 逐玩家取弹道：字段口径的玩家集合（GameBridge.worldPlayers 的末位回退）。
+[fields.playerEntities]
+mcp = "playerEntities"
+scope = "net/minecraft/world/World"
 
 [overrides."net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action"]
 START_SPRINTING = { mcp = "START_SPRINTING", scope = "net/minecraft/network/play/client/C0BPacketEntityAction$Action" }

@@ -3961,6 +3961,18 @@
                         "forge": "()Z"
                     }
                 },
+                "isNoGravity": {
+                    "names": {
+                        "vanilla": "aN",
+                        "fabric": "method_5740",
+                        "forge": "m_20068_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z"
+                    }
+                },
                 "isPassenger": {
                     "names": {
                         "vanilla": "bI",
@@ -4442,6 +4454,18 @@
                     "absent": true,
                     "absentReason": "verified"
                 },
+                "getEyeHeight": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_6082",
+                        "forge": "m_6380_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lbco;Lbbo;)F",
+                        "fabric": "(Lnet/minecraft/class_4050;Lnet/minecraft/class_4048;)F",
+                        "forge": "(Lnet/minecraft/world/entity/Pose;Lnet/minecraft/world/entity/EntityDimensions;)F"
+                    }
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "i",
@@ -4548,6 +4572,18 @@
                         "vanilla": "()F",
                         "fabric": "()F",
                         "forge": "()F"
+                    }
+                },
+                "getTicksUsingItem": {
+                    "names": {
+                        "vanilla": "eX",
+                        "fabric": "method_6048",
+                        "forge": "m_21252_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I"
                     }
                 },
                 "getUseItem": {
@@ -5624,6 +5660,18 @@
                         "forge": "Lnet/minecraft/world/inventory/AbstractContainerMenu;"
                     }
                 },
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "ba",
+                        "fabric": "field_18066",
+                        "forge": "f_19816_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "L",
@@ -5835,6 +5883,15 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/entity/projectile/ThrownExperienceBottle": {
+            "names": {
+                "vanilla": "bve",
+                "fabric": "net.minecraft.class_1683",
+                "forge": "net.minecraft.world.entity.projectile.ThrownExperienceBottle"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/projectile/ThrownPotion": {
             "names": {
                 "vanilla": "bvf",
@@ -5843,6 +5900,20 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/ThrownTrident": {
+            "names": {
+                "vanilla": "bvg",
+                "fabric": "net.minecraft.class_1685",
+                "forge": "net.minecraft.world.entity.projectile.ThrownTrident"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
             "names": {
@@ -6329,6 +6400,22 @@
                         "forge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
                     }
                 },
+                "getMinY": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "isLoaded": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_8477",
+                        "forge": "m_46749_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lgt;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;)Z",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Z"
+                    }
+                },
                 "noCollision": {
                     "names": {
                         "vanilla": "g",
@@ -6370,7 +6457,16 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "playerEntities": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "players": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/world/level/LevelReader": {
             "names": {

@@ -4538,6 +4538,20 @@
                         "neoforge": "()Z"
                     }
                 },
+                "isNoGravity": {
+                    "names": {
+                        "vanilla": "aY",
+                        "fabric": "method_5740",
+                        "forge": "m_20068_",
+                        "neoforge": "isNoGravity"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
+                    }
+                },
                 "isPassenger": {
                     "names": {
                         "vanilla": "bS",
@@ -5091,6 +5105,20 @@
                     "absent": true,
                     "absentReason": "verified"
                 },
+                "getEyeHeight": {
+                    "names": {
+                        "vanilla": "cL",
+                        "fabric": "method_5751",
+                        "forge": "m_20192_",
+                        "neoforge": "getEyeHeight"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F",
+                        "neoforge": "()F"
+                    }
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "k",
@@ -5215,6 +5243,20 @@
                         "fabric": "()F",
                         "forge": "()F",
                         "neoforge": "()F"
+                    }
+                },
+                "getTicksUsingItem": {
+                    "names": {
+                        "vanilla": "fv",
+                        "fabric": "method_6048",
+                        "forge": "m_21252_",
+                        "neoforge": "getTicksUsingItem"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
                     }
                 },
                 "getUseItem": {
@@ -6456,6 +6498,20 @@
                         "neoforge": "Lnet/minecraft/world/inventory/AbstractContainerMenu;"
                     }
                 },
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "be",
+                        "fabric": "field_18066",
+                        "forge": "f_19816_",
+                        "neoforge": "eyeHeight"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "ac",
@@ -6696,6 +6752,16 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/entity/projectile/ThrownExperienceBottle": {
+            "names": {
+                "vanilla": "coa",
+                "fabric": "net.minecraft.class_1683",
+                "forge": "net.minecraft.world.entity.projectile.ThrownExperienceBottle",
+                "neoforge": "net.minecraft.world.entity.projectile.ThrownExperienceBottle"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/projectile/ThrownPotion": {
             "names": {
                 "vanilla": "cob",
@@ -6705,6 +6771,21 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/ThrownTrident": {
+            "names": {
+                "vanilla": "coc",
+                "fabric": "net.minecraft.class_1685",
+                "forge": "net.minecraft.world.entity.projectile.ThrownTrident",
+                "neoforge": "net.minecraft.world.entity.projectile.ThrownTrident"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
             "names": {
@@ -7260,6 +7341,24 @@
                         "neoforge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
                     }
                 },
+                "getMinY": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "isLoaded": {
+                    "names": {
+                        "vanilla": "p",
+                        "fabric": "method_8477",
+                        "forge": "m_46749_",
+                        "neoforge": "isLoaded"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ljd;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;)Z",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Z",
+                        "neoforge": "(Lnet/minecraft/core/BlockPos;)Z"
+                    }
+                },
                 "noCollision": {
                     "names": {
                         "vanilla": "g",
@@ -7307,7 +7406,16 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "playerEntities": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "players": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/world/level/LevelReader": {
             "names": {

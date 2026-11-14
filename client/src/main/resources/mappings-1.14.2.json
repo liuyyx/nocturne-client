@@ -3413,6 +3413,10 @@
                         "forge": "()Z"
                     }
                 },
+                "isNoGravity": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "isPassenger": {
                     "absent": true,
                     "absentReason": "unverified"
@@ -3821,6 +3825,10 @@
                     "absent": true,
                     "absentReason": "unverified"
                 },
+                "getEyeHeight": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "j",
@@ -3920,6 +3928,10 @@
                         "fabric": "()F",
                         "forge": "()F"
                     }
+                },
+                "getTicksUsingItem": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getUseItem": {
                     "names": {
@@ -4896,6 +4908,10 @@
                         "fabric": "Lnet/minecraft/class_1703;"
                     }
                 },
+                "eyeHeight": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "G",
@@ -5104,6 +5120,15 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/entity/projectile/ThrownExperienceBottle": {
+            "names": {
+                "vanilla": "awx",
+                "fabric": "net.minecraft.class_1683",
+                "forge": "net.minecraft.entity.item.ExperienceBottleEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/projectile/ThrownPotion": {
             "names": {
                 "vanilla": "awy",
@@ -5112,6 +5137,20 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/ThrownTrident": {
+            "names": {
+                "vanilla": "awz",
+                "fabric": "net.minecraft.class_1685",
+                "forge": "net.minecraft.entity.projectile.TridentEntity"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
         },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
             "names": {
@@ -5481,6 +5520,22 @@
                     "absent": true,
                     "absentReason": "unverified"
                 },
+                "getMinY": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "isLoaded": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_8477",
+                        "forge": "func_195588_v"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lev;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;)Z",
+                        "forge": "(Lnet/minecraft/util/math/BlockPos;)Z"
+                    }
+                },
                 "noCollision": {
                     "absent": true,
                     "absentReason": "unverified"
@@ -5498,7 +5553,16 @@
                     "absentReason": "unverified"
                 }
             },
-            "fields": {}
+            "fields": {
+                "playerEntities": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "players": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                }
+            }
         },
         "net/minecraft/world/level/LevelReader": {
             "absent": true,

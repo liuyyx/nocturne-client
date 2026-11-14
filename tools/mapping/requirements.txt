@@ -911,3 +911,13 @@ net/minecraft/world/entity/LivingEntity#getArmorValue()
 net/minecraft/world/entity/Entity#isCrouching()
 net/minecraft/client/player/LocalPlayer#getInventory()
 net/minecraft/world/level/Level#players()
+# Trajectories：1.13–1.16 的 Level.players 是字段（方法在 1.17+），强制按字段也登记一份。
+net/minecraft/world/level/Level#players!field
+net/minecraft/world/level/Level#getMinY()
+net/minecraft/world/level/Level#isLoaded()
+net/minecraft/world/entity/LivingEntity#getTicksUsingItem()
+net/minecraft/world/entity/LivingEntity#getEyeHeight()
+net/minecraft/world/entity/Entity#isNoGravity()
+net/minecraft/world/entity/projectile/ThrownTrident
+net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull
+net/minecraft/world/entity/projectile/ThrownExperienceBottle

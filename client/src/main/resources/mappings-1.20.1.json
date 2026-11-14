@@ -4562,6 +4562,20 @@
                         "neoforge": "()Z"
                     }
                 },
+                "isNoGravity": {
+                    "names": {
+                        "vanilla": "aR",
+                        "fabric": "method_5740",
+                        "forge": "m_20068_",
+                        "neoforge": "m_20068_"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
+                    }
+                },
                 "isPassenger": {
                     "names": {
                         "vanilla": "bM",
@@ -5115,6 +5129,20 @@
                     "absent": true,
                     "absentReason": "verified"
                 },
+                "getEyeHeight": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_48761",
+                        "forge": "m_6380_",
+                        "neoforge": "m_6380_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lbgl;Lbfk;)F",
+                        "fabric": "(Lnet/minecraft/class_4050;Lnet/minecraft/class_4048;)F",
+                        "forge": "(Lnet/minecraft/world/entity/Pose;Lnet/minecraft/world/entity/EntityDimensions;)F",
+                        "neoforge": "(Lnet/minecraft/world/entity/Pose;Lnet/minecraft/world/entity/EntityDimensions;)F"
+                    }
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "j",
@@ -5239,6 +5267,20 @@
                         "fabric": "()F",
                         "forge": "()F",
                         "neoforge": "()F"
+                    }
+                },
+                "getTicksUsingItem": {
+                    "names": {
+                        "vanilla": "fm",
+                        "fabric": "method_6048",
+                        "forge": "m_21252_",
+                        "neoforge": "m_21252_"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
                     }
                 },
                 "getUseItem": {
@@ -6480,6 +6522,20 @@
                         "neoforge": "Lnet/minecraft/world/inventory/AbstractContainerMenu;"
                     }
                 },
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "bi",
+                        "fabric": "field_18066",
+                        "forge": "f_19816_",
+                        "neoforge": "f_19816_"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "aa",
@@ -6720,6 +6776,16 @@
             "methods": {},
             "fields": {}
         },
+        "net/minecraft/world/entity/projectile/ThrownExperienceBottle": {
+            "names": {
+                "vanilla": "bzq",
+                "fabric": "net.minecraft.class_1683",
+                "forge": "net.minecraft.world.entity.projectile.ThrownExperienceBottle",
+                "neoforge": "net.minecraft.world.entity.projectile.ThrownExperienceBottle"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/world/entity/projectile/ThrownPotion": {
             "names": {
                 "vanilla": "bzr",
@@ -6729,6 +6795,21 @@
             },
             "methods": {},
             "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/ThrownTrident": {
+            "names": {
+                "vanilla": "bzs",
+                "fabric": "net.minecraft.class_1685",
+                "forge": "net.minecraft.world.entity.projectile.ThrownTrident",
+                "neoforge": "net.minecraft.world.entity.projectile.ThrownTrident"
+            },
+            "methods": {},
+            "fields": {}
+        },
+        "net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
         },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
             "names": {
@@ -7284,6 +7365,24 @@
                         "neoforge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
                     }
                 },
+                "getMinY": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "isLoaded": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "method_8477",
+                        "forge": "m_46749_",
+                        "neoforge": "m_46749_"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lgu;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;)Z",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Z",
+                        "neoforge": "(Lnet/minecraft/core/BlockPos;)Z"
+                    }
+                },
                 "noCollision": {
                     "names": {
                         "vanilla": "g",
@@ -7331,7 +7430,16 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "playerEntities": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "players": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/world/level/LevelReader": {
             "names": {

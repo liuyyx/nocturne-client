@@ -4485,6 +4485,20 @@
                         "neoforge": "()Z"
                     }
                 },
+                "isNoGravity": {
+                    "names": {
+                        "vanilla": "br",
+                        "fabric": "method_5740",
+                        "forge": "m_20068_",
+                        "neoforge": "isNoGravity"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
+                    }
+                },
                 "isPassenger": {
                     "names": {
                         "vanilla": "cq",
@@ -5038,6 +5052,20 @@
                     "absent": true,
                     "absentReason": "verified"
                 },
+                "getEyeHeight": {
+                    "names": {
+                        "vanilla": "dk",
+                        "fabric": "method_5751",
+                        "forge": "m_20192_",
+                        "neoforge": "getEyeHeight"
+                    },
+                    "signatures": {
+                        "vanilla": "()F",
+                        "fabric": "()F",
+                        "forge": "()F",
+                        "neoforge": "()F"
+                    }
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "n",
@@ -5162,6 +5190,20 @@
                         "fabric": "()F",
                         "forge": "()F",
                         "neoforge": "()F"
+                    }
+                },
+                "getTicksUsingItem": {
+                    "names": {
+                        "vanilla": "gd",
+                        "fabric": "method_6048",
+                        "forge": "m_21252_",
+                        "neoforge": "getTicksUsingItem"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
                     }
                 },
                 "getUseItem": {
@@ -6542,6 +6584,20 @@
                         "neoforge": "Lnet/minecraft/world/inventory/AbstractContainerMenu;"
                     }
                 },
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "bA",
+                        "fabric": "field_18066",
+                        "forge": "f_19816_",
+                        "neoforge": "eyeHeight"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "an",
@@ -6767,10 +6823,30 @@
             "names": {},
             "absentReason": "verified"
         },
+        "net/minecraft/world/entity/projectile/ThrownExperienceBottle": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
         "net/minecraft/world/entity/projectile/ThrownPotion": {
             "absent": true,
             "names": {},
             "absentReason": "verified"
+        },
+        "net/minecraft/world/entity/projectile/ThrownTrident": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
+        "net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull": {
+            "names": {
+                "vanilla": "der",
+                "fabric": "net.minecraft.class_1687",
+                "forge": "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull",
+                "neoforge": "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
             "names": {
@@ -7326,6 +7402,34 @@
                         "neoforge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
                     }
                 },
+                "getMinY": {
+                    "names": {
+                        "vanilla": "K_",
+                        "fabric": "getMinY",
+                        "forge": "m_141937_",
+                        "neoforge": "getMinY"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                },
+                "isLoaded": {
+                    "names": {
+                        "vanilla": "t",
+                        "fabric": "method_8477",
+                        "forge": "m_46749_",
+                        "neoforge": "isLoaded"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lis;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;)Z",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Z",
+                        "neoforge": "(Lnet/minecraft/core/BlockPos;)Z"
+                    }
+                },
                 "noCollision": {
                     "names": {
                         "vanilla": "g",
@@ -7373,7 +7477,16 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "playerEntities": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "players": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/world/level/LevelReader": {
             "names": {

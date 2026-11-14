@@ -2217,19 +2217,29 @@ public final class GameBridge {
 
     /** 实体三轴速度；不可读取时返回零向量。 */
     public double[] entityVelocity(Object entity) {
+        double[] out = new double[3];
+        entityVelocity(entity, out);
+        return out;
+    }
+
+    /** 将实体速度写入调用方复用的三轴数组；不可读取的轴为零。 */
+    public void entityVelocity(Object entity, double[] out) {
         Object delta = callMapped(entity, ClassType.ENTITY, "getDeltaMovement");
         Number x = number(readField(delta, ClassType.VEC3, "x"));
         Number y = number(readField(delta, ClassType.VEC3, "y"));
         Number z = number(readField(delta, ClassType.VEC3, "z"));
         if (x != null && y != null && z != null) {
-            return new double[]{x.doubleValue(), y.doubleValue(), z.doubleValue()};
+            out[0] = x.doubleValue();
+            out[1] = y.doubleValue();
+            out[2] = z.doubleValue();
+            return;
         }
         Number legacyX = number(readField(entity, ClassType.ENTITY, "motionX"));
         Number legacyY = number(readField(entity, ClassType.ENTITY, "motionY"));
         Number legacyZ = number(readField(entity, ClassType.ENTITY, "motionZ"));
-        return new double[]{legacyX == null ? 0.0 : legacyX.doubleValue(),
-                legacyY == null ? 0.0 : legacyY.doubleValue(),
-                legacyZ == null ? 0.0 : legacyZ.doubleValue()};
+        out[0] = legacyX == null ? 0.0 : legacyX.doubleValue();
+        out[1] = legacyY == null ? 0.0 : legacyY.doubleValue();
+        out[2] = legacyZ == null ? 0.0 : legacyZ.doubleValue();
     }
 
     /** 两实体脚部中心距离；不可读取时为正无穷。 */
@@ -2450,6 +2460,104 @@ public final class GameBridge {
         }
         return callMapped(entity, ClassType.LIVING_ENTITY,
                 offHand ? "getOffhandItem" : "getMainHandItem");
+    }
+
+    /**
+     * 当前世界的玩家列表（Trajectories 逐玩家画手持弹道用）。
+     *
+     * <p>1.17+ 为 {@code Level#players()}；1.13–1.16 是同名字段；1.8.9/1.12.2 经别名桥到
+     * {@code World#playerEntities}。三者都缺失时为空列表。
+     */
+    public java.util.List<Object> worldPlayers() {
+        Object world = world();
+        if (world == null) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.List<Object> out = new java.util.ArrayList<Object>();
+        collectWorldPlayers(world, out);
+        return out;
+    }
+
+    /** 将玩家写入调用方复用的列表；无世界时清空结果。 */
+    public void worldPlayers(java.util.List<Object> out) {
+        out.clear();
+        Object world = world();
+        if (world != null) {
+            collectWorldPlayers(world, out);
+        }
+    }
+
+    private void collectWorldPlayers(Object world, java.util.List<Object> out) {
+        Object players = callMapped(world, ClassType.LEVEL, "players");
+        if (players == null) {
+            players = readField(world, ClassType.LEVEL, "players");
+        }
+        if (players == null) {
+            // 1.8.9/1.12.2：玩家集合是 World.playerEntities 字段（经字段别名桥）。
+            players = readField(world, ClassType.LEVEL, "playerEntities");
+        }
+        if (players instanceof java.util.List) {
+            java.util.List<?> list = (java.util.List<?>) players;
+            for (int i = 0; i < list.size(); i++) {
+                Object player = list.get(i);
+                if (player != null) {
+                    out.add(player);
+                }
+            }
+        } else if (players instanceof Iterable) {
+            for (Object player : (Iterable<?>) players) {
+                if (player != null) {
+                    out.add(player);
+                }
+            }
+        } else if (players instanceof Object[]) {
+            for (Object player : (Object[]) players) {
+                if (player != null) {
+                    out.add(player);
+                }
+            }
+        }
+    }
+
+    /**
+     * 实体相对脚部的视线高度；眼睛位置是世界坐标，须减去脚部世界 Y。
+     * 无法读取时使用 {@code getEyeHeight()}、玩家字段或站姿默认值 1.62。
+     */
+    public double entityEyeHeight(Object entity) {
+        Object eye = callMapped(entity, ClassType.ENTITY, "getEyePosition");
+        Number y = number(readField(eye, ClassType.VEC3, "y"));
+        if (y != null) {
+            Object position = callMapped(entity, ClassType.ENTITY, "position");
+            Number feetY = number(readField(position, ClassType.VEC3, "y"));
+            if (feetY != null) {
+                return y.doubleValue() - feetY.doubleValue();
+            }
+        }
+        Object height = callMapped(entity, ClassType.LIVING_ENTITY, "getEyeHeight");
+        Number value = number(height);
+        if (value == null) {
+            value = number(readField(entity, ClassType.PLAYER, "eyeHeight"));
+        }
+        return value == null ? 1.62 : value.doubleValue();
+    }
+
+    /**
+     * 实体已蓄力当前物品的 tick 数（弓的弹道初速用）。1.17+ 为
+     * {@code LivingEntity#getTicksUsingItem()}；旧版用 {@code getUseItemRemainingTicks}
+     * 的剩余计数反推（72000 - 剩余），不在使用或读取失败时为 0。
+     */
+    public int ticksUsingItem(Object entity) {
+        Object direct = callMapped(entity, ClassType.LIVING_ENTITY, "getTicksUsingItem");
+        Number ticks = number(direct);
+        if (ticks != null) {
+            return ticks.intValue();
+        }
+        Object remaining = callMapped(entity, ClassType.LIVING_ENTITY, "getUseItemRemainingTicks");
+        Number left = number(remaining);
+        if (left == null || left.intValue() <= 0) {
+            return 0;
+        }
+        return Math.max(0, 72000 - left.intValue());
     }
 
     /** 掉落物携带的物品栈。 */

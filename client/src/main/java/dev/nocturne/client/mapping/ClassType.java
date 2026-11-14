@@ -212,6 +212,12 @@ public enum ClassType {
     FISHING_HOOK("net.minecraft.world.entity.projectile.FishingHook"),
     /** 箭实体；AntiFireball/Arrows 的目标。 */
     ABSTRACT_ARROW("net.minecraft.world.entity.projectile.AbstractArrow"),
+    /** 三叉戟实体；Trajectories 已发射弹道取三叉戟运动参数。 */
+    THROWN_TRIDENT("net.minecraft.world.entity.projectile.ThrownTrident"),
+    /** 凋灵头颅；Trajectories 的 Ignore Wither Skulls 过滤目标。 */
+    WITHER_SKULL("net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull"),
+    /** 经验瓶实体；已发射弹道归类。 */
+    THROWN_EXPERIENCE_BOTTLE("net.minecraft.world.entity.projectile.ThrownExperienceBottle"),
     /** 玩家队伍及队伍关系判定。 */
     PLAYER_TEAM("net.minecraft.world.scores.PlayerTeam"),
     /** 动物实体分类。 */

@@ -4514,6 +4514,20 @@
                         "neoforge": "()Z"
                     }
                 },
+                "isNoGravity": {
+                    "names": {
+                        "vanilla": "isNoGravity",
+                        "fabric": "isNoGravity",
+                        "forge": "isNoGravity",
+                        "neoforge": "isNoGravity"
+                    },
+                    "signatures": {
+                        "vanilla": "()Z",
+                        "fabric": "()Z",
+                        "forge": "()Z",
+                        "neoforge": "()Z"
+                    }
+                },
                 "isPassenger": {
                     "names": {
                         "vanilla": "isPassenger",
@@ -5061,6 +5075,14 @@
                     "absent": true,
                     "absentReason": "verified"
                 },
+                "getEyeHeight": {
+                    "names": {
+                        "vanilla": "getEyeHeight",
+                        "fabric": "getEyeHeight",
+                        "forge": "getEyeHeight",
+                        "neoforge": "getEyeHeight"
+                    }
+                },
                 "getEyePosition": {
                     "names": {
                         "vanilla": "getEyePosition",
@@ -5185,6 +5207,14 @@
                         "fabric": "()F",
                         "forge": "()F",
                         "neoforge": "()F"
+                    }
+                },
+                "getTicksUsingItem": {
+                    "names": {
+                        "vanilla": "getTicksUsingItem",
+                        "fabric": "getTicksUsingItem",
+                        "forge": "getTicksUsingItem",
+                        "neoforge": "getTicksUsingItem"
                     }
                 },
                 "getUseItem": {
@@ -6559,6 +6589,20 @@
                         "neoforge": "Lnet/minecraft/world/inventory/AbstractContainerMenu;"
                     }
                 },
+                "eyeHeight": {
+                    "names": {
+                        "vanilla": "eyeHeight",
+                        "fabric": "eyeHeight",
+                        "forge": "eyeHeight",
+                        "neoforge": "eyeHeight"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F",
+                        "forge": "F",
+                        "neoforge": "F"
+                    }
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "fallDistance",
@@ -6784,10 +6828,30 @@
             "names": {},
             "absentReason": "verified"
         },
+        "net/minecraft/world/entity/projectile/ThrownExperienceBottle": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
         "net/minecraft/world/entity/projectile/ThrownPotion": {
             "absent": true,
             "names": {},
             "absentReason": "verified"
+        },
+        "net/minecraft/world/entity/projectile/ThrownTrident": {
+            "absent": true,
+            "names": {},
+            "absentReason": "verified"
+        },
+        "net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull": {
+            "names": {
+                "vanilla": "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull",
+                "fabric": "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull",
+                "forge": "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull",
+                "neoforge": "net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
             "names": {
@@ -7343,6 +7407,34 @@
                         "neoforge": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"
                     }
                 },
+                "getMinY": {
+                    "names": {
+                        "vanilla": "getMinY",
+                        "fabric": "getMinY",
+                        "forge": "getMinY",
+                        "neoforge": "getMinY"
+                    },
+                    "signatures": {
+                        "vanilla": "()I",
+                        "fabric": "()I",
+                        "forge": "()I",
+                        "neoforge": "()I"
+                    }
+                },
+                "isLoaded": {
+                    "names": {
+                        "vanilla": "isLoaded",
+                        "fabric": "isLoaded",
+                        "forge": "isLoaded",
+                        "neoforge": "isLoaded"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lnet/minecraft/core/BlockPos;)Z",
+                        "fabric": "(Lnet/minecraft/core/BlockPos;)Z",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Z",
+                        "neoforge": "(Lnet/minecraft/core/BlockPos;)Z"
+                    }
+                },
                 "noCollision": {
                     "names": {
                         "vanilla": "noCollision",
@@ -7384,7 +7476,16 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "playerEntities": {
+                    "absent": true,
+                    "absentReason": "verified"
+                },
+                "players": {
+                    "absent": true,
+                    "absentReason": "verified"
+                }
+            }
         },
         "net/minecraft/world/level/LevelReader": {
             "names": {

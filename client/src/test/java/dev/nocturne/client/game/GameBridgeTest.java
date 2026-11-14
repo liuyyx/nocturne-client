@@ -81,6 +81,54 @@ class GameBridgeTest {
         }
     }
 
+    static final class EyeVector {
+        final double y;
+
+        EyeVector(double y) {
+            this.y = y;
+        }
+    }
+
+    static final class EyePositionEntity {
+        EyeVector getEyePosition() {
+            return new EyeVector(-48.38);
+        }
+
+        EyeVector position() {
+            return new EyeVector(-50.0);
+        }
+    }
+
+    @Test
+    void eyeHeightIsRelativeToFeetRatherThanWorldOrigin() {
+        GameBridge bridge = new GameBridge(null, new IdentityMapping());
+        assertEquals(1.62, bridge.entityEyeHeight(new EyePositionEntity()), 1.0e-6);
+    }
+
+    static final class PlayersWorld {
+        public java.util.List<Object> players() {
+            return java.util.Arrays.<Object>asList("one", null, "two");
+        }
+    }
+
+    @Test
+    void reusablePlayerListReplacesOldValuesAndClearsWithoutWorld() {
+        FakeMinecraft.reset();
+        try {
+            FakeMinecraft.instance.level = new PlayersWorld();
+            GameBridge bridge = new GameBridge(null, new TestMapping(FakeMinecraft.class));
+            java.util.List<Object> players = new java.util.ArrayList<Object>();
+            players.add("stale");
+            bridge.worldPlayers(players);
+            assertEquals(java.util.Arrays.asList("one", "two"), players);
+            FakeMinecraft.instance.level = null;
+            bridge.worldPlayers(players);
+            assertTrue(players.isEmpty());
+        } finally {
+            FakeMinecraft.reset();
+        }
+    }
+
     /**
      * 验证混淆映射下候选类名把映射名排在首位、规范名压尾：四套加载器命名空间按
      * {@code vanilla → fabric → forge → neoforge} 展开（1.8.9 无 NeoForge），
@@ -253,6 +301,11 @@ class GameBridgeTest {
     void legacyVelocityFallsBackToMotionFields() {
         GameBridge bridge = new GameBridge(null, new IdentityMapping());
         assertArrayEquals(new double[]{0.25, -0.5, 0.75}, bridge.entityVelocity(new LegacyEntity()));
+        double[] reused = {9.0, 9.0, 9.0};
+        bridge.entityVelocity(new LegacyEntity(), reused);
+        assertArrayEquals(new double[]{0.25, -0.5, 0.75}, reused);
+        bridge.entityVelocity(new Object(), reused);
+        assertArrayEquals(new double[]{0.0, 0.0, 0.0}, reused);
     }
 
     @Test

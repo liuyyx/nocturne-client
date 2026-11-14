@@ -145,6 +145,13 @@ public final class PlannedBackend implements UiBackend, PlayerModelPreview {
     }
 
     @Override
+    public boolean quad(float x0, float y0, float x1, float y1,
+                        float x2, float y2, float x3, float y3, Color color) {
+        flushNow();
+        return delegate.quad(x0, y0, x1, y1, x2, y2, x3, y3, color);
+    }
+
+    @Override
     public void text(String text, float x, float y, float size, Color color) {
         // 文本由后端立即提交，几何在 endFrame 才 flush；先冲掉之前的矩形，否则
         // 背景会盖在文字上。裁剪状态在 flush 后仍保留，文本仍受当前 scissor 约束。

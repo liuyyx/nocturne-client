@@ -9,6 +9,8 @@ public final class WorldGeometry {
             {0, 1}, {0, 2}, {0, 4}, {1, 3}, {1, 5}, {2, 3},
             {2, 6}, {3, 7}, {4, 5}, {4, 6}, {5, 7}, {6, 7}
     };
+    /** 各侧面从底边沿外向绕序排列；只填充朝向相机的外表面，避免透明面重复叠色。 */
+    private static final int[][] SIDE_EDGES = {{0, 2}, {2, 3}, {3, 1}, {1, 0}};
 
     private WorldGeometry() {
     }
@@ -23,27 +25,68 @@ public final class WorldGeometry {
         }
     }
 
-    /** 用包围盒八角的屏幕包围矩形近似低透明度填充；所有角不可见时不画。 */
+    /** 沿盒体真实投影面填充，不再把屏幕外接矩形涂到方块轮廓之外。 */
     public static void silhouette(OverlayDraw draw, WorldProjection projection,
                                   double minX, double minY, double minZ,
                                   double maxX, double maxY, double maxZ, int argb) {
+        fillBox(draw, projection, minX, minY, minZ, maxX, maxY, maxZ, argb, argb, 1);
+    }
+
+    /** 从世界坐标底面到顶面分八段渐变；每条色带保持同一方块表面的透视边界。 */
+    public static void silhouetteFade(OverlayDraw draw, WorldProjection projection,
+                                      double minX, double minY, double minZ,
+                                      double maxX, double maxY, double maxZ,
+                                      int topArgb, int bottomArgb) {
+        fillBox(draw, projection, minX, minY, minZ, maxX, maxY, maxZ, topArgb, bottomArgb, 8);
+    }
+
+    private static void fillBox(OverlayDraw draw, WorldProjection projection,
+                                double minX, double minY, double minZ,
+                                double maxX, double maxY, double maxZ,
+                                int topArgb, int bottomArgb, int strips) {
+        if (((topArgb | bottomArgb) >>> 24) == 0) return;
         projectBox(projection, minX, minY, minZ, maxX, maxY, maxZ);
-        float left = Float.POSITIVE_INFINITY;
-        float top = Float.POSITIVE_INFINITY;
-        float right = Float.NEGATIVE_INFINITY;
-        float bottom = Float.NEGATIVE_INFINITY;
-        for (WorldProjection.ScreenPoint point : BOX_POINTS) {
-            if (!point.visible) {
-                continue;
+        fillFace(draw, BOX_POINTS[0], BOX_POINTS[1], BOX_POINTS[3], BOX_POINTS[2], bottomArgb);
+        fillFace(draw, BOX_POINTS[4], BOX_POINTS[6], BOX_POINTS[7], BOX_POINTS[5], topArgb);
+        for (int i = 0; i < SIDE_EDGES.length; i++) {
+            WorldProjection.ScreenPoint a = BOX_POINTS[SIDE_EDGES[i][0]];
+            WorldProjection.ScreenPoint b = BOX_POINTS[SIDE_EDGES[i][1]];
+            WorldProjection.ScreenPoint c = BOX_POINTS[SIDE_EDGES[i][1] + 4];
+            WorldProjection.ScreenPoint d = BOX_POINTS[SIDE_EDGES[i][0] + 4];
+            if (!frontFacing(a, b, c, d)) continue;
+            for (int strip = 0; strip < strips; strip++) {
+                float low = (float) strip / strips;
+                float high = (float) (strip + 1) / strips;
+                int color = RenderSupport.blend(bottomArgb, topArgb, (low + high) * 0.5f);
+                draw.quad(along(a, d, low, true), along(a, d, low, false),
+                        along(b, c, low, true), along(b, c, low, false),
+                        along(b, c, high, true), along(b, c, high, false),
+                        along(a, d, high, true), along(a, d, high, false), color);
             }
-            left = Math.min(left, point.x);
-            top = Math.min(top, point.y);
-            right = Math.max(right, point.x);
-            bottom = Math.max(bottom, point.y);
         }
-        if (left != Float.POSITIVE_INFINITY) {
-            draw.rect(left, top, right - left, bottom - top, argb);
+    }
+
+    private static void fillFace(OverlayDraw draw, WorldProjection.ScreenPoint a,
+                                 WorldProjection.ScreenPoint b, WorldProjection.ScreenPoint c,
+                                 WorldProjection.ScreenPoint d, int color) {
+        if (frontFacing(a, b, c, d)) {
+            draw.quad(a.rawX, a.rawY, b.rawX, b.rawY, c.rawX, c.rawY, d.rawX, d.rawY, color);
         }
+    }
+
+    private static boolean frontFacing(WorldProjection.ScreenPoint a, WorldProjection.ScreenPoint b,
+                                       WorldProjection.ScreenPoint c, WorldProjection.ScreenPoint d) {
+        return a.depth > 0 && b.depth > 0 && c.depth > 0 && d.depth > 0
+                && (b.rawX - a.rawX) * (c.rawY - a.rawY)
+                - (b.rawY - a.rawY) * (c.rawX - a.rawX) < -0.0001f;
+    }
+
+    /** 屏幕坐标按深度还原后插值，避免把透视渐变条当成等距屏幕条而扭曲侧边。 */
+    private static float along(WorldProjection.ScreenPoint a, WorldProjection.ScreenPoint b,
+                                float t, boolean horizontal) {
+        double wa = (1.0 - t) * a.depth, wb = t * b.depth;
+        return (float) (((horizontal ? a.rawX : a.rawY) * wa
+                + (horizontal ? b.rawX : b.rawY) * wb) / (wa + wb));
     }
 
     /** 画竖直圆柱的上下圆环与四条母线，用于水晶等竖向盒的低成本近似。 */

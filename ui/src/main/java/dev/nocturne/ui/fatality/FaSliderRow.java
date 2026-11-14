@@ -6,7 +6,7 @@ import java.awt.event.KeyEvent;
 
 /**
  * 数值输入：轨道内从左侧填充的强调色条 + 居中数值；数值被填充分割时由灰转白。
- * 拖拽设置、滚轮微调、右键直接输入。
+ * 拖拽设置、右键直接输入；滚轮始终留给所在面板，避免滑动时误改值。
  */
 final class FaSliderRow extends FaRow implements FaKeySink {
     /** 填充条相对轨道的内缩（设计单位）；让填充看起来像嵌在凹槽里。 */
@@ -120,17 +120,6 @@ final class FaSliderRow extends FaRow implements FaKeySink {
     @Override
     void mouseReleased() {
         dragging = false;
-    }
-
-    @Override
-    boolean mouseScrolled(FaContext ctx, double mx, double my, double amount) {
-        if (!shown || !FaContext.inside(mx, my, fieldX(FaTheme.FIELD_W), fieldY(), FaTheme.FIELD_W,
-                FaTheme.FIELD_H)) {
-            return false;
-        }
-        double step = number.step() > 0 ? number.step() : (number.max() - number.min()) / 100.0;
-        set(number.get() + Math.signum(amount) * step);
-        return true;
     }
 
     /** 按指针位置设定值。 */

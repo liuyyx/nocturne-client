@@ -85,6 +85,7 @@ final class FaStrings {
         put("Bounding Box", "包围盒");
         put("Player Color", "玩家颜色");
         put("Chest Color", "箱子颜色");
+        put("Barrel", "木桶");
         put("Trapped Chest Color", "陷阱箱颜色");
         put("Ender Chest Color", "末影箱颜色");
         put("Hopper Color", "漏斗颜色");

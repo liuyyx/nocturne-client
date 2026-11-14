@@ -767,6 +767,9 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
 
     @Override
     public void endFrame() {
+        // 帧末必须把批次画掉：漏掉就是整屏纯色消失。
+        flushBatch();
+        reclaimFromText();
         if (stateSaved) {
             // 只还原**我们自己改过**的开关位；查询通道不可用时什么都不做，
             // 宁可留着我们的值，也不要盲目把它们全关掉。
@@ -786,9 +789,6 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
             gl.disableScissorTest();
             clipDepth = 0;
         }
-        // 帧末必须把批次画掉：漏掉就是整屏纯色消失。
-        flushBatch();
-        reclaimFromText();
         if (ready) {
             // 解绑到 0（VAO 0 是独立的默认状态，不会改写游戏 VAO 的内容）。
             // 曾经尝试「恢复到进入前的绑定」，但游戏 VAO 1 上的 glBindBuffer 会改写它自己的
@@ -828,6 +828,21 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         i = vertex(i, x + width, y + height);
         i = vertex(i, x, y + height);
         drawSolid(scratch, i, color);
+    }
+
+    @Override
+    public boolean quad(float x0, float y0, float x1, float y1,
+                        float x2, float y2, float x3, float y3, Color color) {
+        if (!ready || color == null) return true;
+        ensureCapacity(6 * FLOATS_PER_VERTEX);
+        int i = vertex(0, x0, y0);
+        i = vertex(i, x1, y1);
+        i = vertex(i, x2, y2);
+        i = vertex(i, x0, y0);
+        i = vertex(i, x2, y2);
+        i = vertex(i, x3, y3);
+        drawSolid(scratch, i, color);
+        return true;
     }
 
     @Override

@@ -2050,6 +2050,20 @@
                         "neoforge": "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Z"
                     }
                 },
+                "destroyBlock": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2899",
+                        "forge": "m_105267_",
+                        "neoforge": "destroyBlock"
+                    },
+                    "signatures": {
+                        "vanilla": "(Ljd;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;)Z",
+                        "forge": "(Lnet/minecraft/core/BlockPos;)Z",
+                        "neoforge": "(Lnet/minecraft/core/BlockPos;)Z"
+                    }
+                },
                 "handleContainerInput": {
                     "absent": true,
                     "absentReason": "verified"

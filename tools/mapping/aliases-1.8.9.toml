@@ -232,6 +232,10 @@ scope = "net/minecraft/network/NetworkManager"
 mcp = "resetBlockRemoving"
 scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
 
+[methods.destroyBlock]
+mcp = "onPlayerDestroyBlock"
+scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
 [methods.startDestroyBlock]
 mcp = "clickBlock"
 scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
@@ -420,6 +424,15 @@ scope = "net/minecraft/util/BlockPos"
 # ClientLevel 面（scope World）只覆盖到 World 自己的声明，锚点学不到它。
 [overrides."net/minecraft/world/level/LevelReader"]
 getBlockState = { mcp = "getBlockState", scope = "net/minecraft/world/IBlockAccess" }
+
+# Vec3i 坐标字段：全局 [fields.x/y/z] 规则的 scope 是 Vec3(Vec3D) 的 xCoord/yCoord/zCoord，
+# 会把 Vec3i 的 y/z 错路由到 NULL_VECTOR（b:Ldf）与 y（c）——1.8.9 真机症状是 Block ESP
+# 容器坐标读不到（getBlockPos 非空但 blockCoordinates 返回 null，无日志无异常）。
+# 按类覆盖回 Vec3i 自己的 MCP 名（x=field_177962_a→a，y=field_177960_b→c，z=field_177961_c→d）。
+[overrides."net/minecraft/core/Vec3i"]
+x = { mcp = "x", scope = "net/minecraft/util/Vec3i" }
+y = { mcp = "y", scope = "net/minecraft/util/Vec3i" }
+z = { mcp = "z", scope = "net/minecraft/util/Vec3i" }
 
 [methods.setFlyingSpeed]
 mcp = "setFlySpeed"

@@ -289,6 +289,10 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.render.BlockHighlightModule());
         modules.register(new dev.nocturne.client.module.modules.render.TntTimerModule());
         modules.register(new dev.nocturne.client.module.modules.render.LogoutSpotsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.BlockEspModule());
+        modules.register(new dev.nocturne.client.module.modules.render.HoleEspModule());
+        modules.register(new dev.nocturne.client.module.modules.render.XrayModule());
+        modules.register(new dev.nocturne.client.module.modules.render.NoGhostBlocksModule());
     }
 
     /** 执行实际安装：装载配置并挂接运行时回调。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */
@@ -300,12 +304,26 @@ public final class NocturneClient {
         moduleConfig.load();
         dev.nocturne.client.module.ModuleKeybinds.install(this);
         gameplayEvents = dev.nocturne.client.event.GameplayEvents.install(this);
+        installScrollEvents();
         world3d = new dev.nocturne.client.render3d.World3DRenderer(this);
         rotations.install(this);
         dev.nocturne.client.runtime.NocturneRuntime.addListener(
                 new dev.nocturne.client.runtime.ModuleTicker(this));
         log("client installed (modules=" + modules.size() + ")");
         // 后续阶段：映射初始化、渲染/输入钩子、HUD。
+    }
+
+    /** 只把 JDK 回调交给 bootstrap 唯一的汇；由客户端自己的加载器构造事件。 */
+    private void installScrollEvents() {
+        try {
+            Class<?> sink = Class.forName("dev.nocturne.bootstrap.KeySink", true, null);
+            sink.getMethod("setScrollListener", java.util.function.DoubleConsumer.class).invoke(null,
+                    (java.util.function.DoubleConsumer) delta -> {
+                        if (!panicked) eventBus.post(new dev.nocturne.client.event.ScrollEvent(delta));
+                    });
+        } catch (Throwable failure) {
+            log("scroll event listener unavailable: " + failure);
+        }
     }
 
     /** 全局事件总线。 */

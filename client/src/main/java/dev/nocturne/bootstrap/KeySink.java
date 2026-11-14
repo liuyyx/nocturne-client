@@ -26,6 +26,11 @@ public final class KeySink {
     private static double pendingScroll;
     /** 游戏自己的滚轮入口是否已被织入累加钩子（是则叠加层不得再顶掉 GLFW 回调）。 */
     private static volatile boolean scrollHookActive;
+    /** JDK 函数接口跨越加载器边界；bootstrap 层不引用 NocturneClient 或事件总线。 */
+    private static volatile java.util.function.DoubleConsumer scrollListener;
+    /** 旧版 Windows 原始滚轮一格为 120，其它 LWJGL2 平台为 1。 */
+    private static final double LEGACY_WHEEL_DIVISOR =
+            System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? 120d : 1d;
 
     private KeySink() {
     }
@@ -75,6 +80,7 @@ public final class KeySink {
     public static void disable() {
         disabled = true;
         blocked = false;
+        scrollListener = null;
     }
 
     /** @return 游戏侧输入入口是否应短路 */
@@ -97,6 +103,24 @@ public final class KeySink {
         synchronized (SCROLL_LOCK) {
             pendingScroll += delta;
         }
+        java.util.function.DoubleConsumer listener = scrollListener;
+        if (listener != null) {
+            try {
+                listener.accept(delta);
+            } catch (Throwable ignored) {
+                // 外部汇失效时仍保留 GUI 累加器，不让异常进入游戏滚轮处理。
+            }
+        }
+    }
+
+    /** 安装客户端拥有的滚轮监听器；回调异常绝不能越过注入点。 */
+    public static void setScrollListener(java.util.function.DoubleConsumer listener) {
+        scrollListener = listener;
+    }
+
+    /** 将旧版原始增量换算成与 GLFW/SDL 相同的滚轮格数。 */
+    public static void accumulateLegacyScroll(int delta) {
+        accumulateScroll(delta / LEGACY_WHEEL_DIVISOR);
     }
 
     /**

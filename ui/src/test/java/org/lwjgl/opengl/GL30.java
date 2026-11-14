@@ -35,6 +35,9 @@ public final class GL30 {
     public static int lastBufferDataFloats = -1;
     public static int lastDrawCount = -1;
     public static int drawArraysCalls;
+    /** 提交几何时的能力位，区分绘制状态与帧结束后应还原的游戏状态。 */
+    public static boolean blendingAtDraw;
+    public static boolean depthAtDraw;
     /** 模拟真实能力位，供原生模型绘制后的 UI 状态恢复断言使用。 */
     public static final java.util.Set<Integer> enabledCaps = new java.util.HashSet<Integer>();
 
@@ -60,6 +63,8 @@ public final class GL30 {
         lastBufferDataFloats = -1;
         lastDrawCount = -1;
         drawArraysCalls = 0;
+        blendingAtDraw = false;
+        depthAtDraw = false;
         enabledCaps.clear();
     }
 
@@ -176,6 +181,8 @@ public final class GL30 {
     public static void glDrawArrays(int mode, int first, int count) {
         drawArraysCalls++;
         lastDrawCount = count;
+        blendingAtDraw = enabledCaps.contains(0x0BE2);
+        depthAtDraw = enabledCaps.contains(0x0B71);
     }
 
     public static void glEnable(int cap) {

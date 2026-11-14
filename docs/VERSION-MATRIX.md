@@ -49,6 +49,31 @@
   的包驱动行为均为**未验证**。1.8.9 映射表缺少独立玩家移除包，不得据此声称该版退服标记可用。
   其余版本真机均未验证。
 
+## Epsilon 视觉移植：阶段 2 扫描类（2026-11-14）
+
+- 注册 `Block ESP`、`Hole ESP`、`Xray`、`No Ghost Blocks` 共 4 个模块（与阶段 1 合计 13 个）。
+  `Block ESP`/`Hole ESP`/`Xray` 为 tick 快照 + 绘制期零反射；`No Ghost Blocks` 接
+  `destroyStop` 布尔钩子（`MultiPlayerGameMode#destroyBlock` 签名已入 66 张表，1.8.9 MCP 桥
+  `onPlayerDestroyBlock`）。
+- **1.8.9 容器坐标根因修复**：`aliases-1.8.9.toml` 的 `[fields.x/y/z]` 规则 scope 指向
+  `Vec3`(Vec3D)，而规则表按成员名全局键控，`Vec3i` 的 y/z 被错路由到 `NULL_VECTOR`（b）与
+  y（c）——症状是 `getBlockPos` 非空但 `blockCoordinates` 返回 null（真机探针
+  `chest=true pos=null`，无日志无异常）。按 srg/fields.csv/javap 三重证据改为按类覆盖：
+  `x=a / y=c / z=d`（forge `field_177962_a/177960_b/177961_c`），1.8.9 表重生成，
+  `generate.py --check`（含 66 版 jar 交叉校验）通过。1.12.2 及其余 legacy/modern 表经核对无此错位。
+- **低帧率性能退化修复**：JFR（`tmp/nocturne-performance-before.jfr`）显示 Render 线程垃圾
+  几乎全部来自 `HoleEspModule.scan` → `GameBridge.callMapped` →
+  `ObfuscatedMapping.methodCandidates` 每格重建候选集合。三处修复：① `ObfuscatedMapping`
+  类/字段/方法候选按（宿主，名）记忆化（表不可变，结果安全共享）；② `GameBridge` 新增
+  调用计划缓存 `(实例类, 宿主, 规范名, arity) → Method`，命中即「校验实参 → 调用」，
+  同键不同实参形状由 `matchesArgs` 把关回落全量解析，`invalidate()` 一并清空；
+  ③ Hole ESP/Xray 扫描循环改为单次取 `world()` 并逐格复用 `BlockPos`（`blockStateAt`/
+  `hasBlockCollision` 新增带 world/坐标重载）。新增 `GameBridgePlanCacheTest` 与
+  `ObfuscatedMappingCandidateCacheTest` 钉住缓存语义。
+- **真机**：1.8.9/1.21.1 场景（GUI 滚动、洞/矿/容器绘制、No Ghost Blocks 冒烟）在修复前已
+  真机跑过，证据 `tmp/epsilon-stage-2-*-1.8.9/1.21.1.log/png`；**本轮性能与 1.8.9 容器坐标
+  修复后未再真机**，这两项的真机复验记为未验证，不得声称通过。
+
 ## Kill Aura 移植（2026-11-12，真机未验证）
 
 - 已按 eps 上游行为重写并注册 `Kill Aura`：Single/Switch 选靶、四类优先级、受限旋转、

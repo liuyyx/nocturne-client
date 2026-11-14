@@ -164,6 +164,20 @@ class ModernRendererPlayerPreviewTest {
         renderer.endFrame();
     }
 
+    @Test
+    void lastTransparentBatchDrawsBeforeTheGameBlendAndDepthStateAreRestored() {
+        ModernRenderer renderer = renderer(new TestMapping(MissingScreen.class));
+        GL30.glDisable(0x0BE2);
+        GL30.glEnable(0x0B71);
+        renderer.beginFrame();
+        renderer.rect(10, 10, 30, 30, dev.nocturne.ui.render.Color.of(0x2800FFFF));
+        renderer.endFrame();
+        assertTrue(GL30.blendingAtDraw, "最后一批半透明填色必须在混合仍开启时提交");
+        assertFalse(GL30.depthAtDraw, "覆盖层不能在游戏深度测试恢复后才提交");
+        assertFalse(GL30.glIsEnabled(0x0BE2), "提交之后才还原游戏原有的混合开关");
+        assertTrue(GL30.glIsEnabled(0x0B71));
+    }
+
     private static ModernRenderer renderer(Mapping mapping) {
         ModernRenderer renderer = new ModernRenderer(ModernGlApi.bind(
                 ModernRendererPlayerPreviewTest.class.getClassLoader()), null,

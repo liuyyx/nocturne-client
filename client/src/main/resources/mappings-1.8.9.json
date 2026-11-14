@@ -1051,6 +1051,18 @@
                         "forge": "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/util/EnumFacing;)Z"
                     }
                 },
+                "destroyBlock": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2899",
+                        "forge": "func_178888_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcj;Lcq;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;)Z",
+                        "forge": "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/util/EnumFacing;)Z"
+                    }
+                },
                 "handleContainerInput": {
                     "absent": true,
                     "absentReason": "verified"
@@ -1921,22 +1933,22 @@
                 "x": {
                     "names": {
                         "vanilla": "a",
-                        "fabric": "field_1352",
-                        "forge": "field_72450_a"
+                        "fabric": "field_11175",
+                        "forge": "field_177962_a"
                     }
                 },
                 "y": {
                     "names": {
-                        "vanilla": "b",
-                        "fabric": "field_1351",
-                        "forge": "field_72448_b"
+                        "vanilla": "c",
+                        "fabric": "field_11174",
+                        "forge": "field_177960_b"
                     }
                 },
                 "z": {
                     "names": {
-                        "vanilla": "c",
-                        "fabric": "field_1350",
-                        "forge": "field_72449_c"
+                        "vanilla": "d",
+                        "fabric": "field_11173",
+                        "forge": "field_177961_c"
                     }
                 }
             }

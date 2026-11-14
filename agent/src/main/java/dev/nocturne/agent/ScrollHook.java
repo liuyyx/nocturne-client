@@ -51,14 +51,16 @@ public final class ScrollHook {
      * @param yoffset 纵向滚轮增量，符号决定方向
      */
     public static void onMouseWheel(double yoffset) {
-        if (yoffset == 0d || Double.isNaN(yoffset) || Double.isInfinite(yoffset)) {
-            return;
+        try {
+            if (yoffset == 0d || Double.isNaN(yoffset) || Double.isInfinite(yoffset)) return;
+            if (!wheelLogged) {
+                wheelLogged = true;
+                System.out.println("[nocturne] game wheel event: dy=" + yoffset);
+            }
+            ScrollState.accumulate(yoffset);
+        } catch (Throwable ignored) {
+            // GLFW 入口与 SDL 入口一样隔离所有失败；原始滚轮处理继续执行。
         }
-        if (!wheelLogged) {
-            wheelLogged = true;
-            System.out.println("[nocturne] game wheel event: dy=" + yoffset);
-        }
-        ScrollState.accumulate(yoffset);
     }
 
     /**

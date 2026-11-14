@@ -33,6 +33,4 @@ abstract class FaBox {
     abstract void mouseDragged(FaContext ctx, double mx, double my);
 
     abstract void mouseReleased();
-
-    abstract boolean mouseScrolled(FaContext ctx, double mx, double my, double amount);
 }

@@ -396,17 +396,12 @@ public final class FaClickGui implements OverlayGui {
         }
         View view = view();
         if (FaContext.inside(x, y, wx, contentY(), FaTheme.SIDEBAR_W, contentH())) {
-            view.sideScroll -= (float) amount * SIDE_ITEM_H * 1.5f;
+            float maximum = Math.max(0f, currentGroups().size() * SIDE_ITEM_H - (contentH() - 16f));
+            view.sideScroll = clamp(view.sideScroll - (float) amount * SIDE_ITEM_H * 1.5f, 0f, maximum);
             return true;
         }
         if (!FaContext.inside(x, y, contentX(), contentY(), contentW(), contentH())) {
             return false;
-        }
-        // 悬停在可步进的控件（滑条）上时，滚轮改值；否则滚动内容。
-        for (FaBox box : currentBoxes()) {
-            if (box.mouseScrolled(ctx, x, y, amount)) {
-                return true;
-            }
         }
         closeAllPopups();
         view.scroll = clamp(view.scroll - (float) amount * 34.0f, 0.0f, view.maxScroll);

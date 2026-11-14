@@ -70,19 +70,6 @@ final class FaBoundsRow extends FaRow {
         dragging = -1;
     }
 
-    @Override
-    boolean mouseScrolled(FaContext ctx, double mx, double my, double amount) {
-        if (!shown || !FaContext.inside(mx, my, fieldX(FaTheme.FIELD_W), fieldY(),
-                FaTheme.FIELD_W, FaTheme.FIELD_H)) {
-            return false;
-        }
-        int side = side(mx);
-        double current = side == 0 ? bounds.get().min() : bounds.get().max();
-        double step = bounds.step() > 0 ? bounds.step() : (bounds.max() - bounds.min()) / 100.0;
-        set(side, current + Math.signum(amount) * step);
-        return true;
-    }
-
     private int side(double mx) {
         return mx <= fieldX(FaTheme.FIELD_W) + TRACK_W + GAP * 0.5 ? 0 : 1;
     }

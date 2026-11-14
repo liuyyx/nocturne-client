@@ -24,11 +24,8 @@ public final class ScrollState {
      * @param delta 增量；{@code 0}、NaN、无穷会被忽略
      */
     public static void accumulate(double delta) {
+        // bootstrap 类不能链接客户端类型；客户端事件由 KeySink 中的 JDK 回调转交。
         KeySink.accumulateScroll(delta);
-        dev.nocturne.client.NocturneClient client = dev.nocturne.client.NocturneClient.get();
-        if (client != null) {
-            client.events().post(new dev.nocturne.client.event.ScrollEvent(delta));
-        }
     }
 
     /**

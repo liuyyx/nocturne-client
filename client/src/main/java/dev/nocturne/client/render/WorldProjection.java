@@ -57,6 +57,9 @@ public final class WorldProjection {
         public float x;
         /** 屏幕 y（像素）。 */
         public float y;
+        /** 未裁剪的屏幕坐标；面图元交给绘制后端裁剪，不能先钳角点而扭曲透视轮廓。 */
+        public float rawX;
+        public float rawY;
         /** 是否可见：在相机前方且视口已就绪。 */
         public boolean visible;
         /** 相机空间的前向深度（米）；不可见时为 0。 */
@@ -210,6 +213,8 @@ public final class WorldProjection {
         out.y = 0f;
         out.visible = false;
         out.depth = 0d;
+        out.rawX = 0f;
+        out.rawY = 0f;
         if (!isReady()) {
             return;
         }
@@ -233,6 +238,8 @@ public final class WorldProjection {
 
         float rawX = (float) ((ndcX + 1d) * 0.5d * viewportWidth);
         float rawY = (float) ((1d - ndcY) * 0.5d * viewportHeight);
+        out.rawX = rawX;
+        out.rawY = rawY;
         // depth 无条件写出：调用方（AABB 8 角包围盒）需要用它判断"在相机前方"，
         // 而 visible 只表示"落在视口 2 倍范围内"，两者的语义不能混。
         out.depth = forward;

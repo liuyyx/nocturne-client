@@ -483,6 +483,19 @@ public final class GlRenderer implements UiBackend, PlayerModelPreview {
     }
 
     @Override
+    public boolean quad(float x0, float y0, float x1, float y1,
+                        float x2, float y2, float x3, float y3, Color color) {
+        if (color == null || color.af() <= 0f) return true;
+        gl.beginQuads(0);
+        gl.color(color.rf(), color.gf(), color.bf(), color.af());
+        gl.vertex(x0, y0);
+        gl.vertex(x1, y1);
+        gl.vertex(x2, y2);
+        gl.vertex(x3, y3);
+        return true;
+    }
+
+    @Override
     public void roundedRect(float x, float y, float width, float height, float radius, Color color) {
         if (width <= 0f || height <= 0f || color == null) {
             return;

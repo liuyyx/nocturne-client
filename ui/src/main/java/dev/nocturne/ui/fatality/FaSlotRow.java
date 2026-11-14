@@ -43,16 +43,6 @@ final class FaSlotRow extends FaRow {
     }
 
     @Override
-    boolean mouseScrolled(FaContext ctx, double mx, double my, double amount) {
-        if (!shown || !FaContext.inside(mx, my, fieldX(FaTheme.FIELD_W), fieldY(),
-                FaTheme.FIELD_W, FaTheme.FIELD_H)) {
-            return false;
-        }
-        slot.set(slot.get() - (int) Math.signum(amount));
-        return true;
-    }
-
-    @Override
     boolean matches(String query) {
         return super.matches(query) || slot.display().contains(query);
     }

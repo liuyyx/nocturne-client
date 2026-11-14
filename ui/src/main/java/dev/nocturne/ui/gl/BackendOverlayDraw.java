@@ -50,6 +50,15 @@ public final class BackendOverlayDraw implements OverlayDraw {
     }
 
     @Override
+    public void quad(float x0, float y0, float x1, float y1,
+                     float x2, float y2, float x3, float y3, int argb) {
+        if (!renderer.quad(x0, y0, x1, y1, x2, y2, x3, y3, Color.of(argb))) {
+            OverlayDraw.super.quad(x0, y0, x1, y1, x2, y2, x3, y3, argb);
+        }
+        drawCalls++;
+    }
+
+    @Override
     public void roundedRect(float x, float y, float width, float height, float radius, int argb) {
         renderer.roundedRect(x, y, width, height, radius, Color.of(argb));
         drawCalls++;

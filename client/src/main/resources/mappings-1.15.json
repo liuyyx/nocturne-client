@@ -1727,6 +1727,18 @@
                         "forge": "(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/Direction;)Z"
                     }
                 },
+                "destroyBlock": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2899",
+                        "forge": "func_187103_a"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lfk;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;)Z",
+                        "forge": "(Lnet/minecraft/util/math/BlockPos;)Z"
+                    }
+                },
                 "handleContainerInput": {
                     "absent": true,
                     "absentReason": "verified"

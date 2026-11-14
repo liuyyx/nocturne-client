@@ -55,6 +55,13 @@ public final class GameBridge {
     /** 已成功解析的映射类；只缓存成功结果，类晚加载时仍可重试。 */
     private final ConcurrentHashMap<ClassType, Class<?>> typeCache =
             new ConcurrentHashMap<ClassType, Class<?>>();
+    /**
+     * 调用计划缓存：（实例类, 映射宿主, 规范名, 实参数）→ 已解析方法。扫描类模块每格反复走同一
+     * 条映射调用，命中后不再拼候选、解析描述符（M-73）；同键不同实参形状由调用前
+     * {@link #matchesArgs} 校验把关，不兼容即回落全量解析，不会把错误重载钉进缓存。
+     */
+    private final ConcurrentHashMap<PlanKey, Method> callPlanCache =
+            new ConcurrentHashMap<PlanKey, Method>();
     /** 构造器按真实类与实参形状缓存；不可变输入记录与 Vec2 共用。 */
     private final ConcurrentHashMap<ConstructorKey, java.lang.reflect.Constructor<?>> constructorCache =
             new ConcurrentHashMap<ConstructorKey, java.lang.reflect.Constructor<?>>();
@@ -378,8 +385,22 @@ public final class GameBridge {
 
     /** 读取指定方块坐标的方块状态；世界未就绪时返回 {@code null}。 */
     public Object blockStateAt(int x, int y, int z) {
-        Object world = world();
-        Object position = blockPos(x, y, z);
+        return blockStateAt(world(), x, y, z);
+    }
+
+    /**
+     * 以调用方持有的世界引用按坐标读取方块状态；批量扫描每格省一次
+     * {@link #world()} 的实例访问与字段反射链。
+     */
+    public Object blockStateAt(Object world, int x, int y, int z) {
+        return blockStateAt(world, blockPos(x, y, z));
+    }
+
+    /**
+     * 以既有坐标对象读取方块状态；批量扫描时坐标实例可在 getBlockState 与
+     * 碰撞查询之间复用，每格只构造一次 BlockPos。
+     */
+    public Object blockStateAt(Object world, Object position) {
         if (world == null || position == null) {
             return null;
         }
@@ -2627,11 +2648,19 @@ public final class GameBridge {
      * 于是任何草地边缘都被判成安全。读不到形状时只认空气或可替换方块，其余保守算碰撞。
      */
     public boolean hasBlockCollision(Object blockState, Object blockPos) {
+        return hasBlockCollision(world(), blockState, blockPos);
+    }
+
+    /**
+     * {@link #hasBlockCollision(Object, Object)} 的批量扫描版本：世界引用由调用方持有，
+     * 避免每格重复走 {@link #world()} 反射链。
+     */
+    public boolean hasBlockCollision(Object world, Object blockState, Object blockPos) {
         if (blockState == null) {
             return true;
         }
         Object shape = callMapped(blockState, ClassType.BLOCK_STATE, "getCollisionShape",
-                world(), blockPos);
+                world, blockPos);
         Object empty = callMapped(shape, ClassType.VOXEL_SHAPE, "isEmpty");
         if (empty instanceof Boolean) {
             return !(Boolean) empty;
@@ -2706,6 +2735,11 @@ public final class GameBridge {
             return null;
         }
         Class<?> type = target.getClass();
+        int arity = args == null ? 0 : args.length;
+        Method plan = callPlanCache.get(new PlanKey(type, owner, canonicalMethod, arity));
+        if (plan != null && matchesArgs(plan, args)) {
+            return Reflect.call(plan, target, args);
+        }
         // 候选逐个试（原版混淆名 → intermediary → SRG → NeoForge → 规范名）：Forge 目标上方法名是
         // SRG（getMinecraft → func_71410_x），只试一个名字会让整条调用链静默返回 null。
         for (MethodCandidate candidate : mapping.methodCandidates(owner, canonicalMethod)) {
@@ -2730,6 +2764,7 @@ public final class GameBridge {
             }
             Method method = findMethodCached(type, candidate.name(), parameters);
             if (method != null) {
+                rememberPlan(type, owner, canonicalMethod, arity, method);
                 return Reflect.call(method, target, args);
             }
         }
@@ -2741,6 +2776,11 @@ public final class GameBridge {
         Class<?> ownerType = type(owner);
         if (ownerType == null) {
             return null;
+        }
+        int arity = args == null ? 0 : args.length;
+        Method plan = callPlanCache.get(new PlanKey(ownerType, owner, canonicalMethod, arity));
+        if (plan != null && Modifier.isStatic(plan.getModifiers()) && matchesArgs(plan, args)) {
+            return Reflect.call(plan, null, args);
         }
         for (MethodCandidate candidate : mapping.methodCandidates(owner, canonicalMethod)) {
             Class<?>[] parameters = candidate.descriptor() == null ? null
@@ -2756,6 +2796,7 @@ public final class GameBridge {
             }
             Method method = findMethodCached(ownerType, candidate.name(), parameters);
             if (method != null && Modifier.isStatic(method.getModifiers())) {
+                rememberPlan(ownerType, owner, canonicalMethod, arity, method);
                 return Reflect.call(method, null, args);
             }
         }
@@ -2769,6 +2810,11 @@ public final class GameBridge {
             return false;
         }
         Class<?> type = target.getClass();
+        int arity = args == null ? 0 : args.length;
+        Method plan = callPlanCache.get(new PlanKey(type, owner, canonicalMethod, arity));
+        if (plan != null && matchesArgs(plan, args)) {
+            return Reflect.callStatus(plan, target, args);
+        }
         for (MethodCandidate candidate : mapping.methodCandidates(owner, canonicalMethod)) {
             String descriptor = candidate.descriptor();
             Class<?>[] parameters = descriptor == null ? null
@@ -2784,6 +2830,7 @@ public final class GameBridge {
             }
             Method method = findMethodCached(type, candidate.name(), parameters);
             if (method != null && Reflect.callStatus(method, target, args)) {
+                rememberPlan(type, owner, canonicalMethod, arity, method);
                 return true;
             }
             if (method != null) {
@@ -2794,12 +2841,38 @@ public final class GameBridge {
                 if (inferred != null && !java.util.Arrays.equals(inferred, parameters)) {
                     Method retry = findMethodCached(type, candidate.name(), inferred);
                     if (retry != null && Reflect.callStatus(retry, target, args)) {
+                        rememberPlan(type, owner, canonicalMethod, arity, retry);
                         return true;
                     }
                 }
             }
         }
         return false;
+    }
+
+    /**
+     * 实参是否与方法的形参逐位兼容；调用计划缓存命中后的调用前校验（分配自由）。
+     * 同键（类, 宿主, 规范名, arity）可能对应多种实参形状，不兼容时必须回落全量解析，
+     * 否则会把首次解析出的重载钉死给所有后续调用。
+     */
+    private static boolean matchesArgs(Method method, Object[] args) {
+        Class<?>[] parameters = method.getParameterTypes();
+        int count = args == null ? 0 : args.length;
+        if (parameters.length != count) {
+            return false;
+        }
+        for (int i = 0; i < parameters.length; i++) {
+            if (!isCompatible(parameters[i], args[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 记录一次成功解析的调用计划；后写覆盖先写，实参形状漂移时以最近一次为准。 */
+    private void rememberPlan(Class<?> type, ClassType owner, String canonicalMethod,
+                              int arity, Method method) {
+        callPlanCache.put(new PlanKey(type, owner, canonicalMethod, arity), method);
     }
 
     /**
@@ -3046,6 +3119,7 @@ public final class GameBridge {
         fieldCache.clear();
         methodCache.clear();
         methodListCache.clear();
+        callPlanCache.clear();
     }
 
     /** 记录一次「现在已尝试过解析」，供 {@link #resolve()} 的 250ms 退避判定使用。 */
@@ -3359,6 +3433,48 @@ public final class GameBridge {
         @Override
         public int hashCode() {
             return (System.identityHashCode(owner) * 31 + name.hashCode()) * 31 + signature.hashCode();
+        }
+    }
+
+    /**
+     * 调用计划缓存键：目标运行类 + 映射宿主 + 规范名 + 实参个数。
+     *
+     * <p>类与宿主走 identity（句柄缓存同款口径，重载类不互相污染）；实参形状不进键——
+     * 兼容性由调用前 {@link #matchesArgs} 逐次校验，校验不过就回落全量解析。
+     */
+    private static final class PlanKey {
+        private final Class<?> type;
+        private final ClassType owner;
+        private final String method;
+        private final int arity;
+
+        PlanKey(Class<?> type, ClassType owner, String method, int arity) {
+            this.type = type;
+            this.owner = owner;
+            this.method = method;
+            this.arity = arity;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof PlanKey)) {
+                return false;
+            }
+            PlanKey key = (PlanKey) other;
+            return arity == key.arity && type == key.type && owner == key.owner
+                    && method.equals(key.method);
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = System.identityHashCode(type);
+            hash = 31 * hash + System.identityHashCode(owner);
+            hash = 31 * hash + method.hashCode();
+            hash = 31 * hash + arity;
+            return hash;
         }
     }
 }

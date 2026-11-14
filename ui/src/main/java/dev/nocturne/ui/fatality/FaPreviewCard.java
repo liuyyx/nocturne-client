@@ -238,8 +238,4 @@ final class FaPreviewCard extends FaBox {
         // 无拖拽交互。
     }
 
-    @Override
-    boolean mouseScrolled(FaContext ctx, double mx, double my, double amount) {
-        return false;
-    }
 }

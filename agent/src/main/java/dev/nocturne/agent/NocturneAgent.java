@@ -1330,6 +1330,12 @@ public final class NocturneAgent {
         registerGate(instrumentation, asmLoader,
                 dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "stopDestroyBlock",
                 "()V", "destroyStop", "V", false, false);
+        boolean destroyBlockWired = registerGate(instrumentation, asmLoader,
+                dev.nocturne.client.mapping.ClassType.MULTI_PLAYER_GAME_MODE, "destroyBlock",
+                "(Lnet/minecraft/core/BlockPos;)Z|(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Z",
+                "destroyBlock", "Z", false, false);
+        publishHookState("destroyBlock", destroyBlockWired,
+                destroyBlockWired ? null : "destroyBlock has no usable hook target");
         registerMoveHooks(instrumentation, asmLoader);
         registerEntityRenderHooks(instrumentation, asmLoader);
         registerXrayHooks(instrumentation, asmLoader);
@@ -2119,7 +2125,7 @@ public final class NocturneAgent {
         return names;
     }
 
-    private static void registerGate(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
+    private static boolean registerGate(Instrumentation instrumentation, EmbeddedAsmLoader asmLoader,
                                      dev.nocturne.client.mapping.ClassType owner, String canonicalMethod,
                                      String fallbackDescriptors, String hookMethod, String hookReturn,
                                      boolean atMethodEnd, boolean passThis) {
@@ -2128,6 +2134,7 @@ public final class NocturneAgent {
                 mapping.classNameCandidates(owner));
         classNames.add(owner.canonicalName());
         boolean patched = false;
+        boolean available = false;
         for (String className : classNames) {
             for (dev.nocturne.client.mapping.MethodCandidate candidate
                     : mapping.methodCandidates(owner, canonicalMethod)) {
@@ -2140,8 +2147,10 @@ public final class NocturneAgent {
                         descriptor, fallbackDescriptors)) {
                     ClassFileTransformer transformer = createGateTransformer(asmLoader, className,
                             candidate.name(), each, hookMethod, hookReturn, atMethodEnd, passThis);
-                    patched |= registerGameplayTransformer(instrumentation, asmLoader, transformer, className,
-                            candidate.name(), each, hookMethod);
+                    int state = registerGameplayTransformerState(instrumentation, asmLoader, transformer,
+                            className, candidate.name(), each, hookMethod);
+                    available |= state != HOOK_FAILED;
+                    patched |= state == HOOK_WOVEN;
                 }
             }
         }
@@ -2149,6 +2158,7 @@ public final class NocturneAgent {
             log("gameplay hook pending or unavailable: " + owner.canonicalName() + "#"
                     + canonicalMethod + " -> " + hookMethod);
         }
+        return available;
     }
 
     /** 按钩子语义选择转换器；输入 tick 必须走捕获/无参消费，不能尾读 this。 */

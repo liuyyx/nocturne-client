@@ -142,6 +142,17 @@ public final class ObfuscatedMapping implements Mapping {
     /** 规范类名（斜杠形式）→ 类记录；构造时已把 {@code null} 归一化为空表。 */
     private final Map<String, ClassData> classes;
 
+    /** 方法候选记忆化缓存：键为「宿主规范类#规范方法名」。表加载后不可变，候选列表可安全共享，
+     *  扫描类模块的热循环不再每次重建候选集合（M-73）。 */
+    private final ConcurrentHashMap<String, List<MethodCandidate>> methodCandidateCache =
+            new ConcurrentHashMap<String, List<MethodCandidate>>();
+    /** 字段名候选记忆化缓存，键形式同 {@link #methodCandidateCache}。 */
+    private final ConcurrentHashMap<String, List<String>> fieldCandidateCache =
+            new ConcurrentHashMap<String, List<String>>();
+    /** 类名候选记忆化缓存，键为规范类名。 */
+    private final ConcurrentHashMap<String, List<String>> classCandidateCache =
+            new ConcurrentHashMap<String, List<String>>();
+
     /** 已成功解析的映射表，按资源路径缓存：同一路径只解析一次（L-107）。 */
     private static final ConcurrentHashMap<String, ObfuscatedMapping> CACHE =
             new ConcurrentHashMap<String, ObfuscatedMapping>();
@@ -288,12 +299,22 @@ public final class ObfuscatedMapping implements Mapping {
         return classCandidates(type.canonicalName());
     }
 
+    private List<String> classCandidates(String canonicalName) {
+        List<String> cached = classCandidateCache.get(canonicalName);
+        if (cached != null) {
+            return cached;
+        }
+        List<String> built = buildClassCandidates(canonicalName);
+        List<String> raced = classCandidateCache.putIfAbsent(canonicalName, built);
+        return raced == null ? built : raced;
+    }
+
     /**
      * 组装某个规范类的候选名：命名空间优先级 → 空值跳过 → 去重 → 末尾追加规范名。
      *
      * <p>表未收录或标记 {@code absent} 时只返回规范名一项（后者附带一次性诊断日志）。
      */
-    private List<String> classCandidates(String canonicalName) {
+    private List<String> buildClassCandidates(String canonicalName) {
         ClassData data = classes.get(key(canonicalName));
         if (data == null) {
             // 表根本没覆盖这个类型：回退为规范名，SRG/Forge 等未混淆构建仍可按可读名反射。
@@ -400,6 +421,18 @@ public final class ObfuscatedMapping implements Mapping {
      */
     @Override
     public List<String> fieldNameCandidates(ClassType owner, String canonicalName) {
+        String cacheKey = owner.canonicalName() + "#" + canonicalName;
+        List<String> cached = fieldCandidateCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        List<String> built = buildFieldNameCandidates(owner, canonicalName);
+        List<String> raced = fieldCandidateCache.putIfAbsent(cacheKey, built);
+        return raced == null ? built : raced;
+    }
+
+    /** 组装字段名候选（原 {@link #fieldNameCandidates} 实现，结果按（宿主类，字段名）记忆化）。 */
+    private List<String> buildFieldNameCandidates(ClassType owner, String canonicalName) {
         MemberData member = fieldMember(owner, canonicalName);
         if (member != null && member.absent) {
             reportAbsentMember(owner.canonicalName(), canonicalName, "field");
@@ -422,15 +455,26 @@ public final class ObfuscatedMapping implements Mapping {
         return names;
     }
 
+    @Override
+    public List<MethodCandidate> methodCandidates(ClassType owner, String canonicalName) {
+        String cacheKey = owner.canonicalName() + "#" + canonicalName;
+        List<MethodCandidate> cached = methodCandidateCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        List<MethodCandidate> built = buildMethodCandidates(owner, canonicalName);
+        List<MethodCandidate> raced = methodCandidateCache.putIfAbsent(cacheKey, built);
+        return raced == null ? built : raced;
+    }
+
     /**
-     * {@inheritDoc}
+     * 构建某方法的候选列表（原 {@link #methodCandidates} 实现，结果按（宿主类，方法名）记忆化）。
      *
      * <p>每条候选都带上<b>该命名空间自己的</b>描述符（同名命名空间缺描述符时为 {@code null}，
      * 调用方按实参类型推断形参）；末尾追加的规范名没有命名空间，描述符恒为 {@code null}。
      * 名字按命名空间优先级去重：两个命名空间同名时以优先级更高者的描述符为准。
      */
-    @Override
-    public List<MethodCandidate> methodCandidates(ClassType owner, String canonicalName) {
+    private List<MethodCandidate> buildMethodCandidates(ClassType owner, String canonicalName) {
         MemberData member = methodMember(owner, canonicalName);
         if (member != null && member.absent) {
             reportAbsentMember(owner.canonicalName(), canonicalName, "method");

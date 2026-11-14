@@ -57,6 +57,12 @@ public interface Renderer {
         return false;
     }
 
+    /** 原生凸四边形；返回 false 时由 OverlayDraw 按真实轮廓逐行填充。 */
+    default boolean quad(float x0, float y0, float x1, float y1,
+                         float x2, float y2, float x3, float y3, Color color) {
+        return false;
+    }
+
 
     /**
      * 绘制一行文本。

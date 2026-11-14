@@ -166,7 +166,17 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public boolean xrayBlock(Object blockState, Object blockPos) {
-        return true;
+        if (!active()) return true;
+        dev.nocturne.client.module.Module module = client.modules().get("Xray");
+        if (!(module instanceof dev.nocturne.client.module.modules.render.XrayModule)
+                || !module.isEnabled()) return true;
+        try {
+            return ((dev.nocturne.client.module.modules.render.XrayModule) module)
+                    .shouldRender(blockState, blockPos);
+        } catch (Throwable t) {
+            warnReceive("xrayBlock", "xray block gate failed; allowing original block: " + t);
+            return true;
+        }
     }
 
     @Override
@@ -235,8 +245,21 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public void destroyStop() {
-        if (active()) {
-            client.events().post(new BlockEvent(BlockEvent.Phase.STOP, null, null));
+        if (active()) client.events().post(new BlockEvent(BlockEvent.Phase.STOP, null, null));
+    }
+
+    @Override
+    public boolean destroyBlock(Object blockPos) {
+        if (!active()) return true;
+        dev.nocturne.client.module.Module module = client.modules().get("No Ghost Blocks");
+        if (!(module instanceof dev.nocturne.client.module.modules.render.NoGhostBlocksModule)
+                || !module.isEnabled()) return true;
+        try {
+            return !((dev.nocturne.client.module.modules.render.NoGhostBlocksModule) module)
+                    .shouldSuppressDestroy();
+        } catch (Throwable t) {
+            warnReceive("destroyBlock", "local block destruction gate failed; preserving original behaviour: " + t);
+            return true;
         }
     }
 

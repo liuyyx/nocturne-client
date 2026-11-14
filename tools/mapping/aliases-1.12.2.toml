@@ -238,6 +238,10 @@ scope = "net/minecraft/network/NetworkManager"
 mcp = "resetBlockRemoving"
 scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
 
+[methods.destroyBlock]
+mcp = "onPlayerDestroyBlock"
+scope = "net/minecraft/client/multiplayer/PlayerControllerMP"
+
 [methods.startDestroyBlock]
 mcp = "clickBlock"
 scope = "net/minecraft/client/multiplayer/PlayerControllerMP"

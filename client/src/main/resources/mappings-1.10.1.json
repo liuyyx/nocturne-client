@@ -1049,6 +1049,16 @@
                         "fabric": "(Lnet/minecraft/class_2338;Lnet/minecraft/class_2350;)Z"
                     }
                 },
+                "destroyBlock": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_2899"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lcm;)Z",
+                        "fabric": "(Lnet/minecraft/class_2338;)Z"
+                    }
+                },
                 "handleContainerInput": {
                     "absent": true,
                     "absentReason": "unverified"

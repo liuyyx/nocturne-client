@@ -302,16 +302,4 @@ final class FaGroup extends FaBox {
         }
     }
 
-    @Override
-    boolean mouseScrolled(FaContext ctx, double mx, double my, double amount) {
-        if (!contains(mx, my)) {
-            return false;
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            if (matched[i] && rows.get(i).mouseScrolled(ctx, mx, my, amount)) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

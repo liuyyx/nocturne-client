@@ -18,6 +18,36 @@ public interface OverlayDraw {
     /** 矩形描边；{@code thickness} 为线宽（像素）。 */
     void outline(float x, float y, float width, float height, float thickness, int argb);
 
+    /** 填充按边界顺序给出的凸四边形；游戏绘制栈用逐行覆盖，GL 后端使用原生图元。 */
+    default void quad(float x0, float y0, float x1, float y1,
+                      float x2, float y2, float x3, float y3, int argb) {
+        if ((argb >>> 24) == 0) return;
+        float top = Math.max(0f, Math.min(Math.min(y0, y1), Math.min(y2, y3)));
+        float bottom = Math.min(height(), Math.max(Math.max(y0, y1), Math.max(y2, y3)));
+        if (!Float.isFinite(top) || !Float.isFinite(bottom)) return;
+        for (int row = (int) Math.floor(top); row < bottom; row++) {
+            float sampleY = row + 0.5f;
+            float a = quadEdgeX(x0, y0, x1, y1, sampleY);
+            float b = quadEdgeX(x1, y1, x2, y2, sampleY);
+            float c = quadEdgeX(x2, y2, x3, y3, sampleY);
+            float d = quadEdgeX(x3, y3, x0, y0, sampleY);
+            float left = Float.POSITIVE_INFINITY, right = Float.NEGATIVE_INFINITY;
+            if (Float.isFinite(a)) { left = Math.min(left, a); right = Math.max(right, a); }
+            if (Float.isFinite(b)) { left = Math.min(left, b); right = Math.max(right, b); }
+            if (Float.isFinite(c)) { left = Math.min(left, c); right = Math.max(right, c); }
+            if (Float.isFinite(d)) { left = Math.min(left, d); right = Math.max(right, d); }
+            left = Math.max(0f, left);
+            right = Math.min(width(), right);
+            if (right > left) rect(left, row, right - left, 1f, argb);
+        }
+    }
+
+    /** 半开边界让顶点只参与一条边，水平边不产生重复交点。 */
+    static float quadEdgeX(float x0, float y0, float x1, float y1, float y) {
+        if (y < Math.min(y0, y1) || y >= Math.max(y0, y1)) return Float.NaN;
+        return x0 + (x1 - x0) * (y - y0) / (y1 - y0);
+    }
+
     /**
      * 两点连线。
      *

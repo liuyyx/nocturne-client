@@ -112,10 +112,6 @@ abstract class FaRow {
     void mouseReleased() {
     }
 
-    boolean mouseScrolled(FaContext ctx, double mx, double my, double amount) {
-        return false;
-    }
-
     /** @return 标签或控件内容是否匹配搜索词（{@code query} 已小写） */
     boolean matches(String query) {
         return label.toLowerCase(Locale.ROOT).contains(query)

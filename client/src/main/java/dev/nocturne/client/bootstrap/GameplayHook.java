@@ -104,6 +104,11 @@ public final class GameplayHook {
         default void destroyStop() {
         }
 
+        /** 返回 false 时仅抑制本地预测移除，开始/完成挖掘发包仍由原版路径执行。 */
+        default boolean destroyBlock(Object blockPos) {
+            return true;
+        }
+
         default Object moveVec(Object entity, Object motion) {
             return motion;
         }
@@ -671,12 +676,25 @@ public final class GameplayHook {
     public static void destroyStop() {
         try {
             Sink current = sink();
-            if (current != null) {
-                current.destroyStop();
-            }
+            if (current != null) current.destroyStop();
         } catch (Throwable t) {
             failure("destroyStop", t);
         }
+    }
+
+    public static boolean destroyBlock(Object blockPos) {
+        try {
+            Sink current = sink();
+            return current == null || current.destroyBlock(blockPos);
+        } catch (Throwable t) {
+            failure("destroyBlock", t);
+            return true;
+        }
+    }
+
+    /** 旧版目标多一个方向实参；钩子的业务只需要位置。 */
+    public static boolean destroyBlock(Object blockPos, Object direction) {
+        return destroyBlock(blockPos);
     }
 
     public static Object moveVec(Object entity, Object motion) {

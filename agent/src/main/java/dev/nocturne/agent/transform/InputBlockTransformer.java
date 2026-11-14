@@ -208,7 +208,9 @@ public final class InputBlockTransformer implements ClassFileTransformer {
                                     || first.getSort() == Type.SHORT
                                     || first.getSort() == Type.CHAR) {
                                 super.visitVarInsn(Opcodes.ILOAD, slot);
-                                super.visitInsn(Opcodes.I2D);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, SCROLL_OWNER,
+                                        "accumulateLegacyScroll", "(I)V", false);
+                                return;
                             } else if (first.getSort() == Type.DOUBLE) {
                                 super.visitVarInsn(Opcodes.DLOAD, slot);
                             } else {

@@ -1,5 +1,7 @@
 package dev.nocturne.client.runtime;
 
+import dev.nocturne.bootstrap.KeySink;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ScrollStateTest {
 
     @BeforeEach
+    @AfterEach
     void reset() {
+        KeySink.setScrollListener(null);
         ScrollState.reset();
     }
 
@@ -53,6 +57,50 @@ class ScrollStateTest {
         ScrollState.accumulate(1d);
 
         assertEquals(1d, ScrollState.take(), 0.0001);
+    }
+
+    @Test
+    void legacyRawWheelUsesNotchesRatherThanJumpingOneHundredTwentyRows() {
+        int notch = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
+                ? 120 : 1;
+        KeySink.accumulateLegacyScroll(notch * 3);
+        KeySink.accumulateLegacyScroll(-notch);
+        assertEquals(2d, ScrollState.take(), 0.0001);
+    }
+
+    @Test
+    void brokenClientListenerCannotCrashTheGameOrLoseTheGuiDelta() {
+        KeySink.setScrollListener(delta -> { throw new LinkageError("client loader unavailable"); });
+        ScrollState.accumulate(5d);
+        assertEquals(5d, ScrollState.take(), 0.0001);
+    }
+
+    @Test
+    void bootstrapOnlyLoaderAccumulatesWithoutAnyClientClass() throws Exception {
+        ClassLoader isolated = new ClassLoader(null) {
+            @Override protected Class<?> findClass(String name) throws ClassNotFoundException {
+                if (!name.equals(ScrollState.class.getName()) && !name.equals(KeySink.class.getName())) {
+                    throw new ClassNotFoundException(name);
+                }
+                String resource = "/" + name.replace('.', '/') + ".class";
+                try (java.io.InputStream input = ScrollStateTest.class.getResourceAsStream(resource)) {
+                    if (input == null) throw new ClassNotFoundException(name);
+                    java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+                    byte[] buffer = new byte[1024];
+                    int count;
+                    while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                    byte[] bytes = output.toByteArray();
+                    return defineClass(name, bytes, 0, bytes.length);
+                } catch (java.io.IOException failure) {
+                    throw new ClassNotFoundException(name, failure);
+                }
+            }
+        };
+        Class<?> state = Class.forName(ScrollState.class.getName(), true, isolated);
+        state.getMethod("accumulate", double.class).invoke(null, 1d);
+        state.getMethod("accumulate", double.class).invoke(null, -.25d);
+        assertEquals(.75d, ((Number) state.getMethod("take").invoke(null)).doubleValue(), 0.0001);
+        assertEquals(0d, ((Number) state.getMethod("take").invoke(null)).doubleValue(), 0.0001);
     }
 
     /**

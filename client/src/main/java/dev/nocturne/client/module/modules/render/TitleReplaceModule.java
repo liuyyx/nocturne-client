@@ -12,14 +12,16 @@ import java.util.regex.Pattern;
 
 /**
  * 替换收到的标题、副标题及动作栏中的指定文本。
- * 跨版本组件样式不能可靠构造，替换结果为单色纯文本；不提供渐变及颜色设置。
+ *
+ * <p>上游降级（{@code EPSILON_PLAN.md} 阶段 6）：删 {@code Gradient}、{@code Color}、
+ * {@code Start Color}、{@code End Color} 四项——组件样式无法跨版本可靠构造，替换结果为单色纯文本。
  * 缺少包映射、组件构造或字段写入能力时保留原包。
  */
 public final class TitleReplaceModule extends GameModule {
     private static final Pattern TARGET = Pattern.compile("(祝你好运\\s*)[^!！\\n]*");
     private final TextValue value = add(new TextValue("Value", "跨圈皇帝萌萌刻", 256));
 
-    public TitleReplaceModule() { super("Title Replace", Category.RENDER); }
+    public TitleReplaceModule() { super("Title Replace", Category.PLAYER); }
 
     @Override protected void onStart() { listen(PacketEvent.class, this::onPacket); }
 

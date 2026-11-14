@@ -13,7 +13,12 @@ import dev.nocturne.client.value.NumberValue;
 
 import java.util.List;
 
-/** 自绘计分板；模糊通道不可用，只有读到有效行才允许接线层隐藏原版。 */
+/**
+ * 自绘计分板；模糊通道不可用，只有读到有效行才允许接线层隐藏原版。
+ *
+ * <p>上游降级（阶段 6）：删 {@code Background Blur}、{@code Blur Strength}、
+ * {@code Shadow Blur} 三项——本仓库无模糊/后处理通道，仅提供实色圆角背景与可选阴影。
+ */
 public final class BetterScoreboardModule extends GameModule implements WorldOverlay {
     private final ColorValue background = add(new ColorValue("Background Color", 0x5A101114));
     private final NumberValue radius = add(new NumberValue("Radius", 4.5, 0, 12, .5));

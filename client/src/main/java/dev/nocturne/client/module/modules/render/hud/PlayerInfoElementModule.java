@@ -19,7 +19,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/** 附近玩家列表；头像、模糊和阴影没有对应绘制能力，图腾仅统计启用后收到的事件。 */
+/**
+ * 附近玩家列表；头像、模糊和阴影没有对应绘制能力，图腾仅统计启用后收到的事件。
+ *
+ * <p>上游降级（阶段 10）：删 {@code Show Heads}——本仓库无玩家头像/皮肤绘制钩子，
+ * 列表行改画 {@code ●} 占位，不注册死开关。
+ */
 public final class PlayerInfoElementModule extends HudElementModule implements RenderSupport.EntityVisitor {
     private final NumberValue scale = add(new NumberValue("Scale", 1, .5, 2, .05));
     private final NumberValue width = add(new NumberValue("Width", 250, 200, 300, 1));

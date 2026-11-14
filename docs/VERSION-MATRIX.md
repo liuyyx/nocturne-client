@@ -135,19 +135,19 @@
 - 1.8.9 水晶描边、YSM 自定义文件加载、图腾触发与其他版本尚未真机验证。
 
 
-## Epsilon 视觉移植：阶段 5–10 与收尾（2026-11-14，真机未验证）
+## Epsilon 视觉移植：阶段 5–10 与收尾（2026-11-14，1.8.9 / 1.21.1 真机注入验收）
 
 - 阶段 5（效果/粒子）`HitParticles/Particles/MasEffects/KillEffect`、阶段 6（屏幕/GUI）
   `BetterChat/BetterScoreboard/TitleReplace/NoRender/Fullbright/WorldTweaks`、
   阶段 7（相机/手/动画）`CameraClip/FreeCamera/SneakTweak/HandView/GameAnimation/ItemPhysics/AspectRatio`、
   阶段 8（后处理降级组）`MotionBlur/AntiAlias/Filter/CustomSky/Shaders`、
-  阶段 9 `Derp/ServerGuard`、阶段 10 九个 HUD 元素（Watermark…Inventory）已注册。
-  `registerModules()` 现共 55 个模块；`Totem Animation` 因无浮空图腾绘制钩子不注册，
-  已重写为诚实占位（不订阅包、不声称等价）。后处理五项为降级占位，不等价于上游后处理链。
+  `registerModules()` 与真机日志 `client installed (modules=51)` 均为 51 个模块（此前记 55 为笔误，已订正）；
+  `Totem Animation` 因无浮空图腾绘制钩子不注册，已重写为诚实占位（不订阅包、不声称等价）。
+  后处理五项为降级占位，不等价于上游后处理链。
 - 静态门禁：`gradle.bat build --console=plain --no-daemon` 实测 `BUILD SUCCESSFUL`
   （含 `verifyJarBytecode`、全量单测）；`python generate.py`（无 `--check` 重生成 26.x 五表）
   + `python generate.py --check` 实测 `all tables up to date`、66 版逐 jar 交叉校验通过。
-- 收尾修复（仅静态 + 单测验证，真机未跑）：`HudElementModuleTest` 改按 id 计数消除全局污染；
+- 收尾修复（静态 + 单测 + 本轮 1.8.9/1.21.1 真机注入验证）：`HudElementModuleTest` 改按 id 计数消除全局污染；
   `GameplayEventsTest` 补 4 个转发强断言；`CameraClip/FreeCamera/ItemPhysics` 的
   `setPosition/setDeltaMovement(DDD)` 改 `bridge.construct(Vec3, x,y,z)` 单参对齐映射描述符；
   `ObfuscatedMapping.isClassAbsent/classNameIn` 的斜杠键修正 + `isMemberAbsent` 补查字段表；
@@ -164,8 +164,44 @@
   文档分叉已订正为实际接线（见阶段 2 与 `.omp/plans/EPSILON_PLAN.md`），不改代码接线。
   A2 的 `markerY`「墙盒下移」与 A7 的 `Derp Jitter cycle==0` 经核对为误报（前者由
   `HoleEspSurfaceTest` 钉住 `isWall` 三连以 y 为中心、`-1` 落墙底正确；后者短路返回 `0f`），未改。
-- **真机未验证**：本轮全部为静态 + 单测 + 构建验收，未执行任何版本注入；上述模块的游戏行为、
-  1.21.1 阶段 4 青色边框来源、20 路审查未并回的 P3/P4 热路径 javadoc 段，均不得记为通过。
+- **真机注入验收（2026-11-14，当前构建 `940215c8` 之后 + 本轮 P1 修复）**：
+  - **1.8.9**（`tmp/epsilon-stage-stage5to10-1.8.9.log`，截图 `tmp/real-189-client.png`）：
+    `client installed (modules=51)`、`frame hook is live`、`GUI opened on install (openGui=true)`、
+    `GUI overlay attached; backend=gl-fixed; input=lwjgl2`、`world3d backend=gl-fixed`、无 `VerifyError`/崩溃；
+    前台窗口客户区 `853x480` 截图像素分析确认自绘 FaClickGui 矩形面板（大面积精确纯色 +
+    淡蓝强调色行）真实绘制。
+  - **1.21.1**（`tmp/epsilon-stage-stage5to10-1.21.1.log`，截图 `tmp/real-1211-client.png`）：
+    `client installed (modules=51)`、`frame hook is live`、`GUI overlay attached; backend=gl-core; input=glfw`、
+    `overlay active; input=glfw; backend=gl-core; screen=FaClickGui`、
+    **`world overlay: drawing (427x240): 69 draw call(s) from 3 module(s), enabled=[Chams,Crystal Chams,Ysm Model]`**；
+    截图像素分析确认 GUI 面板真实绘制。Hud/Screen/Chams 重定义路径的 `VerifyError` 为阶段 0 起
+    记录的既有降级（转换器失败沿用原字节码），不阻断 GUI / 帧钩子 / 覆盖层，本批不声称修复这些路径。
+  - 注入方式：1.8.9 用 JDK8 `tmp/Attach8.java`（`VirtualMachine.loadAgent` 带
+    `mcVersion=1.8.9,openGui=true`），1.21.1 用 JDK21 `probe.AttachArgs`（同参数）；
+    均绕过 CLI 只传 `mcVersion` 的限制，靠 `openGui=true` 在 LWJGL2/GLFW 下直接看到界面。
+- **本轮 scout 归并（A3/A5/A9 三路只读审查）**：
+  - 修 `Fullbright` 夜视 P1（`appliedEffect` 身份守卫导致每 tick 续期失效、停用后残留；
+    改用 `weApplied` 布尔，停用走映射表精确 `removeEffect` 调用）与 `TrajectoriesModule` 的
+    `tickCount` 自动装箱。
+  - 按计划 `EPSILON_PLAN.md:7,265` 把 `TitleReplaceModule` 落 `Category.PLAYER`；
+    按 A5/A9 硬规则补齐 `TitleReplace`/`NoRender`/`BetterChat`/`BetterScoreboard`/
+    `PlayerInfoElement` 的「上游降级」javadoc，逐项点名删除的设置与原因。
+  - A3 的 `worldMinY` 回退 0 建议经 `ProjectileSimulatorTest.unmappedWorldMinimumDoesNotStopNegativeHeightTrajectory`
+    判定为误报并撤销：`getMinY` 规范名在 1.21.1 标 `absent(verified)` 但该版世界有负 Y，
+    未映射时 `-Infinity` 是有意的安全默认，避免误截断负高度弹道。
+  - **未改（审查建议 / 已知限制，不得记为完成）**：Chams.accept 复用与 Ysm `originalAllowed`
+    恒 true 接线（语义不同 / 计划允许降级）；A3/A5/A9 的热路径每 tick 分配（BetterScoreboard
+    `new Line[]`、Trajectories DDA `new BlockPos`、itemDescription/itemDisplayName、Chams `int[3]`、
+    HandView 每帧 `construct`）、PopChams 包线程遍历实体；A9 的映射门禁垃圾键
+    （`east(int)`/`getFOVModifier(float,boolean)` 等字面字段键）、1.8.9/1.12.2 legacy 别名缺失
+    （TitleReplace actionbar、HandView 主手/挥臂）、`ObfuscatedMapping` 忽略 `absentReason`、
+    `TotemAnimationModule` 诚实占位半接线。这些改动会触发 66 表重生成或改运行期解析/热路径，
+    超出本轮「实机验收 + P1 修复」范围，需单独一轮真机复验。
+
+- **边界**：仅 1.8.9 / 1.21.1 两版做了本轮构建的注入 + GUI 可见性 + 覆盖层绘制验收；
+  55→51 笔误已订正；其余 64 版真机未跑；阶段 5–10 各模块的逐项游戏行为（粒子形态、
+  HUD 内容、后处理降级观感、图腾触发）、1.21.1 阶段 4 青色边框来源、上述未并回的审查项，
+  均不得记为通过。
 
 ## Kill Aura 移植（2026-11-12，真机未验证）
 

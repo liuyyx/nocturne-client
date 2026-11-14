@@ -5,7 +5,6 @@ import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
 import dev.nocturne.client.value.ModeValue;
-import java.util.Map;
 
 /**
  * 提高 gamma 或添加夜视；已有夜视由游戏保管，不覆盖也不移除。
@@ -16,7 +15,8 @@ public final class FullbrightModule extends GameModule {
     private Object originalGamma;
     private boolean gammaApplied;
     private Object effectPlayer;
-    private Object appliedEffect;
+    /** 是否由本模块加过夜视；玩家自带夜视不覆盖、也不移除。 */
+    private boolean weApplied;
     private boolean potionFallback;
     private boolean warned;
 
@@ -25,6 +25,8 @@ public final class FullbrightModule extends GameModule {
     @Override protected void onStart() {
         potionFallback = false;
         warned = false;
+        weApplied = false;
+        effectPlayer = null;
         update();
     }
 
@@ -34,7 +36,7 @@ public final class FullbrightModule extends GameModule {
         GameBridge bridge = bridge();
         if (bridge == null) return;
         if (!"Potion".equals(mode.get())) {
-            removeOwnEffect(bridge);
+            cleanup(bridge);
             potionFallback = false;
             applyGamma(bridge);
             return;
@@ -47,18 +49,12 @@ public final class FullbrightModule extends GameModule {
         Object player = bridge.player();
         if (player == null) return;
         if (effectPlayer != null && effectPlayer != player) {
-            removeOwnEffect(bridge);
-        }
-        Object effects = bridge.activeEffects();
-        if (!(effects instanceof Iterable) && !(effects instanceof Map)) {
-            fallback(bridge);
-            return;
-        }
-        if (appliedEffect != null && !containsIdentity(effects, appliedEffect)) {
-            appliedEffect = null;
+            // 换了玩家实体：旧实体已不可达，夜视随其消失；只重置标记，不对新玩家误移除。
+            weApplied = false;
             effectPlayer = null;
         }
-        if (appliedEffect == null && bridge.hasEffect("NIGHT_VISION")) return;
+        // 本模块加过就每 tick 续期；玩家自带（weApplied=false）且有夜视时不碰。
+        if (!weApplied && bridge.hasEffect("NIGHT_VISION")) return;
         Object nightVision = bridge.staticField(ClassType.MOB_EFFECTS, "NIGHT_VISION");
         Object instance = nightVision == null ? null
                 : bridge.construct(ClassType.MOB_EFFECT_INSTANCE, nightVision, 100, 0, false, false);
@@ -68,21 +64,14 @@ public final class FullbrightModule extends GameModule {
                     ((Number) id).intValue(), 100, 0, false, false);
         }
         if (instance == null || !bridge.callMappedStatus(player, ClassType.LIVING_ENTITY, "addEffect", instance)) {
-            removeOwnEffect(bridge);
+            cleanup(bridge);
             fallback(bridge);
             return;
         }
-        if (appliedEffect == null) {
-            effectPlayer = player;
-            appliedEffect = instance;
-        }
+        effectPlayer = player;
+        weApplied = true;
     }
 
-    private static boolean containsIdentity(Object effects, Object expected) {
-        Iterable<?> values = effects instanceof Map ? ((Map<?, ?>) effects).values() : (Iterable<?>) effects;
-        for (Object effect : values) if (effect == expected) return true;
-        return false;
-    }
 
     private void fallback(GameBridge bridge) {
         potionFallback = true;
@@ -115,17 +104,16 @@ public final class FullbrightModule extends GameModule {
         }
     }
 
-    private void removeOwnEffect(GameBridge bridge) {
-        Object player = effectPlayer;
-        Object instance = appliedEffect;
+    /** 停用 / 降级时移除本模块加过的夜视；玩家自带夜视（weApplied=false）不动。 */
+    private void cleanup(GameBridge bridge) {
+        boolean applied = weApplied;
+        weApplied = false;
         effectPlayer = null;
-        appliedEffect = null;
-        if (player == null || instance == null || player != bridge.player()) return;
-        Object effects = bridge.activeEffects();
-        if (!(effects instanceof Iterable) && !(effects instanceof Map)) return;
-        if (!containsIdentity(effects, instance)) return;
+        Object player = applied ? bridge.player() : null;
+        if (player == null) return;
         Object effect = bridge.staticField(ClassType.MOB_EFFECTS, "NIGHT_VISION");
         if (effect == null) return;
+        // 走映射表描述符精确调用，不用反射遍历 getMethods() 的宽匹配。
         if (!bridge.callMappedStatus(player, ClassType.LIVING_ENTITY, "removeEffect", effect)) {
             Object id = bridge.readField(effect, ClassType.MOB_EFFECT, "id");
             if (id instanceof Number) bridge.callMappedStatus(player, ClassType.LIVING_ENTITY,
@@ -136,7 +124,7 @@ public final class FullbrightModule extends GameModule {
     @Override protected void onStop() {
         GameBridge bridge = bridge();
         if (bridge == null) return;
-        removeOwnEffect(bridge);
+        cleanup(bridge);
         restoreGamma(bridge);
         potionFallback = false;
     }

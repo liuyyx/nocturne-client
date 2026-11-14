@@ -11,7 +11,9 @@ import java.util.Arrays;
 import java.util.Collections;
 
 /**
- * 实体、雾与天气过滤。其余上游选项没有对应注入点：
+ * 实体、雾与天气过滤。
+ *
+ * <p>上游降级（阶段 6）：其余 30+ 开关因本仓库无对应渲染注入点，一律不提供（不注册死开关）：
  * Overlay：portal、spyglass、nausea、fire、water、vignette、totem、eat particles、enchant glint；
  * HUD：boss bar、scoreboard、chat、crosshair、title、held item name、obfuscation、potion icons；
  * World：world border、blindness、darkness、block break overlay、beacon beams、cave culling、

@@ -325,14 +325,14 @@ public final class TrajectoriesModule extends GameModule implements WorldOverlay
                     continue;
                 }
                 bridge.entityVelocity(entity, velocity);
-                Number tickCount = number(bridge.readField(entity, ClassType.ENTITY, "tickCount"));
+                double tickCount = number(bridge.readField(entity, ClassType.ENTITY, "tickCount"));
                 boolean inWater = Boolean.TRUE.equals(
                         bridge.callMapped(entity, ClassType.ENTITY, "isInWater"));
                 boolean noGravity = Boolean.TRUE.equals(
                         bridge.callMapped(entity, ClassType.ENTITY, "isNoGravity"));
                 if (!simulator.configureFired(data, position[0], position[1], position[2],
                         velocity[0], velocity[1], velocity[2], inWater,
-                        tickCount == null ? 0 : tickCount.intValue(), noGravity)) {
+                        (int) tickCount, noGravity)) {
                     continue;
                 }
                 Object owner = bridge.callMapped(entity, ClassType.THROWABLE_PROJECTILE, "getOwner");
@@ -689,11 +689,11 @@ public final class TrajectoriesModule extends GameModule implements WorldOverlay
             return minY;
         }
     }
-
     private static double worldMinY(GameBridge bridge, Object world) {
         Object value = bridge.callMapped(world, ClassType.LEVEL, "getMinY");
         Number number = value instanceof Number ? (Number) value : null;
-        // 未映射时不能假定世界底部为 0；模拟步数已有上限。
+        // 未映射时不能假定世界底部为 0（1.18+ 有负 Y 但 getMinY 规范名可能缺映射）；
+        // 用 -Infinity 放行，靠模拟步数上限与 isLoaded 门控收尾，避免误截断负高度弹道。
         return number == null ? Double.NEGATIVE_INFINITY : number.doubleValue();
     }
 

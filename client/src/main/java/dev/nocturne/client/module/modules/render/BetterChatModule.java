@@ -11,7 +11,12 @@ import dev.nocturne.client.value.BooleanValue;
 import dev.nocturne.client.value.ColorValue;
 import dev.nocturne.client.value.NumberValue;
 
-/** 聊天界面叠加背景；不改原版聊天背景和文字透明度，也不提供模糊通道。 */
+/**
+ * 聊天界面叠加背景；不改原版聊天背景和文字透明度，也不提供模糊通道。
+ *
+ * <p>上游降级（阶段 6）：删 {@code Blur Strength}、{@code Shadow Blur} 两项——无模糊/后处理通道；
+ * 原版聊天背景与文字透明度改动需要 {@code ChatComponent} 钩子，本仓库没有对应注入点。
+ */
 public final class BetterChatModule extends GameModule implements WorldOverlay {
     private final ColorValue background = add(new ColorValue("Background Color", 0x96101114));
     private final ColorValue inputBackground = add(new ColorValue("Input Background Color", 0xB9101114));

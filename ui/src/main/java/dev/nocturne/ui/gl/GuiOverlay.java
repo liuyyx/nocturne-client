@@ -132,6 +132,8 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     private boolean worldOverlaySkipLogged;
     /** 首次真的画出覆盖层时是否已记过（只记一次）。 */
     private boolean worldOverlayDrawLogged;
+    /** 整帧后处理异常是否已记录过（限流，避免每帧刷屏）。 */
+    private boolean frameEffectsErrorLogged;
 
     /** 可打印键上一帧是否按下，下标与 {@link KeyChars#keys()} 对齐。 */
     private final boolean[] charWasDown;
@@ -1172,7 +1174,8 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         // 世界覆盖层（ESP/Tracers/NameTags/StorageESP…）与界面无关，必须单独计入：
         // 界面关着时本方法此前直接 return，于是 beginFrame() 根本不执行、覆盖层一帧都不画——
         // 世界里什么都看不到，日志里也没有半句线索。
-        if (!needsFrame(guiOpen, hasWorldOverlays(), !hudLines.isEmpty(), !hudElements.isEmpty())) {
+        if (!needsFrame(guiOpen, hasWorldOverlays(), !hudLines.isEmpty(), !hudElements.isEmpty(),
+                frameEffects.active(NocturneClient.get()))) {
             return;
         }
         Integer wantedScale = Integer.getInteger("nocturne.ui.scale", 0);
@@ -1192,9 +1195,17 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             // 这里再同步一次：输入处理用上一帧尺寸可以接受，但绘制尺寸必须是当帧的——否则固定
             // 管线后端会按 0 尺寸布局，整个界面等于空框。
             gui.setViewport(renderer.width(), renderer.height());
-            // 世界覆盖物画在最底下：GUI 菜单要盖住它们，否则 ESP 的框会糊在面板上。
             long overlayStart = System.nanoTime();
-            frameEffects.render(overlayDraw, NocturneClient.get());
+            // 世界覆盖物画在最底下：GUI 菜单要盖住它们，否则 ESP 的框会糊在面板上。
+            try {
+                frameEffects.render(overlayDraw, NocturneClient.get());
+            } catch (Throwable t) {
+                // 整帧后处理异常不得中断本帧后续覆盖层与 HUD 绘制（注入帧代码异常不外泄）。
+                if (!frameEffectsErrorLogged) {
+                    frameEffectsErrorLogged = true;
+                    System.out.println("[nocturne] frame effects failed: " + t);
+                }
+            }
             drawWorldOverlays();
             lastOverlayNanos = System.nanoTime() - overlayStart;
             drawHudLines();
@@ -1348,19 +1359,21 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
     }
 
     /**
-     * 本帧是否需要开绘制面：GUI 打开、有启用中的世界覆盖层、或有 HUD 行，任一成立都必须
-     * beginFrame + drawWorldOverlays + endFrame。否则「界面关闭 + 有 ESP + hudLines 为空」会被
-     * 误判成无事可做，1.8.9 真机上表现为模块已启用但世界覆盖层一帧都不画。
+     * 本帧是否需要开绘制面：GUI 打开、有启用中的世界覆盖层、有 HUD 行，或有整帧后处理模块
+     * （Motion Blur / Anti Alias）启用，任一成立都必须 beginFrame + drawWorldOverlays + endFrame。
+     * 否则「界面关闭 + 有 ESP + hudLines 为空」会被误判成无事可做，1.8.9 真机上表现为模块已启用
+     * 但世界覆盖层一帧都不画；纯 GameModule 的后期模块单开也会因整帧早退而永远不执行。
      *
-     * @param guiOpen          自绘 GUI 是否打开
-     * @param hasWorldOverlays 是否存在启用中的 {@link WorldOverlay} 模块
-     * @param hasHudLines      HUD 行汇是否非空
-     * @param hasHudElements   复合 HUD 元素汇是否非空
+     * @param guiOpen            自绘 GUI 是否打开
+     * @param hasWorldOverlays   是否存在启用中的 {@link WorldOverlay} 模块
+     * @param hasHudLines        HUD 行汇是否非空
+     * @param hasHudElements     复合 HUD 元素汇是否非空
+     * @param frameEffectsActive 是否有整帧后处理模块启用
      * @return true 表示本帧必须进入绘制
      */
     static boolean needsFrame(boolean guiOpen, boolean hasWorldOverlays, boolean hasHudLines,
-                              boolean hasHudElements) {
-        return guiOpen || hasWorldOverlays || hasHudLines || hasHudElements;
+                              boolean hasHudElements, boolean frameEffectsActive) {
+        return guiOpen || hasWorldOverlays || hasHudLines || hasHudElements || frameEffectsActive;
     }
 
     /**
@@ -1410,6 +1423,15 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
                         + enabledOverlayNames(client) + "])");
             }
             return;
+        }
+        // Aspect Ratio 只改自绘覆盖层的横向投影；每帧按模块开关写一次,关闭时清空覆写。
+        {
+            Module aspect = client.modules().get("Aspect Ratio");
+            camera.projection().setAspectOverride(
+                    aspect instanceof dev.nocturne.client.module.modules.render.AspectRatioModule
+                            && aspect.isEnabled()
+                            ? ((dev.nocturne.client.module.modules.render.AspectRatioModule) aspect).ratio()
+                            : 0f);
         }
         long beforeDrawCalls = overlayDraw.drawCalls();
         int drawn = 0;

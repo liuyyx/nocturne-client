@@ -98,6 +98,11 @@ version = "1.12.2"
 "net/minecraft/client/gui/screens/inventory/InventoryScreen" = "net/minecraft/client/gui/inventory/GuiInventory"
 "net/minecraft/client/gui/screens/inventory/CraftingScreen" = "net/minecraft/client/gui/inventory/GuiCrafting"
 "net/minecraft/client/gui/screens/inventory/CreativeModeInventoryScreen" = "net/minecraft/client/gui/inventory/GuiContainerCreative"
+"net/minecraft/network/protocol/game/ClientboundEntityEventPacket" = "net/minecraft/network/play/server/SPacketEntityStatus"
+"net/minecraft/network/protocol/game/ClientboundExplodePacket" = "net/minecraft/network/play/server/SPacketExplosion"
+"net/minecraft/network/protocol/game/ClientboundSetTitleTextPacket" = "net/minecraft/network/play/server/SPacketTitle"
+"net/minecraft/network/protocol/game/ClientboundSetSubtitleTextPacket" = "net/minecraft/network/play/server/SPacketTitle"
+"net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket" = "net/minecraft/network/play/server/SPacketTitle"
 # Network packets: the 1.8.9 protocol classes are shaped differently
 # (C03PacketPlayer has no accessors; S12 exposes int motion, not a Vec3), so the
 # class names are usable for `resolve_class`/`is_instance_of` but the packet
@@ -646,6 +651,10 @@ scope = "net/minecraft/entity/player/PlayerCapabilities"
 mcp = "hurtTime"
 scope = "net/minecraft/entity/EntityLivingBase"
 
+[fields.hurtDuration]
+mcp = "maxHurtTime"
+scope = "net/minecraft/entity/EntityLivingBase"
+
 [fields.fallDistance]
 mcp = "fallDistance"
 scope = "net/minecraft/entity/Entity"
@@ -737,10 +746,6 @@ unsupported = "不死图腾是 1.11 加入的；1.8.9 Items 无该字段（且 1
 # --------------------------------------------------------------------------
 
 [overrides."net/minecraft/client/multiplayer/ClientLevel"]
-rainLevel = { mcp = "rainingStrength", scope = "net/minecraft/world/World" }
-thunderLevel = { mcp = "thunderingStrength", scope = "net/minecraft/world/World" }
-setRainLevel = { mcp = "setRainStrength", scope = "net/minecraft/world/World" }
-setThunderLevel = { mcp = "setThunderStrength", scope = "net/minecraft/world/World" }
 levelData = { mcp = "worldInfo", scope = "net/minecraft/world/World" }
 getScoreboard = { mcp = "getScoreboard", scope = "net/minecraft/world/World" }
 
@@ -869,6 +874,7 @@ hasLineOfSight = { mcp = "canEntityBeSeen", scope = "net/minecraft/entity/Entity
 getAbsorptionAmount = { mcp = "getAbsorptionAmount", scope = "net/minecraft/entity/EntityLivingBase" }
 getArmorValue = { mcp = "getTotalArmorValue", scope = "net/minecraft/entity/EntityLivingBase" }
 hurtTime = { mcp = "hurtTime", scope = "net/minecraft/entity/EntityLivingBase" }
+hurtDuration = { mcp = "maxHurtTime", scope = "net/minecraft/entity/EntityLivingBase" }
 jumpTicks = { mcp = "jumpTicks", scope = "net/minecraft/entity/EntityLivingBase" }
 getActiveEffects = { mcp = "getActivePotionEffects", scope = "net/minecraft/entity/EntityLivingBase" }
 
@@ -952,6 +958,7 @@ caughtEntity = { mcp = "caughtEntity", scope = "net/minecraft/entity/projectile/
 
 [overrides."net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket"]
 getPos = { mcp = "getBlockPosition", scope = "net/minecraft/network/play/server/SPacketBlockChange" }
+getBlockState = { mcp = "getBlockState", scope = "net/minecraft/network/play/server/SPacketBlockChange" }
 
 [overrides."net/minecraft/world/effect/MobEffects"]
 NAUSEA = { mcp = "NAUSEA", scope = "net/minecraft/init/MobEffects" }
@@ -1008,6 +1015,10 @@ getColorValue = { mcp = "getColorValue", scope = "net/minecraft/util/EnumChatFor
 colorValue = { mcp = "colorValue", scope = "net/minecraft/util/EnumChatFormatting" }
 
 [overrides."net/minecraft/world/level/Level"]
+rainLevel = { mcp = "rainingStrength", scope = "net/minecraft/world/World" }
+thunderLevel = { mcp = "thunderingStrength", scope = "net/minecraft/world/World" }
+setRainLevel = { mcp = "setRainStrength", scope = "net/minecraft/world/World" }
+setThunderLevel = { mcp = "setThunderStrength", scope = "net/minecraft/world/World" }
 checkNoEntityCollision = { mcp = "checkNoEntityCollision", srg = "func_72917_a", scope = "net/minecraft/world/World", note = "固定到两参重载 (AABB,Entity)：一参重载把盒子覆盖到的玩家自己算成碰撞" }
 checkBlockCollision = { mcp = "checkBlockCollision", scope = "net/minecraft/world/World" }
 players = { unsupported = "1.12.2 玩家集合是 World.playerEntities 字段，没有无参玩家集合方法" }
@@ -1187,3 +1198,21 @@ scope = "net/minecraft/entity/Entity"
 [fields.onGround]
 mcp = "onGround"
 scope = "net/minecraft/entity/Entity"
+
+[overrides."net/minecraft/network/protocol/game/ClientboundEntityEventPacket"]
+getEventId = { mcp = "getOpCode", scope = "net/minecraft/network/play/server/SPacketEntityStatus" }
+entityId = { mcp = "entityId", scope = "net/minecraft/network/play/server/SPacketEntityStatus" }
+
+[overrides."net/minecraft/network/protocol/game/ClientboundExplodePacket"]
+getX = { mcp = "getX", scope = "net/minecraft/network/play/server/SPacketExplosion" }
+getY = { mcp = "getY", scope = "net/minecraft/network/play/server/SPacketExplosion" }
+getZ = { mcp = "getZ", scope = "net/minecraft/network/play/server/SPacketExplosion" }
+
+[overrides."net/minecraft/network/protocol/game/ClientboundSetTitleTextPacket"]
+text = { mcp = "message", scope = "net/minecraft/network/play/server/SPacketTitle" }
+
+[overrides."net/minecraft/network/protocol/game/ClientboundSetSubtitleTextPacket"]
+text = { mcp = "message", scope = "net/minecraft/network/play/server/SPacketTitle" }
+
+[overrides."net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket"]
+text = { mcp = "message", scope = "net/minecraft/network/play/server/SPacketTitle" }

@@ -100,6 +100,16 @@ public final class BackendOverlayDraw implements OverlayDraw {
         return renderer.supportsTextures();
     }
 
+    @Override
+    public void pushClip(float x, float y, float width, float height) {
+        renderer.pushClip(x, y, width, height);
+    }
+
+    @Override
+    public void popClip() {
+        renderer.popClip();
+    }
+
     /**
      * 能力位由后端自己声明（{@link UiBackend#reliableAlphaBlend()}），适配器不再按
      * {@code instanceof GlRenderer} 猜：以前那种写法对任何**未知**后端都是 fail-open，

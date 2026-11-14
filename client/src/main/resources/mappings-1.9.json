@@ -1018,30 +1018,6 @@
                         "fabric": "()Lnet/minecraft/class_269;",
                         "forge": "()Lnet/minecraft/scoreboard/Scoreboard;"
                     }
-                },
-                "setRainLevel": {
-                    "names": {
-                        "vanilla": "k",
-                        "fabric": "method_8519",
-                        "forge": "func_72894_k"
-                    },
-                    "signatures": {
-                        "vanilla": "(F)V",
-                        "fabric": "(F)V",
-                        "forge": "(F)V"
-                    }
-                },
-                "setThunderLevel": {
-                    "names": {
-                        "vanilla": "i",
-                        "fabric": "method_8496",
-                        "forge": "func_147442_i"
-                    },
-                    "signatures": {
-                        "vanilla": "(F)V",
-                        "fabric": "(F)V",
-                        "forge": "(F)V"
-                    }
                 }
             },
             "fields": {
@@ -1058,28 +1034,6 @@
                     "descriptors": {
                         "vanilla": "Lazh;",
                         "fabric": "Lnet/minecraft/class_31;"
-                    }
-                },
-                "rainLevel": {
-                    "names": {
-                        "vanilla": "o",
-                        "fabric": "field_9235",
-                        "forge": "field_73004_o"
-                    },
-                    "descriptors": {
-                        "vanilla": "F",
-                        "fabric": "F"
-                    }
-                },
-                "thunderLevel": {
-                    "names": {
-                        "vanilla": "q",
-                        "fabric": "field_9234",
-                        "forge": "field_73017_q"
-                    },
-                    "descriptors": {
-                        "vanilla": "F",
-                        "fabric": "F"
                     }
                 }
             }
@@ -2335,6 +2289,18 @@
                 "forge": "net.minecraft.network.play.server.SPacketBlockChange"
             },
             "methods": {
+                "getBlockState": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_11308",
+                        "forge": "func_180728_a"
+                    },
+                    "signatures": {
+                        "vanilla": "()Larc;",
+                        "fabric": "()Lnet/minecraft/class_0_378;",
+                        "forge": "()Lnet/minecraft/block/state/IBlockState;"
+                    }
+                },
                 "getPos": {
                     "names": {
                         "vanilla": "b",
@@ -2357,10 +2323,6 @@
                 "forge": "net.minecraft.network.play.server.SPacketEntityStatus"
             },
             "methods": {
-                "getEntityId": {
-                    "absent": true,
-                    "absentReason": "unverified"
-                },
                 "getEventId": {
                     "names": {
                         "vanilla": "a",
@@ -2374,7 +2336,19 @@
                     }
                 }
             },
-            "fields": {}
+            "fields": {
+                "entityId": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "field_12175",
+                        "forge": "field_149164_a"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I"
+                    }
+                }
+            }
         },
         "net/minecraft/network/protocol/game/ClientboundExplodePacket": {
             "names": {
@@ -2382,7 +2356,48 @@
                 "fabric": "net.minecraft.class_2664",
                 "forge": "net.minecraft.network.play.server.SPacketExplosion"
             },
-            "methods": {},
+            "methods": {
+                "center": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getX": {
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "method_11475",
+                        "forge": "func_149148_f"
+                    },
+                    "signatures": {
+                        "vanilla": "()D",
+                        "fabric": "()D",
+                        "forge": "()D"
+                    }
+                },
+                "getY": {
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "method_11477",
+                        "forge": "func_149143_g"
+                    },
+                    "signatures": {
+                        "vanilla": "()D",
+                        "fabric": "()D",
+                        "forge": "()D"
+                    }
+                },
+                "getZ": {
+                    "names": {
+                        "vanilla": "f",
+                        "fabric": "method_11478",
+                        "forge": "func_149145_h"
+                    },
+                    "signatures": {
+                        "vanilla": "()D",
+                        "fabric": "()D",
+                        "forge": "()D"
+                    }
+                }
+            },
             "fields": {}
         },
         "net/minecraft/network/protocol/game/ClientboundPlayerInfoRemovePacket": {
@@ -2405,7 +2420,64 @@
                 "fabric": "net.minecraft.class_2708",
                 "forge": "net.minecraft.network.play.server.SPacketPlayerPosLook"
             },
-            "methods": {},
+            "methods": {
+                "change": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
+                "getRelativeArguments": {
+                    "names": {
+                        "vanilla": "g",
+                        "fabric": "method_11733",
+                        "forge": "func_179834_f"
+                    },
+                    "signatures": {
+                        "vanilla": "()Ljava/util/Set;",
+                        "fabric": "()Ljava/util/Set;",
+                        "forge": "()Ljava/util/Set;"
+                    }
+                },
+                "getX": {
+                    "names": {
+                        "vanilla": "a",
+                        "fabric": "method_11734",
+                        "forge": "func_148932_c"
+                    },
+                    "signatures": {
+                        "vanilla": "()D",
+                        "fabric": "()D",
+                        "forge": "()D"
+                    }
+                },
+                "getY": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "method_11735",
+                        "forge": "func_148928_d"
+                    },
+                    "signatures": {
+                        "vanilla": "()D",
+                        "fabric": "()D",
+                        "forge": "()D"
+                    }
+                },
+                "getZ": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_11738",
+                        "forge": "func_148933_e"
+                    },
+                    "signatures": {
+                        "vanilla": "()D",
+                        "fabric": "()D",
+                        "forge": "()D"
+                    }
+                },
+                "relatives": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                }
+            },
             "fields": {
                 "xRot": {
                     "names": {
@@ -2432,9 +2504,25 @@
             }
         },
         "net/minecraft/network/protocol/game/ClientboundSetActionBarTextPacket": {
-            "absent": true,
-            "names": {},
-            "absentReason": "unverified"
+            "names": {
+                "vanilla": "hx",
+                "fabric": "net.minecraft.class_2762",
+                "forge": "net.minecraft.network.play.server.SPacketTitle"
+            },
+            "methods": {},
+            "fields": {
+                "text": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_12626",
+                        "forge": "field_179810_b"
+                    },
+                    "descriptors": {
+                        "vanilla": "Leu;",
+                        "fabric": "Lnet/minecraft/class_2561;"
+                    }
+                }
+            }
         },
         "net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket": {
             "names": {
@@ -2540,14 +2628,46 @@
             }
         },
         "net/minecraft/network/protocol/game/ClientboundSetSubtitleTextPacket": {
-            "absent": true,
-            "names": {},
-            "absentReason": "unverified"
+            "names": {
+                "vanilla": "hx",
+                "fabric": "net.minecraft.class_2762",
+                "forge": "net.minecraft.network.play.server.SPacketTitle"
+            },
+            "methods": {},
+            "fields": {
+                "text": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_12626",
+                        "forge": "field_179810_b"
+                    },
+                    "descriptors": {
+                        "vanilla": "Leu;",
+                        "fabric": "Lnet/minecraft/class_2561;"
+                    }
+                }
+            }
         },
         "net/minecraft/network/protocol/game/ClientboundSetTitleTextPacket": {
-            "absent": true,
-            "names": {},
-            "absentReason": "unverified"
+            "names": {
+                "vanilla": "hx",
+                "fabric": "net.minecraft.class_2762",
+                "forge": "net.minecraft.network.play.server.SPacketTitle"
+            },
+            "methods": {},
+            "fields": {
+                "text": {
+                    "names": {
+                        "vanilla": "b",
+                        "fabric": "field_12626",
+                        "forge": "field_179810_b"
+                    },
+                    "descriptors": {
+                        "vanilla": "Leu;",
+                        "fabric": "Lnet/minecraft/class_2561;"
+                    }
+                }
+            }
         },
         "net/minecraft/network/protocol/game/ClientboundSystemChatPacket": {
             "absent": true,
@@ -3490,6 +3610,18 @@
                 "forge": "net.minecraft.entity.EntityLivingBase"
             },
             "methods": {
+                "addEffect": {
+                    "names": {
+                        "vanilla": "c",
+                        "fabric": "method_6092",
+                        "forge": "func_70690_d"
+                    },
+                    "signatures": {
+                        "vanilla": "(Lrl;)V",
+                        "fabric": "(Lnet/minecraft/class_1293;)V",
+                        "forge": "(Lnet/minecraft/potion/PotionEffect;)V"
+                    }
+                },
                 "distanceToSqr": {
                     "names": {
                         "vanilla": "e",
@@ -3593,6 +3725,10 @@
                         "fabric": "(Lnet/minecraft/class_1304;)Lnet/minecraft/class_1799;",
                         "forge": "(Lnet/minecraft/inventory/EntityEquipmentSlot;)Lnet/minecraft/item/ItemStack;"
                     }
+                },
+                "getMainArm": {
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getMainHandItem": {
                     "names": {
@@ -3758,6 +3894,10 @@
                         "forge": "(DDD)D"
                     }
                 },
+                "removeEffect": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "setPos": {
                     "names": {
                         "vanilla": "b",
@@ -3792,6 +3932,10 @@
                 }
             },
             "fields": {
+                "attackAnim": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "fallDistance": {
                     "names": {
                         "vanilla": "L",
@@ -3801,6 +3945,17 @@
                     "descriptors": {
                         "vanilla": "F",
                         "fabric": "F"
+                    }
+                },
+                "hurtDuration": {
+                    "names": {
+                        "vanilla": "ay",
+                        "fabric": "field_6254",
+                        "forge": "field_70738_aO"
+                    },
+                    "descriptors": {
+                        "vanilla": "I",
+                        "fabric": "I"
                     }
                 },
                 "hurtTime": {
@@ -4175,6 +4330,21 @@
                     }
                 }
             }
+        },
+        "net/minecraft/world/entity/PositionMoveRotation": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
+        "net/minecraft/world/entity/Relative": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
+        "net/minecraft/world/entity/RelativeMovement": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
         },
         "net/minecraft/world/entity/ambient/AmbientCreature": {
             "names": {
@@ -4865,6 +5035,11 @@
             "names": {},
             "absentReason": "unverified"
         },
+        "net/minecraft/world/entity/projectile/windcharge/AbstractWindCharge": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
         "net/minecraft/world/inventory/AbstractContainerMenu": {
             "names": {
                 "vanilla": "aau",
@@ -5221,6 +5396,10 @@
                     "absent": true,
                     "absentReason": "unverified"
                 },
+                "getDayTime": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "getMinY": {
                     "absent": true,
                     "absentReason": "unverified"
@@ -5252,6 +5431,30 @@
                 "setBlock": {
                     "absent": true,
                     "absentReason": "unverified"
+                },
+                "setRainLevel": {
+                    "names": {
+                        "vanilla": "k",
+                        "fabric": "method_8519",
+                        "forge": "func_72894_k"
+                    },
+                    "signatures": {
+                        "vanilla": "(F)V",
+                        "fabric": "(F)V",
+                        "forge": "(F)V"
+                    }
+                },
+                "setThunderLevel": {
+                    "names": {
+                        "vanilla": "i",
+                        "fabric": "method_8496",
+                        "forge": "func_147442_i"
+                    },
+                    "signatures": {
+                        "vanilla": "(F)V",
+                        "fabric": "(F)V",
+                        "forge": "(F)V"
+                    }
                 }
             },
             "fields": {
@@ -5269,6 +5472,28 @@
                 "players": {
                     "absent": true,
                     "absentReason": "unverified"
+                },
+                "rainLevel": {
+                    "names": {
+                        "vanilla": "o",
+                        "fabric": "field_9235",
+                        "forge": "field_73004_o"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F"
+                    }
+                },
+                "thunderLevel": {
+                    "names": {
+                        "vanilla": "q",
+                        "fabric": "field_9234",
+                        "forge": "field_73017_q"
+                    },
+                    "descriptors": {
+                        "vanilla": "F",
+                        "fabric": "F"
+                    }
                 }
             }
         },
@@ -5542,6 +5767,10 @@
                 "forge": "net.minecraft.world.storage.WorldInfo"
             },
             "methods": {
+                "getDayTime": {
+                    "absent": true,
+                    "absentReason": "unverified"
+                },
                 "setDayTime": {
                     "names": {
                         "vanilla": "c",

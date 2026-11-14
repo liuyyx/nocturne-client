@@ -202,10 +202,10 @@ com/mojang/blaze3d/vertex/PoseStack#rotate()
 org/joml/Quaternionf
 org/joml/AxisAngle4f
 net/minecraft/client/renderer/GameRenderer#setupFog()
-net/minecraft/client/multiplayer/ClientLevel#rainLevel
-net/minecraft/client/multiplayer/ClientLevel#thunderLevel
-net/minecraft/client/multiplayer/ClientLevel#setRainLevel()
-net/minecraft/client/multiplayer/ClientLevel#setThunderLevel()
+net/minecraft/world/level/Level#rainLevel!field
+net/minecraft/world/level/Level#thunderLevel!field
+net/minecraft/world/level/Level#setRainLevel()
+net/minecraft/world/level/Level#setThunderLevel()
 # 26.x 世界时间：dayTime/setDayTime 已删除，改为客户端时钟实例的私有字段。
 net/minecraft/client/multiplayer/ClientLevel#clockManager()
 net/minecraft/client/ClientClockManager
@@ -255,8 +255,12 @@ net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket
 net/minecraft/network/protocol/game/ClientboundExplodePacket
 net/minecraft/network/protocol/game/ClientboundEntityEventPacket
 net/minecraft/network/protocol/game/ClientboundEntityEventPacket#getEventId()
+net/minecraft/network/protocol/game/ClientboundExplodePacket#center()
+net/minecraft/network/protocol/game/ClientboundExplodePacket#getX()
+net/minecraft/network/protocol/game/ClientboundExplodePacket#getY()
+net/minecraft/network/protocol/game/ClientboundExplodePacket#getZ()
 net/minecraft/network/protocol/game/ClientboundAddEntityPacket
-net/minecraft/network/protocol/game/ClientboundEntityEventPacket#getEntityId()
+net/minecraft/network/protocol/game/ClientboundEntityEventPacket#entityId!field
 net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#getId()
 net/minecraft/network/protocol/game/ServerboundPlayerActionPacket
 net/minecraft/network/protocol/game/ServerboundPlayerActionPacket#getAction()
@@ -271,6 +275,9 @@ net/minecraft/network/protocol/game/ClientboundSetEntityMotionPacket#za
 net/minecraft/world/entity/Entity#isInWater()
 net/minecraft/world/entity/Entity#bb
 net/minecraft/world/entity/LivingEntity#hurtTime
+net/minecraft/world/entity/LivingEntity#hurtDuration!field
+net/minecraft/world/entity/LivingEntity#attackAnim!field
+net/minecraft/world/entity/LivingEntity#getMainArm()
 net/minecraft/world/entity/projectile/AbstractArrow
 net/minecraft/world/entity/projectile/ThrownEnderpearl
 net/minecraft/world/entity/projectile/ThrowableProjectile
@@ -283,6 +290,7 @@ net/minecraft/world/entity/projectile/Egg
 net/minecraft/world/entity/projectile/ThrownPotion
 net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket
 net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket#getPos()
+net/minecraft/network/protocol/game/ClientboundBlockUpdatePacket#getBlockState()
 net/minecraft/network/protocol/game/ClientboundBlockEventPacket
 net/minecraft/network/protocol/game/ClientboundBlockEventPacket#getPos()
 net/minecraft/world/effect/MobEffects#NAUSEA
@@ -735,6 +743,13 @@ net/minecraft/network/protocol/game/ClientboundSystemChatPacket#content
 net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket
 net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#yRot
 net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#xRot
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#getX()
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#getY()
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#getZ()
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#getRelativeArguments()
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#change()
+net/minecraft/network/protocol/game/ClientboundPlayerPositionPacket#relatives()
+net/minecraft/world/entity/PositionMoveRotation#position()
 net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket
 net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket#getSlot()
 net/minecraft/network/protocol/game/ServerboundContainerClickPacket
@@ -860,6 +875,8 @@ net/minecraft/client/Camera#getXRot()
 net/minecraft/client/Camera#getEntity()
 # 相机对齐钩子与位姿写回：26.x 存在同名 getter，字段必须明确登记。
 net/minecraft/client/Camera#setup()
+net/minecraft/client/Camera#setPosition()
+net/minecraft/client/Camera#setRotation()
 net/minecraft/client/Camera#position!field
 net/minecraft/client/Camera#xRot!field
 net/minecraft/client/Camera#yRot!field

@@ -105,6 +105,19 @@ class GameBridgeTest {
         assertEquals(1.62, bridge.entityEyeHeight(new EyePositionEntity()), 1.0e-6);
     }
 
+    static final class EntityEventPacket {
+        private final int entityId = 42;
+        byte getEventId() { return 35; }
+    }
+
+    @Test
+    void entityEventUsesPacketIdFieldRatherThanNonexistentGetter() {
+        TestMapping mapping = new TestMapping(FakeMinecraft.class)
+                .classOverride(ClassType.CLIENTBOUND_ENTITY_EVENT, EntityEventPacket.class);
+        GameBridge bridge = new GameBridge(null, mapping);
+        assertArrayEquals(new int[]{35, 42}, bridge.entityEventData(new EntityEventPacket()));
+    }
+
     static final class PlayersWorld {
         public java.util.List<Object> players() {
             return java.util.Arrays.<Object>asList("one", null, "two");

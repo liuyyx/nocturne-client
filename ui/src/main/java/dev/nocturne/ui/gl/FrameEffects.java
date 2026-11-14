@@ -2,10 +2,11 @@ package dev.nocturne.ui.gl;
 
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.module.Module;
+import dev.nocturne.client.module.modules.render.MotionBlurModule;
 import dev.nocturne.client.render.OverlayDraw;
 import dev.nocturne.client.render.RenderCapabilities;
 
-/** 真实帧捕获、4× 降采样与历史帧混合（InventoryBlur / Motion Blur 的整帧通道）。 */
+/** 真实帧捕获、4× 降采样与历史帧混合（Motion Blur 的整帧通道，Anti Alias 共用降采样）。 */
 public final class FrameEffects {
     private int texture;
     private int[] current;
@@ -21,15 +22,30 @@ public final class FrameEffects {
     private final java.util.concurrent.atomic.AtomicBoolean fixedPipelineNotice =
             new java.util.concurrent.atomic.AtomicBoolean();
 
+    /** 是否有后期模块启用；{@code GuiOverlay} 用它决定整帧是否该进 beginFrame。 */
+    public boolean active(NocturneClient client) {
+        MotionBlurModule motionModule = motion(client);
+        Module antiAlias = client == null ? null : client.modules().get("Anti Alias");
+        return (motionModule != null && motionModule.isEnabled())
+                || (antiAlias != null && antiAlias.isEnabled());
+    }
+
+    /** 同名模块若非本类则静默忽略，避免帧代码里的裸强转抛 ClassCastException。 */
+    private static MotionBlurModule motion(NocturneClient client) {
+        Module module = client == null ? null : client.modules().get("Motion Blur");
+        return module instanceof MotionBlurModule ? (MotionBlurModule) module : null;
+    }
+
     public void render(OverlayDraw draw, NocturneClient client) {
-        Module inventory = client == null ? null : client.modules().get("InventoryBlur");
-        Module motion = client == null ? null : client.modules().get("Motion Blur");
-        boolean inventoryActive = inventory != null && inventory.isEnabled()
-                && client.gameBridge() != null && client.gameBridge().containerOpen();
-        // 第三人称开关随 MotionBlur 模块删除，这里只按第一人称混合。
-        boolean motionActive = motion != null && motion.isEnabled()
-                && client.gameBridge() != null && client.gameBridge().perspective() == 0;
-        if (!inventoryActive && !motionActive) {
+        MotionBlurModule motionModule = motion(client);
+        Module antiAlias = client == null ? null : client.modules().get("Anti Alias");
+        boolean antiAliasActive = antiAlias != null && antiAlias.isEnabled();
+        // Motion Blur 的 Third Person=false 时只允许第一人称；true 时两种视角都允许。
+        // perspective()==-1 表示"人称不可读"，按未知放行，不能误当第三人称禁掉第一人称。
+        boolean motionActive = motionModule != null && motionModule.isEnabled()
+                && client.gameBridge() != null
+                && (motionModule.thirdPerson() || client.gameBridge().perspective() != 1);
+        if (!motionActive && !antiAliasActive) {
             history = null;
             return;
         }
@@ -82,12 +98,12 @@ public final class FrameEffects {
         if (small == null || small.length != required) {
             small = new int[required];
         }
-        boolean blend = motionActive && history != null;
-        downsample(current, blend ? history : null, w, h, small, smallW, smallH, 0.65f);
+        float weight = motionActive ? motionModule.historyWeight() : 0f;
+        downsample(current, motionActive ? history : null, w, h, small, smallW, smallH, weight);
         texture = draw.uploadTexture(texture, smallW, smallH, small);
         if (texture > 0) {
             draw.texturedQuad(texture, 0, 0, draw.width(), draw.height(),
-                    0, 1, 1, 0, inventoryActive ? 0x90FFFFFF : 0xA0FFFFFF);
+                    0, 1, 1, 0, 0xA0FFFFFF);
         }
         if (motionActive) {
             if (history == null || history.length != current.length) {

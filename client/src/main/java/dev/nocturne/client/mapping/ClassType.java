@@ -236,6 +236,8 @@ public enum ClassType {
     END_CRYSTAL("net.minecraft.world.entity.boss.enderdragon.EndCrystal"),
     /** TNT 实体；TNTTimer 读取引信。 */
     PRIMED_TNT("net.minecraft.world.entity.item.PrimedTnt"),
+    /** 风弹共同基类；旧版本不存在。 */
+    ABSTRACT_WIND_CHARGE("net.minecraft.world.entity.projectile.windcharge.AbstractWindCharge"),
     /** 全部移动包基类；Freecam 仅拦截这些包。 */
     SERVERBOUND_MOVE_PLAYER("net.minecraft.network.protocol.game.ServerboundMovePlayerPacket"),
     /** 玩家挖掘/释放物品动作包；NoItemRelease 读取 action。 */
@@ -251,6 +253,10 @@ public enum ClassType {
     /** Epsilon 包级模块使用的聊天、位置、槽位和容器包。 */
     CLIENTBOUND_SYSTEM_CHAT("net.minecraft.network.protocol.game.ClientboundSystemChatPacket"),
     CLIENTBOUND_PLAYER_POSITION("net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket"),
+    /** 位置同步包的现代位姿与相对坐标标记。 */
+    POSITION_MOVE_ROTATION("net.minecraft.world.entity.PositionMoveRotation"),
+    RELATIVE_MOVEMENT("net.minecraft.world.entity.RelativeMovement"),
+    RELATIVE("net.minecraft.world.entity.Relative"),
     SERVERBOUND_CONTAINER_CLICK("net.minecraft.network.protocol.game.ServerboundContainerClickPacket"),
     SERVERBOUND_PLAYER_INPUT("net.minecraft.network.protocol.game.ServerboundPlayerInputPacket"),
     CLIENTBOUND_SET_TITLE_TEXT("net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket"),

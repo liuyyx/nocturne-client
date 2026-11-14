@@ -197,6 +197,35 @@ final class FaStrings {
         put("Splash Potion", "喷溅药水");
         put("Lingering Potion", "滞留药水");
         put("Wind Charge", "风弹");
+        // 实体外观参数
+        put("Self", "自己");
+        put("Friends", "好友");
+        put("Crystals", "水晶");
+        put("Chests", "箱子");
+        put("Creatures", "动物");
+        put("Monsters", "怪物");
+        put("Ambients", "环境生物");
+        put("Others", "其他");
+        put("Side Color", "填充颜色");
+        put("Scale", "缩放");
+        put("Ignore Self", "忽略自己");
+        put("Render Time", "显示时长");
+        put("Y Modifier", "垂直位移");
+        put("Scale Modifier", "缩放变化");
+        put("Fade Out", "淡出");
+        put("Model", "模型");
+        put("Auto", "自动");
+        put("Custom", "自定义");
+        put("Custom Path", "自定义路径");
+        put("Animation", "动画");
+        put("Vanilla", "原版");
+        put("Bone Filter", "骨骼筛选");
+        put("Character Only", "仅玩家");
+        put("Show Item", "显示物品");
+        put("Item Scale", "物品偏移");
+        put("Flip Left Walk", "反转左侧行走");
+        put("Flip Right Walk", "反转右侧行走");
+        put("Flip Other Anim", "反转其他动画");
         // 界面文案
         put("Preview", "预览");
         put("Preview unavailable", "预览不可用");
@@ -263,6 +292,18 @@ final class FaStrings {
         put("Flux", "Flux 风格");
         put("NV", "夜视");
         put("TXT", "纯文本");
+        put("Akrien", "Akrien 风格");
+        put("CENTER", "居中");
+        put("Chromatic X", "色差 X");
+        put("Chromatic Y", "色差 Y");
+        put("Glitch", "故障");
+        put("MTF", "MTF 图案");
+        put("Modern", "现代");
+        put("Sakura", "樱花");
+        put("Style", "样式");
+        put("Subtitle", "副标题");
+        put("Tradition", "传统");
+        put("Victory", "胜利");
     }
 
     /** 全部内置模块的精确译名；技术缩写保留，但名称本身必须中文化。 */
@@ -407,7 +448,6 @@ final class FaStrings {
         put("Shaders", "着色器");
         put("Sneak Tweak", "潜行调整");
         put("Title Replace", "标题替换");
-        put("Totem Animation", "图腾动画");
         put("TNT Timer", "TNT 倒计时");
         put("Trajectories", "弹道轨迹");
         put("World Tweaks", "世界调整");
@@ -468,6 +508,8 @@ final class FaStrings {
         put("Keystrokes", "按键显示");
         put("Reach Display", "攻击距离显示");
         put("Text GUI", "文字界面");
+        put("Hotkey", "快捷键");
+        put("Victory Banner", "胜利横幅");
         put("Panic", "紧急关闭");
     }
 

@@ -45,8 +45,8 @@ class HudElementModuleTest {
         assertSame(module.element(), sink.elements.get(module.name()));
         module.setEnabled(false);
         assertFalse(sink.hasElement(module.name()));
-        assertEquals(1, sink.addCalls);
-        assertEquals(1, sink.removeCalls);
+        assertEquals(1, sink.adds(module.name()));
+        assertEquals(1, sink.removes(module.name()));
     }
 
     @Test
@@ -60,7 +60,7 @@ class HudElementModuleTest {
 
         assertTrue(module.isEnabled());
         assertSame(module.element(), sink.elements.get(module.name()));
-        assertEquals(1, sink.addCalls);
+        assertEquals(1, sink.adds(module.name()));
     }
 
     @Test
@@ -76,11 +76,11 @@ class HudElementModuleTest {
 
         assertFalse(oldSink.hasElement(module.name()));
         assertSame(module.element(), newSink.elements.get(module.name()));
-        assertEquals(1, oldSink.removeCalls);
-        assertEquals(1, newSink.addCalls);
+        assertEquals(1, oldSink.removes(module.name()));
+        assertEquals(1, newSink.adds(module.name()));
         module.setEnabled(false);
         assertFalse(newSink.hasElement(module.name()));
-        assertEquals(1, newSink.removeCalls);
+        assertEquals(1, newSink.removes(module.name()));
     }
 
     @Test
@@ -111,16 +111,16 @@ class HudElementModuleTest {
         client.setHudElementSink(sink);
         client.setHudElementSink(sink);
         assertEquals(1, sink.elements.size());
-        assertEquals(1, sink.addCalls);
-        assertEquals(0, sink.removeCalls);
+        assertEquals(1, sink.adds(module.name()));
+        assertEquals(0, sink.removes(module.name()));
 
         module.setEnabled(false);
         module.setEnabled(false);
         module.setEnabled(true);
         assertEquals(1, sink.elements.size());
         assertSame(module.element(), sink.elements.get(module.name()));
-        assertEquals(2, sink.addCalls);
-        assertEquals(1, sink.removeCalls);
+        assertEquals(2, sink.adds(module.name()));
+        assertEquals(1, sink.removes(module.name()));
     }
 
     @Test
@@ -135,8 +135,8 @@ class HudElementModuleTest {
         client.setHudElementSink(second);
         assertTrue(first.elements.isEmpty());
         assertTrue(second.elements.isEmpty());
-        assertEquals(0, first.addCalls);
-        assertEquals(0, second.addCalls);
+        assertEquals(0, first.adds(module.name()));
+        assertEquals(0, second.adds(module.name()));
     }
 
     private static FakeElementModule register(NocturneClient client) {
@@ -145,26 +145,44 @@ class HudElementModuleTest {
         return module;
     }
 
+    /**
+     * 按元素 id 分别计数：注册表里还有生产用的其它 HUD 元素，全局调用次数会随注册数量变化，
+     * 本测试只断言自己这个 fake 模块的迁移契约，不能把全局计数当断言。
+     */
     private static final class RecordingSink implements HudElementSink {
         final Map<String, HudElement> elements = new LinkedHashMap<String, HudElement>();
-        int addCalls;
-        int removeCalls;
+        final Map<String, Integer> addsById = new LinkedHashMap<String, Integer>();
+        final Map<String, Integer> removesById = new LinkedHashMap<String, Integer>();
 
         @Override
         public void addElement(HudElement element) {
-            addCalls++;
-            elements.put(element.id(), element);
+            String id = element.id();
+            addsById.put(id, count(addsById, id) + 1);
+            elements.put(id, element);
         }
 
         @Override
         public void removeElement(String id) {
-            removeCalls++;
+            removesById.put(id, count(removesById, id) + 1);
             elements.remove(id);
         }
 
         @Override
         public boolean hasElement(String id) {
             return elements.containsKey(id);
+        }
+
+        int adds(String id) {
+            return count(addsById, id);
+        }
+
+        int removes(String id) {
+            return count(removesById, id);
+        }
+
+        private static int count(Map<String, Integer> map, String id) {
+            Integer value = map.get(id);
+            return value == null ? 0 : value;
         }
     }
 

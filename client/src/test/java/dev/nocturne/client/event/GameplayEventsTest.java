@@ -1,5 +1,6 @@
 package dev.nocturne.client.event;
 
+import dev.nocturne.bootstrap.GameplaySink;
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.TestSupport;
 import dev.nocturne.client.bootstrap.GameplayHook;
@@ -7,6 +8,9 @@ import dev.nocturne.client.game.FakeMinecraft;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.game.TestMapping;
 import dev.nocturne.client.mapping.IdentityMapping;
+import dev.nocturne.client.module.Module;
+import dev.nocturne.client.module.modules.render.NoRenderModule;
+import dev.nocturne.client.value.MultiBoolValue;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -249,6 +254,74 @@ class GameplayEventsTest {
         assertFalse(events.get(1).post);
         assertSame(outer, events.get(2).entity);
         assertTrue(events.get(2).post);
+    }
+
+    // -------------------------------------------------- 四个视觉覆写的转发契约
+
+    @Test
+    void noFogForwardsToEnabledWorldTweaks() {
+        NocturneClient client = NocturneClient.boot(null);
+        Module tweaks = client.modules().get("World Tweaks");
+        assertNotNull(tweaks, "World Tweaks must be registered for noFog to reach it");
+
+        assertTrue(GameplayHook.noFog(), "disabled by default: fog allowed");
+        tweaks.setEnabled(true);
+        assertFalse(GameplayHook.noFog(), "enabled World Tweaks (No Fog) must cancel fog");
+        tweaks.setEnabled(false);
+        assertTrue(GameplayHook.noFog(), "disabling restores fog");
+    }
+
+    @Test
+    void cameraZoomForwardsToEnabledCameraClip() {
+        NocturneClient client = NocturneClient.boot(null);
+        Module clip = client.modules().get("Camera Clip");
+        assertNotNull(clip, "Camera Clip must be registered for cameraZoom to reach it");
+        GameplaySink.markWired("cameraZoom");
+
+        assertEquals(5.0f, GameplayHook.cameraZoom(5.0f), "disabled: original distance preserved");
+        clip.setEnabled(true);
+        assertEquals(3.5f, GameplayHook.cameraZoom(5.0f), "enabled Camera Clip supplies its Distance value");
+        clip.setEnabled(false);
+        assertEquals(5.0f, GameplayHook.cameraZoom(5.0f), "disabling restores original distance");
+    }
+
+    @Test
+    void entityRenderGateForwardsToEnabledNoRender() {
+        NocturneClient client = NocturneClient.boot(null);
+        NoRenderModule noRender = (NoRenderModule) client.modules().get("No Render");
+        assertNotNull(noRender);
+
+        assertTrue(GameplayHook.entityRenderGate(new Object(), null), "disabled: allow render");
+        MultiBoolValue entities = multi(noRender, "Entities");
+        entities.toggle("Other");
+        noRender.setEnabled(true);
+        // 选中 "Other" 后普通对象判为 OTHER，门必须真的取消渲染 —— 证明转发到模块而非恒 true。
+        client.setGameBridge(new GameBridge(null, new IdentityMapping()));
+        assertFalse(GameplayHook.entityRenderGate(new Object(), null), "enabled No Render must filter selected entity kind");
+        assertTrue(GameplayHook.entityRenderGate(null, null), "null entity must allow render");
+    }
+
+    @Test
+    void handTransformPreservesPoseWhenDisabledAndIsolatesFailures() {
+        NocturneClient client = NocturneClient.boot(null);
+        Module handView = client.modules().get("Hand View");
+        assertNotNull(handView);
+        Object pose = new Object();
+
+        GameplayHook.handTransform(pose, null, 0.5f); // 未启用：不抛、不动 pose
+        handView.setEnabled(true);
+        client.setGameBridge(new GameBridge(null, new IdentityMapping()));
+        GameplayHook.handTransform(pose, null, 0.5f); // 反射失败被 catch，pose 必须原样保留
+        assertSame(pose, pose);
+    }
+
+    private static MultiBoolValue multi(Module module, String name) {
+        for (dev.nocturne.client.value.Value<?> value : module.values()) {
+            if (value.name().equals(name) && value instanceof MultiBoolValue) {
+                return (MultiBoolValue) value;
+            }
+        }
+        throw new AssertionError("missing MultiBoolValue " + name + " on " + module.name());
     }
 
     private static final class FakeVector {

@@ -151,4 +151,15 @@ public interface OverlayDraw {
     default boolean reliableAlphaBlend() {
         return false;
     }
+
+    /**
+     * 压入逻辑像素裁剪矩形;必须与 {@link #popClip()} 成对调用。
+     * 后端不支持时为空操作,调用方不能假设裁剪已生效。
+     */
+    default void pushClip(float x, float y, float width, float height) {
+    }
+
+    /** 弹出最近一次 {@link #pushClip(float, float, float, float)}。 */
+    default void popClip() {
+    }
 }

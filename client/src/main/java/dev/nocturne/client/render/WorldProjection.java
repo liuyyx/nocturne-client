@@ -47,7 +47,8 @@ public final class WorldProjection {
     private int viewportHeight;
     /** 视口宽高比；为 0 表示尚未更新。 */
     private double aspect;
-
+    /** 覆盖层专用宽高比覆写；0 表示用视口实际比例。只影响自绘 2D 覆盖层，不改游戏投影。 */
+    private double aspectOverride;
     /** 近平面：比这更近的点算不可见（在相机背后或贴着镜头）。 */
     private static final double NEAR_PLANE = 0.05;
 
@@ -124,6 +125,15 @@ public final class WorldProjection {
     /** @return 视口是否已就绪（宽高与宽高比都有效） */
     public boolean isReady() {
         return viewportWidth > 0 && viewportHeight > 0 && aspect > 0d;
+    }
+    /**
+     * 设置覆盖层专用宽高比覆写；0 表示恢复用视口实际比例。
+     * 每帧由绘制前调用一次；只改变 2D 覆盖层的横向投影，不影响游戏自身画面。
+     *
+     * @param ratio 目标宽高比（宽/高），≤0 时清空覆写
+     */
+    public void setAspectOverride(float ratio) {
+        this.aspectOverride = ratio > 0f ? ratio : 0d;
     }
 
     /** @return 视口宽（逻辑像素） */
@@ -233,7 +243,8 @@ public final class WorldProjection {
         // 跳到屏幕另一侧）。但屏幕位置必须与直接透视一致：透视除法本身是比例不变的，
         // 把点沿视线插值到近平面后 side/forward 的比值不变，因此这里仍然用原始 forward 做除法，
         // 真正的修复是不再丢弃该点 + 下面把屏幕坐标 clamp 到视口（否则近点的巨大 x/y 会撑满屏）。
-        double ndcX = (side / forward) * focal / aspect;
+        double effectiveAspect = aspectOverride > 0d ? aspectOverride : aspect;
+        double ndcX = (side / forward) * focal / effectiveAspect;
         double ndcY = (above / forward) * focal;
 
         float rawX = (float) ((ndcX + 1d) * 0.5d * viewportWidth);

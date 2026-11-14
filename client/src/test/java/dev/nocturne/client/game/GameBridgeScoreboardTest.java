@@ -95,6 +95,11 @@ class GameBridgeScoreboardTest {
 
         assertEquals(2, lines.size());
         assertTrue(lines.get(1).endsWith("Steve 42"));
+        List<GameBridge.ScoreboardRow> rows = bridge.scoreboardRows();
+        assertEquals("Obj", rows.get(0).label);
+        assertNull(rows.get(0).score);
+        assertEquals("Steve", rows.get(1).label);
+        assertEquals(Integer.valueOf(42), rows.get(1).score);
     }
 
     @Test

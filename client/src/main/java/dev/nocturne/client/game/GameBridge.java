@@ -430,13 +430,13 @@ public final class GameBridge {
     /** 设置客户端天气强度。 */
     public boolean setWeather(float rain, float thunder) {
         Object world = world();
-        boolean rainSet = writeField(world, ClassType.CLIENT_LEVEL, "rainLevel", rain);
-        boolean thunderSet = writeField(world, ClassType.CLIENT_LEVEL, "thunderLevel", thunder);
+        boolean rainSet = writeField(world, ClassType.LEVEL, "rainLevel", rain);
+        boolean thunderSet = writeField(world, ClassType.LEVEL, "thunderLevel", thunder);
         if (!rainSet) {
-            rainSet = callMappedStatus(world, ClassType.CLIENT_LEVEL, "setRainLevel", rain);
+            rainSet = callMappedStatus(world, ClassType.LEVEL, "setRainLevel", rain);
         }
         if (!thunderSet) {
-            thunderSet = callMappedStatus(world, ClassType.CLIENT_LEVEL, "setThunderLevel", thunder);
+            thunderSet = callMappedStatus(world, ClassType.LEVEL, "setThunderLevel", thunder);
         }
         return rainSet && thunderSet;
     }
@@ -619,9 +619,19 @@ public final class GameBridge {
         public final String text;
         /** 行颜色（ARGB）；未知时为不透明白色。 */
         public final int color;
+        /** 格式化后的标题或持有者名称。 */
+        public final String label;
+        /** 标题行没有分数。 */
+        public final Integer score;
 
         public ScoreboardRow(String text, int color) {
-            this.text = text;
+            this(text, null, color);
+        }
+
+        public ScoreboardRow(String label, Integer score, int color) {
+            this.label = label;
+            this.score = score;
+            this.text = score == null ? label : label + " " + score;
             this.color = color;
         }
     }
@@ -725,7 +735,7 @@ public final class GameBridge {
         }
         for (ScoreEntry entry : entries) {
             FormattedOwner owner = formatScoreOwner(board, entry.owner);
-            rows.add(new ScoreboardRow(owner.text + " " + entry.value, owner.color));
+            rows.add(new ScoreboardRow(owner.text, entry.value, owner.color));
         }
         return rows;
     }
@@ -2291,7 +2301,7 @@ public final class GameBridge {
             return null;
         }
         Number event = number(callMapped(packet, ClassType.CLIENTBOUND_ENTITY_EVENT, "getEventId"));
-        Number id = number(callMapped(packet, ClassType.CLIENTBOUND_ENTITY_EVENT, "getEntityId"));
+        Number id = number(readField(packet, ClassType.CLIENTBOUND_ENTITY_EVENT, "entityId"));
         return event == null || id == null ? null : new int[]{event.intValue(), id.intValue()};
     }
 
@@ -2809,7 +2819,7 @@ public final class GameBridge {
             // 26.x 的 PoseStack 只有 rotate(Quaternionfc)：先试 rotate，再回退旧版 mulPose(Quaternionf)。
             if (!callMappedStatus(pose, ClassType.POSE_STACK, "rotate", quaternion)
                     && !callMappedStatus(pose, ClassType.POSE_STACK, "mulPose", quaternion)) {
-                // 不再静默：旋转丢失会让 HandView/TotemAnimation 看起来"开着但没效果"。
+                // 不再静默：旋转丢失会让 HandView 看起来"开着但没效果"。
                 logThrottled("PoseStack#rotate/mulPose(Quaternionf) failed for rotation axis " + axis, null);
             }
         }

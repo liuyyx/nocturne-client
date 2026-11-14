@@ -52,9 +52,11 @@
 ## Epsilon 视觉移植：阶段 2 扫描类（2026-11-14）
 
 - 注册 `Block ESP`、`Hole ESP`、`Xray`、`No Ghost Blocks` 共 4 个模块（与阶段 1 合计 13 个）。
-  `Block ESP`/`Hole ESP`/`Xray` 为 tick 快照 + 绘制期零反射；`No Ghost Blocks` 接
-  `destroyStop` 布尔钩子（`MultiPlayerGameMode#destroyBlock` 签名已入 66 张表，1.8.9 MCP 桥
-  `onPlayerDestroyBlock`）。
+  `Block ESP`/`Hole ESP`/`Xray` 为 tick 快照 + 绘制期零反射；`No Ghost Blocks` 走
+  `MultiPlayerGameMode#destroyBlock` 的布尔门（`GameplayHook.Sink.destroyBlock` 返回 `false`
+  抑制客户端预测移除；`destroyBlock` 签名已入 66 张表，1.8.9 MCP 桥 `onPlayerDestroyBlock`）。
+  计划曾设想把 `destroyStop()` 改成布尔钩子，实现采用更贴合 boolean 目标方法的 `destroyBlock` 门；
+  两条路径接线点不同，`destroyStop` 路径未真实验收，不记为等价。
 - **1.8.9 容器坐标根因修复**：`aliases-1.8.9.toml` 的 `[fields.x/y/z]` 规则 scope 指向
   `Vec3`(Vec3D)，而规则表按成员名全局键控，`Vec3i` 的 y/z 被错路由到 `NULL_VECTOR`（b）与
   y（c）——症状是 `getBlockPos` 非空但 `blockCoordinates` 返回 null（真机探针
@@ -117,6 +119,53 @@
   区块检查构建记为 1.8.9 真机通过。
 - 后续修正穿越未加载区块的 DDA 截断和遍历上限，并避免未加载起点产生虚假线段；
   对应回归测试、完整构建与 66 版映射和 jar 交叉校验通过。此构建尚未真机验证。
+
+## Epsilon 视觉移植：阶段 4 实体外观（进行中，2026-11-14）
+
+- 已注册 Chams、Crystal Chams、Pop Chams、Ysm Model；完整构建及图腾事件字段、
+  YSM 几何回归测试通过。图腾效果依赖状态包事件，尚未实机触发验证。
+- 1.21.1 隔离世界注入后生成末影水晶，截图
+  `tmp/epsilon-stage-4appearance-1.21.1.png` 可见水晶覆盖轮廓；日志
+  `tmp/epsilon-stage-4appearance-1.21.1.log` 记录三个启用模块共 38 次绘制。
+  截图还出现大面积青色边框，来源待核对；不能将整阶段记为真机通过。
+- 1.8.9 启用 Chams 后观察到自身第一人称包围盒产生贯穿画面的白线，截图
+  `tmp/epsilon-stage-4appearance-before-1.8.9.png`；修正后注入并启用 Chams 与
+  Crystal Chams，白线不再出现，日志 `tmp/epsilon-stage-4self-fixed-1.8.9.log`
+  记录 8 次绘制，截图 `tmp/epsilon-stage-4self-fixed-1.8.9.png`。
+- 1.8.9 水晶描边、YSM 自定义文件加载、图腾触发与其他版本尚未真机验证。
+
+
+## Epsilon 视觉移植：阶段 5–10 与收尾（2026-11-14，真机未验证）
+
+- 阶段 5（效果/粒子）`HitParticles/Particles/MasEffects/KillEffect`、阶段 6（屏幕/GUI）
+  `BetterChat/BetterScoreboard/TitleReplace/NoRender/Fullbright/WorldTweaks`、
+  阶段 7（相机/手/动画）`CameraClip/FreeCamera/SneakTweak/HandView/GameAnimation/ItemPhysics/AspectRatio`、
+  阶段 8（后处理降级组）`MotionBlur/AntiAlias/Filter/CustomSky/Shaders`、
+  阶段 9 `Derp/ServerGuard`、阶段 10 九个 HUD 元素（Watermark…Inventory）已注册。
+  `registerModules()` 现共 55 个模块；`Totem Animation` 因无浮空图腾绘制钩子不注册，
+  已重写为诚实占位（不订阅包、不声称等价）。后处理五项为降级占位，不等价于上游后处理链。
+- 静态门禁：`gradle.bat build --console=plain --no-daemon` 实测 `BUILD SUCCESSFUL`
+  （含 `verifyJarBytecode`、全量单测）；`python generate.py`（无 `--check` 重生成 26.x 五表）
+  + `python generate.py --check` 实测 `all tables up to date`、66 版逐 jar 交叉校验通过。
+- 收尾修复（仅静态 + 单测验证，真机未跑）：`HudElementModuleTest` 改按 id 计数消除全局污染；
+  `GameplayEventsTest` 补 4 个转发强断言；`CameraClip/FreeCamera/ItemPhysics` 的
+  `setPosition/setDeltaMovement(DDD)` 改 `bridge.construct(Vec3, x,y,z)` 单参对齐映射描述符；
+  `ObfuscatedMapping.isClassAbsent/classNameIn` 的斜杠键修正 + `isMemberAbsent` 补查字段表；
+  `MasEffects` 环形索引改 `&(len-1)` 防溢出负索引；`Watermark` cached 初值取 `text.get()`；
+  `NocturneClient.hideVanillaScoreboard` javadoc 与实现对齐；
+  `requirements.txt`/`aliases-1.8.9|1.12.2.toml` 把 `rainLevel/thunderLevel/setRainLevel/setThunderLevel`
+  四条别名从 `ClientLevel` 迁到 `Level` 段（1.8.9–1.14.3 生成表四项 resolved，解除 NoRender Weather 死开关）。
+- 只读审查归并（A2/A7）：`GuiOverlay.needsFrame` 补第 5 参 `frameEffectsActive`，修
+  `Motion Blur`/`Anti Alias` 单开且 GUI 关、无 HUD 时整帧早退「开了没反应」；
+  `frameEffects.render` 包 `catch(Throwable)` 限流，异常不再中断本帧覆盖/HUD；
+  `FrameEffects` 删未注册的 `InventoryBlur` 死消费者与死 `0.35` 权重、裸强转改 `instanceof`、
+  `perspective()==-1`（人称不可读）放行第一人称；`ServerGuard` 告警串改冷却前置避免热路径分配；
+  `Derp` javadoc 与 `AttackEvent`/`UseItemEvent` 接线对齐。两处 `destroyStop`/`destroyBlock`
+  文档分叉已订正为实际接线（见阶段 2 与 `.omp/plans/EPSILON_PLAN.md`），不改代码接线。
+  A2 的 `markerY`「墙盒下移」与 A7 的 `Derp Jitter cycle==0` 经核对为误报（前者由
+  `HoleEspSurfaceTest` 钉住 `isWall` 三连以 y 为中心、`-1` 落墙底正确；后者短路返回 `0f`），未改。
+- **真机未验证**：本轮全部为静态 + 单测 + 构建验收，未执行任何版本注入；上述模块的游戏行为、
+  1.21.1 阶段 4 青色边框来源、20 路审查未并回的 P3/P4 热路径 javadoc 段，均不得记为通过。
 
 ## Kill Aura 移植（2026-11-12，真机未验证）
 

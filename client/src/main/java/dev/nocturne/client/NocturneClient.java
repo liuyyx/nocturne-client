@@ -144,14 +144,25 @@ public final class NocturneClient {
     /**
      * 是否要抑制原版侧边栏（保证默认只显示一套计分板）。
      *
-     * <p>来源是 Better Scoreboard 模块；模块层正在重写，当前没有任何内置模块，
-     * 因此正常情况下返回 {@code false}，保留原版侧边栏。
+     * <p>来源是 Better Scoreboard 模块：仅当其启用且读到有效计分行时才隐藏原版侧边栏，
+     * 避免用空自绘面板盖掉原版后什么都不显示；否则保留原版侧边栏。
      *
      * @return {@code true} 表示原版侧边栏应隐藏
      */
     public boolean hideVanillaScoreboard() {
         Module better = modules.get("Better Scoreboard");
-        return better != null && better.isEnabled();
+        if (!(better instanceof dev.nocturne.client.module.modules.render.BetterScoreboardModule)
+                || !better.isEnabled()) {
+            return false;
+        }
+        // 本版本读不到计分行时保留原版侧边栏,避免用空自绘面板盖掉原版后什么都不显示。
+        try {
+            return ((dev.nocturne.client.module.modules.render.BetterScoreboardModule) better)
+                    .suppressVanilla();
+        } catch (Throwable t) {
+            log("scoreboard suppression probe failed: " + t);
+            return false;
+        }
     }
 
     /** 全局目标选择器。 */
@@ -294,6 +305,49 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.render.XrayModule());
         modules.register(new dev.nocturne.client.module.modules.render.NoGhostBlocksModule());
         modules.register(new dev.nocturne.client.module.modules.render.TrajectoriesModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ChamsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.CrystalChamsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.PopChamsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.YsmModelModule());
+        // 阶段 5：效果/粒子
+        modules.register(new dev.nocturne.client.module.modules.render.HitParticlesModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ParticlesModule());
+        modules.register(new dev.nocturne.client.module.modules.render.MasEffectsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.KillEffectModule());
+        // 阶段 6：屏幕/GUI
+        modules.register(new dev.nocturne.client.module.modules.render.BetterChatModule());
+        modules.register(new dev.nocturne.client.module.modules.render.BetterScoreboardModule());
+        modules.register(new dev.nocturne.client.module.modules.render.TitleReplaceModule());
+        modules.register(new dev.nocturne.client.module.modules.render.NoRenderModule());
+        modules.register(new dev.nocturne.client.module.modules.render.FullbrightModule());
+        modules.register(new dev.nocturne.client.module.modules.render.WorldTweaksModule());
+        // 阶段 7：相机/手/动画（Totem Animation 无浮空图腾绘制钩子，不注册）
+        modules.register(new dev.nocturne.client.module.modules.render.CameraClipModule());
+        modules.register(new dev.nocturne.client.module.modules.render.FreeCameraModule());
+        modules.register(new dev.nocturne.client.module.modules.render.SneakTweakModule());
+        modules.register(new dev.nocturne.client.module.modules.render.HandViewModule());
+        modules.register(new dev.nocturne.client.module.modules.render.GameAnimationModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ItemPhysicsModule());
+        modules.register(new dev.nocturne.client.module.modules.render.AspectRatioModule());
+        // 阶段 8：后处理降级组
+        modules.register(new dev.nocturne.client.module.modules.render.MotionBlurModule());
+        modules.register(new dev.nocturne.client.module.modules.render.AntiAliasModule());
+        modules.register(new dev.nocturne.client.module.modules.render.FilterModule());
+        modules.register(new dev.nocturne.client.module.modules.render.CustomSkyModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ShadersModule());
+        // 阶段 9：其他视觉
+        modules.register(new dev.nocturne.client.module.modules.render.DerpModule());
+        modules.register(new dev.nocturne.client.module.modules.render.ServerGuardModule());
+        // 阶段 10：HUD 元素
+        modules.register(new dev.nocturne.client.module.modules.render.hud.WatermarkElementModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.VictoryBannerElementModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.TargetHudElementModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.PlayerInfoElementModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.ModuleListElementModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.HotkeyElementModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.MtfElementModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.ScaffoldBlockElementModule());
+        modules.register(new dev.nocturne.client.module.modules.render.hud.InventoryElementModule());
     }
 
     /** 执行实际安装：装载配置并挂接运行时回调。仅在持锁的 {@link #boot} 内调用，保证只执行一次。 */

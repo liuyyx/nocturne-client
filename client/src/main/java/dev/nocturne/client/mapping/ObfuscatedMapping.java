@@ -367,7 +367,7 @@ public final class ObfuscatedMapping implements Mapping {
      * @return 类名（点号形式）；该命名空间没有时为 {@code null}
      */
     public String classNameIn(ClassType type, String namespace) {
-        ClassData data = classes.get(type.canonicalName());
+        ClassData data = classes.get(key(type.canonicalName()));
         return data == null || data.names == null ? null : data.names.get(namespace);
     }
 
@@ -379,14 +379,18 @@ public final class ObfuscatedMapping implements Mapping {
 
     @Override
     public boolean isClassAbsent(ClassType type) {
-        ClassData data = classes.get(type.canonicalName());
+        ClassData data = classes.get(key(type.canonicalName()));
         return data != null && data.absent;
     }
 
     @Override
     public boolean isMemberAbsent(ClassType owner, String canonicalName) {
-        MemberData member = methodMember(owner, canonicalName);
-        return member != null && member.absent;
+        MemberData method = methodMember(owner, canonicalName);
+        if (method != null && method.absent) {
+            return true;
+        }
+        MemberData field = fieldMember(owner, canonicalName);
+        return field != null && field.absent;
     }
 
     @Override

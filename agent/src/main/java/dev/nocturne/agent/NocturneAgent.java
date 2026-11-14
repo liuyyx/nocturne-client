@@ -1367,7 +1367,7 @@ public final class NocturneAgent {
     }
 
     /**
-     * 第一人称手臂变换入口；参数原样交给 HandView/TotemAnimation。
+     * 第一人称手臂变换入口；参数原样交给 HandView。
      *
      * <p>表内可能没有描述符（26.x 恒等映射只记名字）：此时先按 {@code resolveDescriptor} 从已加载
      * 类里取真实签名，仍取不到就退回规范描述符。**绝不静默 continue**——旧实现遇到

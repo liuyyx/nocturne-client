@@ -125,7 +125,21 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public boolean entityRenderGate(Object entity) {
-        return true;
+        if (!active() || entity == null) {
+            return true;
+        }
+        dev.nocturne.client.module.Module module = client.modules().get("No Render");
+        if (!(module instanceof dev.nocturne.client.module.modules.render.NoRenderModule)
+                || !module.isEnabled()) {
+            return true;
+        }
+        try {
+            return ((dev.nocturne.client.module.modules.render.NoRenderModule) module)
+                    .entityRenderGate(entity);
+        } catch (Throwable t) {
+            warnReceive("entityRenderGate", "entity render gate failed; allowing original render: " + t);
+            return true;
+        }
     }
 
     /** {@code EntityRenderDispatcher#shouldRender(Entity,Frustum,DDD)Z} 的两参形态：Frustum 只占位。 */
@@ -181,11 +195,39 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public void handTransform(Object pose, Object arm, float inverseHeight) {
+        if (!active() || pose == null) {
+            return;
+        }
+        dev.nocturne.client.module.Module module = client.modules().get("Hand View");
+        if (!(module instanceof dev.nocturne.client.module.modules.render.HandViewModule)
+                || !module.isEnabled()) {
+            return;
+        }
+        try {
+            ((dev.nocturne.client.module.modules.render.HandViewModule) module)
+                    .apply(pose, arm, inverseHeight);
+        } catch (Throwable t) {
+            warnReceive("handTransform", "hand transform failed; preserving original pose: " + t);
+        }
     }
 
     @Override
     public float cameraZoom(float distance) {
-        return distance;
+        if (!active()) {
+            return distance;
+        }
+        dev.nocturne.client.module.Module module = client.modules().get("Camera Clip");
+        if (!(module instanceof dev.nocturne.client.module.modules.render.CameraClipModule)
+                || !module.isEnabled()) {
+            return distance;
+        }
+        try {
+            return ((dev.nocturne.client.module.modules.render.CameraClipModule) module)
+                    .zoom(distance);
+        } catch (Throwable t) {
+            warnReceive("cameraZoom", "camera zoom failed; preserving original distance: " + t);
+            return distance;
+        }
     }
 
     @Override
@@ -214,6 +256,30 @@ public final class GameplayEvents implements GameplayHook.Sink {
 
     @Override
     public boolean noFog() {
+        if (!active()) {
+            return true;
+        }
+        // 真值语义：true=允许雾。任一模块要求禁雾时返回 false，保持与原 setupFog 门一致。
+        try {
+            dev.nocturne.client.module.Module noRender = client.modules().get("No Render");
+            if (noRender instanceof dev.nocturne.client.module.modules.render.NoRenderModule
+                    && noRender.isEnabled()
+                    && ((dev.nocturne.client.module.modules.render.NoRenderModule) noRender).noFog()) {
+                return false;
+            }
+        } catch (Throwable t) {
+            warnReceive("noFog:NoRender", "fog gate (No Render) failed; allowing fog: " + t);
+        }
+        try {
+            dev.nocturne.client.module.Module tweaks = client.modules().get("World Tweaks");
+            if (tweaks instanceof dev.nocturne.client.module.modules.render.WorldTweaksModule
+                    && tweaks.isEnabled()
+                    && ((dev.nocturne.client.module.modules.render.WorldTweaksModule) tweaks).noFog()) {
+                return false;
+            }
+        } catch (Throwable t) {
+            warnReceive("noFog:WorldTweaks", "fog gate (World Tweaks) failed; allowing fog: " + t);
+        }
         return true;
     }
 

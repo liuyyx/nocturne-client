@@ -41,7 +41,7 @@ class GuiOverlayHudElementTest {
         RecordingElement element = new RecordingElement("only", HudAnchor.TOP_LEFT, 0);
         overlay.addElement(element);
         assertTrue(overlay.hasElement("only"));
-        assertTrue(GuiOverlay.needsFrame(false, false, false, true));
+        assertTrue(GuiOverlay.needsFrame(false, false, false, true, false));
 
         overlay.onFrame();
 

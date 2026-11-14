@@ -62,6 +62,12 @@ public final class GameBridge {
      */
     private final ConcurrentHashMap<PlanKey, Method> callPlanCache =
             new ConcurrentHashMap<PlanKey, Method>();
+    /**
+     * 方法形参缓存：{@code Method.getParameterTypes()} 每次调用都克隆新数组，计划缓存命中后的
+     * 实参校验（M-73 热路径）每调必用，必须记忆化才能真零分配。
+     */
+    private final ConcurrentHashMap<Method, Class<?>[]> parameterTypeCache =
+            new ConcurrentHashMap<Method, Class<?>[]>();
     /** 构造器按真实类与实参形状缓存；不可变输入记录与 Vec2 共用。 */
     private final ConcurrentHashMap<ConstructorKey, java.lang.reflect.Constructor<?>> constructorCache =
             new ConcurrentHashMap<ConstructorKey, java.lang.reflect.Constructor<?>>();
@@ -2855,8 +2861,8 @@ public final class GameBridge {
      * 同键（类, 宿主, 规范名, arity）可能对应多种实参形状，不兼容时必须回落全量解析，
      * 否则会把首次解析出的重载钉死给所有后续调用。
      */
-    private static boolean matchesArgs(Method method, Object[] args) {
-        Class<?>[] parameters = method.getParameterTypes();
+    private boolean matchesArgs(Method method, Object[] args) {
+        Class<?>[] parameters = parameterTypes(method);
         int count = args == null ? 0 : args.length;
         if (parameters.length != count) {
             return false;
@@ -2867,6 +2873,17 @@ public final class GameBridge {
             }
         }
         return true;
+    }
+
+    /** {@link Method#getParameterTypes()} 的记忆化封装（其每次调用都分配克隆数组）。 */
+    private Class<?>[] parameterTypes(Method method) {
+        Class<?>[] cached = parameterTypeCache.get(method);
+        if (cached != null) {
+            return cached;
+        }
+        Class<?>[] types = method.getParameterTypes();
+        Class<?>[] raced = parameterTypeCache.putIfAbsent(method, types);
+        return raced == null ? types : raced;
     }
 
     /** 记录一次成功解析的调用计划；后写覆盖先写，实参形状漂移时以最近一次为准。 */
@@ -3120,6 +3137,7 @@ public final class GameBridge {
         methodCache.clear();
         methodListCache.clear();
         callPlanCache.clear();
+        parameterTypeCache.clear();
     }
 
     /** 记录一次「现在已尝试过解析」，供 {@link #resolve()} 的 250ms 退避判定使用。 */

@@ -71,8 +71,23 @@
   `hasBlockCollision` 新增带 world/坐标重载）。新增 `GameBridgePlanCacheTest` 与
   `ObfuscatedMappingCandidateCacheTest` 钉住缓存语义。
 - **真机**：1.8.9/1.21.1 场景（GUI 滚动、洞/矿/容器绘制、No Ghost Blocks 冒烟）在修复前已
-  真机跑过，证据 `tmp/epsilon-stage-2-*-1.8.9/1.21.1.log/png`；**本轮性能与 1.8.9 容器坐标
-  修复后未再真机**，这两项的真机复验记为未验证，不得声称通过。
+  真机跑过，证据 `tmp/epsilon-stage-2-*-1.8.9/1.21.1.log/png`。
+- **1.8.9 容器坐标复验通过（2026-11-14）**：`client installed (modules=13)` 后场景命令送达，
+  探针输出 `chest=true pos=[2, 4, -4]`（修复前为 `pos=null`）；画面同时可见 Block ESP
+  箱子描边、Hole ESP 安全洞绿填充、Xray 钻石矿青框，`world overlay: drawing (1280x720):
+  18 draw call(s) from 3 module(s)`。证据 `tmp/epsilon-stage-2verify-1.8.9.log`、
+  `tmp/epsilon-stage-2fix-blockesp-1.8.9.png`。
+- 1.21.1 性能复验见下节 JFR 对比；其余版本真机未验证。
+- **1.21.1 性能复验通过（2026-11-14）**：同机 `settings=profile` 60s 采样，三扫描模块全开
+  （`world overlay: drawing (427x240): 59 draw call(s) from 3 module(s)`，地下致密场景）。
+  修复前 12.4s 窗口采样分配 1.204 TB（≈97 GB/s），top 帧为
+  `HoleEspModule.scan`/`GameBridge.callMapped`；修复后 60s 窗口 11.2 GB（≈187 MB/s，
+  约 500×），nocturne 帧合计 ≈1.86 GB（`callMapped` 变参与扫描调用，已缓存的
+  `readField` 仅 8 MB/60s），`HoleEspModule.scan` 跌出 top 榜；`Method.getParameterTypes`
+  经形参记忆化后归零；GC 46 次/12.4s → 30 次/60s。证据
+  `tmp/nocturne-performance-before.jfr`、`tmp/nocturne-performance-after3.jfr/.json`。
+  修复后 top 帧 `Field.copy/getDeclaredFields` 的采样栈 5 帧且不含 nocturne 帧，
+  归为原版/JDK 反射内部；未再观察到 <30 FPS 退化。
 
 ## Kill Aura 移植（2026-11-12，真机未验证）
 

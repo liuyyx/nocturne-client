@@ -102,6 +102,25 @@ class AttackGateTest {
         assertTrue(GameplayHook.lastAttackAllowed());
     }
 
+    @Test
+    void gateFailureAllowsGameButReportsFailureToAction() {
+        GameplayHook.install(new GameplayHook.Sink() {
+            @Override
+            public boolean attack(Object player, Object target) {
+                throw new IllegalStateException("expected gate failure");
+            }
+        });
+
+        assertTrue(GameplayHook.attack(new GatePlayer(), new GateEntity()),
+                "游戏侧异常必须保守放行，避免卡死输入");
+        assertFalse(GameplayHook.lastAttackAllowed());
+
+        GameplayHook.resetAttackAllowed();
+        assertFalse(api.attack(new GateEntity()), "动作层不得把门控异常谎报为攻击成功");
+        assertEquals(1, gameMode.calls);
+        assertFalse(GameplayHook.lastAttackAllowed());
+    }
+
     /** 门控未接线（无 sink）时按放行处理，不能误报失败。 */
     @Test
     void missingGateDefaultsToAllowed() {

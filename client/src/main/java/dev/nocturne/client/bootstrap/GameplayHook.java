@@ -766,7 +766,8 @@ public final class GameplayHook {
             }
             return allowed;
         } catch (Throwable t) {
-            ATTACK_ALLOWED.set(Boolean.TRUE);
+            // 游戏侧保守放行避免卡死，动作层必须知道门控求值失败。
+            ATTACK_ALLOWED.set(Boolean.FALSE);
             failure("attack", t);
             return true;
         }

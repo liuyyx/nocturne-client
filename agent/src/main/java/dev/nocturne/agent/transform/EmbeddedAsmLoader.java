@@ -377,28 +377,10 @@ public final class EmbeddedAsmLoader extends ClassLoader {
     }
 
     /**
-     * 创建世界空间 3D 钩子转换器：在目标 {@code void} 方法的每个 RETURN 之前，
-     * 把首个 {@code float} 形参传给钩子 {@code (F)V}。
-     *
-     * @param targetInternalName 目标类内部名
-     * @param method             目标方法名
-     * @param descriptor         目标方法描述符（返回类型必须为 {@code V}，且含 float 形参）
-     * @param hookOwner          钩子类内部名
-     * @param hookMethod         钩子方法名（描述符固定 {@code (F)V}）
-     * @return 转换器；内嵌 ASM 缺失或类加载失败时返回 {@code null}
-     */
-    public ClassFileTransformer createWorldRenderTransformer(String targetInternalName,
-                                                              String method, String descriptor,
-                                                              String hookOwner, String hookMethod) {
-        return createWorldRenderTransformer(targetInternalName, method, descriptor, hookOwner,
-                null, hookMethod);
-    }
-
-    /**
      * 世界空间 3D 钩子转换器：同一个转换器一次插入头部捕获与尾部绘制，避免重复改写。
      *
-     * @param headHookMethod 方法头钩子（可为 null）
-     * @param tailHookMethod 每个 RETURN 前钩子（可为 null）
+     * @param headHookMethod 方法头捕获钩子，描述符为 {@code (F)V}
+     * @param tailHookMethod 每个 RETURN 前的无参消费钩子，描述符为 {@code ()V}
      */
     public ClassFileTransformer createWorldRenderTransformer(String targetInternalName,
                                                               String method, String descriptor,

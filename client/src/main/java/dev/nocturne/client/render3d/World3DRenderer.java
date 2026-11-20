@@ -16,7 +16,7 @@ import java.util.List;
  * <p>调用链（1.8.9）：
  * <pre>
  * EntityRenderer#renderWorld(FJ)V 末尾
- *   → GameplayHook.worldRender3D(F) → GameplayEvents → 本类 render(F)
+ *   → GameplayHook.worldRender3D()（消费入口捕获的 float）→ GameplayEvents → 本类 render(F)
  *     → CameraState.read(...)（眼位/朝向/有效 FOV，反射桥）
  *     → World3DBackend.begin(camera)（投影 + 模型视图 + 状态压栈）
  *     → 订阅者（WorldRenderEvent）+ 启用中的 World3DOverlay 模块

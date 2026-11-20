@@ -1739,10 +1739,10 @@ public final class NocturneAgent {
 
     /**
      * 世界空间 3D 渲染钩子：{@code EntityRenderer#renderWorld(FJ)V} 的每个 RETURN 之前调用
-     * {@code GameplayHook.worldRender3D(F)}。
+     * {@code GameplayHook.worldRender3D()}，入口先调用 {@code worldRender3DBegin(F)}。
      *
      * <p>选择返回点而不是方法头：世界几何已经画进深度缓冲，覆盖物能被地形正确遮挡，也不会被
-     * 随后绘制的世界内容覆盖。{@code partialTicks} 直接取方法形参，不依赖任何版本的 Timer 映射。
+     * 随后绘制的世界内容覆盖。{@code partialTicks} 在入口捕获，不依赖 Timer 映射或尾部局部槽。
      *
      * <p>能力登记是显式的：类/成员在表里标 {@code absent}（1.14.4+ 世界绘制在
      * {@code LevelRenderer#renderLevel}）时不注册任何转换器，直接登记 {@code world3d} 不可用并
@@ -1787,7 +1787,7 @@ public final class NocturneAgent {
                 String target = className + "." + candidate.name() + descriptor;
                 ClassFileTransformer transformer = asmLoader.createWorldRenderTransformer(
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
-                        null, "worldRender3D");
+                        "worldRender3DBegin", "worldRender3D");
                 int state = registerGameplayTransformerState(instrumentation, asmLoader, transformer, className,
                         candidate.name(), descriptor, "worldRender3D");
                 if (state == HOOK_WOVEN) {
@@ -1821,7 +1821,7 @@ public final class NocturneAgent {
                 }
                 ClassFileTransformer capture = asmLoader.createWorldRenderTransformer(
                         className, candidate.name(), descriptor, GAMEPLAY_HOOK_OWNER,
-                        null, "worldRender3DCapture");
+                        "worldRender3DCaptureBegin", "worldRender3DCapture");
                 int captureState = registerGameplayTransformerState(instrumentation, asmLoader, capture,
                         className, candidate.name(), descriptor, "worldRender3DCapture");
                 if (captureState == HOOK_WOVEN) {

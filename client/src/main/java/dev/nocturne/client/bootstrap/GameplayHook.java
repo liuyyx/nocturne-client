@@ -203,6 +203,11 @@ public final class GameplayHook {
             new ThreadLocal<java.util.ArrayDeque<Object>>();
     private static final Object NO_CAMERA = new Object();
     private static final int CAMERA_MAX_DEPTH = 4;
+    /** 世界绘制与相机捕获各自保存参数栈，避免嵌套方法覆盖另一条链的 partialTicks。 */
+    private static final ThreadLocal<float[]> WORLD_RENDER_PARTIALS = new ThreadLocal<float[]>();
+    private static final ThreadLocal<float[]> WORLD_CAPTURE_PARTIALS = new ThreadLocal<float[]>();
+    /** 异常退出不经过 RETURN，限制残留捕获项，避免跨帧无限增长。 */
+    private static final int WORLD_MAX_DEPTH = 64;
 
     /**
      * 取当前线程的捕获栈，首次使用时创建。
@@ -299,6 +304,8 @@ public final class GameplayHook {
         INPUT_TICK.remove();
         CHAMS_STACK.remove();
         CAMERA_STACK.remove();
+        WORLD_RENDER_PARTIALS.remove();
+        WORLD_CAPTURE_PARTIALS.remove();
     }
 
     /** @return 是否已进入自销毁状态 */
@@ -556,46 +563,67 @@ public final class GameplayHook {
         }
     }
 
-    /**
-     * 世界空间 3D 绘制入口：织入点传入游戏自己的 {@code partialTicks}。
-     *
-     * <p>这里只做异常隔离与转发，GL 相关的一切都在 client/ui 侧；钩子内部绝不把异常抛回
-     * 游戏的世界渲染方法。
-     *
-     * @param partialTicks 当帧渲染插值量
-     */
-    public static void worldRender3D(float partialTicks) {
-        if (GameplaySink.isKilled()) {
-            return;
-        }
+    /** 世界绘制方法入口捕获形参，RETURN 处不再读取局部槽。 */
+    public static void worldRender3DBegin(float partialTicks) {
+        captureWorldPartial(WORLD_RENDER_PARTIALS, partialTicks);
+    }
+
+    /** 相机矩阵建立方法入口捕获形参，与外层世界绘制栈隔离。 */
+    public static void worldRender3DCaptureBegin(float partialTicks) {
+        captureWorldPartial(WORLD_CAPTURE_PARTIALS, partialTicks);
+    }
+
+    /** 世界绘制方法的无参尾钩；消费入口值后转发，回调异常不得残留当前项。 */
+    public static void worldRender3D() {
+        dispatchWorldRender(WORLD_RENDER_PARTIALS, false);
+    }
+
+    /** 相机矩阵建立方法的无参尾钩；GL 查询仍在客户端后端执行。 */
+    public static void worldRender3DCapture() {
+        dispatchWorldRender(WORLD_CAPTURE_PARTIALS, true);
+    }
+
+    private static void captureWorldPartial(ThreadLocal<float[]> context, float partialTicks) {
         try {
-            Sink current = sink();
-            if (current != null) {
-                current.worldRender3D(partialTicks);
+            if (GameplaySink.isKilled()) {
+                return;
             }
+            float[] values = context.get();
+            if (values == null) {
+                // 槽 0 保存深度；只在本线程第一次捕获时分配，不装箱 float。
+                values = new float[WORLD_MAX_DEPTH + 1];
+                context.set(values);
+            }
+            int depth = (int) values[0];
+            if (depth >= WORLD_MAX_DEPTH) {
+                depth = 0;
+            }
+            values[depth + 1] = partialTicks;
+            values[0] = depth + 1;
         } catch (Throwable t) {
-            failure("worldRender3D", t);
+            failure("worldRender3DBegin", t);
         }
     }
 
-    /**
-     * 世界渲染头部入口：转发给客户端捕获当帧相机矩阵。
-     *
-     * <p>与 {@link #worldRender3D(float)} 一样只做异常隔离与转发；GL 查询在后端完成。
-     *
-     * @param partialTicks 当帧渲染插值量（当前实现只做日志/对齐，捕获不依赖它）
-     */
-    public static void worldRender3DCapture(float partialTicks) {
-        if (GameplaySink.isKilled()) {
-            return;
-        }
+    private static void dispatchWorldRender(ThreadLocal<float[]> context, boolean capture) {
         try {
+            float[] values = context.get();
+            if (values == null || values[0] == 0) {
+                return;
+            }
+            int depth = (int) values[0];
+            float partialTicks = values[depth];
+            values[0] = depth - 1;
             Sink current = sink();
             if (current != null) {
-                current.worldRender3DCapture(partialTicks);
+                if (capture) {
+                    current.worldRender3DCapture(partialTicks);
+                } else {
+                    current.worldRender3D(partialTicks);
+                }
             }
         } catch (Throwable t) {
-            failure("worldRender3DCapture", t);
+            failure(capture ? "worldRender3DCapture" : "worldRender3D", t);
         }
     }
 

@@ -14,19 +14,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * 在一个 {@code void} 方法上插入世界空间 3D 钩子，把该方法的首个 {@code float} 形参传出去：
  * <ul>
- *   <li><b>头部</b>（方法第一条指令前）：捕获世界相机矩阵；</li>
- *   <li><b>尾部</b>（每个 {@code RETURN} 之前）：实际绘制。</li>
+ *   <li><b>头部</b>（方法第一条指令前）：捕获首个 float 形参；</li>
+ *   <li><b>尾部</b>（每个 {@code RETURN} 之前）：无参消费捕获值，执行绘制或矩阵捕获。</li>
  * </ul>
  *
  * <p>为什么必须同一个转换器：两个独立转换器注册到同一方法时，第二个会拿到已含第一个钩子的
  * 字节再跑整条转换链，头部/尾部钩子会被重复插入（真机表现为同一帧画两遍）。这里一次访问同时
  * 插入两者，最多各一次。
  *
- * <p>为什么需要头部捕获：1.8.9 的 {@code renderWorld} 尾部模型视图已被手部渲染改成手空间
- * （带缩放），解析不出相机；头部的矩阵才是世界相机（含 F5/第三人称/viewBobbing）。
+ * <p>尾部不得读取形参：StackMapTable 可以把参数槽裁成 top，方法体也可能复用参数槽。
+ * 因此首部通过 {@code (F)V} 捕获，尾部只调用 {@code ()V}，不新增局部变量或分支。
  *
- * <p>平衡性：{@code FLOAD} + {@code INVOKESTATIC (F)V} 在每个插入点都是栈平衡的；不新增分支/
- * 异常处理器，因此用 {@code COMPUTE_MAXS} + {@code reader.accept(visitor, 0)} 保留原
+ * <p>平衡性：首部 {@code FLOAD} + {@code INVOKESTATIC (F)V} 与尾部
+ * {@code INVOKESTATIC ()V} 均保持栈平衡；用 {@code COMPUTE_MAXS} 保留原
  * StackMapTable。任何不匹配都返回 {@code null}，让 JVM 沿用原字节码。
  */
 public final class WorldRenderHookTransformer implements ClassFileTransformer {
@@ -45,35 +45,23 @@ public final class WorldRenderHookTransformer implements ClassFileTransformer {
     private final String targetDescriptor;
     /** 钩子类内部名（斜杠形式）。 */
     private final String hookOwner;
-    /** 方法头钩子名（{@code (F)V}）；{@code null} 表示不插头部。 */
+    /** 方法头捕获钩子名（{@code (F)V}）。 */
     private final String headHookMethod;
-    /** 每个 RETURN 前钩子名（{@code (F)V}）；{@code null} 表示不插尾部。 */
+    /** 每个 RETURN 前消费钩子名（{@code ()V}）。 */
     private final String tailHookMethod;
-
-    /** 单钩子（尾部）兼容构造器。 */
-    public WorldRenderHookTransformer(String targetClassInternalName, String targetMethod,
-                                      String targetDescriptor, String hookOwner,
-                                      String hookMethod) {
-        this(targetClassInternalName, targetMethod, targetDescriptor, hookOwner, null, hookMethod);
-    }
-
-    /** 单钩子构造器：{@code atMethodEnd=false} 时插头部。 */
-    public WorldRenderHookTransformer(String targetClassInternalName, String targetMethod,
-                                      String targetDescriptor, String hookOwner,
-                                      String hookMethod, boolean atMethodEnd) {
-        this(targetClassInternalName, targetMethod, targetDescriptor, hookOwner,
-                atMethodEnd ? null : hookMethod, atMethodEnd ? hookMethod : null);
-    }
 
     /**
      * 双钩子构造器。
      *
-     * @param headHookMethod 方法头钩子（可为 null）
-     * @param tailHookMethod 每个 RETURN 前钩子（可为 null）
+     * @param headHookMethod 方法头捕获钩子（不得为 null）
+     * @param tailHookMethod 每个 RETURN 前的无参消费钩子（不得为 null）
      */
     public WorldRenderHookTransformer(String targetClassInternalName, String targetMethod,
                                       String targetDescriptor, String hookOwner,
                                       String headHookMethod, String tailHookMethod) {
+        if (headHookMethod == null || tailHookMethod == null) {
+            throw new IllegalArgumentException("world render hooks require capture and consume");
+        }
         this.targetClassInternalName = internalize(targetClassInternalName);
         this.targetMethod = targetMethod;
         this.targetDescriptor = targetDescriptor;
@@ -91,18 +79,17 @@ public final class WorldRenderHookTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
         if (classfileBuffer == null || className == null
-                || !className.equals(targetClassInternalName)
-                || (headHookMethod == null && tailHookMethod == null)) {
+                || !className.equals(targetClassInternalName)) {
             return null;
         }
         try {
             // 幂等：同一类的转换器链在注册第二个钩子（setupCameraTransform 与 renderWorld
             // 同属 bfk）时会把整条链重放到已织入的字节上。这里按钩子名先检测，已存在的
             // 头/尾钩子不再插入——否则同一帧会画两遍（真机两个 cube 偏移即此）。
-            final boolean needHead = headHookMethod != null
-                    && !TransformGuard.containsHook(classfileBuffer, hookOwner, headHookMethod);
-            final boolean needTail = tailHookMethod != null
-                    && !TransformGuard.containsHook(classfileBuffer, hookOwner, tailHookMethod);
+            final boolean needHead = !TransformGuard.containsHookInMethod(classfileBuffer,
+                    targetClassInternalName, targetMethod, targetDescriptor, hookOwner, headHookMethod);
+            final boolean needTail = !TransformGuard.containsHookInMethod(classfileBuffer,
+                    targetClassInternalName, targetMethod, targetDescriptor, hookOwner, tailHookMethod);
             if (!needHead && !needTail) {
                 return null;
             }
@@ -138,7 +125,8 @@ public final class WorldRenderHookTransformer implements ClassFileTransformer {
                         @Override
                         public void visitInsn(int opcode) {
                             if (opcode == Opcodes.RETURN && needTail) {
-                                emitHook(floatSlot, tailHookMethod);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner,
+                                        tailHookMethod, "()V", false);
                             }
                             super.visitInsn(opcode);
                         }

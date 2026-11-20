@@ -170,6 +170,9 @@ public final class ModernGlApi {
     private Method getIntegervBuffer;
     /** {@code glGetIntegerv(int, int[])}（老版本兜底形态）。 */
     private Method getIntegervArray;
+    /** 混合因子查询令牌与数组形态的复用单值缓冲，避免每帧创建查询数组。 */
+    private static final int[] BLEND_NAMES = {0x80C9, 0x80C8, 0x80CB, 0x80CA};
+    private final int[] blendQuery = new int[1];
     /** {@code glGenTextures(int[])}。 */
     private Method genTextures;
     /** {@code glDeleteTextures(int[])}。 */
@@ -864,27 +867,28 @@ public final class ModernGlApi {
 
     // ------------------------------------------------------------- 状态开关
 
-    /** 开启混合并使用常规的 src-alpha 混合因子，同时返回下发前的因子对（还原时用）。 */
+    /** 开启常规 src-alpha 混合；缓冲/数组两种查询面都保存四个原因子供帧末还原。 */
     public int[] enableBlendAndReadPrevious() {
         int[] previous = null;
-        if (getIntegervBuffer != null && viewportStaging != null) {
-            // GL_BLEND_SRC_RGB / GL_BLEND_DST_RGB / GL_BLEND_SRC_ALPHA / GL_BLEND_DST_ALPHA
-            // 一次 getIntegerv 只能查一个平面；这里用四个单独查询（视口以内）。查不到就返回 null。
-            // GL_BLEND_SRC_RGB=0x80C9, GL_BLEND_DST_RGB=0x80C8, GL_BLEND_SRC_ALPHA=0x80CB,
-            // GL_BLEND_DST_ALPHA=0x80CA。旧值 0x0C30-0x0C33 是 pre-1.4 的 token（核心 profile 下
-            // glGetIntegerv 直接 GL_INVALID_ENUM 且不写值），会让还原用到垃圾因子。
-            int[][] queries = {{0x80C9, 0x80C8}, {0x80CB, 0x80CA}};
-            int[] prev = new int[4];
-            for (int i = 0; i < 4; i++) {
-                int[] read = getInteger(queries[i / 2][i % 2], 1);
-                if (read == null) {
-                    prev = null;
+        if ((getIntegervBuffer != null && viewportStaging != null) || getIntegervArray != null) {
+            previous = new int[4];
+            for (int i = 0; i < BLEND_NAMES.length; i++) {
+                try {
+                    if (getIntegervBuffer != null && viewportStaging != null) {
+                        viewportStaging.clear();
+                        viewportStaging.limit(1);
+                        getIntegervBuffer.invoke(null, BLEND_NAMES[i], viewportStaging);
+                        previous[i] = viewportStaging.get(0);
+                    } else {
+                        getIntegervArray.invoke(null, BLEND_NAMES[i], blendQuery);
+                        previous[i] = blendQuery[0];
+                    }
+                } catch (Throwable t) {
+                    previous = null;
                     break;
                 }
-                prev[i] = read[0];
             }
-            // P7：GL_ZERO==0 是合法因子，不能拿 ">0" 判成功——四个查询都返回非 null 即读到了真实值。
-            previous = prev;
+            // GL_ZERO 是合法因子；四次查询成功即保留快照，不按值是否为零判断。
         }
         enableCap(GL_BLEND);
         Reflect.call(blendFunc, null, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

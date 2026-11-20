@@ -176,35 +176,7 @@ val distJar = tasks.register<Jar>("distJar") {
     // 让「全部类 ≤ 52」成为可校验的硬约束。
     exclude("META-INF/versions/**")
 
-    // 产物自检：必须内嵌 dev/nocturne/agent/asm.pack，且 jar 根不得出现展开的 ASM 类。
-    // 这两个不变式一旦被破坏（例如打包任务被跳过或 exclude 失效），帧钩子会静默失效，故在此硬失败。
-    doLast {
-        val jarFile = archiveFile.get().asFile
-        ZipFile(jarFile).use { zip ->
-            if (zip.getEntry("dev/nocturne/agent/asm.pack") == null) {
-                throw GradleException(
-                    "dist jar ${jarFile.name} is missing the embedded ASM payload " +
-                        "'dev/nocturne/agent/asm.pack'; the frame hook would silently fail."
-                )
-            }
-            var stray: String? = null
-            val entries = zip.entries()
-            while (entries.hasMoreElements()) {
-                val name = entries.nextElement().name
-                if (name.startsWith("org/objectweb/asm/")) {
-                    stray = name
-                    break
-                }
-            }
-            if (stray != null) {
-                throw GradleException(
-                    "dist jar ${jarFile.name} leaked an expanded ASM class '$stray'; " +
-                        "ASM must only be embedded as the encrypted payload " +
-                        "'dev/nocturne/agent/asm.pack'."
-                )
-            }
-        }
-    }
+    // ASM 载荷与展开类检查放在 verifyJarBytecode：Jar 的 doLast 会在 UP-TO-DATE/缓存命中时跳过。
 }
 
 // ---------------------------------------------------------------------------
@@ -263,10 +235,16 @@ val verifyJarBytecode = tasks.register("verifyJarBytecode") {
         val jarFile = distJar.get().archiveFile.get().asFile
         val violations = ArrayList<String>()
         ZipFile(jarFile).use { zip ->
+            if (zip.getEntry("dev/nocturne/agent/asm.pack") == null) {
+                violations.add("missing embedded ASM payload 'dev/nocturne/agent/asm.pack'")
+            }
             val entries = zip.entries()
             val present = HashSet<String>()
             while (entries.hasMoreElements()) {
                 val entry = entries.nextElement()
+                if (entry.name.startsWith("org/objectweb/asm/")) {
+                    violations.add("${entry.name}: expanded ASM must only use the encrypted payload")
+                }
                 if (!entry.name.endsWith(".class")) {
                     continue
                 }

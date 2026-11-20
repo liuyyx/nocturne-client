@@ -1,10 +1,10 @@
 package dev.nocturne.agent;
 
+import dev.nocturne.client.game.ForeignScreens;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.runtime.FrameListener;
 
-import java.util.Locale;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -23,11 +23,6 @@ import java.util.function.BooleanSupplier;
  * 这个回调每帧都在跑，绝不能因为它影响游戏。
  */
 final class ForeignScreenGuard implements FrameListener {
-
-    /** 已知会自己弹 {@code GuiScreen} 的客户端包名前缀（小写比较）。 */
-    private static final String[] FOREIGN_PACKAGES = {
-            "top.fpsmaster.",
-    };
 
     /** 读游戏状态与调用 {@code displayGuiScreen} 用的桥。 */
     private final GameBridge bridge;
@@ -75,16 +70,7 @@ final class ForeignScreenGuard implements FrameListener {
      * @return 命中已知前缀时返回 {@code true}
      */
     static boolean isForeignScreen(String className) {
-        if (className == null) {
-            return false;
-        }
-        String name = className.toLowerCase(Locale.ROOT);
-        for (String prefix : FOREIGN_PACKAGES) {
-            if (name.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
+        return ForeignScreens.isForeign(className);
     }
 
     @Override

@@ -676,8 +676,10 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         // 连“回到游戏”都点不了，同时关闭自绘 GUI，避免“回到游戏”被面板压住。
         // 但绘制不能一起让步：HUD 行（计分板/坐标/按键）、世界覆盖层（NameTags/ESP）
         // 与 Better Chat 的背景都必须在聊天/背包/暂停界面期间继续画。
-        boolean nativeScreen = hasNativeScreen();
-        if (nativeScreen) {
+        // 已知外部客户端 Screen 例外：继续处理开关键，由 guard 在同帧关闭它。
+        Object nativeScreen = nativeScreen();
+        if (nativeScreen != null && !dev.nocturne.client.game.ForeignScreens.isForeign(
+                nativeScreen.getClass().getName())) {
             setBlocked(false);
             nativeMouseHandoff = false;
             if (gui.isOpen()) {
@@ -1046,12 +1048,17 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
 
     /** @return 游戏当前是否显示原生 Screen；桥不可用时按没有处理，不阻断自绘 GUI。 */
     private boolean hasNativeScreen() {
+        return nativeScreen() != null;
+    }
+
+    /** @return 当前原生 Screen 实例；找不到或桥不可用时为 {@code null}。 */
+    private Object nativeScreen() {
         try {
             NocturneClient client = NocturneClient.get();
             dev.nocturne.client.game.GameBridge bridge = client == null ? null : client.gameBridge();
             Object minecraft = bridge == null ? null : bridge.minecraft();
             if (minecraft == null) {
-                return false;
+                return null;
             }
             Object current = bridge.readField(minecraft,
                     dev.nocturne.client.mapping.ClassType.MINECRAFT, "currentScreen");
@@ -1068,13 +1075,16 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
                 System.out.println("[nocturne] native screen probe: currentScreen=" + current
                         + " screen=" + legacy + " gui.screen=" + viaGui);
             }
-            return current != null || legacy != null || viaGui != null;
+            if (current != null) {
+                return current;
+            }
+            return legacy != null ? legacy : viaGui;
         } catch (Throwable t) {
             if (!nativeScreenProbeLogged) {
                 nativeScreenProbeLogged = true;
                 System.out.println("[nocturne] native screen probe failed: " + t);
             }
-            return false;
+            return null;
         }
     }
     /** 形状兜底缓存的 Screen 字段（26.3 的 currentScreen/screen 映射 absent）。 */

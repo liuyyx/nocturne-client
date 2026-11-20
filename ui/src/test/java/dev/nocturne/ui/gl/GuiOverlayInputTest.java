@@ -180,6 +180,24 @@ class GuiOverlayInputTest {
         resetClient();
     }
 
+    @Test
+    void foreignScreenDoesNotPreemptToggle() {
+        NocturneClient client = NocturneClient.boot(null);
+        ScreenHost host = new ScreenHost();
+        host.screen = new top.fpsmaster.ui.click.MainPanel();
+        ScreenHost.instance = host;
+        client.setGameBridge(new GameBridge(null, new HostMapping()));
+
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                new FakeBackend(320, 240), new FakeInput(), GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.onFrame();
+        InputBlock.recordKey(344, 1);
+        overlay.onFrame();
+
+        assertTrue(overlay.isOpen(), "外部 Screen 不得在开关键处理前让 overlay 早退");
+        assertTrue(InputBlock.shouldBlock(), "自绘 GUI 打开后必须阻断外部 Screen 的输入");
+    }
+
     /** 清理进程级单例，避免默认模块污染后续用例。 */
     private static void resetClient() {
         try {

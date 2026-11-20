@@ -242,6 +242,11 @@ val verifyJarBytecode = tasks.register("verifyJarBytecode") {
         fun scanJar(file: java.io.File, launcher: Boolean): Set<String> {
             val present = HashSet<String>()
             ZipFile(file).use { zip ->
+                listOf("fabric.mod.json", "nocturne.mixins.json").forEach { metadata ->
+                    if (zip.getEntry(metadata) == null) {
+                        violations.add("${file.name}: missing Fabric metadata '$metadata'")
+                    }
+                }
                 if (zip.getEntry("dev/nocturne/agent/asm.pack") == null) {
                     violations.add("${file.name}: missing embedded ASM payload 'dev/nocturne/agent/asm.pack'")
                 }

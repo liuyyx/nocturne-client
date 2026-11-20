@@ -93,6 +93,22 @@ class ObfuscatedMappingTest {
         assertTrue(mapping.describe().contains("1.8.9"));
     }
 
+    @Test
+    void positionDoesNotBorrowDistanceToSqrId1122() {
+        ObfuscatedMapping mapping = ObfuscatedMapping.load("/mappings-1.12.2.json");
+        MethodCandidate wrong = new MethodCandidate("method_5649", "()Lnet/minecraft/class_243;");
+        for (ClassType owner : Arrays.asList(ClassType.LOCAL_PLAYER, ClassType.ENTITY,
+                ClassType.LIVING_ENTITY, ClassType.MOB, ClassType.PLAYER)) {
+            List<MethodCandidate> candidates = mapping.methodCandidates(owner, "position");
+            assertFalse(candidates.contains(wrong),
+                    owner + " position 不得借用 distanceToSqr 的 intermediary ID");
+            assertEquals("d", candidates.get(0).name(), "vanilla 坐标方法必须仍是首选候选");
+        }
+        assertTrue(mapping.methodCandidates(ClassType.ENTITY, "distanceToSqr").contains(
+                        new MethodCandidate("method_5649", "(DDD)D")),
+                "distanceToSqr 自己的 intermediary 配对必须保留");
+    }
+
     /** 验证表内条目被翻译为混淆名，且方法描述符会按混淆后的类名重写。 */
     @Test
     void translatesKnownClassesFieldsAndMethods() {

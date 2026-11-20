@@ -343,9 +343,9 @@ class Intermediary:
 
     def method(self, owner: str, name: str, descriptor: "str | None") -> "str | None":
         if descriptor is not None:
-            found = self.methods.get((owner, name, descriptor))
-            if found is not None:
-                return found
+            # 同名方法可以重载；精确描述符未命中时按名字回退会把另一成员的
+            # intermediary ID 配上当前描述符（1.12.2 position/distanceToSqr）。
+            return self.methods.get((owner, name, descriptor))
         return self.methods_by_name.get((owner, name))
 
     def field(self, owner: str, name: str, descriptor: "str | None") -> "str | None":

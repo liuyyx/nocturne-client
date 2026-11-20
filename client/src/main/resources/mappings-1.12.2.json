@@ -1342,7 +1342,7 @@
                 "position": {
                     "names": {
                         "vanilla": "d",
-                        "fabric": "method_5649",
+                        "fabric": "position",
                         "forge": "func_174791_d"
                     },
                     "signatures": {
@@ -1418,7 +1418,7 @@
                 "tick": {
                     "names": {
                         "vanilla": "n",
-                        "fabric": "method_3147",
+                        "fabric": "tick",
                         "forge": "func_70636_d"
                     },
                     "signatures": {
@@ -2557,7 +2557,7 @@
                 "blockPosition": {
                     "names": {
                         "vanilla": "c",
-                        "fabric": "method_5654",
+                        "fabric": "blockPosition",
                         "forge": "func_180425_c"
                     },
                     "signatures": {
@@ -2777,7 +2777,7 @@
                 "position": {
                     "names": {
                         "vanilla": "d",
-                        "fabric": "method_5649",
+                        "fabric": "position",
                         "forge": "func_174791_d"
                     },
                     "signatures": {
@@ -3279,7 +3279,7 @@
                 "position": {
                     "names": {
                         "vanilla": "d",
-                        "fabric": "method_5649",
+                        "fabric": "position",
                         "forge": "func_174791_d"
                     },
                     "signatures": {
@@ -3548,7 +3548,7 @@
                 "position": {
                     "names": {
                         "vanilla": "d",
-                        "fabric": "method_5649",
+                        "fabric": "position",
                         "forge": "func_174791_d"
                     },
                     "signatures": {
@@ -3830,7 +3830,7 @@
                 "getItem": {
                     "names": {
                         "vanilla": "a",
-                        "fabric": "method_7375",
+                        "fabric": "getItem",
                         "forge": "func_70301_a"
                     },
                     "signatures": {
@@ -4048,7 +4048,7 @@
                 "position": {
                     "names": {
                         "vanilla": "d",
-                        "fabric": "method_5649",
+                        "fabric": "position",
                         "forge": "func_174791_d"
                     },
                     "signatures": {

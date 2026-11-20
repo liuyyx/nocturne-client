@@ -230,6 +230,9 @@ val verifyJarBytecode = tasks.register("verifyJarBytecode") {
     group = "verification"
     description = "Fails when the delivery jar has bytecode newer than Java 8, or is missing a compiled class."
     dependsOn(distJar)
+    listOf(":core", ":agent", ":client", ":ui", ":injector").forEach { path ->
+        dependsOn(project(path).tasks.named("classes"))
+    }
 
     doLast {
         val jarFile = distJar.get().archiveFile.get().asFile
@@ -264,10 +267,10 @@ val verifyJarBytecode = tasks.register("verifyJarBytecode") {
             // 真机曾出现 NoClassDefFoundError: dev/nocturne/ui/fatality/FaPreviewCard$Effects
             // ——外部类在 jar 里、私有嵌套类却没进去，帧动作因此每帧抛错、ClickGUI 局部失效。
             // 这种「编译产物没被打包」的漏包无法从源码审查发现，只能在打包后逐类核对。
-            listOf(":core", ":agent", ":client", ":ui", ":injector").forEach moduleLoop@ { path ->
+            listOf(":core", ":agent", ":client", ":ui", ":injector").forEach { path ->
                 val root = project(path).layout.buildDirectory.dir("classes/java/main").get().asFile
                 if (!root.isDirectory) {
-                    return@moduleLoop
+                    throw GradleException("missing compiled classes for $path: $root")
                 }
                 root.walkTopDown()
                     .filter { it.isFile && it.name.endsWith(".class") }

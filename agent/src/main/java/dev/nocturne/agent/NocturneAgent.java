@@ -278,21 +278,8 @@ public final class NocturneAgent {
                 return;
             }
             java.net.URL self = source.getLocation();
-            // 游戏类加载器：Fabric/Forge 下是隔离加载器，**不在 system 类加载器的视野里**——
-            // 按名字从 system loader 查必然失败（第一版就是这么静默退出的）。这里从已加载类里找。
-            ClassLoader gameLoader = null;
-            if (instrumentation != null) {
-                for (Class<?> type : instrumentation.getAllLoadedClasses()) {
-                    String name = type.getName();
-                    if ("net.minecraft.client.Minecraft".equals(name)
-                            || "net.minecraft.client.main.Main".equals(name)) {
-                        gameLoader = type.getClassLoader();
-                        if (gameLoader != null) {
-                            break;
-                        }
-                    }
-                }
-            }
+            // 复用映射候选与启动期缓存，避免 Fabric intermediary 类名被另一套扫描规则漏掉。
+            ClassLoader gameLoader = gameClassLoader(instrumentation);
             if (gameLoader == null) {
                 log("game loader not found; skipping agent jar exposure");
                 return;

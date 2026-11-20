@@ -121,7 +121,7 @@ python tools/mapping/generate.py --javap         # 只做逐版本 jar 交叉校
   写入临时 jar，再通过 `addUrlFwd` 加入 Knot 的父级加载器，此时允许在 null-loader 失败后回退到游戏加载器。
 - 症状：Fabric 的 `KnotClassLoader` 会把每份 jar 各加载一遍，静态字段各存一份——
   **帧回调连续触发，但监听器列表恒为 0，界面永远不出现**。任何跨加载器的静态状态都必须放这里。
-- 关联步骤：`exposeAgentJarToGameLoader` 用反射调 Knot 自己的 `addUrlFwd(URL)` 把 agent jar 暴露给游戏加载器。
+- 关联步骤：`exposeAgentJarToGameLoader` 复用 `gameClassLoader()` 的缓存与 `MINECRAFT` 映射候选，再调用 Knot 的 `addUrlFwd(URL)`；禁止另扫硬编码游戏类名。
 
 ### 4.2 反射与映射
 

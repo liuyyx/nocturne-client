@@ -1637,16 +1637,8 @@
                     }
                 },
                 "position": {
-                    "names": {
-                        "vanilla": "d",
-                        "fabric": "method_5649",
-                        "forge": "func_70092_e"
-                    },
-                    "signatures": {
-                        "vanilla": "(DDD)D",
-                        "fabric": "(DDD)D",
-                        "forge": "(DDD)D"
-                    }
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "respawnPlayer": {
                     "absent": true,
@@ -1705,16 +1697,8 @@
                     "absentReason": "unverified"
                 },
                 "tick": {
-                    "names": {
-                        "vanilla": "a",
-                        "fabric": "method_3147",
-                        "forge": "func_184839_n"
-                    },
-                    "signatures": {
-                        "vanilla": "(I)V",
-                        "fabric": "(I)V",
-                        "forge": "(I)V"
-                    }
+                    "absent": true,
+                    "absentReason": "unverified"
                 }
             },
             "fields": {
@@ -3198,16 +3182,8 @@
             },
             "methods": {
                 "blockPosition": {
-                    "names": {
-                        "vanilla": "c",
-                        "fabric": "method_5654",
-                        "forge": "func_70038_c"
-                    },
-                    "signatures": {
-                        "vanilla": "(DDD)Z",
-                        "fabric": "(DDD)Z",
-                        "forge": "(DDD)Z"
-                    }
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "distanceToSqr": {
                     "names": {
@@ -3410,16 +3386,8 @@
                     "absentReason": "unverified"
                 },
                 "position": {
-                    "names": {
-                        "vanilla": "d",
-                        "fabric": "method_5649",
-                        "forge": "func_70092_e"
-                    },
-                    "signatures": {
-                        "vanilla": "(DDD)D",
-                        "fabric": "(DDD)D",
-                        "forge": "(DDD)D"
-                    }
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "rayTrace": {
                     "names": {
@@ -4025,16 +3993,8 @@
                     }
                 },
                 "position": {
-                    "names": {
-                        "vanilla": "d",
-                        "fabric": "method_5649",
-                        "forge": "func_70092_e"
-                    },
-                    "signatures": {
-                        "vanilla": "(DDD)D",
-                        "fabric": "(DDD)D",
-                        "forge": "(DDD)D"
-                    }
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "removeEffect": {
                     "absent": true,
@@ -4342,16 +4302,8 @@
                     }
                 },
                 "position": {
-                    "names": {
-                        "vanilla": "d",
-                        "fabric": "method_5649",
-                        "forge": "func_70092_e"
-                    },
-                    "signatures": {
-                        "vanilla": "(DDD)D",
-                        "fabric": "(DDD)D",
-                        "forge": "(DDD)D"
-                    }
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setPos": {
                     "names": {
@@ -4660,16 +4612,8 @@
                     "absentReason": "unverified"
                 },
                 "getItem": {
-                    "names": {
-                        "vanilla": "a",
-                        "fabric": "method_7375",
-                        "forge": "func_70449_g"
-                    },
-                    "signatures": {
-                        "vanilla": "(F)V",
-                        "fabric": "(F)V",
-                        "forge": "(F)V"
-                    }
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "getSelectedItem": {
                     "names": {
@@ -4874,16 +4818,8 @@
                     "absentReason": "unverified"
                 },
                 "position": {
-                    "names": {
-                        "vanilla": "d",
-                        "fabric": "method_5649",
-                        "forge": "func_70092_e"
-                    },
-                    "signatures": {
-                        "vanilla": "(DDD)D",
-                        "fabric": "(DDD)D",
-                        "forge": "(DDD)D"
-                    }
+                    "absent": true,
+                    "absentReason": "unverified"
                 },
                 "setPos": {
                     "names": {

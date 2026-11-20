@@ -51,6 +51,17 @@ class ForeignScreenGuardTest {
     }
 
     @Test
+    void restoresModernMouseEvenWhenGrabStateIsUnreadable() {
+        assertEquals(ForeignScreenGuard.MouseAction.GRAB,
+                ForeignScreenGuard.decideMouseAction(false, true, false, false, true, false));
+        assertEquals(ForeignScreenGuard.MouseAction.NONE,
+                ForeignScreenGuard.decideMouseAction(false, true, false, false, true, true));
+        assertEquals(ForeignScreenGuard.MouseAction.NONE,
+                ForeignScreenGuard.decideMouseAction(false, false, false, false, true, false),
+                "没有 MouseHandler 的 legacy 版本仍不得调用现代鼠标 API");
+    }
+
+    @Test
     void restoresTheMouseOnlyWhenWeReleasedIt() {
         // 原生 Screen（暂停菜单/背包/聊天）开着时绝不能抓取：否则光标被锁进菜单。
         assertEquals(ForeignScreenGuard.MouseAction.NONE,

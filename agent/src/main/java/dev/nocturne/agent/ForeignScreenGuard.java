@@ -160,8 +160,8 @@ final class ForeignScreenGuard implements FrameListener {
                         + " falling back to unconditional releaseMouse while our GUI is open");
             }
         }
-        MouseAction action = decideMouseAction(guiOpen, faceAvailable, value, mouseReleased,
-                nativeScreen);
+        MouseAction action = decideMouseAction(guiOpen, handler != null, faceAvailable, value,
+                mouseReleased, nativeScreen);
         if (action == MouseAction.RELEASE) {
             bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "releaseMouse");
             mouseReleased = true;
@@ -217,8 +217,20 @@ final class ForeignScreenGuard implements FrameListener {
      */
     static MouseAction decideMouseAction(boolean guiOpen, boolean faceAvailable, boolean grabbed,
                                          boolean suppressed, boolean nativeScreen) {
+        return decideMouseAction(guiOpen, faceAvailable, faceAvailable, grabbed, suppressed,
+                nativeScreen);
+    }
+
+    /**
+     * @param handlerAvailable 是否存在 MouseHandler；与抓取状态是否可读分开判定
+     */
+    static MouseAction decideMouseAction(boolean guiOpen, boolean handlerAvailable,
+                                         boolean faceAvailable, boolean grabbed,
+                                         boolean suppressed, boolean nativeScreen) {
         if (!faceAvailable) {
-            return MouseAction.NONE;
+            // 状态不可读不代表 handler 不存在：我们已经 release 过，就必须在关闭 GUI 后抓回。
+            return !guiOpen && handlerAvailable && suppressed && !nativeScreen
+                    ? MouseAction.GRAB : MouseAction.NONE;
         }
         if (guiOpen) {
             // 每帧复查：游戏会在窗口重新激活等时机再把鼠标抓回去。

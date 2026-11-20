@@ -26,6 +26,25 @@ class ModernRendererPlayerPreviewTest {
         int calls;
     }
 
+    private static final class RecordingText implements TextRenderer {
+        int batchesAtDraw = -1;
+
+        @Override
+        public void draw(String text, float x, float y, float size, dev.nocturne.ui.render.Color color) {
+            batchesAtDraw = GL30.drawArraysCalls;
+        }
+
+        @Override
+        public float width(String text, float size) {
+            return 0f;
+        }
+
+        @Override
+        public float height(float size) {
+            return size;
+        }
+    }
+
     public static final class PoseStack {
     }
 
@@ -178,9 +197,29 @@ class ModernRendererPlayerPreviewTest {
         assertTrue(GL30.glIsEnabled(0x0B71));
     }
 
+    @Test
+    void textFlushesPendingGeometryBeforeCallingTheFontPipeline() {
+        RecordingText text = new RecordingText();
+        ModernRenderer renderer = renderer(new TestMapping(MissingScreen.class), text);
+        renderer.beginFrame();
+        int before = GL30.drawArraysCalls;
+        renderer.rect(1, 1, 20, 20, dev.nocturne.ui.render.Color.of(0xFF112233));
+        assertEquals(before, GL30.drawArraysCalls, "矩形先进入批次而不是立即提交");
+
+        renderer.text("label", 2, 2, 10, dev.nocturne.ui.render.Color.of(0xFFFFFFFF));
+
+        assertEquals(before + 1, GL30.drawArraysCalls, "字体绘制前必须提交背景批次");
+        assertEquals(GL30.drawArraysCalls, text.batchesAtDraw);
+        renderer.endFrame();
+    }
+
     private static ModernRenderer renderer(Mapping mapping) {
+        return renderer(mapping, null);
+    }
+
+    private static ModernRenderer renderer(Mapping mapping, TextRenderer text) {
         ModernRenderer renderer = new ModernRenderer(ModernGlApi.bind(
-                ModernRendererPlayerPreviewTest.class.getClassLoader()), null,
+                ModernRendererPlayerPreviewTest.class.getClassLoader()), text,
                 new GameBridge(null, mapping));
         assertTrue(renderer.initialise());
         return renderer;

@@ -911,6 +911,8 @@ public final class ModernRenderer implements UiBackend, PlayerModelPreview {
         if (value == null || value.isEmpty()) {
             return;
         }
+        // 游戏字体立即绘制，先提交本后端背景几何，否则后提交的批次会盖住文字。
+        flushBatch();
         // 交给游戏字体前必须让出本后端占用的 program 与 VAO：字体渲染器走自己的管线，
         // 留着我们的绑定会与它的状态互相覆盖。注意不要在这里改混合开关——
         // 字体绘制结束后不会替我们恢复，状态会与本后端的假设不符。

@@ -371,7 +371,14 @@ public final class NocturneClient {
     /** 只把 JDK 回调交给 bootstrap 唯一的汇；由客户端自己的加载器构造事件。 */
     private void installScrollEvents() {
         try {
-            Class<?> sink = Class.forName("dev.nocturne.bootstrap.KeySink", true, null);
+            Class<?> sink;
+            try {
+                sink = Class.forName("dev.nocturne.bootstrap.KeySink", true, null);
+            } catch (ClassNotFoundException modForm) {
+                // mod 形态没有 Instrumentation，桥由 Knot 的父级 URL 加载器提供。
+                sink = Class.forName("dev.nocturne.bootstrap.KeySink", true,
+                        NocturneClient.class.getClassLoader());
+            }
             sink.getMethod("setScrollListener", java.util.function.DoubleConsumer.class).invoke(null,
                     (java.util.function.DoubleConsumer) delta -> {
                         if (!panicked) eventBus.post(new dev.nocturne.client.event.ScrollEvent(delta));

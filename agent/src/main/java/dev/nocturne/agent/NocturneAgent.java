@@ -106,8 +106,14 @@ public final class NocturneAgent {
         try {
             // mod 形态下游戏类加载器就是本类的加载器。
             cachedGameLoader = NocturneAgent.class.getClassLoader();
+            // 没有 Instrumentation 时不能追加 bootstrap 搜索路径；把资源桥加入 Knot 的父级
+            // URL 加载器，让 Mixin、InputBlock 与客户端始终解析到同一份类。
+            if (!installModBridge(cachedGameLoader)) {
+                throw new IllegalStateException("Fabric mod bridge unavailable");
+            }
             selectMapping();
             NocturneClient.boot(null);
+            installGameplaySinkBridge(null);
             installOverlay(null);
         } catch (Throwable error) {
             STARTED.set(false);
@@ -291,21 +297,29 @@ public final class NocturneAgent {
                 log("game loader not found; skipping agent jar exposure");
                 return;
             }
-            for (java.lang.reflect.Method method : gameLoader.getClass().getMethods()) {
-                if ("addUrlFwd".equals(method.getName())
-                        && method.getParameterCount() == 1
-                        && method.getParameterTypes()[0] == java.net.URL.class) {
-                    // 声明它的类不是 public（实测会抛 IllegalAccessException），必须显式放开。
-                    method.setAccessible(true);
-                    method.invoke(gameLoader, self);
-                    log("agent jar exposed to game loader: " + self);
-                    return;
-                }
+            if (addUrlFwd(gameLoader, self)) {
+                log("agent jar exposed to game loader: " + self);
+                return;
             }
             log("game loader has no addUrlFwd; assuming a non-isolated launcher");
         } catch (Throwable t) {
             log("exposeAgentJarToGameLoader failed: " + t);
         }
+    }
+
+    /** 把 URL 加入 Knot 的父级动态加载器；非 Fabric 加载器没有该入口时返回 false。 */
+    private static boolean addUrlFwd(ClassLoader loader, java.net.URL url) throws Exception {
+        for (java.lang.reflect.Method method : loader.getClass().getMethods()) {
+            if ("addUrlFwd".equals(method.getName())
+                    && method.getParameterCount() == 1
+                    && method.getParameterTypes()[0] == java.net.URL.class) {
+                // 声明它的类不是 public（实测会抛 IllegalAccessException），必须显式放开。
+                method.setAccessible(true);
+                method.invoke(loader, url);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -454,6 +468,84 @@ public final class NocturneAgent {
         } catch (Throwable t) {
             // fail-closed：桥不可用时必须让调用方停止注册转换器。
             log("bootstrap bridge failed (" + t + "); transformers will not be registered");
+            return false;
+        }
+    }
+
+    /**
+     * Fabric mod 形态安装资源桥。没有 Instrumentation 时，Knot 的父级动态 URL 加载器
+     * 是唯一能让游戏类与本客户端共享桥定义的入口；不得再把顶层副本塞进交付 jar。
+     */
+    private static boolean installModBridge(ClassLoader loader) {
+        return installModBridge(loader, MOD_BRIDGE_ENTRIES);
+    }
+
+    /** 包可见：测试用等价的加载器验证资源写入、父级暴露与失败时不继续启动。 */
+    static boolean installModBridge(ClassLoader loader, String[][] entries) {
+        if (loader == null) {
+            return false;
+        }
+        java.nio.file.Path jar = null;
+        boolean exposed = false;
+        try {
+            if (modBridgeAvailable(loader)) {
+                return true;
+            }
+            jar = java.nio.file.Files.createTempFile("nocturne-mod-bridge", ".jar");
+            jar.toFile().deleteOnExit();
+            try (java.util.zip.ZipOutputStream out = new java.util.zip.ZipOutputStream(
+                    java.nio.file.Files.newOutputStream(jar))) {
+                for (String[] entry : entries) {
+                    try (java.io.InputStream in = NocturneAgent.class.getClassLoader()
+                            .getResourceAsStream(entry[0])) {
+                        if (in == null) {
+                            log("mod bridge: entry missing " + entry[0]);
+                            return false;
+                        }
+                        out.putNextEntry(new java.util.zip.ZipEntry(entry[1]));
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, read);
+                        }
+                        out.closeEntry();
+                    }
+                }
+            }
+            if (!addUrlFwd(loader, jar.toUri().toURL())) {
+                log("mod bridge: game loader has no addUrlFwd");
+                return false;
+            }
+            exposed = true;
+            if (!modBridgeAvailable(loader)) {
+                log("mod bridge: exported classes are not visible to the game loader");
+                return false;
+            }
+            log("mod bridge installed: " + entries.length + " shared classes");
+            return true;
+        } catch (Throwable failure) {
+            log("mod bridge failed: " + failure);
+            return false;
+        } finally {
+            if (!exposed && jar != null) {
+                try {
+                    java.nio.file.Files.deleteIfExists(jar);
+                } catch (Throwable ignored) {
+                    // 临时文件清理由 deleteOnExit 兜底，不影响失败结论。
+                }
+            }
+        }
+    }
+
+    /** 五个资源专用类必须全部能由同一游戏加载器解析，不能只验证第一个。 */
+    private static boolean modBridgeAvailable(ClassLoader loader) {
+        try {
+            for (String[] entry : MOD_BRIDGE_ENTRIES) {
+                Class.forName(entry[1].substring(0, entry[1].length() - ".class".length())
+                        .replace('/', '.'), true, loader);
+            }
+            return true;
+        } catch (Throwable unavailable) {
             return false;
         }
     }
@@ -642,10 +734,17 @@ public final class NocturneAgent {
                 return;
             }
             Object events = client.gameplayEvents();
-            // 必须用 bootstrap 加载器取这个类：交付 jar 里没有它，只有 bridge jar 里有。
-            Class<?> holder = Class.forName("dev.nocturne.bootstrap.GameplaySink", true, null);
+            // attach 形态必须从 bootstrap 取唯一副本；mod 形态则从 Knot 的父级 URL 加载器取。
+            Class<?> holder;
+            try {
+                holder = Class.forName("dev.nocturne.bootstrap.GameplaySink", true, null);
+            } catch (ClassNotFoundException modForm) {
+                ClassLoader loader = cachedGameLoader != null
+                        ? cachedGameLoader : NocturneAgent.class.getClassLoader();
+                holder = Class.forName("dev.nocturne.bootstrap.GameplaySink", true, loader);
+            }
             holder.getMethod("install", Object.class).invoke(null, events);
-            log("gameplay sink bridge installed (shared bootstrap holder) sink="
+            log("gameplay sink bridge installed (shared holder) sink="
                     + (holder.getMethod("target").invoke(null) != null));
         } catch (Throwable t) {
             log("gameplay sink bridge failed: " + t);
@@ -1242,6 +1341,17 @@ public final class NocturneAgent {
 
     /** 桥 jar 内的版本资源路径；用于阻止「同进程新旧 jar 混装」（见 installBootstrapBridge）。 */
     static final String BRIDGE_VERSION_ENTRY = "nocturne-bootstrap/bridge.version";
+
+    /** mod 形态只导出交付 jar 中没有顶层副本的五个类，避免与现有运行时类重复定义。 */
+    private static final String[][] MOD_BRIDGE_ENTRIES = {
+            {"nocturne-bootstrap/KeySink.class", "dev/nocturne/bootstrap/KeySink.class"},
+            {"nocturne-bootstrap/GameplaySink.class", "dev/nocturne/bootstrap/GameplaySink.class"},
+            {"nocturne-bootstrap/LegacyMouse.class", "dev/nocturne/bootstrap/LegacyMouse.class"},
+            {"nocturne-bootstrap/GameplayHook.class",
+                    "dev/nocturne/client/bootstrap/GameplayHook.class"},
+            {"nocturne-bootstrap/GameplayHook$Sink.class",
+                    "dev/nocturne/client/bootstrap/GameplayHook$Sink.class"},
+    };
 
     /** 测试用：清掉「桥已装」标记，使下一次 installBootstrapBridge 真正执行。 */
     static void resetBootstrapBridgeForTests() {

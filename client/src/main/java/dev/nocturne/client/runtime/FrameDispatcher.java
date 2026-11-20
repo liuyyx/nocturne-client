@@ -24,6 +24,26 @@ public final class FrameDispatcher {
 
     /** 是否已自销毁（{@link #clear()}）：置位后分发立刻停，哪怕还在遍历旧快照。 */
     private static volatile boolean cleared;
+    /** 两种注入入口可能来自不同加载器；来源选择只能保存在共享分发器里。 */
+    private static volatile boolean frameHookSeen;
+    private static volatile boolean contextDriven;
+
+    /** 设置后端对当帧绘制上下文的依赖，所有 Runtime 副本共用。 */
+    public static void setContextDriven(boolean required) {
+        contextDriven = required;
+    }
+
+    /** 选择本次入口是否驱动；只接收 JDK 基本类型，避免跨加载器接口分裂。 */
+    public static boolean shouldDriveFrame(boolean drawHook, boolean forceDrawHook) {
+        if (KILLED || cleared) {
+            return false;
+        }
+        if (!drawHook) {
+            frameHookSeen = true;
+            return !contextDriven;
+        }
+        return contextDriven || !frameHookSeen || forceDrawHook;
+    }
 
     /**
      * 一次性安装令牌：跨加载器副本共享「某个安装动作已经做过」。
@@ -288,6 +308,8 @@ public final class FrameDispatcher {
         KILLED = false;
         cleared = false;
         firstFrameLogged = false;
+        frameHookSeen = false;
+        contextDriven = false;
         SHUTDOWN_ACTIONS.clear();
         LISTENERS.clear();
         DRAW_CONTEXT_SINK = null;
@@ -356,6 +378,8 @@ public final class FrameDispatcher {
         INSTALL_CLAIMS.clear();
         DRAW_CONTEXT_SINK = null;
         FRAME_TASKS.clear();
+        frameHookSeen = false;
+        contextDriven = false;
     }
 
     /**

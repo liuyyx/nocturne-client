@@ -186,10 +186,10 @@ python tools/mapping/generate.py --javap         # 只做逐版本 jar 交叉校
 - **每帧每实体禁止手写 `Class.forName` 候选循环**：一律走 `GameBridge.type(ClassType)`（内部有
   `typeCache`，只缓存成功结果）。未命中的候选每次都会抛异常，几百个实体 × 每帧就是上千次类加载
   查询——1.16.5 真机表现为「一开透视框，服务端 tick 掉队、随后追赶」，像游戏加速。
-- **帧驱动有两入口**：`NocturneRuntime.onFrame()`（帧交换点，权威）与 `onDrawFrame()`（GUI 绘制钩子）。
-  游戏绘制 API 后端（`gui-graphics`/`gui-stack`/`gui-extractor`）的上下文只在绘制钩子那一次调用内
-  有效，所以 `OverlayBootstrap` 会置 `setContextDriven(true)`；自绘 GL 后端在帧钩子已驱动时
-  `onDrawFrame()` 直接返回，避免同帧两遍。诊断开关 `-Dnocturne.debug.frames` 打印每秒驱动次数与来源。
+- **帧驱动有两入口**：`NocturneRuntime.onFrame()`（帧交换）与 `onDrawFrame()`（GUI 绘制钩子）。
+  `FrameDispatcher` 在 bootstrap 唯一副本里保存来源与 `contextDriven` 状态，Runtime 不得另存副本。
+  游戏绘制 API 后端只由绘制入口驱动；自绘 GL 后端观察到帧交换后跳过绘制入口，避免同帧两遍。
+  诊断开关 `-Dnocturne.debug.frames` 打印每秒驱动次数与来源。
 
 ### 4.6 自销毁
 

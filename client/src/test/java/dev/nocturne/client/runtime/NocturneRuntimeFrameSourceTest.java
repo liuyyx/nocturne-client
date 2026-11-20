@@ -8,35 +8,29 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** 上下文驱动后端不能同时从帧交换与绘制回调分发输入、绘制和 RenderEvent。 */
 class NocturneRuntimeFrameSourceTest {
     private String previousDrawHook;
-    private boolean previousFrameSeen;
-    private boolean previousContextDriven;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         previousDrawHook = System.getProperty("nocturne.drawhook");
         System.clearProperty("nocturne.drawhook");
-        previousFrameSeen = field("frameHookSeen").getBoolean(null);
-        previousContextDriven = field("contextDriven").getBoolean(null);
         TestSupport.resetClient();
         NocturneRuntime.shutdown();
         FrameDispatcher.resetForTests();
-        field("frameHookSeen").setBoolean(null, false);
     }
 
     @AfterEach
-    void tearDown() throws Exception {
+    void tearDown() {
         NocturneRuntime.shutdown();
         TestSupport.resetClient();
         FrameDispatcher.resetForTests();
-        field("frameHookSeen").setBoolean(null, previousFrameSeen);
-        NocturneRuntime.setContextDriven(previousContextDriven);
         if (previousDrawHook == null) {
             System.clearProperty("nocturne.drawhook");
         } else {
@@ -86,9 +80,65 @@ class NocturneRuntimeFrameSourceTest {
         }
     }
 
-    private static Field field(String name) throws Exception {
-        Field field = NocturneRuntime.class.getDeclaredField(name);
-        field.setAccessible(true);
-        return field;
+    @Test
+    void isolatedRuntimeCopiesShareBothSourceAndContextState() throws Exception {
+        Class<?> frameRuntime = new RuntimeCopyLoader().loadClass(NocturneRuntime.class.getName());
+        Class<?> drawRuntime = new RuntimeCopyLoader().loadClass(NocturneRuntime.class.getName());
+        int[] frames = {0};
+        Runnable listener = () -> frames[0]++;
+        FrameDispatcher.add(listener);
+        try {
+            drawRuntime.getMethod("setContextDriven", boolean.class).invoke(null, true);
+            frameRuntime.getMethod("onFrame").invoke(null);
+            assertEquals(0, frames[0], "其它 Runtime 副本也必须看见上下文依赖");
+            drawRuntime.getMethod("onDrawFrame").invoke(null);
+            assertEquals(1, frames[0]);
+
+            drawRuntime.getMethod("setContextDriven", boolean.class).invoke(null, false);
+            frameRuntime.getMethod("onFrame").invoke(null);
+            drawRuntime.getMethod("onDrawFrame").invoke(null);
+            assertEquals(2, frames[0], "其它 Runtime 副本也必须看见已生效的帧交换来源");
+        } finally {
+            FrameDispatcher.remove(listener);
+        }
+    }
+
+    /** 只隔离 Runtime；两个副本委托到同一个中立分发器，复现 Fabric attach 的边界。 */
+    private static final class RuntimeCopyLoader extends ClassLoader {
+        RuntimeCopyLoader() {
+            super(NocturneRuntimeFrameSourceTest.class.getClassLoader());
+        }
+
+        @Override
+        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            if (!name.equals(NocturneRuntime.class.getName())
+                    && !name.startsWith(NocturneRuntime.class.getName() + "$")) {
+                return super.loadClass(name, resolve);
+            }
+            synchronized (getClassLoadingLock(name)) {
+                Class<?> type = findLoadedClass(name);
+                if (type == null) {
+                    try (InputStream in = getParent().getResourceAsStream(name.replace('.', '/') + ".class")) {
+                        if (in == null) {
+                            throw new ClassNotFoundException(name);
+                        }
+                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+                        byte[] buffer = new byte[4096];
+                        int read;
+                        while ((read = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, read);
+                        }
+                        byte[] bytes = out.toByteArray();
+                        type = defineClass(name, bytes, 0, bytes.length);
+                    } catch (java.io.IOException e) {
+                        throw new ClassNotFoundException(name, e);
+                    }
+                }
+                if (resolve) {
+                    resolveClass(type);
+                }
+                return type;
+            }
+        }
     }
 }

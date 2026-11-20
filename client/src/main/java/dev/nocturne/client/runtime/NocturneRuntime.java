@@ -54,6 +54,9 @@ public final class NocturneRuntime {
     private static Method killedStateMethod;
     /** {@code FrameDispatcher.claimInstall(String)}；未解析时为 null（旧桥没有它）。 */
     private static Method claimInstallMethod;
+    /** bootstrap 唯一副本里的入口选择与上下文依赖状态。 */
+    private static Method shouldDriveFrameMethod;
+    private static Method setContextDrivenMethod;
 
     /** 工具类，禁止实例化。 */
     private NocturneRuntime() {
@@ -102,6 +105,8 @@ public final class NocturneRuntime {
             //    必须绕开它。
             // 3) system —— 兜底。
             Class<?> dispatcher = loadDispatcher();
+            shouldDriveFrameMethod = dispatcher.getMethod("shouldDriveFrame", boolean.class, boolean.class);
+            setContextDrivenMethod = dispatcher.getMethod("setContextDriven", boolean.class);
             dispatchMethod = dispatcher.getMethod("dispatch");
             addMethod = dispatcher.getMethod("add", Runnable.class);
             removeMethod = dispatcher.getMethod("remove", Runnable.class);
@@ -531,6 +536,8 @@ public final class NocturneRuntime {
         killMethod = null;
         killedStateMethod = null;
         claimInstallMethod = null;
+        shouldDriveFrameMethod = null;
+        setContextDrivenMethod = null;
     }
 
     /** 供测试检查监听器包装缓存规模；生产代码不调用。 */
@@ -540,17 +547,19 @@ public final class NocturneRuntime {
         }
     }
 
-    /**
-     * 帧交换点是否在工作。
-     *
-     * <p>一旦观察到帧钩子（{@code Display.update} / {@code glfwSwapBuffers} / {@code SDL_GL_SwapWindow}）
-     * 驱动过一帧，绘制钩子就不再重复驱动——GLFW 栈上两者同时存在，不区分会让 RenderEvent 与叠加层
-     * 绘制每帧各跑两遍（真机表现：「开了 ESP/NameTags 之后像是游戏加速了」）。
-     */
-    private static volatile boolean frameHookSeen;
-
-    /** 当前后端是否必须用当帧绘制上下文绘制（游戏绘制 API 后端为 true）。 */
-    private static volatile boolean contextDriven;
+    /** 来源状态只在 bootstrap 分发器中读写，禁止在 Runtime 副本中再存一份。 */
+    private static boolean shouldDriveFrame(boolean drawHook) {
+        if (!bindDispatcher()) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(shouldDriveFrameMethod.invoke(null, drawHook,
+                    drawHook && System.getProperty("nocturne.drawhook") != null));
+        } catch (Throwable t) {
+            System.out.println("[nocturne] frame source selection failed: " + t);
+            return false;
+        }
+    }
 
     /** 上一秒统计窗口起点（纳秒）；{@code 0} 表示尚未开始。 */
     private static final AtomicLong lastStatNanos = new AtomicLong();
@@ -573,13 +582,8 @@ public final class NocturneRuntime {
      * （单个监听器抛出的 Throwable 不会传播回被补丁的游戏方法）；之后按 20Hz 折算驱动模块 tick。
      */
     public static void onFrame() {
-        if (isKilled()) {
+        if (isKilled() || !shouldDriveFrame(false)) {
             // 自销毁后仍会每帧被注入点调进来：必须在这里就返回，不能进入 drive() 的 GL 工作。
-            return;
-        }
-        frameHookSeen = true;
-        // 游戏绘制 API 只在绘制钩子内有有效上下文；帧交换点不得再重复分发或广播事件。
-        if (contextDriven) {
             return;
         }
         if (FRAME_STAT) {
@@ -598,8 +602,7 @@ public final class NocturneRuntime {
         if (isKilled()) {
             return;
         }
-        if (frameHookSeen && !contextDriven
-                && System.getProperty("nocturne.drawhook") == null) {
+        if (!shouldDriveFrame(true)) {
             if (FRAME_STAT) {
                 drawSkips.incrementAndGet();
             }
@@ -621,7 +624,14 @@ public final class NocturneRuntime {
      * @param required {@code true} = 绘制钩子必须驱动
      */
     public static void setContextDriven(boolean required) {
-        contextDriven = required;
+        if (!bindDispatcher()) {
+            return;
+        }
+        try {
+            setContextDrivenMethod.invoke(null, required);
+        } catch (Throwable t) {
+            System.out.println("[nocturne] context-driven state update failed: " + t);
+        }
     }
 
     /** 每秒打印一次帧驱动次数与来源；仅在 {@link #FRAME_STAT} 时工作。 */

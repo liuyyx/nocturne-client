@@ -82,9 +82,9 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        // agent 形态只为 Screen 显式配置一次；HUD 由已有的转换器注册。
-        // mod 形态没有配置，由两个独立 Mixin 分别驱动菜单与游戏内画面。
-        return targetClass == null || !mixinClassName.endsWith(".HudRenderMixin");
+        // agent 形态只为 Screen 显式配置一次；HUD 与输入由已有 ASM 转换器处理。
+        // mod 形态没有配置，由独立 Mixin 分别驱动菜单、HUD 与输入。
+        return targetClass == null || mixinClassName.endsWith(".ScreenRenderMixin");
     }
 
     @Override
@@ -116,6 +116,9 @@ public final class NocturneMixinPlugin implements IMixinConfigPlugin {
     @Override
     public void postApply(String targetClassName, ClassNode node, String mixinClassName,
                           IMixinInfo mixinInfo) {
+        if (targetClass != null && !mixinClassName.endsWith(".ScreenRenderMixin")) {
+            return;
+        }
         if (mixinClassName.endsWith(".MouseInputMixin")) {
             blockInput(node, MOUSE_INPUT_METHODS);
             return;

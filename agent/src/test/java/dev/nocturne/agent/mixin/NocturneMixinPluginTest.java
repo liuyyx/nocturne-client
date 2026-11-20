@@ -11,11 +11,49 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** HUD 后置钩子的字节码边界回归。 */
 class NocturneMixinPluginTest {
+
+    @Test
+    void agentShapeOnlyAppliesScreenMixin() {
+        NocturneMixinPlugin.configure("net/minecraft/client/gui/screens/Screen",
+                "render", "()V", null, null);
+        NocturneMixinPlugin plugin = new NocturneMixinPlugin();
+        String prefix = "dev.nocturne.agent.mixin.";
+
+        assertTrue(plugin.shouldApplyMixin("Screen", prefix + "ScreenRenderMixin"));
+        assertFalse(plugin.shouldApplyMixin("Hud", prefix + "HudRenderMixin"));
+        assertFalse(plugin.shouldApplyMixin("Mouse", prefix + "MouseInputMixin"));
+        assertFalse(plugin.shouldApplyMixin("Keyboard", prefix + "KeyboardInputMixin"));
+
+        NocturneMixinPlugin.configure(null, null, null, null, null);
+        assertTrue(plugin.shouldApplyMixin("Screen", prefix + "ScreenRenderMixin"));
+        assertTrue(plugin.shouldApplyMixin("Hud", prefix + "HudRenderMixin"));
+        assertTrue(plugin.shouldApplyMixin("Mouse", prefix + "MouseInputMixin"));
+        assertTrue(plugin.shouldApplyMixin("Keyboard", prefix + "KeyboardInputMixin"));
+    }
+
+    @Test
+    void agentInputPostApplyDoesNotPatchMethods() {
+        NocturneMixinPlugin.configure("net/minecraft/client/gui/screens/Screen",
+                "render", "()V", null, null);
+        ClassNode node = new ClassNode();
+        node.name = "net/minecraft/client/MouseHandler";
+        MethodNode method = new MethodNode(Opcodes.ACC_PUBLIC, "onPress", "()V", null, null);
+        method.instructions.add(new InsnNode(Opcodes.RETURN));
+        node.methods.add(method);
+
+        new NocturneMixinPlugin().postApply(node.name, node,
+                "dev.nocturne.agent.mixin.MouseInputMixin", null);
+
+        assertEquals(1, method.instructions.size());
+        assertEquals(Opcodes.RETURN, method.instructions.getFirst().getOpcode());
+        NocturneMixinPlugin.configure(null, null, null, null, null);
+    }
 
     @Test
     void hudHookRunsAfterDepthClearWithoutCallerLocalSlot() {

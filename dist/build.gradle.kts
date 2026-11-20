@@ -331,6 +331,21 @@ distJar { finalizedBy(verifyJarBytecode) }
 // 它写完会立刻自校验悬空引用并以非 0 退出：引用对不上时构建期就红，不留到目标 JVM 里
 // 变成「类找不到」的静默失效。
 // ---------------------------------------------------------------------------
+// bootstrap 桥同时通过「带 .class 后缀的资源条目名」和 Class.forName 点号名引用这些类。
+// 随机化它们会让资源路径、类内部名与反射名分属不同命名空间，因此必须整体保留。
+val randomizedBridgeKeeps = listOf(
+    "dev/nocturne/agent/GuiDrawHook",
+    "dev/nocturne/bootstrap/KeySink",
+    "dev/nocturne/bootstrap/GameplaySink",
+    "dev/nocturne/bootstrap/LegacyMouse",
+    "dev/nocturne/client/runtime/FrameDispatcher",
+    "dev/nocturne/client/runtime/FrameListener",
+    "dev/nocturne/client/runtime/InputBlock",
+    "dev/nocturne/client/runtime/ScrollState",
+    "dev/nocturne/client/bootstrap/GameplayHook",
+    "dev/nocturne/client/bootstrap/GameplayHook\$Sink",
+)
+
 val randomizedJar = tasks.register<Exec>("randomizedJar") {
     group = "build"
     description = "Produces the class-name-randomized delivery jar (the official binary)."
@@ -345,6 +360,7 @@ val randomizedJar = tasks.register<Exec>("randomizedJar") {
 
     inputs.file(script)
     inputs.files(srcJar)
+    inputs.property("randomizedBridgeKeeps", randomizedBridgeKeeps)
     outputs.file(outJar)
 
     doFirst {
@@ -352,7 +368,8 @@ val randomizedJar = tasks.register<Exec>("randomizedJar") {
         val args = mutableListOf(python, script.absolutePath,
             "--in", srcJar.get().asFile.absolutePath,
             "--out", outJar.get().asFile.absolutePath,
-            "--prefix", "dev/nocturne")
+            "--prefix", "dev/nocturne",
+            "--keep", randomizedBridgeKeeps.joinToString(","))
         // 不给 --salt 时工具自行取随机种子（每次官方构建都不同）；
         // CI 传 -PclassSalt=<固定值> 即可得到可复现产物。
         (findProperty("classSalt") as? String)?.takeIf { it.isNotBlank() }?.let {

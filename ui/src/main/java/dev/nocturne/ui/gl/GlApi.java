@@ -303,6 +303,11 @@ public final class GlApi {
 
     /** 已解析的 {@code glPixelStorei}。 */
     private final Method pixelStorei;
+    /** 上传前保存、上传后还原；缓冲复用，不为每次图集更新分配数组。 */
+    private static final int[] UNPACK_NAMES = {GL_UNPACK_ALIGNMENT, GL_UNPACK_ROW_LENGTH,
+            GL_UNPACK_SKIP_ROWS, GL_UNPACK_SKIP_PIXELS};
+    private final int[] unpackSaved = new int[UNPACK_NAMES.length];
+    private final int[] unpackQuery = new int[1];
 
     /** 纹理句柄读写用的复用直接缓冲（GL 要求直接缓冲 + 本地字节序）。 */
     private final IntBuffer textureBuffer;
@@ -1292,14 +1297,15 @@ public final class GlApi {
     /**
      * 是否具备纹理上传所需的最小句柄集。
      *
-     * <p>除生成、上传与采样参数外，还必须能复位活动纹理单元；否则图集可能绑定到
-     * 光照贴图单元而采样器仍读取默认单元。
+     * <p>除生成、上传、采样与活动单元外，必须能保存/还原 UNPACK 状态；
+     * 不能读取原状态时拒绝上传，避免污染游戏图集或让驱动越界读取。
      *
      * @return 可用返回 {@code true}
      */
     public boolean hasTextures() {
         return (genTexturesArray != null || genTexturesBuffer != null)
-                && texImage2D != null && texParameteri != null && activeTexture != null;
+                && texImage2D != null && texParameteri != null && activeTexture != null
+                && pixelStorei != null && (getIntegerv != null || getIntegervBuffer != null);
     }
 
     /** @return 新建的纹理句柄；不可用或失败时为 0 */
@@ -1366,6 +1372,47 @@ public final class GlApi {
         bindTexture(GL_TEXTURE_2D, id);
     }
 
+    /** 不使用失败也返回 null 的 void 反射调用，读不到任一原值就不改动状态。 */
+    private boolean captureUnpackState() {
+        if (pixelStorei == null) {
+            return false;
+        }
+        for (int i = 0; i < UNPACK_NAMES.length; i++) {
+            if (getIntegerv != null) {
+                if (!Reflect.callStatus(getIntegerv, null, UNPACK_NAMES[i], unpackQuery)) {
+                    return false;
+                }
+                unpackSaved[i] = unpackQuery[0];
+            } else if (getIntegervBuffer != null) {
+                // LWJGL2 即使查询单值，也要求缓冲至少剩余 16 个 int。
+                viewportBuffer.clear();
+                if (!Reflect.callStatus(getIntegervBuffer, null, UNPACK_NAMES[i], viewportBuffer)) {
+                    return false;
+                }
+                unpackSaved[i] = viewportBuffer.get(0);
+            } else {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 小缓冲按紧密 RGBA 布局上传；任一步失败由调用方的 finally 还原。 */
+    private boolean prepareUnpackState() {
+        for (int i = 0; i < UNPACK_NAMES.length; i++) {
+            if (!Reflect.callStatus(pixelStorei, null, UNPACK_NAMES[i], i == 0 ? 4 : 0)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void restoreUnpackState() {
+        for (int i = 0; i < UNPACK_NAMES.length; i++) {
+            Reflect.call(pixelStorei, null, UNPACK_NAMES[i], unpackSaved[i]);
+        }
+    }
+
     /**
      * 只上传纹理的一块子矩形（对应 {@code glTexSubImage2D}）。
      *
@@ -1404,15 +1451,16 @@ public final class GlApi {
             }
         }
         buffer.flip();
-        if (pixelStorei != null) {
-            Reflect.call(pixelStorei, null, GL_UNPACK_ALIGNMENT, 4);
-            Reflect.call(pixelStorei, null, GL_UNPACK_ROW_LENGTH, 0);
-            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_ROWS, 0);
-            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_PIXELS, 0);
+        if (!captureUnpackState()) {
+            return false;
         }
-        Reflect.call(texSubImage2D, null, GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA,
-                GL_UNSIGNED_BYTE, buffer);
-        return true;
+        try {
+            return prepareUnpackState()
+                    && Reflect.callStatus(texSubImage2D, null, GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA,
+                    GL_UNSIGNED_BYTE, buffer);
+        } finally {
+            restoreUnpackState();
+        }
     }
 
     /**
@@ -1428,6 +1476,7 @@ public final class GlApi {
      * @return 下发成功返回 {@code true}
      */
     public boolean uploadTexture(int width, int height, int[] argb) {
+        flushBatch();   // 保存像素状态和上传均不得落在 glBegin/glEnd 之间
         if (texImage2D == null || width <= 0 || height <= 0 || argb == null) {
             return false;
         }
@@ -1447,18 +1496,16 @@ public final class GlApi {
             buffer.put((byte) ((pixel >>> 24) & 0xFF)); // A
         }
         buffer.flip();
-        if (pixelStorei != null) {
-            // 行对齐：RGBA 每行字节数必然是 4 的倍数，显式设为 4 以免游戏把全局值改过。
-            Reflect.call(pixelStorei, null, GL_UNPACK_ALIGNMENT, 4);
-            // 行长度/跳过量必须归零：游戏上传图集时会改这些全局值，驱动按旧值读我们的小缓冲
-            // 会读越界（1.21.11 真机：nvoglv64 ACCESS_VIOLATION；固定管线同一套驱动）。
-            Reflect.call(pixelStorei, null, GL_UNPACK_ROW_LENGTH, 0);
-            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_ROWS, 0);
-            Reflect.call(pixelStorei, null, GL_UNPACK_SKIP_PIXELS, 0);
+        if (!captureUnpackState()) {
+            return false;
         }
-        Reflect.call(texImage2D, null, GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                GL_RGBA, GL_UNSIGNED_BYTE, buffer);
-        return true;
+        try {
+            return prepareUnpackState()
+                    && Reflect.callStatus(texImage2D, null, GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                    GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+        } finally {
+            restoreUnpackState();
+        }
     }
 
     /** 已解析的 {@code glIsEnabled}，用于回读能力位的真实状态（调试校验用）。 */

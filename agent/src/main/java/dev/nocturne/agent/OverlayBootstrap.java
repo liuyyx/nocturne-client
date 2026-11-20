@@ -223,7 +223,8 @@ public final class OverlayBootstrap implements FrameListener {
         // 「游戏绘制 API（无自定义纹理）」与「自带 GL 管线（有纹理/字形图集）」两条路的差异）。
         // 仅诊断用：1.20+ 的默认路径一律走游戏绘制 API（GuiGraphics），下面的 extractor 分支会因此跳过，
         // 最终落到 selectBackend → ModernRenderer。生产环境不要设这个属性。
-        boolean forceGl = "gl".equalsIgnoreCase(System.getProperty("nocturne.ui.backend", ""));
+        boolean forceGl = forceGlAllowed(
+                "gl".equalsIgnoreCase(System.getProperty("nocturne.ui.backend", "")));
         // 1.21.1 的注入式 GuiGraphics 路径曾实测整屏纯红；该路径保留已验的
         // gl-core。Fabric mod 没有 Instrumentation 帧钩子，绘制只在游戏交来的
         // GuiGraphics 内有效，而且现场 LWJGL native 无法从 mod 加载，不能强制 GL。
@@ -613,6 +614,18 @@ public final class OverlayBootstrap implements FrameListener {
      */
     private boolean isSdlStack() {
         return resolveLoaded(SDL_CLASS) != null;
+    }
+
+    /** SDL/extractor 栈的 GL 上下文只归游戏绘制序列管理，诊断属性也不能绕过。 */
+    boolean forceGlAllowed(boolean requested) {
+        if (!requested) {
+            return false;
+        }
+        if (isSdlStack() || resolveLoaded(EXTRACTOR_CLASS) != null) {
+            log("forced gl backend ignored: the game owns the active drawing context");
+            return false;
+        }
+        return true;
     }
 
     /**

@@ -96,6 +96,23 @@ class BootstrapBridgeTest {
         }
     }
 
+    @Test
+    void failsClosedWhenAnyBridgeEntryIsMissing() throws Exception {
+        Path jar = Files.createTempFile("nocturne-bridge-missing", ".jar");
+        Recorder recorder = new Recorder();
+        try {
+            String[][] entries = {{"nocturne-bootstrap/__missing__.class",
+                    "dev/nocturne/bootstrap/__missing__.class"}};
+            assertFalse(NocturneAgent.writeBridgeJar(
+                    recorder.instrumentation(), jar, entries, "test-version"),
+                    "任一必需桥资源缺失都不得报告安装成功");
+            assertTrue(recorder.bootstrapSearches.isEmpty(),
+                    "缺资源时不得把不完整 jar 追加到 bootstrap");
+        } finally {
+            Files.deleteIfExists(jar);
+        }
+    }
+
     /** 桥 jar 必须内嵌版本资源，下一次注入才能判断 bootstrap 里已生效的是哪个构建。 */
     @Test
     void embedsTheBuildVersion() throws Exception {

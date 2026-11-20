@@ -417,13 +417,14 @@ public final class NocturneAgent {
     static boolean writeBridgeJar(Instrumentation instrumentation, java.nio.file.Path jar,
                                   String[][] entries, String version) {
         try {
+            java.util.List<String> missing = new java.util.ArrayList<String>();
             try (java.util.zip.ZipOutputStream out =
                          new java.util.zip.ZipOutputStream(java.nio.file.Files.newOutputStream(jar))) {
                 for (String[] entry : entries) {
                     try (java.io.InputStream in =
                                  NocturneAgent.class.getClassLoader().getResourceAsStream(entry[0])) {
                         if (in == null) {
-                            log("bootstrap bridge: entry missing " + entry[0]);
+                            missing.add(entry[0]);
                             continue;
                         }
                         String target = entry[1];
@@ -435,6 +436,10 @@ public final class NocturneAgent {
                         }
                         out.closeEntry();
                     }
+                }
+                if (!missing.isEmpty()) {
+                    log("bootstrap bridge failed: missing entries " + missing);
+                    return false;
                 }
                 // 版本资源：下一次注入（同进程、另一份 agent 类）靠它判断 bootstrap 里
                 // 已生效的是哪个构建。没有它就只能靠 first-wins 碰运气。

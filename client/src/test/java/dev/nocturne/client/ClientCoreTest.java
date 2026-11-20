@@ -184,6 +184,7 @@ class ClientCoreTest {
         NocturneClient second = NocturneClient.boot(null);
         assertSame(first, second, "boot must return the same instance");
         assertSame(first.modules(), second.modules(), "boot must reuse the same registry");
+        assertFalse(firstNames.contains("Scaffold Block"), "不得注册依赖不存在模块的永久隐藏 HUD");
         assertTrue(NocturneClient.isRunning());
         assertSame(first, NocturneClient.get());
 

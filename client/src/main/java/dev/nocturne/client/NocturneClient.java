@@ -346,7 +346,6 @@ public final class NocturneClient {
         modules.register(new dev.nocturne.client.module.modules.render.hud.ModuleListElementModule());
         modules.register(new dev.nocturne.client.module.modules.render.hud.HotkeyElementModule());
         modules.register(new dev.nocturne.client.module.modules.render.hud.MtfElementModule());
-        modules.register(new dev.nocturne.client.module.modules.render.hud.ScaffoldBlockElementModule());
         modules.register(new dev.nocturne.client.module.modules.render.hud.InventoryElementModule());
     }
 

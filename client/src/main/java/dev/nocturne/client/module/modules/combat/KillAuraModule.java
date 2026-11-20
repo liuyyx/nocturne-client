@@ -10,7 +10,6 @@ import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.module.Category;
 import dev.nocturne.client.module.GameModule;
-import dev.nocturne.client.module.Module;
 import dev.nocturne.client.render.OverlayDraw;
 import dev.nocturne.client.render.WorldGeometry;
 import dev.nocturne.client.render.WorldOverlay;
@@ -34,7 +33,6 @@ import java.util.Map;
  */
 public final class KillAuraModule extends GameModule implements WorldOverlay {
     private final BooleanValue pauseOnEat = add(new BooleanValue("Pause On Eat", true));
-    private final BooleanValue pauseOnScaffold = add(new BooleanValue("Pause On Scaffold", true));
     private final BooleanValue hitSelect = add(new BooleanValue("Hit Select", true));
     private final ModeValue mode = add(new ModeValue("Mode", "1.8", "1.8", "1.9+"));
     private final ModeValue targetMode = add(new ModeValue("Target Mode", "Single", "Single", "Switch"));
@@ -146,10 +144,6 @@ public final class KillAuraModule extends GameModule implements WorldOverlay {
         } else {
             pruneDeobf(now);
         }
-        if (pauseOnScaffold.get() && moduleEnabled("Scaffold")) {
-            clearState();
-            return;
-        }
 
         TargetManager.Options options = new TargetManager.Options();
         options.range = searchRange.get();
@@ -185,12 +179,6 @@ public final class KillAuraModule extends GameModule implements WorldOverlay {
         target = targets.get(switchIndex);
         aim(target, state);
         attack(target, state);
-    }
-
-    private boolean moduleEnabled(String name) {
-        NocturneClient client = client();
-        Module module = client == null ? null : client.modules().get(name);
-        return module != null && module.isEnabled();
     }
 
     private TargetManager.Sort sortForPriority() {

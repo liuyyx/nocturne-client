@@ -2888,8 +2888,23 @@ public final class GameBridge {
             }
             Method method = findMethodCached(type, candidate.name(), parameters);
             if (method != null) {
-                rememberPlan(type, owner, canonicalMethod, arity, method);
-                return Reflect.call(method, target, args);
+                Object result = Reflect.callOrFailure(method, target, args);
+                if (!Reflect.callFailed(result)) {
+                    rememberPlan(type, owner, canonicalMethod, arity, method);
+                    return result;
+                }
+                // 描述符选中的重载可能拒绝当前实参；按实参形状再试一次，失败计划不得入缓存。
+                Class<?>[] inferred = inferParameters(type, candidate.name(), args);
+                if (inferred != null && !java.util.Arrays.equals(inferred, parameters)) {
+                    Method retry = findMethodCached(type, candidate.name(), inferred);
+                    if (retry != null) {
+                        Object retryResult = Reflect.callOrFailure(retry, target, args);
+                        if (!Reflect.callFailed(retryResult)) {
+                            rememberPlan(type, owner, canonicalMethod, arity, retry);
+                            return retryResult;
+                        }
+                    }
+                }
             }
         }
         return null;
@@ -2920,8 +2935,22 @@ public final class GameBridge {
             }
             Method method = findMethodCached(ownerType, candidate.name(), parameters);
             if (method != null && Modifier.isStatic(method.getModifiers())) {
-                rememberPlan(ownerType, owner, canonicalMethod, arity, method);
-                return Reflect.call(method, null, args);
+                Object result = Reflect.callOrFailure(method, null, args);
+                if (!Reflect.callFailed(result)) {
+                    rememberPlan(ownerType, owner, canonicalMethod, arity, method);
+                    return result;
+                }
+                Class<?>[] inferred = inferParameters(ownerType, candidate.name(), args);
+                if (inferred != null && !java.util.Arrays.equals(inferred, parameters)) {
+                    Method retry = findMethodCached(ownerType, candidate.name(), inferred);
+                    if (retry != null && Modifier.isStatic(retry.getModifiers())) {
+                        Object retryResult = Reflect.callOrFailure(retry, null, args);
+                        if (!Reflect.callFailed(retryResult)) {
+                            rememberPlan(ownerType, owner, canonicalMethod, arity, retry);
+                            return retryResult;
+                        }
+                    }
+                }
             }
         }
         return null;

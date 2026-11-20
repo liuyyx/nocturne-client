@@ -114,17 +114,31 @@ public final class Reflect {
     private static final java.util.Set<String> REPORTED_FAILURES =
             java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
 
-    /** 调用方法句柄；句柄为 {@code null} 或调用失败时返回 {@code null}。 */
-    public static Object call(Method method, Object target, Object... args) {
+    /** 调用失败的内部哨兵；与目标方法合法返回 {@code null} 区分，且不产生逐次结果对象。 */
+    private static final Object CALL_FAILED = new Object();
+
+    /** 调用方法并保留真实成功状态；仅供调用计划决定能否缓存。 */
+    static Object callOrFailure(Method method, Object target, Object... args) {
         if (method == null) {
-            return null;
+            return CALL_FAILED;
         }
         try {
             return method.invoke(target, args);
         } catch (Throwable t) {
             reportFailure(method, t, args);
-            return null;
+            return CALL_FAILED;
         }
+    }
+
+    /** 判断 {@link #callOrFailure} 的结果是否来自反射异常。 */
+    static boolean callFailed(Object result) {
+        return result == CALL_FAILED;
+    }
+
+    /** 调用方法句柄；句柄为 {@code null} 或调用失败时返回 {@code null}。 */
+    public static Object call(Method method, Object target, Object... args) {
+        Object result = callOrFailure(method, target, args);
+        return callFailed(result) ? null : result;
     }
 
     /** 调用方法并报告真实成功；用于 void 方法，不能靠 null 返回值判断。 */

@@ -3,6 +3,7 @@ package dev.nocturne.client.game;
 import dev.nocturne.client.mapping.ClassType;
 import dev.nocturne.client.mapping.IdentityMapping;
 import dev.nocturne.client.mapping.Mapping;
+import dev.nocturne.client.mapping.MethodCandidate;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,7 +37,7 @@ class GameBridgePlanCacheTest {
     }
 
     /** 给 {@code pick} 配零参描述符的映射：验证描述符路径同样进计划缓存且语义不变。 */
-    static final class ZeroArityDescriptorMapping implements Mapping {
+    static class ZeroArityDescriptorMapping implements Mapping {
         @Override
         public String describe() {
             return "zero-arity-descriptor";
@@ -65,6 +66,107 @@ class GameBridgePlanCacheTest {
         @Override
         public boolean isIdentity() {
             return false;
+        }
+    }
+
+    /** 首个描述符调用抛异常，第二个候选才可用的映射。 */
+    static class FailingCandidateMapping extends ZeroArityDescriptorMapping {
+        @Override
+        public java.util.List<MethodCandidate> methodCandidates(ClassType owner, String canonicalName) {
+            if (!"pick".equals(canonicalName)) {
+                return super.methodCandidates(owner, canonicalName);
+            }
+            return java.util.Arrays.asList(
+                    new MethodCandidate("pick", "(Ljava/lang/String;)Ljava/lang/String;"),
+                    new MethodCandidate("pick", "(Ljava/lang/Object;)Ljava/lang/String;"));
+        }
+    }
+
+    /** 只提供一个会失败的接口描述符，实际可用重载需按实参推断。 */
+    static final class CharSequenceDescriptorMapping extends ZeroArityDescriptorMapping {
+        @Override
+        public String methodDescriptor(ClassType owner, String canonicalName) {
+            return "pick".equals(canonicalName)
+                    ? "(Ljava/lang/CharSequence;)Ljava/lang/String;"
+                    : null;
+        }
+    }
+
+    static final class FailingOverloaded {
+        int stringCalls;
+        int objectCalls;
+
+        @SuppressWarnings("unused")
+        String pick(String value) {
+            stringCalls++;
+            throw new IllegalStateException("expected test failure");
+        }
+
+        @SuppressWarnings("unused")
+        String pick(Object value) {
+            objectCalls++;
+            return "object:" + value;
+        }
+    }
+
+    static final class InferredRetry {
+        int interfaceCalls;
+        int stringCalls;
+
+        @SuppressWarnings("unused")
+        String pick(CharSequence value) {
+            interfaceCalls++;
+            throw new IllegalStateException("expected test failure");
+        }
+
+        @SuppressWarnings("unused")
+        String pick(String value) {
+            stringCalls++;
+            return "string:" + value;
+        }
+    }
+
+    static final class NullResult {
+        int calls;
+
+        @SuppressWarnings("unused")
+        String pick() {
+            calls++;
+            return null;
+        }
+    }
+
+    static final class CountingMapping extends ZeroArityDescriptorMapping {
+        int candidateQueries;
+
+        @Override
+        public java.util.List<MethodCandidate> methodCandidates(ClassType owner, String canonicalName) {
+            candidateQueries++;
+            return super.methodCandidates(owner, canonicalName);
+        }
+    }
+
+    static final class StaticMapping extends FailingCandidateMapping {
+        @Override
+        public String className(ClassType type) {
+            return StaticOverloaded.class.getName();
+        }
+    }
+
+    static final class StaticOverloaded {
+        static int stringCalls;
+        static int objectCalls;
+
+        @SuppressWarnings("unused")
+        static String pick(String value) {
+            stringCalls++;
+            throw new IllegalStateException("expected test failure");
+        }
+
+        @SuppressWarnings("unused")
+        static String pick(Object value) {
+            objectCalls++;
+            return "static:" + value;
         }
     }
 
@@ -103,5 +205,51 @@ class GameBridgePlanCacheTest {
         Overloaded target = new Overloaded();
         assertEquals("str:x", bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick", "x"));
         assertNull(bridge.callMapped(target, ClassType.LOCAL_PLAYER, "missing"));
+    }
+
+    @Test
+    void failedInvocationDoesNotPinTheFirstCandidate() {
+        GameBridge bridge = new GameBridge(null, new FailingCandidateMapping());
+        FailingOverloaded target = new FailingOverloaded();
+
+        assertEquals("object:x", bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick", "x"));
+        assertEquals("object:y", bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick", "y"));
+        assertEquals(1, target.stringCalls, "失败候选不得进入后续调用计划");
+        assertEquals(2, target.objectCalls);
+    }
+
+    @Test
+    void failedStaticInvocationDoesNotPinTheFirstCandidate() {
+        StaticOverloaded.stringCalls = 0;
+        StaticOverloaded.objectCalls = 0;
+        GameBridge bridge = new GameBridge(null, new StaticMapping());
+
+        assertEquals("static:x", bridge.callStaticMapped(ClassType.LOCAL_PLAYER, "pick", "x"));
+        assertEquals("static:y", bridge.callStaticMapped(ClassType.LOCAL_PLAYER, "pick", "y"));
+        assertEquals(1, StaticOverloaded.stringCalls);
+        assertEquals(2, StaticOverloaded.objectCalls);
+    }
+
+    @Test
+    void failedDescriptorOverloadRetriesWithInferredParameters() {
+        GameBridge bridge = new GameBridge(null, new CharSequenceDescriptorMapping());
+        InferredRetry target = new InferredRetry();
+
+        assertEquals("string:x", bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick", "x"));
+        assertEquals("string:y", bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick", "y"));
+        assertEquals(1, target.interfaceCalls);
+        assertEquals(2, target.stringCalls);
+    }
+
+    @Test
+    void successfulNullResultIsStillCached() {
+        CountingMapping mapping = new CountingMapping();
+        GameBridge bridge = new GameBridge(null, mapping);
+        NullResult target = new NullResult();
+
+        assertNull(bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick"));
+        assertNull(bridge.callMapped(target, ClassType.LOCAL_PLAYER, "pick"));
+        assertEquals(2, target.calls, "缓存计划仍要正常执行目标方法");
+        assertEquals(1, mapping.candidateQueries, "合法 null 返回值不得被误判为失败并重新解析");
     }
 }

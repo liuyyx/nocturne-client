@@ -281,6 +281,16 @@ class ObfuscatedMappingTest {
                     + "          \"neoforge\":\"()Lnet/minecraft/client/Minecraft;\""
                     + "        }"
                     + "      },"
+                    + "      \"sharedName\":{"
+                    + "        \"names\":{"
+                    + "          \"fabric\":\"method_shared\","
+                    + "          \"neoforge\":\"method_shared\""
+                    + "        },"
+                    + "        \"signatures\":{"
+                    + "          \"fabric\":\"(Lnet/minecraft/class_1657;)V\","
+                    + "          \"neoforge\":\"(Lnet/minecraft/client/Minecraft;)V\""
+                    + "        }"
+                    + "      },"
                     + "      \"forgeOnly\":{"
                     + "        \"names\":{\"forge\":\"m_0000_\"},"
                     + "        \"signatures\":{\"forge\":\"()V\"}"
@@ -369,6 +379,23 @@ class ObfuscatedMappingTest {
         assertEquals("A", mapping.methodName(ClassType.MINECRAFT, "getInstance", "()Lave;"));
         assertEquals("()Lave;", mapping.methodDescriptor(ClassType.MINECRAFT, "getInstance"));
         assertTrue(mapping.hasMethodDescriptor(ClassType.MINECRAFT, "getInstance"));
+    }
+
+    /** 同名跨命名空间冲突：首个高优先级候选获胜，描述符查询不得与候选首项分裂。 */
+    @Test
+    void duplicateRuntimeNameKeepsHighestPriorityDescriptor() {
+        ObfuscatedMapping mapping = fixture();
+
+        List<MethodCandidate> candidates = mapping.methodCandidates(ClassType.MINECRAFT, "sharedName");
+
+        assertEquals(2, candidates.size());
+        assertEquals("method_shared", candidates.get(0).name());
+        assertEquals("(Lnet/minecraft/class_1657;)V", candidates.get(0).descriptor());
+        assertEquals("sharedName", candidates.get(1).name());
+        assertEquals(null, candidates.get(1).descriptor());
+        assertEquals(candidates.get(0).descriptor(),
+                mapping.methodDescriptor(ClassType.MINECRAFT, "sharedName"));
+        assertTrue(mapping.hasMethodDescriptor(ClassType.MINECRAFT, "sharedName"));
     }
 
     /** 只覆盖一个命名空间的方法：该候选带自己的描述符，末尾规范名候选无描述符。 */

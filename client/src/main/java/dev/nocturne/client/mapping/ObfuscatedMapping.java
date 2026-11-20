@@ -490,7 +490,7 @@ public final class ObfuscatedMapping implements Mapping {
             for (String namespace : NAMESPACES) {
                 String name = memberName(member, namespace);
                 if (name != null) {
-                    picked.put(name, memberSignature(member, namespace));
+                    picked.putIfAbsent(name, memberSignature(member, namespace));
                 }
             }
         }

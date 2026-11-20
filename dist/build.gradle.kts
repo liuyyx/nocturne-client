@@ -222,75 +222,83 @@ val launcherJar = tasks.register<Jar>("launcherJar") {
 // 构建期断言：agent jar 里不允许出现高于 Java 8 的字节码。
 //
 // 背景：1.8.9 真机曾因高版本类被链接而 UnsupportedClassVersionError，二次 attach 直接失败。
-// 交付 jar 是 agent / bootstrap / client 三条路径共用的类来源，所以这里对**整个** jar 断言
-// major <= 52（比只查 dev/nocturne/** 更严），任何新依赖把高版本类带进根都会当场把构建搞红。
+// agent jar 全部类 major <= 52；launcher 仅 MigLayout 可使用 Java 11（major <= 55），
+// 其余类仍按 Java 8 校验。两个 jar 都检查 ASM 载荷与模块类齐全性，避免双击入口绕过门禁。
 // 用 java.util.zip 实现，跨平台、无外部依赖。
 // ---------------------------------------------------------------------------
 val verifyJarBytecode = tasks.register("verifyJarBytecode") {
     group = "verification"
-    description = "Fails when the delivery jar has bytecode newer than Java 8, or is missing a compiled class."
-    dependsOn(distJar)
+    description = "Verifies ASM packaging, bytecode limits, and class completeness of both delivery jars."
+    dependsOn(distJar, launcherJar)
     listOf(":core", ":agent", ":client", ":ui", ":injector").forEach { path ->
         dependsOn(project(path).tasks.named("classes"))
     }
 
     doLast {
         val jarFile = distJar.get().archiveFile.get().asFile
+        val launcherFile = launcherJar.get().archiveFile.get().asFile
         val violations = ArrayList<String>()
-        ZipFile(jarFile).use { zip ->
-            if (zip.getEntry("dev/nocturne/agent/asm.pack") == null) {
-                violations.add("missing embedded ASM payload 'dev/nocturne/agent/asm.pack'")
-            }
-            val entries = zip.entries()
-            val present = HashSet<String>()
-            while (entries.hasMoreElements()) {
-                val entry = entries.nextElement()
-                if (entry.name.startsWith("org/objectweb/asm/")) {
-                    violations.add("${entry.name}: expanded ASM must only use the encrypted payload")
-                }
-                if (!entry.name.endsWith(".class")) {
-                    continue
-                }
-                present.add(entry.name)
-                val bytes = zip.getInputStream(entry).use { it.readBytes() }
-                if (bytes.size < 8) {
-                    violations.add("${entry.name}: truncated class header")
-                    continue
-                }
-                val major = ((bytes[6].toInt() and 0xFF) shl 8) or (bytes[7].toInt() and 0xFF)
-                if (major > 52) {
-                    violations.add("${entry.name}: major $major")
-                }
-            }
 
-            // 完整性：模块编译出的每个类都必须在交付 jar 里。
-            // 真机曾出现 NoClassDefFoundError: dev/nocturne/ui/fatality/FaPreviewCard$Effects
-            // ——外部类在 jar 里、私有嵌套类却没进去，帧动作因此每帧抛错、ClickGUI 局部失效。
-            // 这种「编译产物没被打包」的漏包无法从源码审查发现，只能在打包后逐类核对。
-            listOf(":core", ":agent", ":client", ":ui", ":injector").forEach { path ->
-                val root = project(path).layout.buildDirectory.dir("classes/java/main").get().asFile
-                if (!root.isDirectory) {
-                    throw GradleException("missing compiled classes for $path: $root")
+        fun scanJar(file: java.io.File, launcher: Boolean): Set<String> {
+            val present = HashSet<String>()
+            ZipFile(file).use { zip ->
+                if (zip.getEntry("dev/nocturne/agent/asm.pack") == null) {
+                    violations.add("${file.name}: missing embedded ASM payload 'dev/nocturne/agent/asm.pack'")
                 }
-                root.walkTopDown()
-                    .filter { it.isFile && it.name.endsWith(".class") }
-                    .forEach classLoop@ { file ->
-                        val name = file.relativeTo(root).invariantSeparatorsPath
-                        // dev/nocturne/bootstrap/** 故意不进 jar：唯一副本由 bootstrap bridge 提供。
-                        // GameplayHook 同理（26.3 会从 agent jar 再定义一份，sink 分裂成两套）。
-                        if (name.startsWith("dev/nocturne/bootstrap/")
-                                || name.startsWith("dev/nocturne/client/bootstrap/GameplayHook")) {
-                            return@classLoop
-                        }
-                        if (name !in present) {
-                            violations.add("$name: compiled ($path) but missing from the jar")
-                        }
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (entry.name.startsWith("org/objectweb/asm/")) {
+                        violations.add("${file.name}: ${entry.name}: expanded ASM is forbidden")
                     }
+                    if (!entry.name.endsWith(".class")) {
+                        continue
+                    }
+                    present.add(entry.name)
+                    val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                    if (bytes.size < 8) {
+                        violations.add("${file.name}: ${entry.name}: truncated class header")
+                        continue
+                    }
+                    val major = ((bytes[6].toInt() and 0xFF) shl 8) or (bytes[7].toInt() and 0xFF)
+                    val allowedMajor = if (launcher && entry.name.startsWith("net/miginfocom/")) 55 else 52
+                    if (major > allowedMajor) {
+                        violations.add("${file.name}: ${entry.name}: major $major exceeds $allowedMajor")
+                    }
+                }
             }
+            return present
+        }
+
+        val agentClasses = scanJar(jarFile, false)
+        val launcherClasses = scanJar(launcherFile, true)
+
+        // 完整性：模块编译出的每个类都必须同时存在于 agent 与 launcher jar。
+        // dev/nocturne/bootstrap/** 与 GameplayHook 故意只由 bootstrap bridge 提供。
+        listOf(":core", ":agent", ":client", ":ui", ":injector").forEach { path ->
+            val root = project(path).layout.buildDirectory.dir("classes/java/main").get().asFile
+            if (!root.isDirectory) {
+                throw GradleException("missing compiled classes for $path: $root")
+            }
+            root.walkTopDown()
+                .filter { it.isFile && it.name.endsWith(".class") }
+                .forEach classLoop@ { file ->
+                    val name = file.relativeTo(root).invariantSeparatorsPath
+                    if (name.startsWith("dev/nocturne/bootstrap/")
+                            || name.startsWith("dev/nocturne/client/bootstrap/GameplayHook")) {
+                        return@classLoop
+                    }
+                    if (name !in agentClasses) {
+                        violations.add("${jarFile.name}: $name: compiled ($path) but missing")
+                    }
+                    if (name !in launcherClasses) {
+                        violations.add("${launcherFile.name}: $name: compiled ($path) but missing")
+                    }
+                }
         }
         if (violations.isNotEmpty()) {
             throw GradleException(
-                "dist jar ${jarFile.name} failed verification (${violations.size} problems):\n  " +
+                "delivery jars failed verification (${violations.size} problems):\n  " +
                     violations.joinToString("\n  ")
             )
         }
@@ -301,6 +309,7 @@ val verifyJarBytecode = tasks.register("verifyJarBytecode") {
 tasks.named("check") { dependsOn(verifyJarBytecode) }
 tasks.named("assemble") { dependsOn(launcherJar) }
 distJar { finalizedBy(verifyJarBytecode) }
+launcherJar { finalizedBy(verifyJarBytecode) }
 
 // ---------------------------------------------------------------------------
 // 类名随机化：官方二进制的必经过道。

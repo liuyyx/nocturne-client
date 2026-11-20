@@ -534,14 +534,14 @@ public final class PacketController {
     /**
      * 控制面白名单：KeepAlive / TeleportConfirm / PlayerCommand / ContainerClose。
      *
-     * <p>前两者没有映射表条目（各版本的类名差异在大版本里是
-     * {@code C00PacketKeepAlive}/{@code ServerboundKeepAlivePacket}、
-     * {@code CPacketConfirmTeleport}/{@code ServerboundAcceptTeleportationPacket}），
-     * 因此按类名 token 判定；后两者走映射身份，1.8.9 的别名同样命中。
+     * <p>四种包都先走映射身份，混淆名与 Fabric intermediary 不依赖可读 token；
+     * 类名 token 只保留给映射表之外的自定义加载器兜底。
      */
     private boolean isControlPacket(Object packet) {
         GameBridge bridge = client.gameBridge();
-        if (bridge != null && (bridge.isInstance(packet, ClassType.SERVERBOUND_CONTAINER_CLOSE)
+        if (bridge != null && (bridge.isInstance(packet, ClassType.SERVERBOUND_KEEPALIVE)
+                || bridge.isInstance(packet, ClassType.SERVERBOUND_ACCEPT_TELEPORTATION)
+                || bridge.isInstance(packet, ClassType.SERVERBOUND_CONTAINER_CLOSE)
                 || bridge.isInstance(packet, ClassType.SERVERBOUND_PLAYER_COMMAND))) {
             return true;
         }

@@ -3,6 +3,9 @@ package dev.nocturne.client.control;
 import dev.nocturne.client.NocturneClient;
 import dev.nocturne.client.TestSupport;
 import dev.nocturne.client.event.PacketEvent;
+import dev.nocturne.client.game.GameBridge;
+import dev.nocturne.client.game.TestMapping;
+import dev.nocturne.client.mapping.ClassType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -243,6 +246,27 @@ class PacketControllerTest {
         assertTrue(controller.capture(PacketEvent.Direction.SEND, new Object()), "普通包照常入队");
     }
 
+    @Test
+    void obfuscatedControlPacketsUseMappedIdentity() {
+        Recorder recorder = new Recorder();
+        NocturneClient client = NocturneClient.boot(null);
+        TestMapping mapping = new TestMapping(Object.class)
+                .classOverride(ClassType.SERVERBOUND_KEEPALIVE, a.class)
+                .classOverride(ClassType.SERVERBOUND_ACCEPT_TELEPORTATION, b.class);
+        client.setGameBridge(new GameBridge(null, mapping));
+        PacketController controller = client.packets();
+        controller.noteMainThread();
+        controller.deliveryForTests(recorder);
+        controller.hold(PacketEvent.Direction.SEND, ownerA);
+
+        assertFalse(controller.capture(PacketEvent.Direction.SEND, new a()),
+                "混淆 KeepAlive 不得因类名不含 token 而被捕获");
+        assertFalse(controller.capture(PacketEvent.Direction.SEND, new b()),
+                "混淆 TeleportConfirm 不得因类名不含 token 而被捕获");
+        assertEquals(0, controller.queued(PacketEvent.Direction.SEND));
+        assertTrue(controller.capture(PacketEvent.Direction.SEND, new Object()));
+    }
+
     /** 重放只旁路当前包：嵌套发送的其它包仍受闸门/事件系统约束。 */
     @Test
     void bypassIsScopedToOnePacket() {
@@ -327,7 +351,14 @@ class PacketControllerTest {
         assertFalse(controller.filterReceive(drop));
     }
 
-    /** 1.8.9 的 C00PacketKeepAlive 也命中类名 token（映射表没有该类条目）。 */
+    /** 不含任何可读包名的混淆 KeepAlive 与 TeleportConfirm。 */
+    static final class a {
+    }
+
+    static final class b {
+    }
+
+    /** 映射表之外的加载器仍可使用可读类名 token 兜底。 */
     static final class FakeKeepAlive {
     }
 

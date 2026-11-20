@@ -155,6 +155,8 @@ version = "1.12.2"
 "net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket" = "net/minecraft/network/play/client/CPacketHeldItemChange"
 "net/minecraft/network/protocol/game/ServerboundSwingPacket" = "net/minecraft/network/play/client/CPacketAnimation"
 "net/minecraft/network/protocol/game/ServerboundContainerClosePacket" = "net/minecraft/network/play/client/CPacketCloseWindow"
+"net/minecraft/network/protocol/common/ServerboundKeepAlivePacket" = "net/minecraft/network/play/client/CPacketKeepAlive"
+"net/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket" = "net/minecraft/network/play/client/CPacketConfirmTeleport"
 "net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket" = "net/minecraft/network/play/client/CPacketEntityAction"
 "net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action" = "net/minecraft/network/play/client/CPacketEntityAction$Action"
 

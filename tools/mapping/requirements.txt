@@ -912,6 +912,8 @@ net/minecraft/network/protocol/game/ServerboundChatPacket
 net/minecraft/client/renderer/EntityRenderer#getFOVModifier(float,boolean)
 net/minecraft/world/entity/player/Player#getCooledAttackStrength(float)
 net/minecraft/network/protocol/game/ServerboundPunchPacket
+net/minecraft/network/protocol/common/ServerboundKeepAlivePacket
+net/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket
 net/minecraft/network/protocol/game/ServerboundContainerClosePacket
 net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket
 net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action

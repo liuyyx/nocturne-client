@@ -2020,6 +2020,15 @@
             },
             "fields": {}
         },
+        "net/minecraft/network/protocol/common/ServerboundKeepAlivePacket": {
+            "names": {
+                "vanilla": "io",
+                "fabric": "net.minecraft.class_2827",
+                "forge": "net.minecraft.network.play.client.C00PacketKeepAlive"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/network/protocol/game/ClientboundAddEntityPacket": {
             "absent": true,
             "names": {},
@@ -2290,6 +2299,11 @@
             }
         },
         "net/minecraft/network/protocol/game/ClientboundSystemChatPacket": {
+            "absent": true,
+            "names": {},
+            "absentReason": "unverified"
+        },
+        "net/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket": {
             "absent": true,
             "names": {},
             "absentReason": "unverified"

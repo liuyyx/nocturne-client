@@ -147,6 +147,7 @@ version = "1.8.9"
 "net/minecraft/network/protocol/game/ServerboundSetCarriedItemPacket" = "net/minecraft/network/play/client/C09PacketHeldItemChange"
 "net/minecraft/network/protocol/game/ServerboundSwingPacket" = "net/minecraft/network/play/client/C0APacketAnimation"
 "net/minecraft/network/protocol/game/ServerboundContainerClosePacket" = "net/minecraft/network/play/client/C0DPacketCloseWindow"
+"net/minecraft/network/protocol/common/ServerboundKeepAlivePacket" = "net/minecraft/network/play/client/C00PacketKeepAlive"
 "net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket" = "net/minecraft/network/play/client/C0BPacketEntityAction"
 "net/minecraft/network/protocol/game/ServerboundPlayerCommandPacket$Action" = "net/minecraft/network/play/client/C0BPacketEntityAction$Action"
 

@@ -9,6 +9,10 @@
 #
 # 只在"映射源里这个成员换了名字"时用；来源缺失/权限问题不写在这里。
 
+# 控制面发包：1.8.9–1.12.2 使用旧版 MCP 类名，现代版本使用 Mojmap 规范名。
+net/minecraft/network/protocol/common/ServerboundKeepAlivePacket = net/minecraft/network/protocol/game/ServerboundKeepAlivePacket, net/minecraft/network/play/client/CPacketKeepAlive, net/minecraft/network/play/client/C00PacketKeepAlive
+net/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket = net/minecraft/network/play/client/CPacketConfirmTeleport
+
 # 附魔：1.13–1.20.1 叫 getEnchantmentTags，1.8.9–1.12.2 叫 getEnchantmentTagList，
 # 1.20.5+ 才是 getEnchantments（返回组件）。
 ITEM_STACK#getEnchantments() = getEnchantmentTags(), getEnchantmentTagList()

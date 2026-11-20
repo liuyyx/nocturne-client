@@ -371,6 +371,10 @@ public enum ClassType {
     SERVERBOUND_SWING("net.minecraft.network.protocol.game.ServerboundSwingPacket"),
     /** 26.3 的挥手包新名。 */
     SERVERBOUND_PUNCH("net.minecraft.network.protocol.game.ServerboundPunchPacket"),
+    /** 服务端保活回复包。 */
+    SERVERBOUND_KEEPALIVE("net.minecraft.network.protocol.common.ServerboundKeepAlivePacket"),
+    /** 服务端传送确认包。 */
+    SERVERBOUND_ACCEPT_TELEPORTATION("net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket"),
     /** 关闭容器包。 */
     SERVERBOUND_CONTAINER_CLOSE("net.minecraft.network.protocol.game.ServerboundContainerClosePacket"),
     /** 玩家命令包及动作枚举；疾跑、潜行、鞘翅启动共用。 */

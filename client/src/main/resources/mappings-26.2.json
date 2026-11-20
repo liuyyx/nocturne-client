@@ -3432,6 +3432,16 @@
             },
             "fields": {}
         },
+        "net/minecraft/network/protocol/common/ServerboundKeepAlivePacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.common.ServerboundKeepAlivePacket",
+                "fabric": "net.minecraft.network.protocol.common.ServerboundKeepAlivePacket",
+                "forge": "net.minecraft.network.protocol.common.ServerboundKeepAlivePacket",
+                "neoforge": "net.minecraft.network.protocol.common.ServerboundKeepAlivePacket"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/network/protocol/game/ClientboundAddEntityPacket": {
             "names": {
                 "vanilla": "net.minecraft.network.protocol.game.ClientboundAddEntityPacket",
@@ -3850,6 +3860,16 @@
                     }
                 }
             }
+        },
+        "net/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket": {
+            "names": {
+                "vanilla": "net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket",
+                "fabric": "net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket",
+                "forge": "net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket",
+                "neoforge": "net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundChatPacket": {
             "names": {

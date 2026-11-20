@@ -2400,6 +2400,15 @@
             },
             "fields": {}
         },
+        "net/minecraft/network/protocol/common/ServerboundKeepAlivePacket": {
+            "names": {
+                "vanilla": "mt",
+                "fabric": "net.minecraft.class_2827",
+                "forge": "net.minecraft.network.play.client.CPacketKeepAlive"
+            },
+            "methods": {},
+            "fields": {}
+        },
         "net/minecraft/network/protocol/game/ClientboundAddEntityPacket": {
             "names": {
                 "vanilla": "iz",
@@ -2822,6 +2831,15 @@
             "absent": true,
             "names": {},
             "absentReason": "unverified"
+        },
+        "net/minecraft/network/protocol/game/ServerboundAcceptTeleportationPacket": {
+            "names": {
+                "vanilla": "mf",
+                "fabric": "net.minecraft.class_2793",
+                "forge": "net.minecraft.network.play.client.CPacketConfirmTeleport"
+            },
+            "methods": {},
+            "fields": {}
         },
         "net/minecraft/network/protocol/game/ServerboundChatPacket": {
             "names": {

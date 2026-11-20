@@ -79,6 +79,11 @@ public final class PayloadTool {
                     + " entries vs " + classes.size() + " packed");
             return 1;
         }
+        if (!roundTrip.containsKey("org.objectweb.asm.ClassReader")) {
+            // asm-tree/asm-commons 也含 org/objectweb/asm/**，只有核心 asm jar 才含 ClassReader。
+            System.err.println("payload is missing org.objectweb.asm.ClassReader");
+            return 1;
+        }
         File parent = target.getParentFile();
         if (parent != null) {
             parent.mkdirs();

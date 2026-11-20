@@ -45,7 +45,7 @@ class PayloadToolTest {
         byte[] foo = {1, 2, 3, 4};
         byte[] bar = {9, 8};
         File source = jar("asm.jar",
-                new String[]{"org/objectweb/asm/Foo.class", "org/objectweb/asm/tree/Bar.class",
+                new String[]{"org/objectweb/asm/ClassReader.class", "org/objectweb/asm/tree/Bar.class",
                         "META-INF/MANIFEST.MF", "module-info.class"},
                 new byte[][]{foo, bar, {7}, {6}});
         File target = temp.resolve("out/asm.pack").toFile();
@@ -57,7 +57,7 @@ class PayloadToolTest {
         Map<String, byte[]> unpacked = PayloadPack.unpack(Files.readAllBytes(target.toPath()),
                 PayloadKey.asmPayload());
         assertEquals(2, unpacked.size());
-        assertArrayEquals(foo, unpacked.get("org.objectweb.asm.Foo"));
+        assertArrayEquals(foo, unpacked.get("org.objectweb.asm.ClassReader"));
         assertArrayEquals(bar, unpacked.get("org.objectweb.asm.tree.Bar"));
     }
 
@@ -67,6 +67,15 @@ class PayloadToolTest {
         File target = temp.resolve("none.pack").toFile();
         assertEquals(1, PayloadTool.packAsm(source, target));
         assertTrue(!target.exists(), "must not leave a pack file behind on failure");
+    }
+
+    @Test
+    void rejectsAsmTreeOnlyJar() throws Exception {
+        File source = jar("asm-tree.jar",
+                new String[]{"org/objectweb/asm/tree/ClassNode.class"}, new byte[][]{{1}});
+        File target = temp.resolve("tree.pack").toFile();
+        assertEquals(1, PayloadTool.packAsm(source, target));
+        assertTrue(!target.exists(), "tree-only payload must be rejected before writing");
     }
 
     @Test

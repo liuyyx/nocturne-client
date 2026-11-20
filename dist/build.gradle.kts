@@ -31,8 +31,8 @@ dependencies {
 // dev.nocturne.core.pack.PayloadTool，而不是在构建脚本里另写一套加解密。
 // ---------------------------------------------------------------------------
 val distAsmJar = configurations.runtimeClasspath.map { files ->
-    files.firstOrNull { it.name.startsWith("asm-") && it.name.endsWith(".jar") }
-        ?: throw GradleException("ASM jar not found on the dist runtime classpath")
+    files.singleOrNull { it.name == "asm-9.8.jar" }
+        ?: throw GradleException("Expected exactly one ASM core jar (asm-9.8.jar) on the dist runtime classpath")
 }
 val packedAsmDir = layout.buildDirectory.dir("packed-asm")
 val packedAsm = packedAsmDir.map { it.file("asm.pack") }

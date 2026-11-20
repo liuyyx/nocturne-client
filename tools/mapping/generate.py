@@ -499,7 +499,7 @@ def main() -> int:
                       f"absent verified={absent_stats['verified']} unverified={absent_stats['unverified']})")
             for problem in problems:
                 print(f"    {problem}")
-                if not skipped:
+                if not skipped or (args.check and not args.fast):
                     failures.append(problem)
         if args.check:
             current = None

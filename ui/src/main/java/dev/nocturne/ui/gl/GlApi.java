@@ -626,6 +626,7 @@ public final class GlApi {
         if (color4f == null || begin == null || end == null || vertex2f == null) {
             return null; // 核心句柄不全，无法作为可用的 GL11
         }
+        Class<?> gl13 = Reflect.loadWithoutInit("org.lwjgl.opengl.GL13", gl.getClassLoader());
         GlApi bound = new GlApi(
                 color4f, begin, end, vertex2f,
                 Reflect.method(gl, "glEnable", int.class),
@@ -665,15 +666,18 @@ public final class GlApi {
                         int.class, int.class, int.class, int.class, ByteBuffer.class),
                 Reflect.method(gl, "glTexSubImage2D", int.class, int.class, int.class, int.class,
                         int.class, int.class, int.class, int.class, ByteBuffer.class),
-                // 活动纹理单元是全局状态：游戏可能在 0/1 号之间切换过后不还原（1.8.9 的光照贴图走 1 号）。
-                Reflect.method(gl, "glActiveTexture", int.class),
+                // 活动纹理单元是 OpenGL 1.3 入口；GL11 上没有声明，必须回退到 GL13。
+                orElse(Reflect.method(gl, "glActiveTexture", int.class),
+                        Reflect.method(gl13, "glActiveTexture", int.class)),
                 Reflect.method(gl, "glTexParameteri", int.class, int.class, int.class),
                 Reflect.method(gl, "glPixelStorei", int.class, int.class),
                 // 状态类调用优先走游戏的 GlStateManager（缓存一致），解析不到时为 null。
                 StateManager.resolve(gl.getClassLoader()));
         // 立即模式的前提：客户态数组必须关得掉（关不掉时 glBegin/glVertex2f 会被静默忽略）。
         bound.disableClientStateMethod = Reflect.method(gl, "glDisableClientState", int.class);
-        bound.clientActiveTextureMethod = Reflect.method(gl, "glClientActiveTexture", int.class);
+        bound.clientActiveTextureMethod = orElse(
+                Reflect.method(gl, "glClientActiveTexture", int.class),
+                Reflect.method(gl13, "glClientActiveTexture", int.class));
         bound.shadeModelMethod = Reflect.method(gl, "glShadeModel", int.class);
         bound.polygonOffsetMethod = Reflect.method(gl, "glPolygonOffset", float.class, float.class);
         bound.readPixelsBuffer = Reflect.method(gl, "glReadPixels", int.class, int.class, int.class,
@@ -1288,14 +1292,14 @@ public final class GlApi {
     /**
      * 是否具备纹理上传所需的最小句柄集。
      *
-     * <p>三项缺一都传不了纹理：生成句柄（{@code glGenTextures} 的数组或缓冲形态任一）、
-     * 上传像素（{@code glTexImage2D}）、设置采样参数（{@code glTexParameteri}）。
+     * <p>除生成、上传与采样参数外，还必须能复位活动纹理单元；否则图集可能绑定到
+     * 光照贴图单元而采样器仍读取默认单元。
      *
      * @return 可用返回 {@code true}
      */
     public boolean hasTextures() {
         return (genTexturesArray != null || genTexturesBuffer != null)
-                && texImage2D != null && texParameteri != null;
+                && texImage2D != null && texParameteri != null && activeTexture != null;
     }
 
     /** @return 新建的纹理句柄；不可用或失败时为 0 */

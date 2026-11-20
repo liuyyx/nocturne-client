@@ -460,18 +460,6 @@ public final class FakeGl {
         disableClientStateCalls++;
     }
 
-    /** 切换客户态纹理单元（立即模式前置条件）。 */
-    public static void glClientActiveTexture(int unit) {
-        clientActiveTextureCalls++;
-    }
-
-    /** 切换服务端活动纹理单元。 */
-    public static void glActiveTexture(int unit) {
-        activeTextureCalls++;
-        lastActiveTexture = unit;
-        events.add("activeTexture:" + unit);
-    }
-
     /** 标准透视投影：竖直 FOV 约 70°，近远平面与游戏同量级。 */
     public static double[] perspective() {
         double[] m = new double[16];

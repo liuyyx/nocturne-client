@@ -113,10 +113,6 @@ public final class GL11 {
         depthFar = far;
     }
 
-    public static void glActiveTexture(int unit) {
-        activeTexture = unit;
-    }
-
     public static void glBindTexture(int target, int texture) {
         boundTexture = texture;
     }

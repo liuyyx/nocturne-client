@@ -6,6 +6,7 @@ import dev.nocturne.client.mapping.Mapping;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -80,7 +81,7 @@ class ModernRendererPlayerPreviewTest {
             GL11.glEnable(0x0B50);
             GL11.glDisable(0x0BE2);
             GL11.glDepthRange(0.2, 0.8);
-            GL11.glActiveTexture(GL11.GL_TEXTURE0 + 1);
+            GL13.glActiveTexture(GL11.GL_TEXTURE0 + 1);
             GL11.glBindTexture(0x0DE1, 99);
             GL30.glUseProgram(777);
             GL30.glBindVertexArray(888);

@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>头部钩子返回 {@code boolean} 时，false 会直接取消原方法；返回 {@code void} 时只做通知。
  * 尾部通知插在每个 RETURN 前，因此提前返回路径也不会漏掉。钩子形参由目标描述符派生：
  * 基本类型原样转发，游戏引用类型统一擦成 {@code Object}，避免 bootstrap 钩子依赖游戏类。
+ * 幂等判断按目标方法名与描述符隔离，同类的其它方法或重载可以共用一个钩子。
  */
 public final class GateHookTransformer implements ClassFileTransformer {
 
@@ -75,7 +76,8 @@ public final class GateHookTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
         if (className == null || !className.equals(targetClassInternalName)
-                || TransformGuard.containsHook(classfileBuffer, hookOwner, hookMethod)) {
+                || TransformGuard.containsHookInMethod(classfileBuffer, targetClassInternalName,
+                targetMethod, targetDescriptor, hookOwner, hookMethod)) {
             return null;
         }
         try {

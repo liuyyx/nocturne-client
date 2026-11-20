@@ -167,6 +167,43 @@ class GateHookTransformerTest {
     }
 
     @Test
+    void sharedHookIsInstalledInEveryMethodAndOverloadOnlyOnce() throws Exception {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, TARGET, null, "java/lang/Object", null);
+        defaultConstructor(writer);
+        String[][] targets = {{"hit", "()V"}, {"other", "()V"}, {"hit", "(I)V"}};
+        for (String[] target : targets) {
+            MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC, target[0], target[1],
+                    null, null);
+            method.visitCode();
+            method.visitMethodInsn(Opcodes.INVOKESTATIC, SINK, "earlyBody", "()V", false);
+            method.visitInsn(Opcodes.RETURN);
+            method.visitMaxs(0, 0);
+            method.visitEnd();
+        }
+        writer.visitEnd();
+        byte[] patched = writer.toByteArray();
+        for (String[] target : targets) {
+            patched = new GateHookTransformer(TARGET, target[0], target[1], SINK, "before",
+                    "V", false, true).transform(getClass().getClassLoader(), TARGET,
+                    null, null, patched);
+            assertNotNull(patched, "同类方法与重载不得被另一个方法的钩子误判为已安装");
+        }
+        for (String[] target : targets) {
+            assertNull(new GateHookTransformer(TARGET, target[0], target[1], SINK, "before",
+                    "V", false, true).transform(getClass().getClassLoader(), TARGET,
+                    null, null, patched), "同一目标不得重复织入");
+        }
+        Class<?> type = define(patched);
+        Object instance = type.getDeclaredConstructor().newInstance();
+        type.getMethod("hit").invoke(instance);
+        type.getMethod("other").invoke(instance);
+        type.getMethod("hit", int.class).invoke(instance, 1);
+        assertEquals(java.util.Arrays.asList("before:GateSubject", "earlyBody",
+                "before:GateSubject", "earlyBody", "before:GateSubject", "earlyBody"), Sink.calls);
+    }
+
+    @Test
     void framedTailHookIsSkippedInsteadOfReadingInvalidatedLocals() throws Exception {
         byte[] original = framedEarlyReturnSubject();
         byte[] tail = new GateHookTransformer(TARGET, "hit", "(Z)V", SINK, "after",

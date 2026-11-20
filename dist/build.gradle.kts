@@ -247,6 +247,13 @@ val verifyJarBytecode = tasks.register("verifyJarBytecode") {
                         violations.add("${file.name}: missing Fabric metadata '$metadata'")
                     }
                 }
+                listOf("KeySink.class", "GameplaySink.class", "LegacyMouse.class",
+                    "GameplayHook.class", "GameplayHook\$Sink.class").forEach { bridge ->
+                    val resource = "nocturne-bootstrap/$bridge"
+                    if (zip.getEntry(resource) == null) {
+                        violations.add("${file.name}: missing bootstrap bridge resource '$resource'")
+                    }
+                }
                 if (zip.getEntry("dev/nocturne/agent/asm.pack") == null) {
                     violations.add("${file.name}: missing embedded ASM payload 'dev/nocturne/agent/asm.pack'")
                 }

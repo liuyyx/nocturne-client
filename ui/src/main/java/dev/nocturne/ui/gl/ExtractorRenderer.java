@@ -1581,7 +1581,7 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             target = new RegisteredTexture(identifier, texture, width, height);
             textures.add(target);
             id = index;
-            if (!registerUploads && !writePixels(target, argb)) {
+            if (!writePixels(target, argb)) {
                 diag("writePixels failed (pointer=" + (getPointer != null || pointerField != null)
                         + " apply=" + (applyPixels != null) + " setPixels=" + (setPixels != null)
                         + " setPixel=" + (setPixel != null) + ")");
@@ -1598,16 +1598,18 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
                     + " registerUploads=" + registerUploads);
             return id;
         }
-        if (registerUploads) {
-            return id;
-        }
         if (!writePixels(target, argb)) {
             diag("writePixels failed (pointer=" + (getPointer != null || pointerField != null)
                     + " apply=" + (applyPixels != null) + " setPixels=" + (setPixels != null)
                     + " setPixel=" + (setPixel != null) + ")");
             return id;
         }
-        upload(target);
+        if (registerUploads) {
+            // 新版注册入口同时执行 GPU 上传；新增字形后必须用同一纹理重新注册一次。
+            Reflect.call(registerTexture, manager, target.identifier, target.texture);
+        } else {
+            upload(target);
+        }
         diag("ok id=" + id + " " + target.width + "x" + target.height);
         return id;
     }

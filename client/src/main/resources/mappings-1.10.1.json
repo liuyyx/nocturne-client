@@ -1403,8 +1403,14 @@
             },
             "fields": {
                 "connection": {
-                    "absent": true,
-                    "absentReason": "unverified"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_3944"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lbll;",
+                        "fabric": "Lnet/minecraft/class_634;"
+                    }
                 },
                 "fallDistance": {
                     "names": {

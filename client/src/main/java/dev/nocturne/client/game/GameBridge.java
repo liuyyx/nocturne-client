@@ -1525,7 +1525,12 @@ public final class GameBridge {
     /** @return 当前客户端包监听器；旧版同样从 LocalPlayer.connection/sendQueue 读取。 */
     public Object connection() {
         Object player = player();
-        return player == null ? null : readField(player, ClassType.LOCAL_PLAYER, "connection");
+        Object connection = player == null ? null
+                : readField(player, ClassType.LOCAL_PLAYER, "connection");
+        if (player != null && connection == null) {
+            warnOnce("connection", "LocalPlayer.connection unavailable; packet actions will fail");
+        }
+        return connection;
     }
 
     /**

@@ -558,7 +558,7 @@ mcp = "objectMouseOver"
 scope = "net/minecraft/client/Minecraft"
 
 [fields.connection]
-mcp = "sendQueue"
+mcp = "connection"
 scope = "net/minecraft/client/entity/EntityPlayerSP"
 
 [fields.gui]

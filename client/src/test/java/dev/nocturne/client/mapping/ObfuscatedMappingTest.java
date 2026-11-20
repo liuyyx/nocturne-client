@@ -109,6 +109,25 @@ class ObfuscatedMappingTest {
                 "distanceToSqr 自己的 intermediary 配对必须保留");
     }
 
+    @Test
+    void connectionIsMappedAcrossLegacyBridgeVersions() {
+        String[] versions = {
+                "1.9", "1.9.1", "1.9.2", "1.9.3", "1.9.4",
+                "1.10", "1.10.1", "1.10.2", "1.11", "1.11.1", "1.11.2",
+                "1.12", "1.12.1", "1.12.2", "1.13", "1.13.1", "1.13.2",
+                "1.14", "1.14.1", "1.14.2", "1.14.3",
+        };
+        for (String version : versions) {
+            ObfuscatedMapping mapping = ObfuscatedMapping.load("/mappings-" + version + ".json");
+            assertFalse(mapping.isMemberAbsent(ClassType.LOCAL_PLAYER, "connection"), version);
+            assertTrue(mapping.fieldNameCandidates(ClassType.LOCAL_PLAYER, "connection")
+                    .contains("field_3944"), version + " 缺 Fabric connection 候选");
+        }
+        assertTrue(ObfuscatedMapping.load("/mappings-1.12.2.json")
+                .fieldNameCandidates(ClassType.LOCAL_PLAYER, "connection")
+                .contains("field_71174_a"), "1.12.2 缺 Forge connection 候选");
+    }
+
     /** 验证表内条目被翻译为混淆名，且方法描述符会按混淆后的类名重写。 */
     @Test
     void translatesKnownClassesFieldsAndMethods() {

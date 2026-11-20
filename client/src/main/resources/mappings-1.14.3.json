@@ -1937,8 +1937,15 @@
             },
             "fields": {
                 "connection": {
-                    "absent": true,
-                    "absentReason": "unverified"
+                    "names": {
+                        "vanilla": "e",
+                        "fabric": "field_3944",
+                        "forge": "field_71174_a"
+                    },
+                    "descriptors": {
+                        "vanilla": "Ldho;",
+                        "fabric": "Lnet/minecraft/class_634;"
+                    }
                 },
                 "fallDistance": {
                     "names": {

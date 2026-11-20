@@ -526,9 +526,7 @@ final class BoundActionApi implements ActionApi {
     }
 
     private Object connection() {
-        Object player = bridge.player();
-        return player == null ? null
-                : bridge.readField(player, ClassType.LOCAL_PLAYER, "connection");
+        return bridge.connection();
     }
 
     private static Number number(Object value) {

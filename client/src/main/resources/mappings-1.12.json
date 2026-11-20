@@ -1561,8 +1561,15 @@
             },
             "fields": {
                 "connection": {
-                    "absent": true,
-                    "absentReason": "unverified"
+                    "names": {
+                        "vanilla": "d",
+                        "fabric": "field_3944",
+                        "forge": "field_71174_a"
+                    },
+                    "descriptors": {
+                        "vanilla": "Lbrx;",
+                        "fabric": "Lnet/minecraft/class_634;"
+                    }
                 },
                 "fallDistance": {
                     "names": {

@@ -578,6 +578,10 @@ public final class NocturneRuntime {
             return;
         }
         frameHookSeen = true;
+        // 游戏绘制 API 只在绘制钩子内有有效上下文；帧交换点不得再重复分发或广播事件。
+        if (contextDriven) {
+            return;
+        }
         if (FRAME_STAT) {
             frameDrives.incrementAndGet();
         }
@@ -587,9 +591,8 @@ public final class NocturneRuntime {
     /**
      * 由 GUI 绘制钩子每帧调用（{@code GuiDrawHook}）。
      *
-     * <p>只在帧交换点**不存在**时才真正驱动：SDL 栈（26.x）按设计不注册帧钩子，Fabric mod 形态也没有
-     * {@code Instrumentation}，那时绘制入口是唯一的每帧时机；而 GLFW 栈上帧钩子已经驱动过，再驱动一次
-     * 就是同帧两遍。
+     * <p>上下文驱动后端只走此入口，帧交换入口不分发；自绘 GL 后端在没有帧交换驱动时使用此入口，
+     * 已观察到帧交换后则跳过，避免同帧重复绘制、事件与输入轮询。
      */
     public static void onDrawFrame() {
         if (isKilled()) {

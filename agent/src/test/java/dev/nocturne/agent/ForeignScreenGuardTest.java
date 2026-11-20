@@ -1,9 +1,13 @@
 package dev.nocturne.agent;
 
+import dev.nocturne.client.game.GameBridge;
+import dev.nocturne.client.mapping.ClassType;
+import dev.nocturne.client.mapping.Mapping;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -76,5 +80,68 @@ class ForeignScreenGuardTest {
         // 没有鼠标面的版本（1.13 及更早）→ 一律不动，由 inGameHasFocus 那条路负责
         assertEquals(ForeignScreenGuard.MouseAction.NONE,
                 ForeignScreenGuard.decideMouseAction(true, false, false, false));
+    }
+
+    @Test
+    void readsNativeScreenFromGuiWhenMinecraftFieldsAreAbsent() {
+        Object panel = new Object();
+        ScreenHost host = new ScreenHost();
+        host.gui = new GuiHost(panel);
+        ScreenHost.instance = host;
+        try {
+            ForeignScreenGuard guard = new ForeignScreenGuard(
+                    new GameBridge(null, new HostMapping()), () -> false);
+            assertSame(panel, guard.nativeScreen(host), "26.3 必须从 Gui.screen() 读取原生界面");
+        } finally {
+            ScreenHost.instance = null;
+        }
+    }
+
+    public static final class ScreenHost {
+        private static ScreenHost instance;
+        public Object gui;
+
+        public static ScreenHost getInstance() {
+            return instance;
+        }
+    }
+
+    public static final class GuiHost {
+        private final Object screen;
+
+        GuiHost(Object screen) {
+            this.screen = screen;
+        }
+
+        public Object screen() {
+            return screen;
+        }
+    }
+
+    private static final class HostMapping implements Mapping {
+        @Override
+        public String describe() {
+            return "gui-screen-host";
+        }
+
+        @Override
+        public String className(ClassType type) {
+            return type == ClassType.MINECRAFT ? ScreenHost.class.getName() : type.canonicalName();
+        }
+
+        @Override
+        public String methodName(ClassType owner, String canonicalName, String descriptor) {
+            return canonicalName;
+        }
+
+        @Override
+        public String fieldName(ClassType owner, String canonicalName) {
+            return canonicalName;
+        }
+
+        @Override
+        public boolean isIdentity() {
+            return false;
+        }
     }
 }

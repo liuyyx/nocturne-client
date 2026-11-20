@@ -98,13 +98,7 @@ final class ForeignScreenGuard implements FrameListener {
             if (minecraft == null) {
                 return;
             }
-            Object screen = bridge.readField(minecraft, ClassType.MINECRAFT, "currentScreen");
-            if (screen == null) {
-                // 形状兜底：Forge 等环境把字段名重映射成 SRG（currentScreen → field_71462_r），
-                // 映射表里的原版混淆名（m）在那里不存在，按名字读永远是 null，
-                // 于是这个守护什么都不做、外部客户端的面板照样盖在我们上面。
-                screen = readScreenByShape(minecraft);
-            }
+            Object screen = nativeScreen(minecraft);
             if (screen == null) {
                 return;
             }
@@ -345,14 +339,34 @@ final class ForeignScreenGuard implements FrameListener {
     private boolean hasNativeScreen() {
         try {
             Object minecraft = bridge.minecraft();
-            if (minecraft == null) {
-                return false;
-            }
-            Object current = bridge.readField(minecraft, ClassType.MINECRAFT, "currentScreen");
-            Object legacy = bridge.readField(minecraft, ClassType.MINECRAFT, "screen");
-            return current != null || legacy != null || readScreenByShape(minecraft) != null;
+            return minecraft != null && nativeScreen(minecraft) != null;
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    /** 字段 → Gui.screen() → 形状兜底；26.x 的屏幕挂在 Gui 上。 */
+    Object nativeScreen(Object minecraft) {
+        Object screen = bridge.readField(minecraft, ClassType.MINECRAFT, "currentScreen");
+        if (screen == null) {
+            screen = bridge.readField(minecraft, ClassType.MINECRAFT, "screen");
+        }
+        if (screen == null) {
+            screen = readGuiScreen(minecraft);
+        }
+        return screen != null ? screen : readScreenByShape(minecraft);
+    }
+
+    /** 26.3 的 Minecraft 没有 currentScreen/screen，改从 Gui.screen() 读取。 */
+    private Object readGuiScreen(Object minecraft) {
+        try {
+            if (bridge.mapping() == null || bridge.mapping().isMemberAbsent(ClassType.HUD, "screen")) {
+                return null;
+            }
+            Object gui = bridge.readField(minecraft, ClassType.MINECRAFT, "gui");
+            return gui == null ? null : bridge.callMapped(gui, ClassType.HUD, "screen");
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 

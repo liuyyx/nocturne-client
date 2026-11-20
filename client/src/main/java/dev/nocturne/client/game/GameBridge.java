@@ -344,34 +344,7 @@ public final class GameBridge {
         ConstructorKey key = new ConstructorKey(type, describeArgs(actual));
         java.lang.reflect.Constructor<?> constructor = constructorCache.get(key);
         if (constructor == null) {
-            java.lang.reflect.Constructor<?> compatible = null;
-            java.lang.reflect.Constructor<?> exact = null;
-            for (java.lang.reflect.Constructor<?> candidate : type.getDeclaredConstructors()) {
-                Class<?>[] parameters = candidate.getParameterTypes();
-                if (parameters.length != actual.length) {
-                    continue;
-                }
-                boolean matches = true;
-                for (int i = 0; i < parameters.length; i++) {
-                    if (!isCompatible(parameters[i], actual[i])) {
-                        matches = false;
-                        break;
-                    }
-                }
-                if (!matches) {
-                    continue;
-                }
-                if (exactMatch(parameters, actual)) {
-                    exact = candidate;
-                    break;
-                }
-                if (compatible != null) {
-                    // 有歧义时不猜构造器，避免把相邻版本的新参数静默填错。
-                    return null;
-                }
-                compatible = candidate;
-            }
-            constructor = exact != null ? exact : compatible;
+            constructor = selectConstructor(type.getDeclaredConstructors(), actual);
             if (constructor == null) {
                 return null;
             }
@@ -387,6 +360,38 @@ public final class GameBridge {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /** 精确匹配优先；无精确匹配时只接受唯一兼容构造器。 */
+    static java.lang.reflect.Constructor<?> selectConstructor(
+            java.lang.reflect.Constructor<?>[] constructors, Object[] actual) {
+        java.lang.reflect.Constructor<?> compatible = null;
+        boolean ambiguous = false;
+        for (java.lang.reflect.Constructor<?> candidate : constructors) {
+            Class<?>[] parameters = candidate.getParameterTypes();
+            if (parameters.length != actual.length) {
+                continue;
+            }
+            boolean matches = true;
+            for (int i = 0; i < parameters.length; i++) {
+                if (!isCompatible(parameters[i], actual[i])) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (!matches) {
+                continue;
+            }
+            if (exactMatch(parameters, actual)) {
+                return candidate;
+            }
+            if (compatible != null) {
+                ambiguous = true;
+            } else {
+                compatible = candidate;
+            }
+        }
+        return ambiguous ? null : compatible;
     }
 
     /** 读取指定方块坐标的方块状态；世界未就绪时返回 {@code null}。 */

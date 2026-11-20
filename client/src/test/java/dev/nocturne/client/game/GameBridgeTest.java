@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -56,6 +57,22 @@ class GameBridgeTest {
         private final String player = "hardcoded-decoy";
         @SuppressWarnings("unused")
         private final String localPlayer = "mapped-value";
+    }
+
+    static final class ConstructorTarget {
+        final String selected;
+
+        ConstructorTarget(CharSequence value) {
+            selected = "char-sequence";
+        }
+
+        ConstructorTarget(Object value) {
+            selected = "object";
+        }
+
+        ConstructorTarget(String value) {
+            selected = "exact";
+        }
     }
 
     /** 带多个同名重载的宿主，用于验证恒等映射下按实参推导形参 */
@@ -409,6 +426,26 @@ class GameBridgeTest {
         void mulPose(org.joml.Quaternionf quaternion) {
             mulPoses++;
         }
+    }
+
+    @Test
+    void exactConstructorWinsEvenAfterMultipleCompatibleCandidates() throws Exception {
+        java.lang.reflect.Constructor<?> charSequence =
+                ConstructorTarget.class.getDeclaredConstructor(CharSequence.class);
+        java.lang.reflect.Constructor<?> object =
+                ConstructorTarget.class.getDeclaredConstructor(Object.class);
+        java.lang.reflect.Constructor<?> exact =
+                ConstructorTarget.class.getDeclaredConstructor(String.class);
+
+        java.lang.reflect.Constructor<?> selected = GameBridge.selectConstructor(
+                new java.lang.reflect.Constructor<?>[] {charSequence, object, exact},
+                new Object[] {"value"});
+
+        assertSame(exact, selected);
+        assertEquals("exact", ((ConstructorTarget) selected.newInstance("value")).selected);
+        assertNull(GameBridge.selectConstructor(
+                new java.lang.reflect.Constructor<?>[] {charSequence, object},
+                new Object[] {"value"}), "没有精确匹配时仍必须拒绝兼容歧义");
     }
 
     @Test

@@ -371,6 +371,11 @@ public final class ObfuscatedMapping implements Mapping {
         return data == null || data.names == null ? null : data.names.get(namespace);
     }
 
+    public String methodNameIn(ClassType owner, String canonicalName, String namespace) {
+        MemberData member = methodMember(owner, canonicalName);
+        return member == null || member.names == null ? null : member.names.get(namespace);
+    }
+
     public String signatureIn(ClassType owner, String canonicalName, String descriptor,
                               String namespace) {
         MemberData member = methodMember(owner, canonicalName);

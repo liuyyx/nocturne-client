@@ -3213,13 +3213,8 @@ public final class NocturneAgent {
                     (dev.nocturne.client.mapping.ObfuscatedMapping) mapping;
             // 名字与描述符必须同命名空间配套，否则参数类型对不上、钩子永不命中。
             for (String namespace : new String[]{"vanilla", "fabric", "forge", "neoforge"}) {
-                String method = null;
-                for (String candidate : methodNames) {
-                    if (candidate != null && !candidate.isEmpty()) {
-                        method = candidate;
-                        break;
-                    }
-                }
+                String method = table.methodNameIn(
+                        dev.nocturne.client.mapping.ClassType.SCREEN, "render", namespace);
                 String descriptor = table.signatureIn(
                         dev.nocturne.client.mapping.ClassType.SCREEN, "render", null, namespace);
                 if (method == null || descriptor == null) {

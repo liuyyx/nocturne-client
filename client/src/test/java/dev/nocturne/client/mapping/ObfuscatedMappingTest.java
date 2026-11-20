@@ -128,6 +128,15 @@ class ObfuscatedMappingTest {
                 .contains("field_71174_a"), "1.12.2 缺 Forge connection 候选");
     }
 
+    @Test
+    void screenRenderNamesStayWithinTheirNamespaces() {
+        ObfuscatedMapping mapping = ObfuscatedMapping.load("/mappings-1.21.1.json");
+        assertEquals("a", mapping.methodNameIn(ClassType.SCREEN, "render", "vanilla"));
+        assertEquals("method_57734", mapping.methodNameIn(ClassType.SCREEN, "render", "fabric"));
+        assertEquals("m_88315_", mapping.methodNameIn(ClassType.SCREEN, "render", "forge"));
+        assertEquals("render", mapping.methodNameIn(ClassType.SCREEN, "render", "neoforge"));
+    }
+
     /** 验证表内条目被翻译为混淆名，且方法描述符会按混淆后的类名重写。 */
     @Test
     void translatesKnownClassesFieldsAndMethods() {

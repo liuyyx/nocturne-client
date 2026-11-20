@@ -30,6 +30,15 @@ public final class TestMapping implements Mapping {
     /** 指定映射类型命中的替身类（覆盖默认的规范名透传）。 */
     private final java.util.Map<ClassType, Class<?>> classOverrides =
             new java.util.EnumMap<ClassType, Class<?>>(ClassType.class);
+    /** 规范方法名 → 运行期混淆名；键形如 {@code PACKET#handle}。 */
+    private final java.util.Map<String, String> methodOverrides =
+            new java.util.HashMap<String, String>();
+
+    /** 指定一个方法名映射，用于覆盖混淆运行期的方法查找。 */
+    public TestMapping methodOverride(ClassType owner, String canonicalName, String runtimeName) {
+        methodOverrides.put(owner.name() + "#" + canonicalName, runtimeName);
+        return this;
+    }
 
     /** 让某个映射类型解析到替身类，用于验证需要构造/类型检查的分支。 */
     public TestMapping classOverride(ClassType type, Class<?> replacement) {
@@ -95,7 +104,8 @@ public final class TestMapping implements Mapping {
 
     @Override
     public String methodName(ClassType owner, String canonicalName, String descriptor) {
-        return canonicalName;
+        String mapped = methodOverrides.get(owner.name() + "#" + canonicalName);
+        return mapped == null ? canonicalName : mapped;
     }
 
     @Override

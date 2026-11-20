@@ -549,15 +549,19 @@ public final class GameplayEvents implements GameplayHook.Sink {
      * 触发；若把 serverbound 包当成收包推迟，就会用客户端 handler 重放它。这里按包自己的
      * {@code handle(Listener)} 形参判定：只有客户端连接实例能作为参数时才视为 clientbound。
      *
-     * <p>形参类型按包类缓存；方向判定与映射表无关（26.3 之前是 {@code INetHandlerPlayClient}，
-     * 之后是 {@code ClientGamePacketListener}，{@code isInstance} 都成立）。
+     * <p>形参类型按包类缓存；方法名取自当前映射的候选列表，兼容 1.8.9–1.21.x 的混淆名
+     * 与 26.x 的规范名。监听器类型仍由 JVM 方法形参取得，不硬编码版本专属接口。
      */
-    private static boolean isClientbound(Object packet, Object connection) {
+    private boolean isClientbound(Object packet, Object connection) {
         Class<?> handler = HANDLE_PARAMETERS.get(packet.getClass());
         if (handler == null) {
+            GameBridge bridge = client.gameBridge();
+            java.util.List<String> handleNames = bridge == null
+                    ? Collections.singletonList("handle")
+                    : bridge.mapping().methodNameCandidates(ClassType.PACKET, "handle", null);
             handler = Object.class;
             for (Method method : packet.getClass().getMethods()) {
-                if (!"handle".equals(method.getName()) || method.getParameterTypes().length != 1) {
+                if (!handleNames.contains(method.getName()) || method.getParameterTypes().length != 1) {
                     continue;
                 }
                 Class<?> parameter = method.getParameterTypes()[0];

@@ -7,6 +7,7 @@ import dev.nocturne.client.event.PacketEvent;
 import dev.nocturne.client.game.FakeMinecraft;
 import dev.nocturne.client.game.GameBridge;
 import dev.nocturne.client.game.TestMapping;
+import dev.nocturne.client.mapping.ClassType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,9 +49,13 @@ class PacketEventOrderTest {
 
     /** 安装最小桥与本地连接，使收包有 handler 可重放。 */
     private static void installConnection(NocturneClient client) {
+        installConnection(client, new TestMapping(FakeMinecraft.class));
+    }
+
+    private static void installConnection(NocturneClient client, TestMapping mapping) {
         FakeMinecraft.reset();
         FakeMinecraft.instance.player = new FakePlayer();
-        client.setGameBridge(new GameBridge(null, new TestMapping(FakeMinecraft.class)));
+        client.setGameBridge(new GameBridge(null, mapping));
     }
 
     private final Object owner = new Object();
@@ -225,6 +230,30 @@ class PacketEventOrderTest {
         assertTrue(recorder.handled.isEmpty());
     }
 
+    /** 混淆版本的 Packet.handle 叫 a：方向识别与主线程重放都必须使用映射名。 */
+    @Test
+    void obfuscatedHandleNameClassifiesAndReplaysReceivePackets() {
+        NocturneClient client = NocturneClient.boot(null);
+        Recorder recorder = new Recorder();
+        PacketController packets = controller(client, recorder);
+        installConnection(client, new TestMapping(FakeMinecraft.class)
+                .methodOverride(ClassType.PACKET, "handle", "a"));
+        List<PacketEvent> seen = new ArrayList<PacketEvent>();
+        client.events().subscribe(PacketEvent.class, seen::add);
+        Object clientbound = new FakeObfuscatedClientPacket();
+        Object serverbound = new FakeObfuscatedServerPacket();
+
+        assertNull(GameplayHook.packetReceive(clientbound), "混淆 clientbound 包必须进入主线程队列");
+        assertSame(serverbound, GameplayHook.packetReceive(serverbound),
+                "同名混淆方法也不能把 serverbound 包误判为收包");
+        client.gameplayEvents().drainReceive();
+
+        assertEquals(1, seen.size());
+        assertSame(clientbound, seen.get(0).packet);
+        assertEquals(1, recorder.handled.size(), "主线程重放也必须找到混淆方法 a");
+        assertSame(clientbound, recorder.handled.get(0));
+    }
+
     /** 控制包在 hold 中照常发送（事件仍会投递，取消语义保留）。 */
     @Test
     void controlPacketsPassThroughWhileHeld() {
@@ -264,6 +293,18 @@ class PacketEventOrderTest {
     /** 最小 serverbound 包：客户端连接不是它的 handler。 */
     public static final class FakeServerPacket {
         public void handle(FakeServerListener listener) {
+        }
+    }
+
+    /** 1.8.9–1.21.x 形态：clientbound 的 handle 被混淆为 a。 */
+    public static final class FakeObfuscatedClientPacket {
+        public void a(FakeClientListener listener) {
+        }
+    }
+
+    /** 同名混淆方法仍须按监听器形参区分 serverbound。 */
+    public static final class FakeObfuscatedServerPacket {
+        public void a(FakeServerListener listener) {
         }
     }
 

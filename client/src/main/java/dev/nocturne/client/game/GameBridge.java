@@ -160,7 +160,14 @@ public final class GameBridge {
      */
     public boolean resolve() {
         if (isResolved()) {
-            return true;
+            Class<?> current = findLoadedClass(minecraftClassCandidates());
+            if (current != null && current != minecraftClass) {
+                // 同名主类可能已由新 ClassLoader 定义；旧 Class/访问器不能继续沿用。
+                invalidate();
+                lastResolveAttemptNanos = 0L;
+            } else {
+                return true;
+            }
         }
         long now = System.nanoTime();
         long last = lastResolveAttemptNanos;

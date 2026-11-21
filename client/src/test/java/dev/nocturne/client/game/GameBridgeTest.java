@@ -6,6 +6,9 @@ import dev.nocturne.client.mapping.Mapping;
 import dev.nocturne.client.mapping.ObfuscatedMapping;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -469,5 +472,78 @@ class GameBridgeTest {
         } finally {
             Thread.currentThread().setContextClassLoader(saved);
         }
+    }
+
+    @Test
+    void resolvesReplacementClassFromTheCurrentGameLoader() throws Exception {
+        ClassLoader saved = Thread.currentThread().getContextClassLoader();
+        byte[] bytes;
+        try (java.io.InputStream input = GameBridgeTest.class.getClassLoader().getResourceAsStream(
+                FakeMinecraft.class.getName().replace('.', '/') + ".class")) {
+            bytes = readAll(input);
+        }
+        CopyLoader firstLoader = new CopyLoader(saved, FakeMinecraft.class.getName(), bytes);
+        CopyLoader secondLoader = new CopyLoader(saved, FakeMinecraft.class.getName(), bytes);
+        try {
+            Thread.currentThread().setContextClassLoader(firstLoader);
+            GameBridge bridge = new GameBridge(null, new TestMapping(FakeMinecraft.class));
+            assertTrue(bridge.resolve());
+            Class<?> first = bridge.minecraftClass();
+            assertSame(firstLoader, first.getClassLoader());
+            bridge.type(ClassType.ENTITY);
+
+            Thread.currentThread().setContextClassLoader(secondLoader);
+            assertTrue(bridge.resolve(), "同名主类被替换后必须重新解析");
+            assertSame(secondLoader, bridge.minecraftClass().getClassLoader());
+            assertNotSame(first, bridge.minecraftClass());
+        } finally {
+            Thread.currentThread().setContextClassLoader(saved);
+        }
+    }
+
+    private static final class CopyLoader extends ClassLoader {
+        private final String name;
+        private final byte[] bytes;
+
+        CopyLoader(ClassLoader parent, String name, byte[] bytes) {
+            super(parent);
+            this.name = name;
+            this.bytes = bytes;
+        }
+
+        @Override
+        protected Class<?> loadClass(String requested, boolean resolve) throws ClassNotFoundException {
+            if (name.equals(requested)) {
+                synchronized (getClassLoadingLock(requested)) {
+                    Class<?> loaded = findLoadedClass(requested);
+                    if (loaded == null) {
+                        loaded = findClass(requested);
+                    }
+                    if (resolve) {
+                        resolveClass(loaded);
+                    }
+                    return loaded;
+                }
+            }
+            return super.loadClass(requested, resolve);
+        }
+
+        @Override
+        protected Class<?> findClass(String requested) throws ClassNotFoundException {
+            if (name.equals(requested)) {
+                return defineClass(requested, bytes, 0, bytes.length);
+            }
+            return super.findClass(requested);
+        }
+    }
+
+    private static byte[] readAll(java.io.InputStream input) throws java.io.IOException {
+        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int count;
+        while ((count = input.read(buffer)) >= 0) {
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
     }
 }

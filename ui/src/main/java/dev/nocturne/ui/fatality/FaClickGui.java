@@ -18,8 +18,8 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * "FA" ClickGUI：fatality.win 风格的炭黑扁平窗口。分类是顶部 Tab，侧边栏列出当前分类的模块，
- * 每个模块是瀑布流里的一张卡片，底部工具条放搜索与信息。
+ * 深色工具面板：顶部选择分类，侧边栏选择模块，主区域专注显示当前模块的设置。
+ * 搜索时同时浏览匹配的模块；玩家预览作为 Render 分类的辅助面板。
  *
  * <p>所有尺寸都是设计单位，整套界面在一个缩放因子下绘制，因此在任何 GUI 缩放下比例一致。
  *
@@ -30,17 +30,22 @@ import java.util.function.Supplier;
 public final class FaClickGui implements OverlayGui {
 
     /** 分类 Tab 高。 */
-    private static final float TAB_H = 20.5f;
+    private static final float TAB_H = 30.0f;
     /** Tab 左右内边距。 */
-    private static final float TAB_PAD = 7.5f;
+    private static final float TAB_PAD = 8.0f;
     /** Tab 图标尺寸。 */
-    private static final float TAB_ICON = 10.0f;
+    private static final float TAB_ICON = 13.0f;
     /** 图标与文字之间的间距。 */
-    private static final float TAB_GAP = 4.0f;
+    private static final float TAB_GAP = 6.0f;
     /** 搜索框宽。 */
-    private static final float SEARCH_W = 150.0f;
+    private static final float SEARCH_W = 210.0f;
     /** 侧边栏每一项的行高。 */
-    private static final float SIDE_ITEM_H = 19.0f;
+    private static final float SIDE_ITEM_H = 30.0f;
+    /** 标题栏右侧按钮与语言控件尺寸。 */
+    private static final float HEADER_BUTTON = 28.0f;
+    private static final float LANG_W = 36.0f;
+    /** 模型预览保持辅助宽度，不与设置面板平分内容区。 */
+    private static final float PREVIEW_W = 212.0f;
     /** 右下角缩放把手的边长。 */
     private static final float GRIP = 9.0f;
     /** 头部向下、底部向上的柔光过渡带高度。 */
@@ -58,6 +63,10 @@ public final class FaClickGui implements OverlayGui {
     private final ModuleRegistry registry;
     /** 按分类分组的卡片。 */
     private final Map<Category, List<FaGroup>> groups = new EnumMap<Category, List<FaGroup>>(Category.class);
+    /** 当前参与绘制和命中的面板，复用容器以免每帧复制分配。 */
+    private final List<FaBox> visibleBoxes = new ArrayList<FaBox>();
+    /** 搜索最多两列；普通视图的第二列仅用于辅助预览。 */
+    private final float[] columnHeights = new float[2];
     /** 每个分类独立的滚动/选中状态。 */
     private final Map<Category, View> views = new EnumMap<Category, View>(Category.class);
     /** 搜索结果使用的独立视图。 */
@@ -151,6 +160,9 @@ public final class FaClickGui implements OverlayGui {
     private long lastNanos;
     /** 布局键；变化时卡片位置立即吸附，不播动画。 */
     private String layoutKey = "";
+    /** 上一帧的内容宽与焦点模块；变化时直接放到新布局。 */
+    private float layoutWidth = Float.NaN;
+    private Module layoutModule;
 
     /** 搜索框的键盘适配。 */
     private final FaKeySink searchSink = new FaKeySink() {
@@ -190,6 +202,8 @@ public final class FaClickGui implements OverlayGui {
 
     /** 顶部语言芯片的矩形（设计坐标，{@code x,y,w,h}）；绘制时更新，点击时命中测试。 */
     private final float[] langChip = {0.0f, 0.0f, 0.0f, 0.0f};
+    /** Tab 几何的临时缓冲；调用方只在下一次查询前读取。 */
+    private final float[] tabRect = new float[4];
 
     /**
      * @param registry 模块注册表；界面据此列出各分类的模块
@@ -720,11 +734,12 @@ public final class FaClickGui implements OverlayGui {
         });
         ctx.hoverEnabled = topPopupAt(ctx.mouseX, ctx.mouseY) == null && drag == 0;
         float openAmount = openMotion.toward(1.0f, ctx.dt, 14.0f);
+        draw.rect(0.0f, 0.0f, sw, sh, FaTheme.alpha(FaTheme.SCRIM, openAmount));
         try (FaDraw.Scope ignored = draw.push()) {
             float lift = (1.0f - openAmount) * 8.0f;
             draw.translate(0.0f, lift);
             draw.opacity(openAmount);
-            drawWindow(lift, openAmount);
+            drawWindow();
             for (int i = 0; i < popups.size(); i++) {
                 FaPopup popup = popups.get(i);
                 ctx.hoverEnabled = popup.contains(ctx.mouseX, ctx.mouseY)
@@ -735,12 +750,12 @@ public final class FaClickGui implements OverlayGui {
     }
 
     /** 画窗口本体（底衬、侧边栏、内容、头部、底部）。 */
-    private void drawWindow(float lift, float openAmount) {
-        draw.shadow(wx, wy, ww, wh, FaTheme.RADIUS, 16.0f, 0xA0000000);
+    private void drawWindow() {
+        draw.shadow(wx, wy, ww, wh, FaTheme.RADIUS, 8.0f, FaTheme.SHADOW);
         draw.rect(wx, wy, ww, wh, FaTheme.RADIUS, FaTheme.WINDOW);
         drawSidebar();
         drawContent();
-        drawHeader(lift, openAmount);
+        drawHeader();
         drawFooter();
     }
 
@@ -760,11 +775,19 @@ public final class FaClickGui implements OverlayGui {
             float labelW = iconsOnly ? 0.0f : TAB_GAP + font.width(FaStrings.t(value.name()));
             float w = TAB_PAD + TAB_ICON + labelW + TAB_PAD;
             if (i == index) {
-                return new float[]{x, wy + (FaTheme.HEADER_H - TAB_H) * 0.5f, w, TAB_H};
+                tabRect[0] = x;
+                tabRect[1] = wy + (FaTheme.HEADER_H - TAB_H) * 0.5f;
+                tabRect[2] = w;
+                tabRect[3] = TAB_H;
+                return tabRect;
             }
             x += w + 2.0f;
         }
-        return new float[]{x, wy, 0f, TAB_H};
+        tabRect[0] = x;
+        tabRect[1] = wy;
+        tabRect[2] = 0.0f;
+        tabRect[3] = TAB_H;
+        return tabRect;
     }
 
     /** @return 空间不足时 Tab 只显示图标 */
@@ -776,18 +799,18 @@ public final class FaClickGui implements OverlayGui {
         return last[0] + last[2] > tabsRightLimit() - 10.0f;
     }
 
-    /** @return 右侧状态文字的左边界；Tab 不许越过它 */
+    /** @return 右上角关闭按钮的左边界 */
+    private float closeX() {
+        return wx + ww - 18.0f - HEADER_BUTTON;
+    }
+
+    /** @return Tab 不得侵入语言与关闭按钮 */
     private float tabsRightLimit() {
-        return wx + ww - 18.0f - FaTheme.small().width(statusText());
+        return closeX() - 8.0f - LANG_W - 16.0f;
     }
 
-    /** @return 头部右侧的状态文字（后端 + 缩放） */
-    private String statusText() {
-        return backendName + " " + String.format(Locale.ROOT, "%.2f", scale);
-    }
-
-    /** 画头部：渐变表面、分类 Tab、状态文字。 */
-    private void drawHeader(float lift, float openAmount) {
+    /** 画头部：品牌、分类导航、语言与关闭。诊断信息收纳在信息浮层。 */
+    private void drawHeader() {
         float h = FaTheme.HEADER_H;
         draw.vertical(wx, wy + h, ww, SHADE, 0xB0101010, 0x00101010);
         draw.rect(wx, wy, ww, FaTheme.RADIUS * 2.0f, FaTheme.RADIUS, FaTheme.HEADER_TOP);
@@ -827,12 +850,9 @@ public final class FaClickGui implements OverlayGui {
             }
         }
 
-        String status = statusText();
-        draw.textRightMid(status, wx + ww - 18.0f, mid, FaTheme.small(), FaTheme.MUTED);
-        // 语言开关：右侧状态文本左边一枚小芯片，点一下中/英切换。
-        float chipW = 26.0f;
-        float chipH = 13.0f;
-        float chipX = wx + ww - 18.0f - FaTheme.small().width(status) - 10.0f - chipW;
+        float chipW = LANG_W;
+        float chipH = HEADER_BUTTON;
+        float chipX = closeX() - 8.0f - chipW;
         float chipY = mid - chipH * 0.5f;
         langChip[0] = chipX;
         langChip[1] = chipY;
@@ -843,6 +863,14 @@ public final class FaClickGui implements OverlayGui {
                 FaTheme.mix(FaTheme.TAB_ACTIVE, FaTheme.TAB_TEXT_HOVER, chipHover ? 0.35f : 0.0f));
         draw.textCenter(FaStrings.isChinese() ? "中" : "EN", chipX + chipW * 0.5f, mid + 0.5f,
                 FaTheme.small(), chipHover ? FaTheme.TAB_TEXT_ACTIVE : FaTheme.TAB_TEXT);
+        boolean closeHover = ctx.hovered(closeX(), mid - HEADER_BUTTON * 0.5f,
+                HEADER_BUTTON, HEADER_BUTTON);
+        if (closeHover) {
+            draw.rect(closeX(), mid - HEADER_BUTTON * 0.5f, HEADER_BUTTON, HEADER_BUTTON,
+                    FaTheme.FIELD_RADIUS, FaTheme.FIELD_HOVER);
+        }
+        draw.icon(FaTheme.I_CLOSE, closeX() + HEADER_BUTTON * 0.5f, mid, 14.0f,
+                closeHover ? FaTheme.ICON_HOVER : FaTheme.ICON);
     }
 
     /** @return 内容区左边缘 */
@@ -887,20 +915,31 @@ public final class FaClickGui implements OverlayGui {
         return list == null ? Collections.<FaGroup>emptyList() : list;
     }
 
-    /** @return 内容瀑布流里要排的卡片；Render 分类额外插入预览卡片（在第二位） */
+    /** @return 当前设置面板；搜索保留全部匹配结果，Render 额外保留辅助预览。 */
     private List<FaBox> currentBoxes() {
         List<FaGroup> list = currentGroups();
-        List<FaBox> boxes = new ArrayList<FaBox>(list.size() + 1);
-        boxes.addAll(list);
-        if (query.isEmpty() && category == Category.RENDER) {
-            boxes.add(Math.min(1, boxes.size()), preview);
+        visibleBoxes.clear();
+        if (!query.isEmpty()) {
+            visibleBoxes.addAll(list);
+        } else {
+            Module selected = activeModule(view(), list);
+            for (int i = 0; i < list.size(); i++) {
+                FaGroup group = list.get(i);
+                if (group.module == selected) {
+                    visibleBoxes.add(group);
+                    break;
+                }
+            }
+            if (category == Category.RENDER) {
+                visibleBoxes.add(preview);
+            }
         }
-        return boxes;
+        return visibleBoxes;
     }
 
     /** @return 侧边栏第一项的上边缘 */
     private float sideTop() {
-        return contentY() + 11.0f;
+        return contentY() + FaTheme.CONTENT_PAD;
     }
 
     /** 画侧边栏：当前分类的模块名列表 + 活动项高亮条。 */
@@ -908,12 +947,13 @@ public final class FaClickGui implements OverlayGui {
         View view = view();
         List<FaGroup> list = currentGroups();
         float top = sideTop();
-        float height = contentH() - 16.0f;
+        float height = contentH() - FaTheme.CONTENT_PAD * 2.0f;
         float maxSide = Math.max(0.0f, list.size() * SIDE_ITEM_H - height);
         view.sideScroll = clamp(view.sideScroll, 0.0f, maxSide);
         float offset = view.sideScrollMotion.toward(view.sideScroll, ctx.dt, 16.0f);
         Module active = activeModule(view, list);
         FaFont font = FaTheme.label();
+        draw.rect(contentX() - 0.5f, contentY(), 0.5f, contentH(), FaTheme.DIVIDER);
         try (FaDraw.Scope clip = draw.clip(wx, top - 2.0f, FaTheme.SIDEBAR_W, height + 4.0f)) {
             int activeIndex = -1;
             for (int i = 0; i < list.size(); i++) {
@@ -926,11 +966,19 @@ public final class FaClickGui implements OverlayGui {
                     continue;
                 }
                 boolean hovered = ctx.hovered(wx, iy, FaTheme.SIDEBAR_W, SIDE_ITEM_H);
+                if (group.module == active) {
+                    draw.rect(wx + 8.0f, iy + 2.0f, FaTheme.SIDEBAR_W - 16.0f, SIDE_ITEM_H - 4.0f,
+                            FaTheme.FIELD_RADIUS, FaTheme.TAB_ACTIVE);
+                }
                 int color = group.module == active ? FaTheme.SIDE_TEXT_ACTIVE
                         : hovered ? FaTheme.LABEL
                         : group.module.isEnabled() ? FaTheme.SIDE_TEXT_ENABLED : FaTheme.SIDE_TEXT;
-                draw.textMid(FaTheme.fit(FaStrings.t(group.title()), font, FaTheme.SIDEBAR_W - 22.0f),
-                        wx + 16.0f, iy + SIDE_ITEM_H * 0.5f, font, color);
+                draw.textMid(FaTheme.fit(FaStrings.t(group.title()), font, FaTheme.SIDEBAR_W - 48.0f),
+                        wx + 24.0f, iy + SIDE_ITEM_H * 0.5f, font, color);
+                if (group.module.isEnabled()) {
+                    draw.rect(wx + FaTheme.SIDEBAR_W - 20.0f, iy + SIDE_ITEM_H * 0.5f - 2.0f,
+                            4.0f, 4.0f, 2.0f, FaTheme.ACCENT);
+                }
             }
             if (activeIndex >= 0) {
                 float target = activeIndex * SIDE_ITEM_H - offset;
@@ -938,12 +986,12 @@ public final class FaClickGui implements OverlayGui {
                     view.barY.snap(target);
                 }
                 float barY = top + view.barY.toward(target, ctx.dt, 18.0f);
-                draw.rect(wx + 9.0f, barY + (SIDE_ITEM_H - 16.0f) * 0.5f, 2.0f, 16.0f, 1.0f, FaTheme.ACCENT);
+                draw.rect(wx + 14.0f, barY + (SIDE_ITEM_H - 14.0f) * 0.5f, 2.0f, 14.0f, 1.0f, FaTheme.ACCENT);
             }
         }
     }
 
-    /** 点过的模块保持高亮，否则跟随滚动位置。 */
+    /** 选择保持稳定；没有显式选择时显示分类中的第一个模块。 */
     private Module activeModule(View view, List<FaGroup> list) {
         if (list.isEmpty()) {
             return null;
@@ -955,22 +1003,16 @@ public final class FaClickGui implements OverlayGui {
                 }
             }
         }
-        FaGroup best = list.get(0);
-        for (FaGroup group : list) {
-            if (group.targetY() <= view.scroll + 18.0f && group.targetY() > best.targetY()) {
-                best = group;
-            }
-        }
-        return best.module;
+        return list.get(0).module;
     }
 
-    /** @return 内容区能排几列（1..3）；包内可见以便布局测试直接钉住列数计算 */
-    int columns(float contentWidth) {
-        return Math.max(1, Math.min(3, (int) Math.floor((contentWidth - FaTheme.CONTENT_PAD + FaTheme.COLUMN_GAP)
-                / (FaTheme.MIN_COLUMN_W + FaTheme.COLUMN_GAP))));
+    /** @return 搜索结果的列数；保证两侧留白，最多并排两组设置。 */
+    private int columns(float contentWidth) {
+        return contentWidth - FaTheme.CONTENT_PAD * 2.0f >= FaTheme.MIN_COLUMN_W * 2.0f + FaTheme.COLUMN_GAP
+                ? 2 : 1;
     }
 
-    /** 画内容区：按最短列瀑布流摆放卡片。 */
+    /** 画专注设置区；宽窗把辅助预览靠右，窄窗顺次摆放，搜索才使用等宽双列。 */
     private void drawContent() {
         View view = view();
         List<FaBox> list = currentBoxes();
@@ -978,20 +1020,26 @@ public final class FaClickGui implements OverlayGui {
         float cy = contentY();
         float cw = contentW();
         float ch = contentH();
-        int columns = columns(cw);
-        float columnW = (cw - FaTheme.CONTENT_PAD - FaTheme.COLUMN_GAP * (columns - 1)) / columns;
-        String key = (query.isEmpty() ? category.name() : "?" + query) + "|" + columns + "|"
-                + Math.round(columnW);
-        boolean snap = !key.equals(layoutKey);
+        float innerW = cw - FaTheme.CONTENT_PAD * 2.0f;
+        boolean previewBeside = query.isEmpty() && category == Category.RENDER
+                && innerW >= FaTheme.MIN_COLUMN_W + FaTheme.COLUMN_GAP + PREVIEW_W;
+        int columns = query.isEmpty() ? (previewBeside ? 2 : 1) : columns(cw);
+        float columnW = previewBeside ? innerW - FaTheme.COLUMN_GAP - PREVIEW_W
+                : (innerW - FaTheme.COLUMN_GAP * (columns - 1)) / columns;
+        String key = query.isEmpty() ? category.name() : query;
+        Module selected = activeModule(view, currentGroups());
+        boolean snap = !key.equals(layoutKey) || layoutWidth != cw || layoutModule != selected;
         layoutKey = key;
+        layoutWidth = cw;
+        layoutModule = selected;
 
-        float[] columnHeights = new float[columns];
-        for (FaBox box : list) {
-            int column = 0;
-            for (int i = 1; i < columns; i++) {
-                if (columnHeights[i] < columnHeights[column] - 0.5f) {
-                    column = i;
-                }
+        columnHeights[0] = 0.0f;
+        columnHeights[1] = 0.0f;
+        for (int n = 0; n < list.size(); n++) {
+            FaBox box = list.get(n);
+            int column = previewBeside && box == preview ? 1 : 0;
+            if (!query.isEmpty() && columns == 2 && columnHeights[1] < columnHeights[0] - 0.5f) {
+                column = 1;
             }
             box.place(column * (columnW + FaTheme.COLUMN_GAP), columnHeights[column], snap);
             columnHeights[column] += box.targetHeight() + FaTheme.GROUP_GAP;
@@ -1013,8 +1061,10 @@ public final class FaClickGui implements OverlayGui {
                 draw.translate(0.0f, (1.0f - fade) * 6.0f);
                 draw.opacity(fade);
                 float originY = cy + FaTheme.CONTENT_PAD - scroll;
-                for (FaBox box : list) {
-                    box.render(ctx, cx, originY, columnW, cy, cy + ch, 1.0f);
+                for (int i = 0; i < list.size(); i++) {
+                    FaBox box = list.get(i);
+                    float width = box == preview ? Math.min(PREVIEW_W, columnW) : columnW;
+                    box.render(ctx, cx + FaTheme.CONTENT_PAD, originY, width, cy, cy + ch, 1.0f);
                 }
                 if (list.isEmpty()) {
                     draw.textCenter(query.isEmpty() ? "No modules"
@@ -1036,7 +1086,7 @@ public final class FaClickGui implements OverlayGui {
 
     /** @return 第 {@code index} 个底部图标的中心 x */
     private float footerIconX(int index) {
-        return wx + 16.0f + index * 23.0f;
+        return wx + 24.0f + index * 32.0f;
     }
 
     /** 底部工具条：搜索与信息两个图标、搜索框、提示、右下角缩放手柄。 */
@@ -1046,22 +1096,24 @@ public final class FaClickGui implements OverlayGui {
         draw.rect(wx, fy, ww, FaTheme.FOOTER_H, FaTheme.RADIUS, FaTheme.FOOTER);
         draw.rect(wx, fy, ww, 0.5f, FaTheme.DIVIDER);
         float mid = fy + FaTheme.FOOTER_H * 0.5f;
-        String[] icons = {FaTheme.I_SEARCH, FaTheme.I_INFO};
-        for (int i = 0; i < icons.length; i++) {
+        for (int i = 0; i < footerHover.length; i++) {
+            String icon = i == 0 ? FaTheme.I_SEARCH : FaTheme.I_INFO;
             float ix = footerIconX(i);
-            float hover = footerHover[i].toward(ctx.hovered(ix - 9, fy, 18, FaTheme.FOOTER_H) ? 1.0f : 0.0f,
+            float hover = footerHover[i].toward(ctx.hovered(ix - 14, fy, 28, FaTheme.FOOTER_H) ? 1.0f : 0.0f,
                     ctx.dt, 16.0f);
-            boolean active = i == 0 && searchActive || i == 1 && isPopupOpen(icons[1]);
+            boolean active = i == 0 && searchActive || i == 1 && isPopupOpen(FaTheme.I_INFO);
             int color = active ? FaTheme.ACCENT : FaTheme.mix(FaTheme.ICON, FaTheme.ICON_HOVER, hover);
-            draw.icon(icons[i], ix, mid, 11.0f, color);
+            draw.icon(icon, ix, mid, 14.0f, color);
         }
 
         float openAmount = searchOpen.toward(searchActive ? 1.0f : 0.0f, ctx.dt, 16.0f);
-        float fieldX = footerIconX(1) + 16.0f;
+        float fieldX = footerIconX(1) + 22.0f;
         if (openAmount > 0.01f) {
             float fieldW = SEARCH_W * openAmount;
-            draw.rect(fieldX, mid - 7.0f, fieldW, 14.0f, FaTheme.FIELD_RADIUS, FaTheme.FIELD);
-            try (FaDraw.Scope clip = draw.clip(fieldX, mid - 8.0f, fieldW, 16.0f)) {
+            draw.rect(fieldX, mid - FaTheme.FIELD_H * 0.5f, fieldW, FaTheme.FIELD_H,
+                    FaTheme.FIELD_RADIUS, FaTheme.FIELD);
+            try (FaDraw.Scope clip = draw.clip(fieldX, mid - FaTheme.FIELD_H * 0.5f,
+                    fieldW, FaTheme.FIELD_H)) {
                 search.render(draw, fieldX + 6.0f, mid, fieldW - 12.0f, FaTheme.field(), FaTheme.LABEL,
                         focus == searchSink, "Search modules and settings", FaTheme.MUTED);
             }
@@ -1163,20 +1215,20 @@ public final class FaClickGui implements OverlayGui {
             if (button != 0) {
                 return true;
             }
-            if (FaContext.inside(mx, my, footerIconX(0) - 9, fy, 18, FaTheme.FOOTER_H)) {
+            if (FaContext.inside(mx, my, footerIconX(0) - 14, fy, 28, FaTheme.FOOTER_H)) {
                 if (searchActive) {
                     closeSearch();
                 } else {
                     openSearch();
                 }
-            } else if (FaContext.inside(mx, my, footerIconX(1) - 9, fy, 18, FaTheme.FOOTER_H)) {
+            } else if (FaContext.inside(mx, my, footerIconX(1) - 14, fy, 28, FaTheme.FOOTER_H)) {
                 togglePopup(FaTheme.I_INFO, new Supplier<FaPopup>() {
                     @Override
                     public FaPopup get() {
                         return new FaInfoPopup(FaTheme.I_INFO, FaClickGui.this);
                     }
                 }, wx + ww - 200.0f, fy, 18, FaTheme.FOOTER_H, false);
-            } else if (searchActive && FaContext.inside(mx, my, footerIconX(1) + 16, fy, SEARCH_W,
+            } else if (searchActive && FaContext.inside(mx, my, footerIconX(1) + 22, fy, SEARCH_W,
                     FaTheme.FOOTER_H)) {
                 search.focused();
                 focus(searchSink);
@@ -1184,6 +1236,13 @@ public final class FaClickGui implements OverlayGui {
             return true;
         }
         if (FaContext.inside(mx, my, wx, wy, ww, FaTheme.HEADER_H)) {
+            if (FaContext.inside(mx, my, closeX(), wy + (FaTheme.HEADER_H - HEADER_BUTTON) * 0.5f,
+                    HEADER_BUTTON, HEADER_BUTTON)) {
+                if (button == 0) {
+                    setOpen(false);
+                }
+                return true;
+            }
             boolean iconsOnly = tabsIconsOnly();
             if (System.getProperty("nocturne.ui.debug") != null) {
                 StringBuilder trace = new StringBuilder("[nocturne] header click at ");
@@ -1234,7 +1293,16 @@ public final class FaClickGui implements OverlayGui {
             if (button == 0 && index >= 0 && index < list.size()) {
                 FaGroup group = list.get(index);
                 view.selected = group.module;
-                view.scroll = clamp(group.targetY(), 0.0f, view.maxScroll);
+                closeAllPopups();
+                focus(null);
+                if (query.isEmpty()) {
+                    view.scroll = 0.0f;
+                    view.scrollMotion.snap(0.0f);
+                    contentFade.snap(0.6f);
+                    layoutKey = "";
+                } else {
+                    view.scroll = clamp(group.targetY(), 0.0f, view.maxScroll);
+                }
                 group.flash();
             }
             return true;

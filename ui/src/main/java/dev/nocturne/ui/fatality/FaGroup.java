@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 一个模块在界面上的一张卡片：标题压在顶边上，下面第一行是 "Enabled" 开关，
+ * 一个模块的设置面板：独立标题带，下面第一行是 "Enabled" 开关，
  * 其余每一行对应模块的一个设置项。搜索可以把行收窄。
  */
 final class FaGroup extends FaBox {
 
     /** 标题相对卡片顶边的中心偏移。 */
-    private static final float TITLE_RISE = 1.5f;
+    private static final float TITLE_RISE = FaTheme.GROUP_TITLE_H * 0.5f;
 
     /** 本卡片对应的模块。 */
     final Module module;
@@ -242,10 +242,10 @@ final class FaGroup extends FaBox {
         ctx.draw.outline(gx, gy, width, height, FaTheme.GROUP_RADIUS, 0.5f,
                 FaTheme.alpha(FaTheme.mix(FaTheme.GROUP_BORDER, FaTheme.ACCENT_DIM, glow), alpha));
 
-        // 与参考实现一致：标题压在卡片顶边上，不占一条独立的标题带。
+        // 标题与设置行共用同一左对齐轴，不压边框，也不与首行争夺垂直空间。
         FaFont titleFont = FaTheme.title();
-        ctx.draw.textMid(FaTheme.fit(FaStrings.t(title()), titleFont, width - 20.0f),
-                gx + 9.5f, gy + TITLE_RISE, titleFont,
+        ctx.draw.textMid(FaTheme.fit(FaStrings.t(title()), titleFont, width - FaTheme.ROW_PAD * 2.0f),
+                gx + FaTheme.ROW_PAD, gy + TITLE_RISE, titleFont,
                 FaTheme.alpha(FaTheme.mix(FaTheme.TITLE, FaTheme.ACCENT, glow), alpha));
 
         float rowY = gy + FaTheme.GROUP_TITLE_H;

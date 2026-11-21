@@ -188,8 +188,9 @@ launcher ──→ (无编译期依赖)        (运行期把 dist jar 当子进�
   维护 1024² 白化字形图集（LRU 淘汰时释放纹理），`text/FontRasterizer` 把
   `FaFont.Provider` 接到图集并把度量换算回设计单位；`text/RasterTextures` 用解析解生成阴影与
   圆角描边角弧的 alpha 场。三条支路都只经 `Renderer` 的纹理原语。
-- 界面实现：`fatality/FaClickGui`（分类 Tab + 侧边栏 + 三列瀑布流 + 底部搜索；浮层栈、
-  键盘焦点、拖拽/缩放窗口、布局持久化到 `<user.dir>/nocturne/clickgui.properties`），
+- 界面实现：`fatality/FaClickGui`（顶部分类 + 模块侧栏 + 当前模块设置；搜索保留多模块浏览，
+  Render 玩家预览为辅助面板，窄窗顺排；浮层栈、键盘焦点、关闭按钮、拖拽/缩放窗口，
+  布局持久化到 `<user.dir>/nocturne/clickgui.properties`），
   绘制词汇是 `fatality/FaDraw` 与它的 `BackendFaDraw` 实现（变换/透明度/裁剪自持，渐变按缺少
   逐顶点色的现实分段近似）。
 - 输入与界面之间只有 `OverlayGui`：`GuiOverlay` 每帧轮询输入状态并合成点击/拖拽/滚轮/按键事件，

@@ -131,8 +131,8 @@ class FaInteractionTest {
         gui.render(renderer);
         RecordingRenderer.DrawCall window = windowRect();
 
-        // 头部右侧空白（避开分类 Tab 与语言芯片），按下开始拖动窗口。
-        float clickX = window.x + window.width - 4.0f;
+        // 品牌文字区域可以拖动；避开分类 Tab、语言与右上角关闭按钮。
+        float clickX = window.x + 30.0f;
         float clickY = window.y + 10.0f;
         assertTrue(gui.mouseClicked(clickX, clickY, 0), "头部空白处应被窗口消费");
         gui.mouseDragged(clickX - 30.0f, clickY, 0, -30.0, 0.0);
@@ -164,6 +164,24 @@ class FaInteractionTest {
         assertFalse(gui.blocksScaleKeys(), "没有输入焦点时缩放键可用");
         assertTrue(gui.keyPressed(java.awt.event.KeyEvent.VK_F, 2), "Ctrl+F 应打开搜索框");
         assertTrue(gui.blocksScaleKeys(), "搜索框聚焦时 = / - 是输入内容");
+    }
+
+    /** 新关闭入口必须走正常关闭路径，释放搜索键盘焦点。 */
+    @Test
+    void closeButtonClosesThePanelAndReleasesSearchFocus() {
+        FaClickGui gui = new FaClickGui(singleModuleRegistry());
+        renderer.textures = false;
+        gui.setOpen(true);
+        gui.setViewport(1142, 700);
+        gui.update(System.currentTimeMillis(), 10, 10);
+        gui.keyPressed(java.awt.event.KeyEvent.VK_F, 2);
+        gui.render(renderer);
+        RecordingRenderer.DrawCall close = renderer.ofKind("text").stream()
+                .filter(call -> FaTheme.glyph(FaTheme.I_CLOSE).equals(call.text)).findFirst()
+                .orElseThrow(() -> new AssertionError("关闭入口必须被画出来"));
+        gui.mouseClicked(close.x + close.textSize * 0.5f, close.y + close.textSize * 0.5f, 0);
+        assertFalse(gui.isOpen(), "关闭按钮必须真的关闭面板");
+        assertFalse(gui.blocksScaleKeys(), "关闭后不得残留搜索焦点");
     }
 
     /**

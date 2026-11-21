@@ -247,6 +247,7 @@ final class FaStrings {
         put("Render Trapped Chests", "渲染陷阱箱");
         put("No modules", "无模块");
         put("Enter a world first", "请先进入世界");
+        put("Model preview unavailable", "模型预览暂不可用");
         put("Search modules and settings", "搜索模块与设置");
         registerModules();
         registerTerms();

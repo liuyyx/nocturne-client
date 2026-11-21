@@ -23,6 +23,8 @@ final class FaTheme {
     static final int POPUP = 0xFF1A1A1D;
     static final int POPUP_BORDER = 0xFF2B2B31;
     static final int SHADOW = 0x8C000000;
+    /** 只在打开游戏内面板时压暗世界，不修改世界模块或注入器表面色。 */
+    static final int SCRIM = 0x66000000;
 
     // ── 文字（对应 AppTheme.TEXT / TEXT_MUTED / TEXT_FAINT） ────────────────
     static final int LOGO = 0xFFECE9E1;
@@ -54,34 +56,34 @@ final class FaTheme {
     static final int ORANGE = 0xFFEFB04B;
 
     // ── 尺寸（设计单位） ────────────────────────────────────────────────────
-    // 参考实现的目标画布是 960x540 的逻辑像素，这里取其 0.8 倍，使默认窗口在 960x540 下仍有余量；
-    // FaClickGui 再把整套设计单位缩放到实际绘制区。
-    static final float DEFAULT_W = 744.0f;
+    // 设计单位在整套界面中统一缩放；宽窗为模块导航与专注设置区留出余量。
+    static final float DEFAULT_W = 840.0f;
     static final float DEFAULT_H = 540.0f;
-    static final float MIN_W = 500.0f;
-    static final float MIN_H = 320.0f;
-    static final float RADIUS = 4.0f;
-    static final float HEADER_H = 40.0f;
-    static final float FOOTER_H = 22.0f;
-    static final float SIDEBAR_W = 98.0f;
-    static final float CONTENT_PAD = 10.0f;
-    static final float COLUMN_GAP = 13.5f;
-    static final float GROUP_GAP = 16.0f;
-    static final float GROUP_RADIUS = 3.5f;
-    /** 卡片顶边到第一行；标题压在顶边上。 */
-    static final float GROUP_TITLE_H = 15.0f;
-    static final float GROUP_BOTTOM = 10.0f;
-    static final float ROW_H = 25.5f;
-    static final float ROW_PAD = 15.0f;
-    static final float FIELD_W = 72.0f;
-    static final float FIELD_H = 19.0f;
-    static final float SLIDER_H = 13.0f;
-    static final float FIELD_RADIUS = 2.5f;
-    static final float CHECK = 10.5f;
-    static final float CHIP_W = 17.5f;
-    static final float CHIP_H = 9.0f;
-    static final float GEAR = 10.5f;
-    static final float MIN_COLUMN_W = 188.0f;
+    static final float MIN_W = 600.0f;
+    static final float MIN_H = 360.0f;
+    static final float RADIUS = 9.0f;
+    static final float HEADER_H = 52.0f;
+    static final float FOOTER_H = 34.0f;
+    static final float SIDEBAR_W = 172.0f;
+    static final float CONTENT_PAD = 18.0f;
+    static final float COLUMN_GAP = 20.0f;
+    static final float GROUP_GAP = 18.0f;
+    static final float GROUP_RADIUS = 6.0f;
+    /** 标题独占卡片顶部，避免小字骑在描边上。 */
+    static final float GROUP_TITLE_H = 44.0f;
+    static final float GROUP_BOTTOM = 12.0f;
+    static final float ROW_H = 32.0f;
+    static final float ROW_PAD = 18.0f;
+    static final float FIELD_W = 96.0f;
+    static final float FIELD_H = 24.0f;
+    static final float SLIDER_H = 17.0f;
+    static final float FIELD_RADIUS = 4.0f;
+    static final float SWITCH_W = 32.0f;
+    static final float SWITCH_H = 18.0f;
+    static final float CHIP_W = 22.0f;
+    static final float CHIP_H = 11.0f;
+    static final float GEAR = 12.5f;
+    static final float MIN_COLUMN_W = 250.0f;
 
     /** 品牌名；标题栏与信息浮层都用它（不读游戏用户名）。 */
     static final String BRAND = "NOCTURNE";

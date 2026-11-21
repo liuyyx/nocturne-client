@@ -44,17 +44,17 @@ public interface FaFont {
 
     // ── 设计单位下的字号表；每个不同字号各自一张图集，故这组值保持精简 ──────────
     /** Logo 字号。 */
-    float LOGO = 15.0f;
+    float LOGO = 16.0f;
     /** 分类 Tab 字号。 */
-    float TAB = 9.4f;
+    float TAB = 11.5f;
     /** 卡片标题字号。 */
-    float TITLE = 10.0f;
+    float TITLE = 14.0f;
     /** 参数行标签字号。 */
-    float LABEL = 9.8f;
+    float LABEL = 12.0f;
     /** 输入框 / 数值字号。 */
-    float FIELD = 9.6f;
+    float FIELD = 11.5f;
     /** 次要文字字号。 */
-    float SMALL = 8.8f;
+    float SMALL = 10.5f;
 
     /** 字体句柄集；界面按语义取字体，换字体实现只需换掉这个 Provider。 */
     interface Provider {

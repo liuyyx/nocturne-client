@@ -5,7 +5,7 @@ import dev.nocturne.client.value.Value;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-/** 左侧标签 + 右侧深色方框；勾选时画一个白色对勾（带弹性缩放动画）。 */
+/** 左侧标签 + 右侧滑动开关；整行点击，旋钮位置与颜色共同表达状态。 */
 class FaCheckRow extends FaRow {
     /** 取值器。 */
     private final BooleanSupplier getter;
@@ -24,23 +24,19 @@ class FaCheckRow extends FaRow {
     @Override
     protected void draw(FaContext ctx, float x, float centerY, float w, float alpha) {
         float t = check.toward(getter.getAsBoolean() ? 1.0f : 0.0f, ctx.dt, 22.0f);
-        float size = FaTheme.CHECK;
-        float boxX = right() - size;
-        float used = accessory(ctx, boxX - 6.0f, centerY, alpha);
-        drawLabel(ctx, x, centerY, boxX - used - x - FaTheme.ROW_PAD - 6.0f, alpha);
-        int box = t > 0.01f
-                ? FaTheme.mix(FaTheme.ACCENT, FaTheme.ACCENT_DIM, hover.value())
-                : FaTheme.mix(FaTheme.FIELD, FaTheme.FIELD_HOVER, hover.value());
-        ctx.draw.rect(boxX, centerY - size * 0.5f, size, size, 2.0f, FaTheme.alpha(box, alpha));
-        if (t > 0.01f) {
-            // 对勾从 70% 放大到 100%，让开关读起来像"弹出"而不是"闪烁"。
-            // 缩放画布而不是换字号：每种字号都会新建一张字形图集。
-            try (FaDraw.Scope scope = ctx.draw.push()) {
-                ctx.draw.translate(boxX + size * 0.5f, centerY);
-                ctx.draw.scale(0.7f + 0.3f * t);
-                ctx.draw.icon(FaTheme.I_CHECK, 0.0f, 0.0f, 10.0f, FaTheme.alpha(FaTheme.TICK, alpha * t));
-            }
-        }
+        float width = FaTheme.SWITCH_W;
+        float height = FaTheme.SWITCH_H;
+        float boxX = right() - width;
+        float used = accessory(ctx, boxX - 8.0f, centerY, alpha);
+        drawLabel(ctx, x, centerY, boxX - used - x - FaTheme.ROW_PAD - 8.0f, alpha);
+        int off = FaTheme.mix(FaTheme.FIELD, FaTheme.FIELD_HOVER, hover.value());
+        int on = FaTheme.mix(FaTheme.ACCENT, FaTheme.ACCENT_DIM, hover.value());
+        ctx.draw.rect(boxX, centerY - height * 0.5f, width, height, height * 0.5f,
+                FaTheme.alpha(FaTheme.mix(off, on, t), alpha));
+        float knob = height - 6.0f;
+        float knobX = boxX + 3.0f + (width - height) * t;
+        ctx.draw.rect(knobX, centerY - knob * 0.5f, knob, knob, knob * 0.5f,
+                FaTheme.alpha(FaTheme.mix(FaTheme.MUTED, FaTheme.TICK, t), alpha));
     }
 
     /**

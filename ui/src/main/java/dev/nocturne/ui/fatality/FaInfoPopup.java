@@ -8,15 +8,14 @@ import java.util.Locale;
 /**
  * 客户端信息浮层：品牌与版本、模块数量、当前绘制后端与缩放、内存占用。
  *
- * <p>上游的这一层还带语言切换与界面模式切换；本项目只有一个界面实现、也没有多语言，
- * 因此只保留"能自证当前运行状态"的那几行——出问题时它是唯一能一眼看到后端与字号来源的地方。
+ * <p>诊断信息收纳在这里，主标题栏不再重复展示后端与缩放数字。
  */
 final class FaInfoPopup extends FaPopup {
 
     /** 内边距。 */
-    private static final float PAD = 10.0f;
+    private static final float PAD = 14.0f;
     /** 行高。 */
-    private static final float LINE_H = 13.0f;
+    private static final float LINE_H = 22.0f;
 
     /** 所属界面；用于取后端名、缩放与字体模式。 */
     private final FaClickGui gui;
@@ -24,7 +23,7 @@ final class FaInfoPopup extends FaPopup {
     FaInfoPopup(Object owner, FaClickGui gui) {
         super(owner);
         this.gui = gui;
-        w = 196.0f;
+        w = 260.0f;
         h = PAD * 2.0f + LINE_H * 6.0f;
     }
 

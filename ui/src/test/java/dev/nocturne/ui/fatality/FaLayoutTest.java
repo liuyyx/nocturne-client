@@ -13,17 +13,17 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@link FaClickGui} 的布局测试：默认窗口尺寸、列数与瀑布流不越界。
+ * {@link FaClickGui} 的可见布局契约：专注设置、模块切换、搜索与窄窗不越界。
  *
- * <p>用记录型绘制面跑一遍真实渲染路径，断言的是<b>画出来的几何</b>——列数与窗口尺寸算错时，
- * 界面上表现为"卡片挤成一列"或"窗口比内容还小"，只测单独的数学函数抓不到。
+ * <p>通过实际绘制和鼠标/键盘入口验证，避免把内部列数公式固定成产品行为。
  */
 class FaLayoutTest {
 
@@ -60,11 +60,13 @@ class FaLayoutTest {
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
+        LayoutStore.resetForTests();
+        Files.deleteIfExists(Paths.get(System.getProperty("user.dir", "."), "nocturne/clickgui.properties"));
         FontRasterizer.invalidate();
     }
 
-    /** 设计目标是 960×540 的画布；1142×700 下缩放为 1，默认窗口就是 744×540 并居中。 */
+    /** 足够大的画布中，窗口保持设计尺寸并居中。 */
     @Test
     void defaultWindowKeepsItsDesignSizeAndCentres() {
         ModuleRegistry registry = new ModuleRegistry();
@@ -87,50 +89,109 @@ class FaLayoutTest {
                 "window is centred vertically (open animation lifts it by at most 8): " + window.y);
     }
 
-    /** 646 设计单位宽的内容区排三列；恰好够两列时排两列，最窄一列。 */
+    /** 选择模块后只显示它的设置，开关命中不得落到上一个模块。 */
     @Test
-    void columnsFollowTheAvailableWidth() {
-        FaClickGui gui = new FaClickGui(new ModuleRegistry());
-
-        assertEquals(3, gui.columns(FaTheme.DEFAULT_W - FaTheme.SIDEBAR_W),
-                "the default window fits three columns");
-        float twoColumns = 2 * FaTheme.MIN_COLUMN_W + FaTheme.CONTENT_PAD + FaTheme.COLUMN_GAP;
-        assertEquals(2, gui.columns(twoColumns), "exactly two columns fit at this width");
-        assertEquals(1, gui.columns(FaTheme.MIN_COLUMN_W), "a single column when nothing else fits");
-    }
-
-    /** 瀑布流必须把卡片放在列起点上，且整体不越过窗口右边界。 */
-    @Test
-    void masonryKeepsCardsInsideTheContentArea() {
+    void selectingAModuleShowsAndEditsOnlyItsSettings() {
+        Module alpha = module("Alpha", Category.MISC);
+        Module beta = module("Beta", Category.MISC);
         ModuleRegistry registry = new ModuleRegistry();
-        for (int i = 0; i < 7; i++) {
-            // 用 MISC 避免 Render 分类额外插入的预览卡片混进计数。
-            registry.register(module("Module" + i, Category.MISC));
-        }
+        registry.register(alpha);
+        registry.register(beta);
         FaClickGui gui = new FaClickGui(registry);
-
+        renderer.textures = false;
         gui.setOpen(true);
         gui.setViewport(VIEWPORT_W, VIEWPORT_H);
         gui.update(System.currentTimeMillis(), 10, 10);
         gui.render(renderer);
 
         RecordingRenderer.DrawCall window = windowRect();
-        float contentX = window.x + FaTheme.SIDEBAR_W;
-        float contentRight = window.x + window.width;
-        Set<Float> columnStarts = new HashSet<Float>();
-        int cards = 0;
-        for (RecordingRenderer.DrawCall call : renderer.ofKind("roundedRect")) {
-            if (call.radius != FaTheme.GROUP_RADIUS || call.x < contentX - 0.5f) {
-                continue;
-            }
-            cards++;
-            columnStarts.add(call.x);
-            assertTrue(call.x + call.width <= contentRight + 0.5f,
-                    "a card must not stick out of the window: " + call.x + " + " + call.width);
+        assertEquals(1, cards(window).size(), "默认只展开一个模块，避免重复导航和设置墙");
+        RecordingRenderer.DrawCall betaLabel = renderer.ofKind("text").stream()
+                .filter(call -> "Beta".equals(call.text) && call.x < window.x + FaTheme.SIDEBAR_W)
+                .findFirst().orElseThrow(() -> new AssertionError("Beta 必须能从侧栏选择"));
+        float clickX = betaLabel.x + 3.0f;
+        float clickY = betaLabel.y + betaLabel.textSize * 0.5f;
+        gui.mouseClicked(clickX, clickY, 0);
+        gui.mouseReleased(clickX, clickY, 0);
+        renderer.clear();
+        gui.render(renderer);
+
+        assertEquals(1, cards(windowRect()).size(), "切换后仍只显示当前模块");
+        assertTrue(renderer.ofKind("text").stream()
+                .anyMatch(call -> "Beta".equals(call.text) && call.x > window.x + FaTheme.SIDEBAR_W),
+                "设置标题必须跟随侧栏选择");
+        assertFalse(renderer.ofKind("text").stream()
+                .anyMatch(call -> "Alpha".equals(call.text) && call.x > window.x + FaTheme.SIDEBAR_W),
+                "旧模块设置必须退出绘制与命中");
+        RecordingRenderer.DrawCall enabled = renderer.ofKind("text").stream()
+                .filter(call -> FaStrings.t("Enabled").equals(call.text)).findFirst()
+                .orElseThrow(() -> new AssertionError("当前模块开关必须可见"));
+        gui.mouseClicked(enabled.x + 3.0f, enabled.y + enabled.textSize * 0.5f, 0);
+        assertTrue(beta.isEnabled(), "点击当前设置行应修改 Beta");
+        assertFalse(alpha.isEnabled(), "Alpha 不得残留命中");
+    }
+
+    /** 搜索保留多模块浏览；缩窄窗口时卡片继续保持内边距且互不覆盖。 */
+    @Test
+    void searchResultsStayInsideWideAndNarrowWindows() {
+        ModuleRegistry registry = new ModuleRegistry();
+        for (int i = 0; i < 7; i++) {
+            registry.register(module("Module" + i, Category.MISC));
         }
-        assertEquals(7, cards, "every module must be laid out");
-        assertTrue(columnStarts.size() <= 3, "the masonry must use at most three columns");
-        assertTrue(columnStarts.size() > 1, "seven cards must spread over more than one column");
+        FaClickGui gui = new FaClickGui(registry);
+        gui.setOpen(true);
+        gui.setViewport(VIEWPORT_W, VIEWPORT_H);
+        gui.update(System.currentTimeMillis(), 10, 10);
+        gui.render(renderer);
+        gui.keyPressed(java.awt.event.KeyEvent.VK_F, 2);
+        for (char character : "Module".toCharArray()) {
+            gui.charTyped(character);
+        }
+        renderer.clear();
+        gui.render(renderer);
+        RecordingRenderer.DrawCall window = windowRect();
+        assertEquals(7, cards(window).size(), "宽窗搜索应展示全部匹配模块，而不是只显示当前选择");
+        assertCardsStayInside(window);
+
+        float gripX = window.x + window.width - 3.0f;
+        float gripY = window.y + window.height - 3.0f;
+        float shrink = window.width - FaTheme.MIN_W;
+        gui.mouseClicked(gripX, gripY, 0);
+        gui.mouseDragged(gripX - shrink, gripY, 0, -shrink, 0.0);
+        gui.mouseReleased(gripX - shrink, gripY, 0);
+        renderer.clear();
+        gui.render(renderer);
+        assertTrue(windowRect().width < window.width, "缩放手柄必须实际缩窄窗口");
+        assertCardsStayInside(windowRect());
+    }
+
+    private List<RecordingRenderer.DrawCall> cards(RecordingRenderer.DrawCall window) {
+        List<RecordingRenderer.DrawCall> cards = new ArrayList<RecordingRenderer.DrawCall>();
+        for (RecordingRenderer.DrawCall call : renderer.ofKind("roundedRect")) {
+            if (call.radius == FaTheme.GROUP_RADIUS && call.width >= FaTheme.MIN_COLUMN_W
+                    && call.x >= window.x + FaTheme.SIDEBAR_W) {
+                cards.add(call);
+            }
+        }
+        return cards;
+    }
+
+    private void assertCardsStayInside(RecordingRenderer.DrawCall window) {
+        List<RecordingRenderer.DrawCall> cards = cards(window);
+        assertFalse(cards.isEmpty(), "设置内容不得因布局变化消失");
+        for (int i = 0; i < cards.size(); i++) {
+            RecordingRenderer.DrawCall card = cards.get(i);
+            assertTrue(card.x >= window.x + FaTheme.SIDEBAR_W + FaTheme.CONTENT_PAD - 0.5f,
+                    "内容区左侧必须保留留白");
+            assertTrue(card.x + card.width <= window.x + window.width - FaTheme.CONTENT_PAD + 0.5f,
+                    "内容区右侧必须保留留白");
+            for (int j = i + 1; j < cards.size(); j++) {
+                RecordingRenderer.DrawCall other = cards.get(j);
+                float overlapX = Math.min(card.x + card.width, other.x + other.width) - Math.max(card.x, other.x);
+                float overlapY = Math.min(card.y + card.height, other.y + other.height) - Math.max(card.y, other.y);
+                assertTrue(overlapX <= 0.5f || overlapY <= 0.5f, "设置卡片不得互相覆盖");
+            }
+        }
     }
 
     /** @return 记录流里面积最大的圆角矩形——窗口本体（底色被淡入动画改写过，不能按颜色认） */

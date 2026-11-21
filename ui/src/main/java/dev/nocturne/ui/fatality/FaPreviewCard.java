@@ -14,13 +14,11 @@ import dev.nocturne.client.module.Module;
 final class FaPreviewCard extends FaBox {
 
     /** 卡片高。 */
-    static final float HEIGHT = 238.0f;
+    static final float HEIGHT = 288.0f;
     /** 底部开关行高。 */
-    private static final float FOOTER = 24.0f;
-    /** 标题相对卡片顶边的中心偏移。 */
-    private static final float TITLE_RISE = 1.5f;
+    private static final float FOOTER = 40.0f;
     /** 开关药丸高。 */
-    private static final float PILL_H = 13.0f;
+    private static final float PILL_H = 24.0f;
     /** ESP 模块名。 */
     private static final String ESP_MODULE = "ESP";
     /** 标签模块名。 */
@@ -32,8 +30,8 @@ final class FaPreviewCard extends FaBox {
     private final FaMotion y = new FaMotion(Float.NaN);
     /** 开关药丸的悬停动画（ESP / Nametags）。 */
     private final FaMotion[] pillHover = {new FaMotion(0.0f), new FaMotion(0.0f)};
-    /** 上一帧算出的药丸矩形（{@code null} 表示该项本帧没画）。 */
-    private final float[][] pills = new float[2][];
+    /** 上一帧算出的两个开关矩形。 */
+    private final float[][] pills = {new float[4], new float[4]};
     /** 目标位置。 */
     private float targetX;
     /** 目标位置。 */
@@ -65,29 +63,7 @@ final class FaPreviewCard extends FaBox {
         return targetY;
     }
 
-    // ── 被预览的效果状态 ────────────────────────────────────────────────────
-
-    /** 两个开关的当前状态。 */
-    private static final class Effects {
-        /** ESP 是否启用。 */
-        boolean esp;
-        /** Nametags 是否启用。 */
-        boolean nametags;
-    }
-
-    /** 读取两个开关的真实状态。 */
-    private static Effects effects() {
-        Effects effects = new Effects();
-        NocturneClient client = NocturneClient.get();
-        if (client == null) {
-            return effects;
-        }
-        Module esp = client.modules().get(ESP_MODULE);
-        Module nametags = client.modules().get(NAMETAGS_MODULE);
-        effects.esp = esp != null && esp.isEnabled();
-        effects.nametags = nametags != null && nametags.isEnabled();
-        return effects;
-    }
+    // ── 真实模块开关 ────────────────────────────────────────────────────────
 
     /** 按名字切换模块；模块不存在时忽略。 */
     private static void toggleModule(String name) {
@@ -119,46 +95,46 @@ final class FaPreviewCard extends FaBox {
         ctx.draw.rect(gx, gy, width, HEIGHT, FaTheme.GROUP_RADIUS, FaTheme.alpha(FaTheme.GROUP, alpha));
         ctx.draw.outline(gx, gy, width, HEIGHT, FaTheme.GROUP_RADIUS, 0.5f,
                 FaTheme.alpha(FaTheme.GROUP_BORDER, alpha));
-        ctx.draw.textMid("Player", gx + 9.5f, gy + TITLE_RISE, FaTheme.title(),
-                FaTheme.alpha(FaTheme.TITLE, alpha));
+        ctx.draw.textMid("Player", gx + FaTheme.ROW_PAD, gy + FaTheme.GROUP_TITLE_H * 0.5f,
+                FaTheme.title(), FaTheme.alpha(FaTheme.TITLE, alpha));
 
         NocturneClient client = NocturneClient.get();
         GameBridge bridge = client == null ? null : client.gameBridge();
         Object player = bridge == null ? null : bridge.player();
         if (player == null) {
-            ctx.draw.textCenter("Enter a world first", gx + width * 0.5f, gy + 105.0f,
+            ctx.draw.textCenter("Enter a world first", gx + width * 0.5f, gy + 111.0f,
                     FaTheme.small(), FaTheme.alpha(FaTheme.MUTED, alpha));
         } else {
-            float modelX = gx + 18.0f, modelY = gy + 23.0f;
-            float modelW = Math.max(0.0f, width - 36.0f), modelH = 141.0f;
+            float modelX = gx + FaTheme.ROW_PAD, modelY = gy + FaTheme.GROUP_TITLE_H + 4.0f;
+            float modelW = Math.max(0.0f, width - FaTheme.ROW_PAD * 2.0f), modelH = 126.0f;
             if (!ctx.draw.player(player, modelX, modelY, modelW, modelH, ctx.mouseX, ctx.mouseY)) {
-                ctx.draw.textCenter("Model preview unavailable", gx + width * 0.5f, gy + 105.0f,
+                ctx.draw.textCenter("Model preview unavailable", gx + width * 0.5f, gy + 111.0f,
                         FaTheme.small(), FaTheme.alpha(FaTheme.MUTED, alpha));
             }
             drawInfo(ctx, gx, gy, width, alpha, bridge, player);
         }
-        drawFooter(ctx, gx, gy + HEIGHT - FOOTER, width, effects(), alpha);
+        drawFooter(ctx, gx, gy + HEIGHT - FOOTER, width, client, alpha);
     }
 
     /** 模型下沿保留玩家的实时状态；失败字段少画一行，不使预览消失。 */
     private void drawInfo(FaContext ctx, float gx, float gy, float width, float alpha,
                           GameBridge bridge, Object player) {
         FaFont font = FaTheme.small();
-        float left = gx + 10.0f;
-        float y = gy + 168.0f;
-        float lineHeight = 14.0f;
+        float left = gx + FaTheme.ROW_PAD;
+        float y = gy + 188.0f;
+        float lineHeight = 20.0f;
 
         Object name = bridge.callMapped(player, ClassType.ENTITY, "getName");
         if (name != null) {
             Object text = name instanceof String ? name : bridge.callMapped(name, ClassType.CHAT_COMPONENT, "getString");
             if (text instanceof String) {
-                row(ctx, font, left, y, width - 20.0f, "Name", (String) text, alpha);
+                row(ctx, font, left, y, width - FaTheme.ROW_PAD * 2.0f, "Name", (String) text, alpha);
                 y += lineHeight;
             }
         }
         Object health = bridge.callMapped(player, ClassType.LIVING_ENTITY, "getHealth");
         if (health instanceof Number) {
-            row(ctx, font, left, y, width - 20.0f, "Health",
+            row(ctx, font, left, y, width - FaTheme.ROW_PAD * 2.0f, "Health",
                     String.format(java.util.Locale.ROOT, "%.1f", ((Number) health).floatValue()), alpha);
             y += lineHeight;
         }
@@ -168,7 +144,7 @@ final class FaPreviewCard extends FaBox {
             Object ey = bridge.readField(eye, ClassType.VEC3, "y");
             Object ez = bridge.readField(eye, ClassType.VEC3, "z");
             if (ex instanceof Number && ey instanceof Number && ez instanceof Number) {
-                row(ctx, font, left, y, width - 20.0f, "Pos", String.format(java.util.Locale.ROOT,
+                row(ctx, font, left, y, width - FaTheme.ROW_PAD * 2.0f, "Pos", String.format(java.util.Locale.ROOT,
                         "%.0f %.0f %.0f", ((Number) ex).doubleValue(), ((Number) ey).doubleValue(),
                         ((Number) ez).doubleValue()), alpha);
                 y += lineHeight;
@@ -185,25 +161,32 @@ final class FaPreviewCard extends FaBox {
     }
 
     /** 底部两个开关药丸。 */
-    private void drawFooter(FaContext ctx, float gx, float fy, float width, Effects effects, float alpha) {
+    private void drawFooter(FaContext ctx, float gx, float fy, float width, NocturneClient client, float alpha) {
         FaFont font = FaTheme.small();
-        String[] labels = {"ESP", "Nametags"};
-        boolean[] on = {effects.esp, effects.nametags};
-        float px = gx + 10.0f;
-        float mid = fy + FOOTER * 0.5f - 1.0f;
-        for (int i = 0; i < labels.length; i++) {
-            float w = font.width(labels[i]) + 18.0f;
-            pills[i] = new float[]{px, mid - PILL_H * 0.5f, w, PILL_H};
+        float px = gx + FaTheme.ROW_PAD;
+        float mid = fy + FOOTER * 0.5f;
+        ctx.draw.rect(px, fy, width - FaTheme.ROW_PAD * 2.0f, 0.5f,
+                FaTheme.alpha(FaTheme.DIVIDER, alpha));
+        for (int i = 0; i < pills.length; i++) {
+            String label = i == 0 ? "ESP" : "Name Tags";
+            Module module = client == null ? null : client.modules().get(i == 0 ? ESP_MODULE : NAMETAGS_MODULE);
+            boolean on = module != null && module.isEnabled();
+            float w = font.width(FaStrings.t(label)) + 24.0f;
+            float[] pill = pills[i];
+            pill[0] = px;
+            pill[1] = mid - PILL_H * 0.5f;
+            pill[2] = w;
+            pill[3] = PILL_H;
             float hover = pillHover[i].toward(ctx.hovered(px, mid - PILL_H * 0.5f, w, PILL_H) ? 1.0f : 0.0f,
                     ctx.dt, 16.0f);
             ctx.draw.rect(px, mid - PILL_H * 0.5f, w, PILL_H, PILL_H * 0.5f,
                     FaTheme.alpha(FaTheme.mix(FaTheme.FIELD, FaTheme.FIELD_HOVER, hover), alpha));
             ctx.draw.rect(px + 6.0f, mid - 1.5f, 3.0f, 3.0f, 1.5f,
-                    FaTheme.alpha(on[i] ? FaTheme.ACCENT : 0xFF3A3A3A, alpha));
-            int color = on[i] ? FaTheme.mix(FaTheme.LABEL, FaTheme.LABEL_HOVER, hover)
+                    FaTheme.alpha(on ? FaTheme.ACCENT : 0xFF3A3A3A, alpha));
+            int color = on ? FaTheme.mix(FaTheme.LABEL, FaTheme.LABEL_HOVER, hover)
                     : FaTheme.mix(FaTheme.FIELD_TEXT, FaTheme.FIELD_TEXT_HOVER, hover);
-            ctx.draw.textMid(labels[i], px + 12.0f, mid, font, FaTheme.alpha(color, alpha));
-            px += w + 5.0f;
+            ctx.draw.textMid(label, px + 14.0f, mid, font, FaTheme.alpha(color, alpha));
+            px += w + 8.0f;
         }
     }
 

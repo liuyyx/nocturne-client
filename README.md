@@ -23,7 +23,7 @@
 | `core/` | 进程发现、attach（自实现 Windows/POSIX 通道 + JDK attach 兜底）、载荷解密装载、agent 选项组装（`AgentOptions`）；免 GUI 的 CLI 入口 `dev.nocturne.core.Nocturne` |
 | `agent/` | 目标 JVM 内的入口（`agentmain`/`premain`）、ASM 子加载器、两种注入点、按版本选表、`OverlayBootstrap`（选后端 / 输入源 / 安装稳定器） |
 | `client/` | 事件总线、模块与值框架、映射层（`Mapping` / `ObfuscatedMapping` / `IdentityMapping`）、游戏桥（`GameBridge`）、世界覆盖层（ESP / Tracers / StorageEsp / Search / Trajectories …） |
-| `ui/` | **Fatality 风格 ClickGUI**（自绘）：分类 Tab / 三列瀑布流 / 侧栏 / 下拉与调色板浮层 / 底部搜索；绘制只面向 `Renderer` 抽象，各绘制后端同一份代码 |
+| `ui/` | **深色工具面板 ClickGUI**（自绘）：顶部分类 / 模块侧栏 / 当前模块设置 / 辅助玩家预览 / 下拉与调色板浮层 / 搜索；绘制只面向 `Renderer` 抽象，各绘制后端同一份代码 |
 | `injector/` | Swing 注入器 GUI（扫描进程 → 选版本 → 注入），并作为 jar 的 Main-Class；`--list-json` / `--pid=` 走同一入口 |
 | `dist/` | 把上述模块合并成单个多入口 `nocturne-*.jar` |
 | `launcher/` | 独立 WPF(.NET 8) 启动器壳：只把 jar 当子进程驱动；不含业务逻辑，不在 Gradle 构建里 |

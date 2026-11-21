@@ -669,7 +669,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             escapeWasDown = keyPressed(KEY_ESCAPE);
             // 开关键也要取样：否则「用外部方式打开时开关键正按着」会在下一帧被当成新按下而立刻关掉界面。
             toggleWasDown = togglePressed();
-            java.util.Arrays.fill(charWasDown, false);
+            resetKeyboardBaselines();
         }
     }
 
@@ -705,7 +705,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             escapeWasDown = keyPressed(KEY_ESCAPE);
             lastX = mx;
             lastY = my;
-            java.util.Arrays.fill(charWasDown, false);
+            resetKeyboardBaselines();
             drawFrame();
             return;
         }
@@ -726,7 +726,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
                 leftWasDown = input.mouseDown(BUTTON_LEFT);
                 rightWasDown = input.mouseDown(BUTTON_RIGHT);
                 escapeWasDown = keyPressed(KEY_ESCAPE);
-                java.util.Arrays.fill(charWasDown, false);
+                resetKeyboardBaselines();
             }
         }
         if (System.getProperty("nocturne.ui.debug") != null && (debugFrames % 30) == 0) {
@@ -819,7 +819,7 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             escapeWasDown = keyPressed(KEY_ESCAPE);
             lastX = mx;
             lastY = my;
-            java.util.Arrays.fill(charWasDown, false);
+            resetKeyboardBaselines();
             // 界面关闭不等于不绘制：世界覆盖层与界面无关，必须继续走绘制
             drawFrame();
             return;
@@ -847,7 +847,13 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             gui.keyPressed(KEY_ESCAPE, modifiers);
         }
         escapeWasDown = escapeDown;
-        dispatchKeys(modifiers);
+        if (!gui.isOpen()) {
+            // Esc 关闭的是整个界面；本帧剩余按键/字符不能再重建搜索焦点或污染下次打开。
+            // 不把当前按住状态带入下一次打开：松开后重新按下的特殊键必须形成新的按下沿。
+            resetKeyboardBaselines();
+        } else {
+            dispatchKeys(modifiers);
+        }
         if (!gui.isOpen()) {
             nativeMouseHandoff = false;
             // Esc 在本帧关闭了界面：同步输入基准后只画覆盖层。
@@ -941,6 +947,13 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             modifiers |= MOD_ALT;
         }
         return modifiers;
+    }
+
+    /** 开关界面时丢弃旧键盘按下沿，避免重开后吞键或补发旧输入。 */
+    private void resetKeyboardBaselines() {
+        java.util.Arrays.fill(charWasDown, false);
+        java.util.Arrays.fill(specialWasDown, false);
+        java.util.Arrays.fill(bindWasDown, false);
     }
 
     /**

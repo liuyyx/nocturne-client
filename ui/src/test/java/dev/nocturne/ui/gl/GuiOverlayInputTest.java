@@ -154,6 +154,80 @@ class GuiOverlayInputTest {
         assertEquals(2, backend.scaleValue);
     }
 
+    @Test
+    void escapeCloseDoesNotDispatchRemainingKeys() throws Exception {
+        FakeInput input = new FakeInput();
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                new FakeBackend(320, 240), input, GuiOverlay.KEY_RIGHT_SHIFT);
+        RecordingGui recording = new RecordingGui();
+        replaceGui(overlay, recording);
+        overlay.setOpen(true);
+        overlay.onFrame();
+        recording.keysPressed = 0;
+        recording.charsTyped = 0;
+
+        input.keys.add(KeyEvent.VK_ESCAPE);
+        input.keys.add(KeyEvent.VK_CONTROL);
+        input.keys.add(KeyEvent.VK_F);
+        overlay.onFrame();
+
+        assertFalse(overlay.isOpen(), "Esc 必须关闭界面");
+        assertEquals(1, recording.keysPressed, "关闭后不得再收到 Ctrl+F");
+        assertEquals(KeyEvent.VK_ESCAPE, recording.lastKey);
+        assertEquals(0, recording.charsTyped, "关闭后不得收到同帧字符");
+
+        input.keys.clear();
+        overlay.onFrame();
+        input.keys.add(KeyEvent.VK_A);
+        overlay.onFrame();
+        assertEquals(0, recording.charsTyped, "关闭期间不得派发字符");
+
+        input.keys.clear();
+        overlay.onFrame();
+        overlay.setOpen(true);
+        overlay.onFrame();
+        input.keys.add(KeyEvent.VK_A);
+        overlay.onFrame();
+        assertEquals(1, recording.charsTyped, "重新打开后的新字符必须正常派发");
+    }
+
+    @Test
+    void firstBackspaceAfterReopenIsNotSwallowed() throws Exception {
+        FakeInput input = new FakeInput();
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                new FakeBackend(320, 240), input, GuiOverlay.KEY_RIGHT_SHIFT);
+        RecordingGui recording = new RecordingGui();
+        replaceGui(overlay, recording);
+        overlay.setOpen(true);
+        overlay.onFrame();
+        input.keys.add(KeyEvent.VK_BACK_SPACE);
+        overlay.onFrame();
+        assertEquals(KeyEvent.VK_BACK_SPACE, recording.lastKey);
+        int beforeClose = recording.keysPressed;
+
+        // 按住 Backspace 时用开关键关闭：该帧不应把旧按下态带入下一次打开。
+        input.keys.add(GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.onFrame();
+        assertFalse(overlay.isOpen());
+        input.keys.clear();
+        overlay.onFrame();
+        overlay.setOpen(true);
+        overlay.onFrame();
+        recording.keysPressed = 0;
+        input.keys.add(KeyEvent.VK_BACK_SPACE);
+        overlay.onFrame();
+
+        assertEquals(1, recording.keysPressed, "重开后的第一次退格必须产生新的按下沿");
+        assertEquals(KeyEvent.VK_BACK_SPACE, recording.lastKey);
+        assertTrue(beforeClose > 0);
+    }
+
+    private static void replaceGui(GuiOverlay overlay, OverlayGui replacement) throws Exception {
+        Field gui = GuiOverlay.class.getDeclaredField("gui");
+        gui.setAccessible(true);
+        gui.set(overlay, replacement);
+    }
+
     /**
      * 原生 Screen（聊天/背包/暂停）打开时 HUD 不能被输入让步逻辑一起砍掉：
      * 早退只交接鼠标状态，绘制仍要走 drawFrame。
@@ -256,6 +330,9 @@ class GuiOverlayInputTest {
         private int clicks;
         private int drags;
         private int releases;
+        private int keysPressed;
+        private int lastKey;
+        private int charsTyped;
         /** 模拟"搜索框/绑定行占用键盘"。 */
         private boolean blockScaleKeys;
 
@@ -312,11 +389,17 @@ class GuiOverlayInputTest {
 
         @Override
         public boolean keyPressed(int keyCode, int modifiers) {
+            keysPressed++;
+            lastKey = keyCode;
+            if (keyCode == KeyEvent.VK_ESCAPE) {
+                open = false;
+            }
             return true;
         }
 
         @Override
         public boolean charTyped(char c) {
+            charsTyped++;
             return true;
         }
 

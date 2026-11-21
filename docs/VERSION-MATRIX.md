@@ -50,6 +50,15 @@
   指针接口异常后再次恢复可重试；正式 `distJar`/`launcherJar` 与字节码门禁由同次构建执行。
 - 该修复只覆盖 panic/shutdown 恢复路径，不等同于所有线程或所有后端的真机关闭验收。
 
+## 审计 P2-20/P2-21 复核（2026-11-21）
+
+- Esc 关闭整个 GUI 后不再调用 `dispatchKeys`，同帧 Ctrl+F 等组合键不会重新打开隐藏搜索框；
+  关闭仍立即同步鼠标基准并绘制世界覆盖层。
+- 新增 `resetKeyboardBaselines`，统一清理可打印键、特殊键与绑定键基线；所有打开、关闭及原生界面
+  交接路径复用，重开后的第一次 Backspace 不再被旧按下态吞掉。
+- `GuiOverlayInputTest` 10 项、`GuiOverlayPointerRestoreTest` 5 项通过，覆盖 Esc 同帧组合键、
+  关闭期间字符、重开后退格及原有原生界面交接；两个正式 jar 和 `verifyJarBytecode` 通过。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

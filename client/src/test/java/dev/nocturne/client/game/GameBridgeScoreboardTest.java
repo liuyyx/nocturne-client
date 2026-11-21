@@ -129,6 +129,39 @@ class GameBridgeScoreboardTest {
         assertSame(board.objective, board.shown, "关闭抑制后显示槽恢复原 objective");
     }
 
+    @Test
+    void cachedScoreMethodKeepsMethodAndOwnerTogether() throws Exception {
+        java.lang.reflect.Field cache = GameBridge.class.getDeclaredField("scoreboardScoreCache");
+        cache.setAccessible(true);
+        MethodA first = new MethodA();
+        MethodB second = new MethodB();
+        java.lang.reflect.Method firstMethod = MethodA.class.getMethod("scores", String.class);
+        java.lang.reflect.Method secondMethod = MethodB.class.getMethod("scores", String.class);
+        Class<?> holder = Class.forName("dev.nocturne.client.game.GameBridge$MethodCache");
+        java.lang.reflect.Constructor<?> constructor = holder.getDeclaredConstructor(
+                java.lang.reflect.Method.class, Class.class);
+        constructor.setAccessible(true);
+        cache.set(bridge, constructor.newInstance(firstMethod, MethodA.class));
+        Object entry = cache.get(bridge);
+        assertSame(MethodA.class, holder.getDeclaredField("owner").get(entry));
+        cache.set(bridge, constructor.newInstance(secondMethod, MethodB.class));
+        entry = cache.get(bridge);
+        assertSame(secondMethod, holder.getDeclaredField("method").get(entry));
+        assertSame(MethodB.class, holder.getDeclaredField("owner").get(entry));
+    }
+
+    public static final class MethodA {
+        public Iterable<String> scores(String owner) {
+            return Collections.singletonList(owner);
+        }
+    }
+
+    public static final class MethodB {
+        public Iterable<String> scores(String owner) {
+            return Collections.singletonList(owner);
+        }
+    }
+
     /** 1.8.9–1.20.2 的 int 槽位：0 是 tab 列表，1 才是侧边栏。 */
     @Test
     void legacyIntSlotIsSidebar() {

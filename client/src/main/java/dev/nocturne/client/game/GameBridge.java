@@ -90,21 +90,26 @@ public final class GameBridge {
     private volatile boolean scoreboardRowsWarned;
     /** 最近一次读到的侧边栏 objective；抑制原版侧边栏后仍靠它继续取分数。 */
     private volatile Object scoreboardObjectiveCache;
+    /** 方法与宿主类必须作为一条记录一次发布，避免跨线程读到错配组合。 */
+    private static final class MethodCache {
+        final Method method;
+        final Class<?> owner;
+
+        MethodCache(Method method, Class<?> owner) {
+            this.method = method;
+            this.owner = owner;
+        }
+    }
     /** 按形状解析出的「取某目标分数」方法及其宿主类（每帧都走，必须缓存）。 */
-    private volatile Method scoreboardScoreMethod;
-    private volatile Class<?> scoreboardScoreMethodOwner;
+    private volatile MethodCache scoreboardScoreCache;
     /** 按形状解析出的「按 owner 取队伍」方法及其宿主类。 */
-    private volatile Method scoreboardTeamMethod;
-    private volatile Class<?> scoreboardTeamMethodOwner;
+    private volatile MethodCache scoreboardTeamCache;
     /** 按形状解析出的队伍格式化方法（1 个 String 参数、返回 String）。 */
-    private volatile Method teamFormatMethod;
-    private volatile Class<?> teamFormatMethodOwner;
+    private volatile MethodCache teamFormatCache;
     /** 按形状解析出的队伍颜色方法（无参、返回枚举/Optional/数字）。 */
-    private volatile Method teamColorMethod;
-    private volatile Class<?> teamColorMethodOwner;
+    private volatile MethodCache teamColorCache;
     /** 按形状解析出的「写显示槽」方法及其宿主类（抑制/恢复原版侧边栏）。 */
-    private volatile Method scoreboardDisplaySetter;
-    private volatile Class<?> scoreboardDisplaySetterOwner;
+    private volatile MethodCache scoreboardDisplayCache;
     /** 本地 HUD 播报不可用是否已告警（只在首次失败时打印）。 */
     private volatile boolean localMessageWarned;
 
@@ -835,8 +840,9 @@ public final class GameBridge {
     /** 按形状解析并缓存「单参目标、返回 Iterable」的分数方法。 */
     private Method scoreMethod(Object board, Object objective) {
         Class<?> boardType = board.getClass();
-        Method cached = scoreboardScoreMethod;
-        if (cached != null && scoreboardScoreMethodOwner == boardType) {
+        MethodCache cachedEntry = scoreboardScoreCache;
+        Method cached = cachedEntry == null ? null : cachedEntry.method;
+        if (cachedEntry != null && cachedEntry.owner == boardType) {
             return cached;
         }
         Method best = null;
@@ -860,8 +866,7 @@ public final class GameBridge {
             }
         }
         if (best != null) {
-            scoreboardScoreMethod = best;
-            scoreboardScoreMethodOwner = boardType;
+            scoreboardScoreCache = new MethodCache(best, boardType);
         }
         return best;
     }
@@ -941,8 +946,9 @@ public final class GameBridge {
     /** 按形状找 {@code getPlayersTeam(String)} / {@code getPlayerTeam(String)} 并缓存。 */
     private Object playerTeam(Object board, String owner) {
         Class<?> boardType = board.getClass();
-        Method method = scoreboardTeamMethod;
-        if (method == null || scoreboardTeamMethodOwner != boardType) {
+        MethodCache cachedEntry = scoreboardTeamCache;
+        Method method = cachedEntry == null ? null : cachedEntry.method;
+        if (cachedEntry == null || cachedEntry.owner != boardType) {
             method = null;
             Class<?> teamType = type(ClassType.PLAYER_TEAM);
             for (Method candidate : collectMethods(boardType)) {
@@ -962,8 +968,7 @@ public final class GameBridge {
                 }
             }
             if (method != null) {
-                scoreboardTeamMethod = method;
-                scoreboardTeamMethodOwner = boardType;
+                scoreboardTeamCache = new MethodCache(method, boardType);
             }
         }
         return method == null ? null : Reflect.call(method, board, owner);
@@ -972,8 +977,9 @@ public final class GameBridge {
     /** 按形状解析队伍格式化方法：{@code formatPlayerName(String)} 一类的 1 参 → String。 */
     private Method teamFormatMethod(Object team) {
         Class<?> teamType = team.getClass();
-        Method cached = teamFormatMethod;
-        if (cached != null && teamFormatMethodOwner == teamType) {
+        MethodCache cachedEntry = teamFormatCache;
+        Method cached = cachedEntry == null ? null : cachedEntry.method;
+        if (cachedEntry != null && cachedEntry.owner == teamType) {
             return cached;
         }
         Method found = null;
@@ -986,8 +992,7 @@ public final class GameBridge {
             }
         }
         if (found != null) {
-            teamFormatMethod = found;
-            teamFormatMethodOwner = teamType;
+            teamFormatCache = new MethodCache(found, teamType);
         }
         return found;
     }
@@ -995,8 +1000,9 @@ public final class GameBridge {
     /** 按形状解析队伍颜色方法：无参、返回枚举/Optional/数字（排除 getName 一类 String）。 */
     private Method teamColorMethod(Object team) {
         Class<?> teamType = team.getClass();
-        Method cached = teamColorMethod;
-        if (cached != null && teamColorMethodOwner == teamType) {
+        MethodCache cachedEntry = teamColorCache;
+        Method cached = cachedEntry == null ? null : cachedEntry.method;
+        if (cachedEntry != null && cachedEntry.owner == teamType) {
             return cached;
         }
         Method found = null;
@@ -1016,8 +1022,7 @@ public final class GameBridge {
             }
         }
         if (found != null) {
-            teamColorMethod = found;
-            teamColorMethodOwner = teamType;
+            teamColorCache = new MethodCache(found, teamType);
         }
         return found;
     }
@@ -1148,8 +1153,9 @@ public final class GameBridge {
     /** 按形状找 {@code setDisplayObjective(slot, objective)}；找不到时静默（该版本无法抑制）。 */
     private void writeDisplayObjective(Object board, Object slot, Object objective) {
         Class<?> boardType = board.getClass();
-        Method setter = scoreboardDisplaySetter;
-        if (setter == null || scoreboardDisplaySetterOwner != boardType) {
+        MethodCache cachedEntry = scoreboardDisplayCache;
+        Method setter = cachedEntry == null ? null : cachedEntry.method;
+        if (cachedEntry == null || cachedEntry.owner != boardType) {
             setter = null;
             Class<?> objectiveType = scoreboardObjectiveCache == null
                     ? null : scoreboardObjectiveCache.getClass();
@@ -1169,8 +1175,7 @@ public final class GameBridge {
                 break;
             }
             if (setter != null) {
-                scoreboardDisplaySetter = setter;
-                scoreboardDisplaySetterOwner = boardType;
+                scoreboardDisplayCache = new MethodCache(setter, boardType);
             }
         }
         if (setter != null) {

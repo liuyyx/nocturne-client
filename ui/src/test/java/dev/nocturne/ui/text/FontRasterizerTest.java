@@ -8,6 +8,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.URL;
+import java.net.URLClassLoader;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -111,6 +114,76 @@ class FontRasterizerTest {
         assertEquals(1, renderer.count("text:Hello"), "the fallback draws through Renderer.text");
         assertTrue(label.width("Hello") > 0f, "fallback metrics must still be usable for layout");
         assertEquals(-1, label.fontId(), "the fallback reports no atlas font id");
+    }
+
+    @Test
+    void missingAwtFontFallsBackDuringClassInitialization() throws Exception {
+        URL[] classPath = classpath();
+        ClassLoader parent = FontRasterizerTest.class.getClassLoader();
+        try (URLClassLoader loader = new URLClassLoader(classPath, parent) {
+            @Override
+            protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+                if ("java.awt.Font".equals(name)) {
+                    throw new ClassNotFoundException("simulated jlink without java.desktop");
+                }
+                if (name.startsWith("dev.nocturne.")) {
+                    synchronized (getClassLoadingLock(name)) {
+                        Class<?> loaded = findLoadedClass(name);
+                        if (loaded == null) {
+                            loaded = findClass(name);
+                        }
+                        if (resolve) {
+                            resolveClass(loaded);
+                        }
+                        return loaded;
+                    }
+                }
+                return super.loadClass(name, resolve);
+            }
+        }) {
+            Class<?> rasterizer = Class.forName("dev.nocturne.ui.text.FontRasterizer", true, loader);
+            Class<?> rendererType = Class.forName("dev.nocturne.ui.render.Renderer", true, loader);
+            Object isolatedRenderer = java.lang.reflect.Proxy.newProxyInstance(loader,
+                    new Class<?>[] {rendererType}, (proxy, method, args) -> {
+                        String name = method.getName();
+                        if ("supportsTextures".equals(name)) {
+                            return true;
+                        }
+                        if ("textWidth".equals(name)) {
+                            return ((String) args[0]).length() * 6.0f;
+                        }
+                        Class<?> result = method.getReturnType();
+                        if (result == boolean.class) {
+                            return false;
+                        }
+                        if (result == int.class) {
+                            return 0;
+                        }
+                        if (result == float.class) {
+                            return 0.0f;
+                        }
+                        return null;
+                    });
+            Object provider = rasterizer.getMethod("bind", rendererType, float.class, float.class)
+                    .invoke(null, isolatedRenderer, 1.0f, 1.0f);
+            assertFalse((Boolean) rasterizer.getMethod("atlasActive").invoke(null),
+                    "FontRegistry 初始化缺类时必须关闭图集");
+            Class<?> providerType = Class.forName("dev.nocturne.ui.fatality.FaFont$Provider", true, loader);
+            Class<?> fontType = Class.forName("dev.nocturne.ui.fatality.FaFont", true, loader);
+            Object label = providerType.getMethod("label").invoke(provider);
+            assertTrue(((Float) fontType.getMethod("width", String.class)
+                    .invoke(label, "fallback")) > 0.0f,
+                    "缺 java.desktop 时游戏字体仍需提供布局度量");
+        }
+    }
+
+    private static URL[] classpath() throws Exception {
+        String[] entries = System.getProperty("java.class.path").split(java.io.File.pathSeparator);
+        URL[] urls = new URL[entries.length];
+        for (int i = 0; i < entries.length; i++) {
+            urls[i] = java.nio.file.Paths.get(entries[i]).toAbsolutePath().toUri().toURL();
+        }
+        return urls;
     }
 
     /** HUD 与菜单字号共存时不能每帧互相重建纹理，统一失效时两者都必须释放。 */

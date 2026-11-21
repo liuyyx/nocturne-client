@@ -64,12 +64,25 @@ public final class FontRasterizer implements FaFont.Provider {
         this.designScale = designScale <= 0f ? 1.0f : designScale;
         this.backendScale = backendScale <= 0f ? 1.0f : backendScale;
         this.density = this.designScale * this.backendScale;
-        this.atlas = renderer != null && renderer.supportsTextures() && FontRegistry.available();
+        this.atlas = renderer != null && renderer.supportsTextures() && fontAtlasAvailable();
         if (System.getProperty("nocturne.ui.debug") != null) {
             System.out.println("[nocturne] fonts: atlas=" + this.atlas
                     + " renderer=" + (renderer == null ? "null" : renderer.getClass().getSimpleName())
                     + " textures=" + (renderer != null && renderer.supportsTextures())
-                    + " registry=" + FontRegistry.available());
+                    + " registry=" + this.atlas);
+        }
+    }
+
+    /**
+     * 字体注册表的类初始化本身可能解析 java.awt.Font；jlink 裁剪该模块时必须在
+     * 调用边界捕获 Error，不能只依赖 FontRegistry.font 内部的资源加载 catch。
+     */
+    private static boolean fontAtlasAvailable() {
+        try {
+            return FontRegistry.available();
+        } catch (Throwable error) {
+            System.out.println("[nocturne] font atlas unavailable; using game font: " + error);
+            return false;
         }
     }
 

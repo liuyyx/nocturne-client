@@ -59,6 +59,14 @@
 - `GuiOverlayInputTest` 10 项、`GuiOverlayPointerRestoreTest` 5 项通过，覆盖 Esc 同帧组合键、
   关闭期间字符、重开后退格及原有原生界面交接；两个正式 jar 和 `verifyJarBytecode` 通过。
 
+## 审计 P2-22 复核（2026-11-21）
+
+- `FontRasterizer` 在图集能力判断边界捕获 `FontRegistry` 的类初始化错误；调试输出也不再
+  重复调用未受保护的 `FontRegistry.available()`。
+- 隔离类加载器隐藏 `java.awt.Font` 后，绑定仍返回可用游戏字体，布局宽度保持为正；
+  日志明确记录 `NoClassDefFoundError` 与回退原因。
+- `FontRasterizerTest` 8 项通过，两个正式 jar 与 `verifyJarBytecode` 通过。未对真实裁剪运行时启动游戏。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

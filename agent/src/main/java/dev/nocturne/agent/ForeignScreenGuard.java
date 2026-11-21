@@ -164,8 +164,9 @@ final class ForeignScreenGuard implements FrameListener {
                 System.out.println("[nocturne] game mouse released while our GUI is open"
                         + " (MouseHandler.releaseMouse)");
             }
-        } else if (!faceAvailable && handler != null && guiOpen && !mouseReleased) {
+        } else if (!faceAvailable && handler != null && guiOpen) {
             // 读不到抓取状态：releaseMouse 本身幂等，每次界面打开期间重申一次是安全的。
+            // 游戏在窗口重新激活时可能自行抓回，不能用 !mouseReleased 把重申限制为一次。
             bridge.callMapped(handler, ClassType.MOUSE_HANDLER, "releaseMouse");
             mouseReleased = true;
         } else if (action == MouseAction.GRAB) {

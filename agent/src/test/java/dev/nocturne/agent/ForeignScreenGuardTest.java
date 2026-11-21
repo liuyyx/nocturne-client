@@ -118,6 +118,69 @@ class ForeignScreenGuardTest {
         }
     }
 
+    @Test
+    void unreadableGrabStateReleasesAgainOnFollowingFrames() throws Exception {
+        MouseHost host = new MouseHost();
+        MouseHost.instance = host;
+        try {
+            ForeignScreenGuard guard = new ForeignScreenGuard(
+                    new GameBridge(null, new MouseMapping()), () -> true);
+            java.lang.reflect.Method apply = ForeignScreenGuard.class.getDeclaredMethod(
+                    "applyGameInputSuppression", boolean.class);
+            apply.setAccessible(true);
+            apply.invoke(guard, true);
+            apply.invoke(guard, true);
+            assertEquals(2, host.mouseHandler.releases,
+                    "抓取状态不可读时每个 GUI 帧都要重申释放");
+        } finally {
+            MouseHost.instance = null;
+        }
+    }
+
+    public static final class MouseHost {
+        private static MouseHost instance;
+        private final MouseFace mouseHandler = new MouseFace();
+
+        public static MouseHost getInstance() {
+            return instance;
+        }
+    }
+
+    public static final class MouseFace {
+        private int releases;
+
+        public void releaseMouse() {
+            releases++;
+        }
+    }
+
+    private static final class MouseMapping implements Mapping {
+        @Override
+        public String describe() {
+            return "mouse-release-test";
+        }
+
+        @Override
+        public String className(ClassType type) {
+            return type == ClassType.MINECRAFT ? MouseHost.class.getName() : type.canonicalName();
+        }
+
+        @Override
+        public String methodName(ClassType owner, String canonicalName, String descriptor) {
+            return canonicalName;
+        }
+
+        @Override
+        public String fieldName(ClassType owner, String canonicalName) {
+            return canonicalName;
+        }
+
+        @Override
+        public boolean isIdentity() {
+            return false;
+        }
+    }
+
     private static final class HostMapping implements Mapping {
         @Override
         public String describe() {

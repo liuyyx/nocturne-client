@@ -514,13 +514,13 @@ public final class FaClickGui implements OverlayGui {
         layoutKey = "";
     }
 
-    /** 恢复上次选中的分类；该分类当前没有模块时保持默认。 */
+    /** 仅恢复当前仍有 Tab 的保存分类；模块集变化后保持同步阶段选择的有效分类。 */
     private void applySavedCategory(String name) {
         if (name == null || name.isEmpty()) {
             return;
         }
         for (Category value : Category.values()) {
-            if (value.name().equalsIgnoreCase(name)) {
+            if (value.name().equalsIgnoreCase(name) && categories.contains(value)) {
                 category = value;
                 return;
             }

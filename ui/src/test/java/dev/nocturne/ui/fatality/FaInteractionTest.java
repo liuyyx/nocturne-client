@@ -92,6 +92,35 @@ class FaInteractionTest {
                 "窗口必须垂直留在新视口内（打开动画最多下移 8）: " + window.y + " + " + window.height);
     }
 
+    @Test
+    void savedEmptyCategoryKeepsTheAvailableModuleCardsVisible() {
+        LayoutStore.save(0.1f, 0.1f, FaTheme.DEFAULT_W, FaTheme.DEFAULT_H, Category.COMBAT.name());
+        FaClickGui gui = new FaClickGui(singleModuleRegistry());
+        gui.setOpen(true);
+        gui.setViewport(1142, 700);
+        gui.update(System.currentTimeMillis(), 10, 10);
+        renderer.textures = false;
+        gui.render(renderer);
+        assertTrue(renderer.ofKind("text").stream().anyMatch(call -> FaStrings.t("Alpha").equals(call.text)),
+                "保存的空分类不得覆盖当前可用分类，模块卡片必须可见");
+    }
+
+    @Test
+    void savedAvailableCategoryStillOverridesTheDefault() {
+        LayoutStore.save(0.1f, 0.1f, FaTheme.DEFAULT_W, FaTheme.DEFAULT_H, Category.MISC.name());
+        ModuleRegistry registry = singleModuleRegistry();
+        registry.register(module("CombatOnly", Category.COMBAT));
+        FaClickGui gui = new FaClickGui(registry);
+        gui.setOpen(true);
+        gui.setViewport(1142, 700);
+        gui.update(System.currentTimeMillis(), 10, 10);
+        renderer.textures = false;
+        gui.render(renderer);
+        assertTrue(renderer.ofKind("text").stream().anyMatch(call -> FaStrings.t("Alpha").equals(call.text)));
+        assertFalse(renderer.ofKind("text").stream().anyMatch(call -> "CombatOnly".equals(call.text)),
+                "保存的有效分类必须继续优先于默认分类");
+    }
+
     /** 右键松开不得结束左键拖动，也不得写盘；左键松开才收尾并保存。 */
     @Test
     void rightReleaseDoesNotEndLeftDragOrSaveLayout() {

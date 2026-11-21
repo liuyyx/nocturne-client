@@ -595,8 +595,8 @@ public final class NocturneRuntime {
     /**
      * 由 GUI 绘制钩子每帧调用（{@code GuiDrawHook}）。
      *
-     * <p>上下文驱动后端只走此入口，帧交换入口不分发；自绘 GL 后端在没有帧交换驱动时使用此入口，
-     * 已观察到帧交换后则跳过，避免同帧重复绘制、事件与输入轮询。
+     * <p>依赖上下文的后端（含收到原生人物预览上下文的核心 GL 后端）只走此入口；
+     * 其余自绘 GL 后端在没有帧交换驱动时使用此入口，避免同帧重复绘制、事件与输入轮询。
      */
     public static void onDrawFrame() {
         if (isKilled()) {
@@ -617,9 +617,8 @@ public final class NocturneRuntime {
     /**
      * 标记当前后端是否**必须**用当帧绘制上下文绘制。
      *
-     * <p>游戏绘制 API 后端（`gui-graphics` / `gui-stack` / `gui-extractor`）的上下文只在
-     * 绘制钩子那一次调用内有效，错过了什么都画不出来；自绘 GL 的后端（`gl-core` / `gl-fixed`）
-     * 不需要上下文，帧钩子已经画过，再画一遍就是同帧两遍。
+     * <p>游戏绘制 API 与核心 GL 后端的原生人物预览只能在游戏绘制上下文有效时提交，
+     * 这些后端须由绘制钩子驱动。未收到游戏上下文的自绘 GL 后端仍可由帧交换入口驱动。
      *
      * @param required {@code true} = 绘制钩子必须驱动
      */
@@ -682,8 +681,13 @@ public final class NocturneRuntime {
     }
 
     /** 复用的渲染事件载荷：热路径每帧投递，不再每帧分配。 */
-    private static final dev.nocturne.client.event.RenderEvent RENDER_EVENT =
-            new dev.nocturne.client.event.RenderEvent();
+    private static final ThreadLocal<dev.nocturne.client.event.RenderEvent> RENDER_EVENT =
+            new ThreadLocal<dev.nocturne.client.event.RenderEvent>() {
+                @Override
+                protected dev.nocturne.client.event.RenderEvent initialValue() {
+                    return new dev.nocturne.client.event.RenderEvent();
+                }
+            };
     /** 帧序号；帧钩子与绘制钩子可能来自不同线程，故用原子计数器。 */
     private static final AtomicLong renderSequence = new AtomicLong();
 
@@ -699,8 +703,9 @@ public final class NocturneRuntime {
                     || !client.events().hasSubscribers(dev.nocturne.client.event.RenderEvent.class)) {
                 return;
             }
-            RENDER_EVENT.update(System.nanoTime(), renderSequence.incrementAndGet());
-            client.events().post(RENDER_EVENT);
+            dev.nocturne.client.event.RenderEvent event = RENDER_EVENT.get();
+            event.update(System.nanoTime(), renderSequence.incrementAndGet());
+            client.events().post(event);
         } catch (Throwable ignored) {
             // 事件系统自身异常不能带回游戏帧；EventBus 内部已有隔离，这里是最后一道门。
         }

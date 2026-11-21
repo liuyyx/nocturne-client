@@ -10,8 +10,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /** 上下文驱动后端不能同时从帧交换与绘制回调分发输入、绘制和 RenderEvent。 */
 class NocturneRuntimeFrameSourceTest {
@@ -100,6 +103,31 @@ class NocturneRuntimeFrameSourceTest {
             assertEquals(2, frames[0], "其它 Runtime 副本也必须看见已生效的帧交换来源");
         } finally {
             FrameDispatcher.remove(listener);
+        }
+    }
+
+    @Test
+    void renderEventsAreReusedPerDriverThread() throws Exception {
+        NocturneClient client = NocturneClient.boot(null);
+        java.util.List<RenderEvent> seen = java.util.Collections.synchronizedList(
+                new java.util.ArrayList<RenderEvent>());
+        EventBus.Subscription subscription = client.events().subscribe(RenderEvent.class, seen::add);
+        try {
+            NocturneRuntime.postRenderEvent();
+            NocturneRuntime.postRenderEvent();
+            AtomicReference<RenderEvent> other = new AtomicReference<RenderEvent>();
+            Thread thread = new Thread(() -> {
+                NocturneRuntime.postRenderEvent();
+                other.set(seen.get(seen.size() - 1));
+            }, "render-event-second-source");
+            thread.start();
+            thread.join(1000L);
+
+            assertEquals(3, seen.size());
+            assertSame(seen.get(0), seen.get(1), "同一驱动线程应复用事件，避免逐帧分配");
+            assertNotSame(seen.get(0), other.get(), "另一驱动线程不得共享可变事件实例");
+        } finally {
+            client.events().unsubscribe(subscription);
         }
     }
 

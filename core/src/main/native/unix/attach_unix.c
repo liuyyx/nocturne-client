@@ -15,6 +15,8 @@
  *      attach_unix.c -o nocturne-attach.so
  */
 
+#define _GNU_SOURCE
+
 #include <jni.h>
 #include <errno.h>
 #include <stdint.h>
@@ -82,6 +84,27 @@ static ssize_t sendNoSignal(int fd, const void* buffer, size_t length) {
 #endif
 }
 
+/* connect 前的文件校验不能覆盖检查-使用窗口；连接后再核对实际对端身份。 */
+static jint verifyPeerUser(int fd) {
+    uid_t peer;
+#if defined(__linux__)
+    struct ucred credentials;
+    socklen_t length = (socklen_t)sizeof(credentials);
+    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &credentials, &length) != 0) {
+        return negErrno(errno);
+    }
+    peer = credentials.uid;
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+    gid_t group;
+    if (getpeereid(fd, &peer, &group) != 0) {
+        return negErrno(errno);
+    }
+#else
+    return 0;
+#endif
+    return peer == geteuid() ? 0 : negErrno(EACCES);
+}
+
 /* ---- PosixAttachNative ---- */
 
 /* 连到目标的 attach 套接字。
@@ -113,7 +136,7 @@ Java_dev_nocturne_core_attach_PosixAttachNative_nConnect(
     } else {
         memcpy(addr.sun_path, utf, pathLength + 1);
         struct stat info;
-        if (stat(addr.sun_path, &info) != 0) {
+        if (lstat(addr.sun_path, &info) != 0) {
             result = negErrno(errno);
         } else if (!S_ISSOCK(info.st_mode)) {
             result = negErrno(ENOTSOCK);
@@ -132,12 +155,18 @@ Java_dev_nocturne_core_attach_PosixAttachNative_nConnect(
                     result = negErrno(errno);
                     close(fd);
                 } else {
-                    jint configured = configureConnectedSocket(fd);
-                    if (configured != 0) {
+                    jint peerVerified = verifyPeerUser(fd);
+                    if (peerVerified != 0) {
                         close(fd);
-                        result = configured;
+                        result = peerVerified;
                     } else {
-                        result = (jint)fd;
+                        jint configured = configureConnectedSocket(fd);
+                        if (configured != 0) {
+                            close(fd);
+                            result = configured;
+                        } else {
+                            result = (jint)fd;
+                        }
                     }
                 }
             }

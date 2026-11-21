@@ -150,7 +150,7 @@ Java_dev_nocturne_core_attach_WindowsAttachNative_nCloseProcess(
 
 /* 最近一次 native 调用的 Win32 错误码：管道/进程操作失败时 Java 侧要把它带进异常文本，
  * 否则排障只能看到"失败"两个字（错误码本该是最直接的线索）。 */
-static DWORD g_lastError = 0;
+static __declspec(thread) DWORD g_lastError = 0;
 
 JNIEXPORT jint JNICALL
 Java_dev_nocturne_core_attach_WindowsAttachNative_nLastWin32Error(
@@ -491,9 +491,12 @@ static uint64_t ResolveEnqueueAddress(HANDLE process, DWORD pid) {
     memset(&exports, 0, sizeof(exports));
     if (!ReadFull(process, jvmBase + exportDir.VirtualAddress, &exports, sizeof(exports))
             || exports.NumberOfNames == 0
-            || exports.NumberOfNames > 8192) {
-        fprintf(stderr, "[attach-resolve] export dir read failed err=%lu names=%lu\n",
-            GetLastError(), (unsigned long)exports.NumberOfNames);
+            || exports.NumberOfNames > 8192
+            || exports.NumberOfFunctions == 0
+            || exports.NumberOfFunctions > 65536) {
+        fprintf(stderr, "[attach-resolve] export dir read failed err=%lu names=%lu functions=%lu\n",
+            GetLastError(), (unsigned long)exports.NumberOfNames,
+            (unsigned long)exports.NumberOfFunctions);
         return 0;
     }
     DWORD nameCount = exports.NumberOfNames;
@@ -561,6 +564,9 @@ static int SplitProtocolParts(const unsigned char* request, DWORD requestLen,
         parts[count++] = (const char*)(request + i);
         while (i < requestLen && request[i] != 0) {
             i++;
+        }
+        if (i >= requestLen || request[i] != 0) {
+            return -1; /* 末段没有 NUL：不能让调用方对无终止缓冲执行 strlen。 */
         }
         i++; /* 跳过该段的结尾 NUL */
     }
@@ -724,11 +730,15 @@ Java_dev_nocturne_core_attach_WindowsAttachNative_nEnqueueOperation(
     DWORD waitResult = WaitForSingleObject(thread, 10000);
     DWORD exitCode = 0;
     if (waitResult == WAIT_OBJECT_0) {
-        GetExitCodeThread(thread, &exitCode);
+        BOOL exitRead = GetExitCodeThread(thread, &exitCode);
+        DWORD queryError = exitRead ? 0 : GetLastError();
         CloseHandle(thread);
         /* 桩线程已结束：可以安全回收它在目标里占用的远内存。 */
         VirtualFreeEx(process, stubAt, 0, MEM_RELEASE);
-        return 0;
+        if (!exitRead) {
+            return (jint)queryError;
+        }
+        return (jint)exitCode;
     }
     /* 超时：远线程很可能**仍在执行**桩代码。这时释放 stubAt 会让目标在自己的线程里跑一段
      * 已被回收的内存（use-after-free，直接把目标 JVM 打崩，且崩在目标而不是发起端，极难定位）。

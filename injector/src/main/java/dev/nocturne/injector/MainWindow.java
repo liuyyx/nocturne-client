@@ -629,8 +629,9 @@ public final class MainWindow extends JFrame {
                 } catch (URISyntaxException malformed) {
                     throw new IllegalStateException("无法解析 agent jar 路径", malformed);
                 }
-                String options = KeyCodes.attachOptions(config.guiBind, row.version);
                 String commandLine = ProcessScanner.javaProcessCommandLines().get(Integer.valueOf(row.pid));
+                String resolvedVersion = GameVersion.fromCommandLine(commandLine);
+                String options = KeyCodes.attachOptions(config.guiBind, resolvedVersion);
                 String keyHint = TargetHints.rightShiftConflict(commandLine, KeyCodes.codeFor(config.guiBind));
                 if (keyHint != null) {
                     log.info("按键提示：" + keyHint);

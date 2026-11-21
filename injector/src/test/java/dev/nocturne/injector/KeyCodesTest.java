@@ -135,5 +135,13 @@ class KeyCodesTest {
         assertEquals("guiKey=7937,mcVersion=26.3", KeyCodes.attachOptions("RSHIFT", "26.3-Fabric 0.19.5"));
         // 判定不出时不传这一项，agent 侧按未知处理（退化为恒等映射并打日志）
         assertEquals("guiKey=7937", KeyCodes.attachOptions("RSHIFT", "\u2014"));
+
+        String staleRowLabel = "\u2014";
+        String commandLine = "java -jar client.jar --version 1.21.1";
+        String resolved = GameVersion.fromCommandLine(commandLine);
+        assertEquals("1.21.1", resolved);
+        assertEquals("guiKey=7937,mcVersion=1.21.1",
+                KeyCodes.attachOptions("RSHIFT", resolved),
+                "表格占位符 " + staleRowLabel + " 不得覆盖注入时重新识别的版本");
     }
 }

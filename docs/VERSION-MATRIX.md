@@ -275,6 +275,12 @@
   选项；异步表格的旧标签/占位符不再决定本次 `mcVersion`。
 - 新增旧表格占位符与命令行重算版本的选项回归，GameVersion/KeyCodes 测试及正式门禁通过。
 
+## 审计 P2-49 复核（2026-11-21）
+
+- `describeFailure` 在通用 cause 解包前识别 `AttachException.deliveryUnknown()`，
+  显示“可能已送达、请勿重复点击注入”，不再落入“游戏拒绝 attach”。
+- 新增真实 ExecutionException 包装回归，DescribeFailure 7 项与正式 jar/字节码门禁通过。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

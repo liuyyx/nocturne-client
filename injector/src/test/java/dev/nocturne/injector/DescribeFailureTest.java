@@ -72,6 +72,17 @@ class DescribeFailureTest {
         assertTrue(MainWindow.describeFailure(wrapped).contains("没找到 JVM"));
     }
 
+    @Test
+    void unknownDeliveryWarnsAgainstRetrying() {
+        AttachException unknown = new AttachException(1234,
+                Collections.singletonList("windows-native"),
+                new RuntimeException("reply timeout"), true);
+        String reason = MainWindow.describeFailure(fromWorker(unknown));
+        assertTrue(reason.contains("可能已送达"), reason);
+        assertTrue(reason.contains("请勿重复点击"), reason);
+        assertTrue(!reason.contains("游戏拒绝"), reason);
+    }
+
     /** L-96：「already」分支必须排在笼统的 agent/attach 匹配之前，否则永远不可达。 */
     @Test
     void alreadyLoadedBeatsGenericAgentText() {

@@ -673,6 +673,9 @@ public final class MainWindow extends JFrame {
                 && cause.getCause() != null) {
             cause = cause.getCause();
         }
+        if (cause instanceof AttachException && ((AttachException) cause).deliveryUnknown()) {
+            return "请求可能已送达，目标可能已注入；请勿重复点击注入，必要时先重启游戏";
+        }
         if (cause instanceof AttachException && cause.getCause() != null) {
             if (cause.getCause() instanceof ClassNotFoundException) {
                 return "未找到 attach API（请用完整 JDK 启动）";

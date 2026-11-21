@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -188,6 +189,27 @@ class ModuleConfigStoreTest {
         }
         assertTrue(Files.exists(path), "debounced save must eventually land");
         assertEquals(8.0, readModuleNode("Probe").getAsJsonObject("values")
+                .get("Amount").getAsDouble());
+        store.close();
+    }
+
+    @Test
+    void failedSaveDoesNotMarkMutationAsPersisted() throws Exception {
+        ProbeModule module = new ProbeModule();
+        ModuleConfigStore store = new ModuleConfigStore(registryWithProbe(module), path);
+        store.load();
+        Files.createDirectories(path);
+        module.amount.set(7.0);
+
+        assertFalse(store.flush(), "目标被目录占用时写盘必须失败");
+        Field sequence = ModuleConfigStore.class.getDeclaredField("savedSeq");
+        sequence.setAccessible(true);
+        assertEquals(0L, sequence.getLong(store), "失败不能把未落盘变更标为已保存");
+        assertTrue(Files.isDirectory(path), "测试应保持故障现场直到显式修复");
+
+        Files.delete(path);
+        assertTrue(store.flush(), "故障恢复后不新增修改也必须能重试保存");
+        assertEquals(7.0, readModuleNode("Probe").getAsJsonObject("values")
                 .get("Amount").getAsDouble());
         store.close();
     }

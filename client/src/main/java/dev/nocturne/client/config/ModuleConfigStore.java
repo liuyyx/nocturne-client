@@ -417,10 +417,13 @@ public final class ModuleConfigStore {
             synchronized (schedulerLock) {
                 sequence = mutationSeq;
             }
-            saveNow();
+            boolean saved = saveNow();
             synchronized (schedulerLock) {
-                if (sequence > savedSeq) {
+                if (saved && sequence > savedSeq) {
                     savedSeq = sequence;
+                } else if (!saved) {
+                    // 失败保留 mutationSeq > savedSeq；退避后重试，不在锁内忙写磁盘。
+                    pendingAt = System.currentTimeMillis() + DEBOUNCE_MS;
                 }
             }
         }
@@ -437,7 +440,7 @@ public final class ModuleConfigStore {
         }
         boolean saved = saveNow();
         synchronized (schedulerLock) {
-            if (sequence > savedSeq) {
+            if (saved && sequence > savedSeq) {
                 savedSeq = sequence;
             }
         }

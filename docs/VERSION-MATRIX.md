@@ -42,6 +42,14 @@
   且仅左键释放时保存布局。两个正式 jar 及字节码门禁通过。
 
 
+## 审计 P2-19 复核（2026-11-21）
+
+- `restoreInputState` 将 GUI 关闭异常与输入恢复分离：关闭保存失败仍继续处理指针，
+  并在 `finally` 中调用 `setBlocked(false)`；指针恢复异常不再把 `inputRestored` 永久置为完成。
+- `GuiOverlayPointerRestoreTest` 共 5 项通过，新增覆盖关闭保存异常后解除输入短路、
+  指针接口异常后再次恢复可重试；正式 `distJar`/`launcherJar` 与字节码门禁由同次构建执行。
+- 该修复只覆盖 panic/shutdown 恢复路径，不等同于所有线程或所有后端的真机关闭验收。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

@@ -541,8 +541,19 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
         }
         inputRestored = true;
         try {
-            gui.setOpen(false);
-            setBlocked(false);
+            try {
+                gui.setOpen(false);
+            } catch (Throwable failure) {
+                // 保存布局失败不等于输入恢复失败；关闭界面的异常不得跳过解除输入短路。
+                System.out.println("[nocturne] overlay GUI close failed during input restore: " + failure);
+                if (wasOpenForPointer && pointerRestorePending) {
+                    try {
+                        pointerRestorePending = !restorePointerWithRetry(pointerRestoreTarget);
+                    } catch (Throwable pointerFailure) {
+                        System.out.println("[nocturne] overlay pointer restore failed: " + pointerFailure);
+                    }
+                }
+            }
             if (wasOpenForPointer) {
                 // panic 可能发生在界面仍开着的时候：此时关闭分支还没算过目标值，
                 // 必须在这里按同一规则重算（pointerRestoreTarget 的默认 false 会直接把指针放开）。
@@ -558,9 +569,11 @@ public final class GuiOverlay implements FrameListener, dev.nocturne.client.hud.
             }
             wasOpenForPointer = false;
         } catch (Throwable failure) {
-            // panic 路径不能因为恢复失败而中断，但不能像以前那样完全静默：
-            // 真机“panic 后鼠标不能动”时这条日志是唯一的线索。
+            // 指针恢复失败仍要解除键盘阻断，并允许下一次 shutdown 动作继续恢复。
+            inputRestored = false;
             System.out.println("[nocturne] overlay input restore failed: " + failure);
+        } finally {
+            setBlocked(false);
         }
     }
 

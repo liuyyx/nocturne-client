@@ -1,8 +1,10 @@
 package dev.nocturne.ui.gl;
 
 import dev.nocturne.client.module.ModuleRegistry;
+import dev.nocturne.client.runtime.InputBlock;
 import dev.nocturne.ui.FakeBackend;
 import dev.nocturne.ui.FakeInput;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -19,11 +21,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class GuiOverlayPointerRestoreTest {
 
+    @AfterEach
+    void clearInputBlock() {
+        InputBlock.setBlocked(false);
+    }
+
     /** 抓取会“瞬时失败”的输入源：前 {@code failures} 次 grab 不改变状态。 */
     private static final class FlakyInput implements InputSource {
         final FakeInput delegate = new FakeInput();
         int failures;
         int grabCalls;
+        boolean failNextGrab;
 
         FlakyInput(int failures, boolean initiallyGrabbed) {
             this.failures = failures;
@@ -60,6 +68,10 @@ class GuiOverlayPointerRestoreTest {
             delegate.pointerGrabCalls++;
             if (grabbed) {
                 grabCalls++;
+                if (failNextGrab) {
+                    failNextGrab = false;
+                    throw new IllegalStateException("pointer bridge failed");
+                }
                 if (failures > 0) {
                     failures--;
                     delegate.pointerGrabbed = false;
@@ -134,6 +146,115 @@ class GuiOverlayPointerRestoreTest {
                 "successful panic restore must not leave a pending retry");
         assertFalse(overlay.isOpen(), "panic restore must close the overlay");
         assertTrue(input.isPointerGrabbed(), "panic restore must hand the pointer back to the game");
+    }
+
+    @Test
+    void closeFailureStillRestoresPointerAndUnblocksInput() throws Exception {
+        FlakyInput input = new FlakyInput(0, true);
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                new FakeBackend(0, 0), input, GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.onFrame();
+        overlay.setOpen(true);
+        overlay.onFrame();
+        InputBlock.setBlocked(true);
+        OverlayGui actualGui = overlay.gui();
+        replaceGui(overlay, new OverlayGui() {
+            @Override
+            public boolean isOpen() {
+                return actualGui.isOpen();
+            }
+
+            @Override
+            public void setOpen(boolean open) {
+                actualGui.setOpen(open);
+                if (!open) {
+                    throw new IllegalStateException("layout save failed");
+                }
+            }
+
+            @Override
+            public void toggle() {
+                actualGui.toggle();
+            }
+
+            @Override
+            public void setViewport(int width, int height) {
+                actualGui.setViewport(width, height);
+            }
+
+            @Override
+            public void update(long nowMs, double mouseX, double mouseY) {
+            }
+
+            @Override
+            public boolean mouseClicked(double mx, double my, int button) {
+                return true;
+            }
+
+            @Override
+            public boolean mouseReleased(double mx, double my, int button) {
+                return true;
+            }
+
+            @Override
+            public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+                return true;
+            }
+
+            @Override
+            public boolean mouseScrolled(double mx, double my, double amount) {
+                return true;
+            }
+
+            @Override
+            public boolean keyPressed(int keyCode, int modifiers) {
+                return true;
+            }
+
+            @Override
+            public boolean charTyped(char c) {
+                return true;
+            }
+
+            @Override
+            public void cancelInteractions() {
+            }
+
+            @Override
+            public void render(dev.nocturne.ui.render.Renderer renderer) {
+            }
+        });
+
+        overlay.restoreInputState();
+
+        assertFalse(InputBlock.shouldBlock(), "关闭界面抛异常也不能把游戏输入永久短路");
+        assertTrue(input.isPointerGrabbed(), "关闭界面抛异常后仍必须把鼠标还给游戏");
+        assertFalse(overlay.isOpen(), "保存布局异常不能撤销已经完成的关闭状态");
+    }
+
+    @Test
+    void pointerFailureDoesNotMarkRestoreAsComplete() throws Exception {
+        FlakyInput input = new FlakyInput(0, true);
+        GuiOverlay overlay = new GuiOverlay(new ModuleRegistry(),
+                new FakeBackend(0, 0), input, GuiOverlay.KEY_RIGHT_SHIFT);
+        overlay.onFrame();
+        overlay.setOpen(true);
+        overlay.onFrame();
+        input.failNextGrab = true;
+
+        overlay.restoreInputState();
+        assertFalse(readBoolean(overlay, "inputRestored"),
+                "指针恢复异常后必须允许下一次 shutdown 动作继续恢复");
+        assertFalse(InputBlock.shouldBlock(), "即使指针接口异常，键盘输入也必须解除短路");
+
+        overlay.restoreInputState();
+        assertTrue(input.isPointerGrabbed(), "再次执行恢复动作必须实际重试抓回鼠标");
+    }
+
+    private static void replaceGui(GuiOverlay overlay, OverlayGui replacement) throws Exception {
+        Field gui = GuiOverlay.class.getDeclaredField("gui");
+        gui.setAccessible(true);
+        gui.set(overlay, replacement);
     }
 
     private static boolean readBoolean(Object target, String name) throws Exception {

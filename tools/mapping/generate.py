@@ -169,6 +169,28 @@ def build_anchor_table(requirements: scan.Requirements, manifest: sources.Manife
     return anchor
 
 
+def absent_reason_problems(version: str, table: dict) -> "list[str]":
+    """在文本/快速路径同样拒绝 ambiguous 与未知状态，不依赖 javap 是否可用。"""
+    problems = []
+
+    def visit(value, path):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "absentReason":
+                    if child == "ambiguous":
+                        problems.append(f"{version}: {path} has ambiguous absentReason")
+                    elif child not in {"verified", "unverified"}:
+                        problems.append(f"{version}: {path} has invalid absentReason {child!r}")
+                else:
+                    visit(child, path + "." + str(key))
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                visit(child, path + "[" + str(index) + "]")
+
+    visit(table, "table")
+    return problems
+
+
 def find_local_jar(version: str) -> "str | None":
     candidates = [
         os.path.join(ROOT, "..", "analysis", f"client-{version}.jar"),
@@ -504,6 +526,7 @@ def main() -> int:
                 if not skipped or (args.check and not args.fast):
                     failures.append(problem)
         if args.check:
+            failures.extend(absent_reason_problems(version, table))
             current = None
             if os.path.exists(path):
                 current = open(path, encoding="utf-8", newline="").read()

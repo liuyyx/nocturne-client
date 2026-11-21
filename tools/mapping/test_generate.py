@@ -66,6 +66,40 @@ class GenerateCheckTest(unittest.TestCase):
 
             self.assertEqual(1, result, "显式覆盖的版本缺 resolver/表时不得通过门禁")
             build.assert_not_called()
+    def test_fast_check_rejects_ambiguous_absent_reason(self):
+        table = {"version": "1.8.9", "classes": {
+            "example/Type": {"absent": True, "absentReason": "ambiguous"},
+        }}
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="", delete=False) as handle:
+            handle.write(generate.render(table))
+            path = handle.name
+        try:
+            def fresh_table(version, resolver, requirements, report, shape_hints, aliases, lint):
+                report["versions"][version] = {
+                    "classes": 1, "resolved": 0, "absent": [], "namespaces": [],
+                }
+                return table
+
+            argv = ["generate.py", "--check", "--fast", "--only", "1.8.9"]
+            with mock.patch.object(generate.sys, "argv", argv), \
+                    mock.patch.object(generate.scan, "collect", return_value=object()), \
+                    mock.patch.object(generate, "load_member_aliases", return_value={}), \
+                    mock.patch.object(generate.sources, "Manifest", return_value=object()), \
+                    mock.patch.object(generate, "load_shape_hints", return_value={}), \
+                    mock.patch.object(generate.namespaces, "Fetch", return_value=object()), \
+                    mock.patch.object(generate, "build_anchor_table", return_value=object()), \
+                    mock.patch.object(generate, "release_versions", return_value=["1.8.9"]), \
+                    mock.patch.object(generate.namespaces, "build_resolver", return_value=object()), \
+                    mock.patch.object(generate, "build_table", side_effect=fresh_table), \
+                    mock.patch.object(generate, "table_path", return_value=path), \
+                    mock.patch.object(generate, "verify_javap") as verify:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    result = generate.main()
+
+            self.assertEqual(1, result, "--fast 也不能接受 ambiguous absentReason")
+            verify.assert_not_called()
+        finally:
+            os.unlink(path)
 
 
 if __name__ == "__main__":

@@ -79,6 +79,9 @@ class FaInteractionTest {
         gui.update(System.currentTimeMillis(), 10, 10);
         gui.render(renderer);
         assertEquals(1.0f, gui.scale(), 1e-6, "1142x700 不缩小");
+        RecordingRenderer.DrawCall before = windowRect();
+        gui.mouseClicked(before.x + 30.0f, before.y + 10.0f, 1);
+        gui.mouseReleased(before.x + 30.0f, before.y + 10.0f, 1);
 
         gui.setViewport(980, 600);
         renderer.clear();
@@ -140,6 +143,7 @@ class FaInteractionTest {
         renderer.clear();
         gui.render(renderer);
         assertEquals(window.x - 30.0f, windowRect().x, 0.5f, "拖动应移动窗口");
+        gui.mouseClicked(clickX - 30.0f, clickY, 1);
 
         gui.mouseReleased(clickX - 30.0f, clickY, 1);
         assertFalse(Files.exists(layoutFile()), "右键松开不应保存布局");

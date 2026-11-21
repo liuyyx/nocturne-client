@@ -330,7 +330,9 @@ public final class FaClickGui implements OverlayGui {
     public boolean mouseClicked(double mx, double my, int button) {
         double dx = mx / scale;
         double dy = my / scale;
-        mouseDown = true;
+        if (button == 0) {
+            mouseDown = true;
+        }
         FaPopup popup = topPopupAt(dx, dy);
         if (popup != null) {
             // 关掉叠在它上面的浮层；控件会自己重新取焦点。

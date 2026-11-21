@@ -64,6 +64,7 @@ public final class RasterTextures {
             }
         }
         CACHE.clear();
+        owner = null;
     }
 
     /**

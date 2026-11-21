@@ -67,6 +67,12 @@
   日志明确记录 `NoClassDefFoundError` 与回退原因。
 - `FontRasterizerTest` 8 项通过，两个正式 jar 与 `verifyJarBytecode` 通过。未对真实裁剪运行时启动游戏。
 
+## 审计 P2-23 复核（2026-11-21）
+
+- `RasterTextures.invalidate()` 在删除缓存纹理后清空 `owner`，同一 `Renderer` 下一次使用
+  也会重新绑定，不再把旧上下文纹理句柄当作有效缓存。
+- `RasterTexturesTest` 验证失效删除旧纹理、相同形状重新上传且句柄不同；正式 jar 与字节码门禁通过。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

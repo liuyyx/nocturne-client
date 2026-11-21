@@ -4,14 +4,14 @@ rem  nocturne launcher
 rem
 rem  Double-click this instead of the .jar: it does not depend on the Windows
 rem  .jar file association (frequently unset or pointing at a JRE), and it
-rem  prefers a JDK whose bin\javaw.exe exists.
+rem  requires Java 11 or later for the GUI.
 rem
 rem Resolution order: newest nocturne-launcher-*.jar under dist\build\libs\,
 rem then newest nocturne-launcher-*.jar next to this script.
-rem  Resolution order for java: %JAVA_HOME% -> any JDK under the usual vendor
-rem  roots (highest version wins) -> javaw on PATH.
+rem Resolution order for Java 11+: JAVA_HOME -> usual vendor roots (highest
+rem version wins) -> PATH.
 rem ---------------------------------------------------------------------------
-setlocal enabledelayedexpansion
+setlocal disabledelayedexpansion
 set "ROOT=%~dp0"
 
 rem Prefer the newest GUI launcher, never the Java 8 agent payload.
@@ -29,68 +29,53 @@ if not defined JAR (
     exit /b 1
 )
 
-rem Pick the HIGHEST JDK version: compare each candidate version and only replace
-rem the current best when strictly greater, so enumeration order no longer decides.
-rem Version rule matches LauncherWindow.cs ParseJdkVersion: the first run of
-rem digits in the directory name is the major version
-rem (jdk1.8.0_411 -> 1, jdk-21 -> 21), so a mixed install selects 21, not JDK 8.
 set "JAVA_EXE="
-if defined JAVA_HOME if exist "%JAVA_HOME%\bin\javaw.exe" set "JAVA_EXE=%JAVA_HOME%\bin\javaw.exe"
+set "BEST_VER=0"
+if defined JAVA_HOME call :considerJava "%JAVA_HOME%\bin\javaw.exe"
+if defined JAVA_EXE goto launch
 
-if not defined JAVA_EXE (
-    set "BEST_VER=-1"
-    for %%R in (
-        "C:\Program Files\Microsoft"
-        "C:\Program Files\Eclipse Adoptium"
-        "C:\Program Files\Java"
-        "C:\Program Files\Amazon Corretto"
-        "C:\Program Files\Zulu"
-    ) do (
-        if exist "%%~fR" (
-            for /d %%D in ("%%~fR\jdk*") do (
-                if exist "%%~fD\bin\javaw.exe" (
-                    call :firstver "%%~nxD" VER
-                    if not defined VER set "VER=-1"
-                    if !VER! gtr !BEST_VER! (
-                        set "BEST_VER=!VER!"
-                        set "JAVA_EXE=%%~fD\bin\javaw.exe"
-                    )
-                )
-            )
-        )
-    )
+rem Compare the JVM's actual version, not the name of its installation directory.
+for %%R in (
+    "%ProgramFiles%\Microsoft"
+    "%ProgramFiles%\Eclipse Adoptium"
+    "%ProgramFiles%\Java"
+    "%ProgramFiles%\Amazon Corretto"
+    "%ProgramFiles%\Zulu"
+) do (
+    for /d %%D in ("%%~fR\jdk*") do call :considerJava "%%~fD\bin\javaw.exe"
 )
+if defined JAVA_EXE goto launch
 
-if not defined JAVA_EXE set "JAVA_EXE=javaw.exe"
+for /f "delims=" %%J in ('"%SystemRoot%\System32\where.exe" $PATH:javaw.exe 2^>nul') do (
+    call :considerJava "%%J"
+    if defined JAVA_EXE goto launch
+)
+echo [nocturne] Java 11 or newer is required for the GUI launcher.
+echo [nocturne] Set JAVA_HOME to a supported JDK or add its bin directory to PATH.
+pause
+exit /b 1
 
-echo [nocturne] java: %JAVA_EXE%
-echo [nocturne] jar : %JAR%
+:launch
+echo [nocturne] java: "%JAVA_EXE%"
+echo [nocturne] jar : "%JAR%"
 start "" "%JAVA_EXE%" -jar "%JAR%" %*
 exit /b 0
 
-rem ---------------------------------------------------------------------------
-rem  Extract the first run of digits from a JDK directory name, matching
-rem  LauncherWindow.cs ParseJdkVersion:
-rem    jdk-21.0.12.8-hotspot -> 21, jdk1.8.0_411 -> 1, jdk-foo -> (empty -> -1).
-rem  Usage: call :firstver <directory-name> <result-variable>
-rem ---------------------------------------------------------------------------
-:firstver
-setlocal enabledelayedexpansion
-set "_s=%~1"
-set "_out="
-:_fv_loop
-if "!_s!"=="" goto :_fv_done
-set "_c=!_s:~0,1!"
-set "_s=!_s:~1!"
-rem A digit yields no token under for /f delims=digits, so the body is skipped
-rem and the char is appended; a non-digit ends the run once digits were found,
-rem otherwise it is part of the "jdk"/"openjdk" prefix and is skipped.
-for /f "delims=0123456789" %%c in ("!_c!") do (
-    if defined _out goto :_fv_done
-    goto :_fv_loop
+rem Check java.exe next to javaw.exe; use a small heap for the version probe.
+:considerJava
+if not exist "%~1" exit /b 0
+if not exist "%~dp1java.exe" exit /b 0
+set "JAVA_MAJOR=0"
+for /f "tokens=1,2,3" %%A in ('""%~dp1java.exe" -Xms16m -Xmx64m -XshowSettings:properties -version 2>&1"') do (
+    if "%%A"=="java.specification.version" if "%%B"=="=" (
+        rem Legacy Java reports 1.x; its first component is below the minimum.
+        for /f "tokens=1 delims=." %%V in ("%%C") do set "JAVA_MAJOR=%%V"
+    )
 )
-set "_out=!_out!!_c!"
-goto :_fv_loop
-:_fv_done
-endlocal & set "%~2=%_out%"
+for /f "delims=0123456789" %%V in ("%JAVA_MAJOR%") do exit /b 0
+if %JAVA_MAJOR% lss 11 exit /b 0
+if %JAVA_MAJOR% gtr %BEST_VER% (
+    set "BEST_VER=%JAVA_MAJOR%"
+    set "JAVA_EXE=%~1"
+)
 exit /b 0

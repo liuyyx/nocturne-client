@@ -138,7 +138,7 @@ java -jar dist/build/libs/nocturne-<version>.jar --list-json    # 列出可注�
 java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进程
 ```
 
-Windows 图形启动使用 `nocturne.bat` 或 `nocturne-launcher-<version>.jar`（`gradle :dist:launcherJar` 构建）。
+Windows 图形启动需要 Java 11 或更新版本。使用 `nocturne.bat` 或 `nocturne-launcher-<version>.jar`（`gradle :dist:launcherJar` 构建）。
 `nocturne-<version>.jar` 不含 Swing 布局依赖，支持上述显式 CLI 参数和 agent 加载，不用于打开 GUI。
 
 游戏里按**右 Shift** 唤出界面（`guiKey` 由注入器传入，AWT VK 码）。

@@ -10,6 +10,9 @@
 - `registerGate` 现只使用映射中配对的描述符；无描述符时仅使用调用方显式候选，不再按名字
   或参数个数推断重载。`GateRegistrationOverloadTest` 两项行为回归通过，覆盖目标方法的
   放行/取消、同形引用重载、float 与五参数重载互不干扰。
+- 修正 `CallbackHookTransformer` 新增异常处理器的 StackMapTable：处理器不读取局部槽，
+  不再假定原始形参在整个方法体内一直有效。实例/静态方法复用并 chop 形参槽后的正常返回、
+  异常传播与一次性消费回归通过；原有回调测试及两个正式 jar 的打包门禁通过。
 - **未通过/待复验**：此次还观察到 Hud/Screen 绘制钩子的 `VerifyError`，游戏随后因 native
   内存不足退出；本轮尚未获得正式 GUI 截图，不得记为界面显示正常。
 

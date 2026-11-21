@@ -192,8 +192,9 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
                                 super.visitLabel(tryEnd);
                                 super.visitLabel(handler);
                                 if (classVersion >= Opcodes.V1_6) {
-                                    Object[] locals = frameLocals(access, descriptor);
-                                    super.visitFrame(Opcodes.F_NEW, locals.length, locals, 1,
+                                    // 形参槽可能已被复用或 chop 成 TOP；处理器不读任何局部变量，
+                                    // 因此全部声明为 TOP，不能重新声称原始 this/形参仍然有效。
+                                    super.visitFrame(Opcodes.F_NEW, 0, null, 1,
                                             new Object[]{"java/lang/Throwable"});
                                 }
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, hookOwner, deferredMethod,
@@ -278,47 +279,6 @@ public final class CallbackHookTransformer implements ClassFileTransformer {
             }
             return null;
         }
-    }
-
-    /**
-     * 异常处理器帧的局部变量表：方法形参（实例方法再加 {@code this}）。
-     *
-     * <p>处理器从方法体任意位置进入；未声明的局部变量按 {@code top} 处理，因此只声明形参是安全的。
-     */
-    private Object[] frameLocals(int access, String descriptor) {
-        Type[] arguments = Type.getArgumentTypes(descriptor);
-        boolean isStatic = (access & Opcodes.ACC_STATIC) != 0;
-        Object[] locals = new Object[arguments.length + (isStatic ? 0 : 1)];
-        int at = 0;
-        if (!isStatic) {
-            locals[at++] = targetClassInternalName;
-        }
-        for (Type argument : arguments) {
-            switch (argument.getSort()) {
-                case Type.BOOLEAN:
-                case Type.CHAR:
-                case Type.BYTE:
-                case Type.SHORT:
-                case Type.INT:
-                    locals[at++] = Opcodes.INTEGER;
-                    break;
-                case Type.FLOAT:
-                    locals[at++] = Opcodes.FLOAT;
-                    break;
-                case Type.LONG:
-                    locals[at++] = Opcodes.LONG;
-                    break;
-                case Type.DOUBLE:
-                    locals[at++] = Opcodes.DOUBLE;
-                    break;
-                case Type.ARRAY:
-                    locals[at++] = argument.getDescriptor();
-                    break;
-                default:
-                    locals[at++] = argument.getInternalName();
-            }
-        }
-        return locals;
     }
 
     /**

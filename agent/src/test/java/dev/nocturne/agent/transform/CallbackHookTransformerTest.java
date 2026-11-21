@@ -33,6 +33,12 @@ class CallbackHookTransformerTest {
             trace.add("body");
         }
 
+        /** 模拟游戏方法在复用形参槽后从被调方法抛出异常。 */
+        public static void fail() {
+            trace.add("body");
+            throw new IllegalStateException("render body failed");
+        }
+
         /** 钩子方法本体（签名必须与转换器插入的调用一致）。 */
         public static void accept(Object value) {
             last = value;
@@ -335,6 +341,74 @@ class CallbackHookTransformerTest {
 
         assertEquals(1, Sink.trace.stream().filter("deferred"::equals).count(),
                 "a method with two RETURN instructions must still defer exactly once");
+    }
+
+    @Test
+    void deferredWorksAfterParameterSlotsAreChopped() throws Exception {
+        exerciseChoppedArguments(false);
+    }
+
+    @Test
+    void deferredPreservesExceptionsAfterParameterSlotsAreChopped() throws Exception {
+        exerciseChoppedArguments(true);
+    }
+
+    private static void exerciseChoppedArguments(boolean throwing) throws Exception {
+        for (boolean isStatic : new boolean[]{false, true}) {
+            Sink.reset();
+            CallbackHookTransformer transformer = new CallbackHookTransformer(
+                    "dev/nocturne/agent/transform/SubjectSample", "handle", "(Ljava/lang/Object;)V",
+                    HOOK_OWNER, "accept", false, "deferred");
+            byte[] patched = transformer.transform(null, "dev/nocturne/agent/transform/SubjectSample",
+                    null, null, choppedArgumentClass(isStatic, throwing));
+            assertNotNull(patched);
+            Class<?> type = define(patched);
+            Object subject = isStatic ? null : type.getConstructor().newInstance();
+            Object argument = new Object();
+            if (throwing) {
+                java.lang.reflect.InvocationTargetException failure =
+                        org.junit.jupiter.api.Assertions.assertThrows(
+                                java.lang.reflect.InvocationTargetException.class,
+                                () -> type.getMethod("handle", Object.class).invoke(subject, argument));
+                assertEquals(IllegalStateException.class, failure.getCause().getClass());
+                assertEquals("render body failed", failure.getCause().getMessage());
+            } else {
+                type.getMethod("handle", Object.class).invoke(subject, argument);
+            }
+            assertEquals(argument, Sink.last, "捕获必须在形参槽失效之前完成");
+            assertEquals(java.util.Arrays.asList("hook", "body", "deferred"), Sink.trace,
+                    "实例/静态方法的正常与异常退出均须且只能消费一次");
+        }
+    }
+
+    /** 模拟真实游戏字节码：形参槽改存 int，再由 chop_frame 裁掉；后续可能从调用点抛异常。 */
+    private static byte[] choppedArgumentClass(boolean isStatic, boolean throwing) {
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "dev/nocturne/agent/transform/SubjectSample",
+                null, "java/lang/Object", null);
+        MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        constructor.visitCode();
+        constructor.visitVarInsn(Opcodes.ALOAD, 0);
+        constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        constructor.visitInsn(Opcodes.RETURN);
+        constructor.visitMaxs(0, 0);
+        constructor.visitEnd();
+
+        MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC | (isStatic ? Opcodes.ACC_STATIC : 0),
+                "handle", "(Ljava/lang/Object;)V", null, null);
+        method.visitCode();
+        method.visitInsn(Opcodes.ICONST_1);
+        method.visitVarInsn(Opcodes.ISTORE, isStatic ? 0 : 1);
+        org.objectweb.asm.Label tail = new org.objectweb.asm.Label();
+        method.visitJumpInsn(Opcodes.GOTO, tail);
+        method.visitLabel(tail);
+        method.visitFrame(Opcodes.F_CHOP, 1, null, 0, null);
+        method.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK_OWNER, throwing ? "fail" : "body", "()V", false);
+        method.visitInsn(Opcodes.RETURN);
+        method.visitMaxs(0, 0);
+        method.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
     }
 
     /**

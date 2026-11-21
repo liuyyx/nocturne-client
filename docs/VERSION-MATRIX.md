@@ -106,6 +106,13 @@
   不再因与 `drawCenteredString` 同形而依赖反射顺序。
 - 新增同形重载实际绘制回归，`ExtractorRendererLegacyTest` 16 项通过；正式 jar 与字节码门禁通过。
 
+## 审计 P2-26 复核（2026-11-21）
+
+- extractor 绑定失败不再直接结束安装尝试；GL11 就绪时进入既有 `selectBackend`，
+  按 ModernRenderer/固定管线契约降级。GL11 尚未就绪时保留重试，不构造空后端。
+- `OverlayBackendGuardTest` 3 项与预览帧源回归通过，两个正式 jar 和字节码门禁通过；
+  未对真实缺映射版本做真机降级验收。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

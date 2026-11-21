@@ -41,6 +41,15 @@ class OverlayBackendGuardTest {
     }
 
     @Test
+    void missingGl11DoesNotClaimModernStack() throws Exception {
+        java.lang.reflect.Method method = OverlayBootstrap.class.getDeclaredMethod(
+                "isModernRenderStack", Class.class);
+        method.setAccessible(true);
+        assertFalse((Boolean) method.invoke(null, new Object[]{null}),
+                "GL11 尚未就绪时不能按现代栈继续构造后端");
+    }
+
+    @Test
     void legacyStackMayStillForceGl() throws Exception {
         OverlayBootstrap bootstrap = bootstrap(new NamedLoader(false, false));
         assertTrue(bootstrap.forceGlAllowed(true));

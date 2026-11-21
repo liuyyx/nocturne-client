@@ -88,6 +88,8 @@ public final class OverlayBootstrap implements FrameListener {
      * <p>1.13–1.15 是常规后端；1.20+ 只有诊断开关 / 1.21.1 兼容豁免 / 绘制 API 映射缺口时才会非空。
      */
     private static volatile ModernRenderer modernBackend;
+    /** 原生人物预览依赖当帧上下文；首次收到后只在绘制钩子内驱动核心 GL 后端。 */
+    private static volatile boolean modernContextDriven;
 
     /** 后端尚未装好时收到的绘制上下文；装好后立刻补喂，避免白丢第一帧。 */
     private static volatile Object pendingGraphics;
@@ -289,6 +291,10 @@ public final class OverlayBootstrap implements FrameListener {
 
         ClassLoader loader = gameApi ? extractorType.getClassLoader()
                 : (gl11.getClassLoader() != null ? gl11.getClassLoader() : gameLoader);
+        if (gameApi) {
+            // extractor 绑定失败后的降级仍需要 GL11；原 gameApi 分支尚未解析它。
+            gl11 = resolveGl11();
+        }
         Mapping mapping = currentMapping();
         GameBridge bridge = new GameBridge(instrumentation, mapping);
         // 等游戏主类实例就绪再绑定字体：GL 可用**早于** Minecraft 实例构造（Forge/launchwrapper 下
@@ -336,37 +342,40 @@ public final class OverlayBootstrap implements FrameListener {
                         () -> bridge.readField(bridge.minecraft(), ClassType.MINECRAFT, "font"));
             }
             if (extractor == null) {
-                // 绘制 API 签名不认识（这个版本换了形状）：报一次，之后仍按上限重试。
+                if (gl11 == null) {
+                    log("game draw API binding failed and GL11 is not ready; retaining install retry");
+                    return;
+                }
+                // 绘制 API 签名不认识：按现有契约转入 ModernRenderer/固定管线选择，
+                // 不让监听器永久重试一个已确定无法绑定的入口。
+                log("game draw API: signatures not recognised on " + extractorType.getName()
+                        + "; falling back to the GL backend selector");
+                backend = selectBackend(gl, gl11, font, bridge);
+            } else {
                 if (!sdlReported) {
                     sdlReported = true;
-                    log("game draw API: signatures not recognised on " + extractorType.getName()
-                            + "; the overlay cannot draw on this version");
+                    if (sdl) {
+                        log("extractor stack (Minecraft 26.x): drawing through the game's GuiGraphicsExtractor;"
+                                + " the overlay never calls LWJGL GL"
+                                + (isSdlStack() ? " (SDL-managed context)" : " (context is only current inside"
+                                        + " the game's own call sequence)"));
+                    } else if (guiStack) {
+                        log("gui-stack (1.16-1.19): drawing through GuiComponent.fill/drawString with"
+                                + " the game's PoseStack; the overlay never calls LWJGL GL for UI");
+                    } else {
+                        log("gui-graphics stack (1.20-1.21): drawing through the game's GuiGraphics;"
+                                + " the overlay never calls LWJGL GL for UI");
+                    }
                 }
-                return;
-            }
-            if (!sdlReported) {
-                sdlReported = true;
-                if (sdl) {
-                    log("extractor stack (Minecraft 26.x): drawing through the game's GuiGraphicsExtractor;"
-                            + " the overlay never calls LWJGL GL"
-                            + (isSdlStack() ? " (SDL-managed context)" : " (context is only current inside"
-                                    + " the game's own call sequence)"));
-                } else if (guiStack) {
-                    log("gui-stack (1.16-1.19): drawing through GuiComponent.fill/drawString with"
-                            + " the game's PoseStack; the overlay never calls LWJGL GL for UI");
-                } else {
-                    log("gui-graphics stack (1.20-1.21): drawing through the game's GuiGraphics;"
-                            + " the overlay never calls LWJGL GL for UI");
+                // 钩子每帧从这里取后端，把当帧的绘制上下文喂进去（见 setDrawContext）。
+                extractorBackend = extractor;
+                // 本帧的上下文在安装之前就送过来了（安装发生在同一帧的 onFrame 里）：补喂，否则第一帧白丢。
+                Object pending = pendingGraphics;
+                if (pending != null) {
+                    extractor.setFrame(pending);
                 }
+                backend = extractor;
             }
-            // 钩子每帧从这里取后端，把当帧的绘制上下文喂进去（见 setDrawContext）。
-            extractorBackend = extractor;
-            // 本帧的上下文在安装之前就送过来了（安装发生在同一帧的 onFrame 里）：补喂，否则第一帧白丢。
-            Object pending = pendingGraphics;
-            if (pending != null) {
-                extractor.setFrame(pending);
-            }
-            backend = extractor;
         } else {
             backend = selectBackend(gl, gl11, font, bridge);
         }
@@ -384,9 +393,10 @@ public final class OverlayBootstrap implements FrameListener {
             System.setProperty("nocturne.drawhook", "1");
             NocturneRuntime.setContextDriven(true);
         }
+        modernContextDriven = false;
         modernBackend = backend instanceof ModernRenderer ? (ModernRenderer) backend : null;
         if (modernBackend != null && pendingGraphics != null) {
-            modernBackend.setDrawContext(pendingGraphics);
+            setDrawContext(pendingGraphics);
         }
         // 输入：鼠标优先取游戏自己的状态（映射后的 MouseHandler）。SDL 的 SDL_GetMouseState 只在
         // 有鼠标焦点的窗口上给坐标，否则静默返回 0,0——26.3 实测的"点不中"就是它。键与滚轮仍由
@@ -671,6 +681,10 @@ public final class OverlayBootstrap implements FrameListener {
         }
         if (modern != null) {
             modern.setDrawContext(graphics);
+            if (graphics != null && !modernContextDriven) {
+                NocturneRuntime.setContextDriven(true);
+                modernContextDriven = true;
+            }
         }
     }
 
@@ -763,6 +777,9 @@ public final class OverlayBootstrap implements FrameListener {
      * LWJGL2（≤1.12）只有固定管线，回退属预期。
      */
     private static boolean isModernRenderStack(Class<?> gl11) {
+        if (gl11 == null) {
+            return false;
+        }
         ClassLoader loader = gl11.getClassLoader();
         return loadNoInit("org.lwjgl.glfw.GLFW", loader) != null
                 || loadNoInit("org.lwjgl.sdl.SDLVideo", loader) != null;

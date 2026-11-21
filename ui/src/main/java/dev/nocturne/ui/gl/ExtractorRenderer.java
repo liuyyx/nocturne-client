@@ -691,7 +691,8 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             names.add(mapping.methodName(
                     dev.nocturne.client.mapping.ClassType.GUI_COMPONENT, canonical, null));
         }
-        names.remove(canonical);
+        // 恒等映射也必须保留规范名：drawString 与 drawCenteredString 可能同形，
+        // 删除它会让名称优先级失效并退化为反射顺序选择。
         return names;
     }
 

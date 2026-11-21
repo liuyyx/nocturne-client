@@ -134,6 +134,24 @@ class ExtractorRendererLegacyTest {
     }
 
 
+    public static final class FakeGuiIdentityOverloads {
+        static final List<String> CALLS = new ArrayList<>();
+
+        public static void fill(FakePoseStack pose, int x1, int y1, int x2, int y2, int argb) {
+            CALLS.add("fill");
+        }
+
+        public static void drawString(FakePoseStack pose, FakeFont font, String text,
+                                      int x, int y, int argb) {
+            CALLS.add("drawString");
+        }
+
+        public static void drawCenteredString(FakePoseStack pose, FakeFont font, String text,
+                                              int x, int y, int argb) {
+            CALLS.add("centered");
+        }
+    }
+
     /** 带矩阵操作的绘制栈：1.16.5 的 {@code dfm}（pushPose/popPose/scale 全是单字母）。 */
     public static final class MatrixPoseStack {
         static final List<Object[]> CALLS = new ArrayList<>();
@@ -204,6 +222,7 @@ class ExtractorRendererLegacyTest {
         FakeLegacyGuiNoScissor.CALLS.clear();
         FakeGuiMappedNames.CALLS.clear();
         FakeGuiUnmappedText.CALLS.clear();
+        FakeGuiIdentityOverloads.CALLS.clear();
         com.mojang.blaze3d.systems.RenderSystem.reset();
         MatrixPoseStack.CALLS.clear();
         FakeLegacyGuiScaled.CALLS.clear();
@@ -303,6 +322,18 @@ class ExtractorRendererLegacyTest {
         assertEquals(com.mojang.blaze3d.systems.RenderSystem.class,
                 ((java.lang.reflect.Method) disable.get(renderer)).getDeclaringClass());
         assertEquals(true, wh.get(renderer), "RenderSystem 使用宽高参数口径");
+    }
+
+    @Test
+    void identityMappingPrefersDrawStringOverCenteredOverload() {
+        ExtractorRenderer renderer = bind(FakeGuiIdentityOverloads.class,
+                new LegacyMapping(true));
+        assertNotNull(renderer);
+        renderer.setFrame(pose);
+        renderer.beginFrame();
+        renderer.text("identity", 1f, 2f, 9f, Color.WHITE);
+        assertEquals(java.util.Arrays.asList("drawString"), FakeGuiIdentityOverloads.CALLS,
+                "恒等映射不得把同形居中文本方法当作 drawString");
     }
 
     /**

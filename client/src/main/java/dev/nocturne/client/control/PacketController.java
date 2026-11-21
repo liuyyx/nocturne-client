@@ -528,7 +528,7 @@ public final class PacketController {
 
     private boolean onMainThread() {
         Thread expected = mainThread;
-        return expected == null || expected == Thread.currentThread();
+        return expected != null && expected == Thread.currentThread();
     }
 
     /**

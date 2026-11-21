@@ -163,6 +163,29 @@ class PacketControllerTest {
     }
 
     @Test
+    void beforeFirstFrameOffThreadReleaseDefersDrain() throws Exception {
+        Recorder recorder = new Recorder();
+        NocturneClient client = NocturneClient.boot(null);
+        PacketController controller = client.packets();
+        controller.deliveryForTests(recorder);
+        Object packet = new Object();
+        controller.hold(PacketEvent.Direction.SEND, ownerA);
+        controller.capture(PacketEvent.Direction.SEND, packet);
+        AtomicInteger released = new AtomicInteger(-1);
+
+        Thread thread = new Thread(() -> released.set(controller.release(PacketEvent.Direction.SEND, ownerA)));
+        thread.start();
+        thread.join();
+
+        assertEquals(0, released.get(), "首帧前异线程只能撤销所有权，不能直接投递");
+        assertTrue(recorder.sent.isEmpty(), "主线程尚未登记时不得在 IO 线程发送");
+        controller.noteMainThread();
+        controller.pump();
+        assertEquals(java.util.Collections.singletonList(packet), recorder.sent,
+                "登记主线程后 pump 必须释放已排队的包");
+    }
+
+    @Test
     void worldChangeEpochDropsOldCapturesAndResetsOwners() {
         Recorder recorder = new Recorder();
         PacketController controller = controller(recorder);

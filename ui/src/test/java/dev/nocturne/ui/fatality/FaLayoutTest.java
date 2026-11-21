@@ -129,6 +129,13 @@ class FaLayoutTest {
         gui.mouseClicked(enabled.x + 3.0f, enabled.y + enabled.textSize * 0.5f, 0);
         assertTrue(beta.isEnabled(), "点击当前设置行应修改 Beta");
         assertFalse(alpha.isEnabled(), "Alpha 不得残留命中");
+        gui.mouseReleased(enabled.x + 3.0f, enabled.y + enabled.textSize * 0.5f, 0);
+        gui.mouseScrolled(enabled.x + 3.0f, enabled.y + enabled.textSize * 0.5f, -1.0);
+        renderer.clear();
+        gui.render(renderer);
+        assertTrue(renderer.ofKind("text").stream()
+                .anyMatch(call -> "Beta".equals(call.text) && call.x > window.x + FaTheme.SIDEBAR_W),
+                "内容滚轮不得把当前模块重置为分类中的第一个模块");
     }
 
     /** 搜索保留多模块浏览；缩窄窗口时卡片继续保持内边距且互不覆盖。 */

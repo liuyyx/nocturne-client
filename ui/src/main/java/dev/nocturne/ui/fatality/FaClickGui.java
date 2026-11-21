@@ -410,7 +410,8 @@ public final class FaClickGui implements OverlayGui {
         }
         View view = view();
         if (FaContext.inside(x, y, wx, contentY(), FaTheme.SIDEBAR_W, contentH())) {
-            float maximum = Math.max(0f, currentGroups().size() * SIDE_ITEM_H - (contentH() - 16f));
+            float maximum = Math.max(0f, currentGroups().size() * SIDE_ITEM_H
+                    - (contentH() - FaTheme.CONTENT_PAD * 2.0f));
             view.sideScroll = clamp(view.sideScroll - (float) amount * SIDE_ITEM_H * 1.5f, 0f, maximum);
             return true;
         }
@@ -419,7 +420,6 @@ public final class FaClickGui implements OverlayGui {
         }
         closeAllPopups();
         view.scroll = clamp(view.scroll - (float) amount * 34.0f, 0.0f, view.maxScroll);
-        view.selected = null;
         return true;
     }
 

@@ -257,7 +257,7 @@ public final class OverlayBootstrap implements FrameListener {
             // 这一段带着 LWJGL3 核心 profile，gl-core 完全可用（1.16.5 实测），因此只在它绑不上
             // 核心 profile 入口时才退回 gui-stack。
             Class<?> glProbe = resolveGl11();
-            if (glProbe != null && GlApi.bind(glProbe) != null) {
+            if (glProbe != null && ModernGlApi.bind(glProbe.getClassLoader()) != null) {
                 guiStack = false;
             } else {
                 extractorType = resolveLegacyGui();

@@ -98,8 +98,8 @@ public final class FreeCameraModule extends GameModule implements CameraOverride
         if (state != null && state.present()) {
             if (!stationary.get()) {
                 if (rotate.get()) {
-                    yaw += state.yaw() - previousYaw;
-                    pitch = Math.max(-90, Math.min(90, pitch + state.pitch() - previousPitch));
+                    yaw += wrapDegrees(state.yaw() - previousYaw);
+                    pitch = Math.max(-90, Math.min(90, pitch + wrapDegrees(state.pitch() - previousPitch)));
                 } else {
                     yaw = state.yaw();
                     pitch = state.pitch();
@@ -113,6 +113,18 @@ public final class FreeCameraModule extends GameModule implements CameraOverride
         x += (-sin * forward * horizontal + cos * strafe) * v;
         z += (cos * forward * horizontal + sin * strafe) * v;
         y += ((jump ? 1 : 0) - (sneak ? 1 : 0) - Math.sin(pitchRadians) * forward) * v;
+    }
+
+    /** 与 CameraState.wrapDegrees 相同：跨 ±180° 只保留最短旋转差。 */
+    private static float wrapDegrees(float degrees) {
+        float wrapped = degrees % 360.0f;
+        if (wrapped >= 180.0f) {
+            wrapped -= 360.0f;
+        }
+        if (wrapped < -180.0f) {
+            wrapped += 360.0f;
+        }
+        return wrapped;
     }
 
     @Override public void applyCamera(Object camera) {

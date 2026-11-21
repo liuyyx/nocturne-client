@@ -711,15 +711,23 @@ class ModernResolver:
 
     def absent_reason(self, canonical: str, kind: str, name: str) -> str:
         key = canonical.replace(".", "/")
-        if self.mojmap.class_of(key) is None:
-            return "verified"
+        obf_owner = self.mojmap.class_of(key)
+        if obf_owner is None:
+            if self.index is None:
+                return "unverified"
+            # 源里没有类不等于目标里没有对应物；jar 反查命中时只能标为需择优。
+            return "ambiguous" if self.index.exists(key) else "verified"
         if kind == "method":
             if self.method_exists(key, name):
                 return "ambiguous"
-            return "verified" if self.index is not None else "unverified"
+            if self.index is None:
+                return "unverified"
+            return "ambiguous" if self.index.reachable(obf_owner, "method", name) else "verified"
         if any((ancestor, name) in self.mojmap.fields for ancestor in self._ancestors(key)):
             return "ambiguous"
-        return "verified" if self.index is not None else "unverified"
+        if self.index is None:
+            return "unverified"
+        return "ambiguous" if self.index.reachable(obf_owner, "field", name) else "verified"
 
     def _pick_field(self, canonical: str, name: str):
         """(declaring class, (obf name, canonical descriptor)) for a field."""

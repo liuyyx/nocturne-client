@@ -55,7 +55,7 @@ public final class CrystalChamsModule extends GameModule implements WorldOverlay
             double radius = .98 * scale.get();
             for (int i = 0; i < count; i++) {
                 double[] p = positions.get(i);
-                double bottom = p[1] - radius;
+                double bottom = p[1];
                 WorldGeometry.silhouette(draw, projection, p[0]-radius, bottom, p[2]-radius,
                         p[0]+radius, bottom+2*radius, p[2]+radius, sideColor.argb());
                 WorldGeometry.verticalBox(draw, projection, p[0], bottom, p[2], radius,

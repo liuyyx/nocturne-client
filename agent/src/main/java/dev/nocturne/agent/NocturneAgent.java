@@ -2242,11 +2242,11 @@ public final class NocturneAgent {
                     : mapping.methodCandidates(owner, canonicalMethod)) {
                 String descriptor = candidate.descriptor();
                 if (descriptor == null || descriptor.isEmpty()) {
-                    descriptor = resolveDescriptor(instrumentation, className, candidate.name(),
-                            fallbackDescriptors);
+                    descriptor = fallbackDescriptors;
                 }
-                for (String each : descriptorsFor(instrumentation, className, candidate.name(),
-                        descriptor, fallbackDescriptors)) {
+                // 钩子签名固定，不能把混淆后同名的其它重载当成同一事件。
+                // 缺少映射签名时也只允许调用方显式列出的形态，不按名字或参数个数猜测。
+                for (String each : descriptor.split("\\|")) {
                     ClassFileTransformer transformer = createGateTransformer(asmLoader, className,
                             candidate.name(), each, hookMethod, hookReturn, atMethodEnd, passThis);
                     int state = registerGameplayTransformerState(instrumentation, asmLoader, transformer,

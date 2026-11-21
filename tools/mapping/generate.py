@@ -169,6 +169,38 @@ def build_anchor_table(requirements: scan.Requirements, manifest: sources.Manife
     return anchor
 
 
+def descriptor_problems(version: str, table: dict) -> "list[str]":
+    """校验所有命名空间的字段描述符；vanilla 之外也不能写入非法 JNI 类型。"""
+    problems = []
+
+    def valid_type(descriptor, offset=0):
+        if not isinstance(descriptor, str) or offset >= len(descriptor):
+            return None
+        start = offset
+        while offset < len(descriptor) and descriptor[offset] == "[":
+            offset += 1
+        if offset >= len(descriptor):
+            return None
+        kind = descriptor[offset]
+        if kind in "BCDFIJSZ":
+            return offset + 1
+        if kind == "L":
+            end = descriptor.find(";", offset + 1)
+            internal = descriptor[offset + 1:end] if end >= 0 else ""
+            if not internal or any(ch in internal for ch in ".;["):
+                return None
+            return end + 1
+        return None
+
+    for canonical, entry in table.get("classes", {}).items():
+        for name, spec in (entry.get("fields") or {}).items():
+            for namespace, descriptor in (spec.get("descriptors") or {}).items():
+                end = valid_type(descriptor)
+                if end is None or end != len(descriptor):
+                    problems.append(f"{version}: {canonical}#{name} {namespace} invalid descriptor {descriptor!r}")
+    return problems
+
+
 def absent_reason_problems(version: str, table: dict) -> "list[str]":
     """在文本/快速路径同样拒绝 ambiguous 与未知状态，不依赖 javap 是否可用。"""
     problems = []
@@ -429,8 +461,9 @@ def verify_javap(version: str, table: dict) -> "tuple[list, int, bool, dict]":
             runtime = (spec.get("names") or {}).get("vanilla")
             if not runtime:
                 continue
-            if not index.reachable(internal, "field", runtime):
-                problems.append(f"{version}: {canonical}.{name} -> {runtime} not found on {obf}")
+            descriptor = (spec.get("descriptors") or {}).get("vanilla")
+            if not index.reachable(internal, "field", runtime, descriptor):
+                problems.append(f"{version}: {canonical}.{name} -> {runtime}{descriptor or ''} not found on {obf}")
             else:
                 checked += 1
     index.save()
@@ -527,6 +560,7 @@ def main() -> int:
                     failures.append(problem)
         if args.check:
             failures.extend(absent_reason_problems(version, table))
+            failures.extend(descriptor_problems(version, table))
             current = None
             if os.path.exists(path):
                 current = open(path, encoding="utf-8", newline="").read()

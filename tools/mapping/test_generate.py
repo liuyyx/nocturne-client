@@ -100,6 +100,43 @@ class GenerateCheckTest(unittest.TestCase):
             verify.assert_not_called()
         finally:
             os.unlink(path)
+    def test_field_descriptor_is_checked_against_jar(self):
+        with tempfile.NamedTemporaryFile(suffix=".jar") as jar:
+            class Index:
+                transient_failures = 0
+
+                def __init__(self):
+                    self.calls = []
+
+                def exists(self, internal):
+                    return True
+
+                def reachable(self, internal, kind, name, signature=None):
+                    self.calls.append((kind, name, signature))
+                    return False
+
+                def save(self):
+                    pass
+
+            index = Index()
+            table = {"classes": {"example/Type": {
+                "names": {"vanilla": "example/Type"}, "methods": {}, "fields": {
+                    "count": {"names": {"vanilla": "a"}, "descriptors": {"vanilla": "I"}},
+                },
+            }}}
+            with mock.patch.object(generate, "find_local_jar", return_value=jar.name), \
+                    mock.patch.object(generate.javap, "JavapIndex", return_value=index):
+                problems, checked, skipped, absent = generate.verify_javap("1.8.9", table)
+            self.assertEqual([("field", "a", "I")], index.calls)
+            self.assertTrue(problems, "字段描述符不匹配必须成为 jar 校验问题")
+
+    def test_non_vanilla_field_descriptor_syntax_is_checked(self):
+        table = {"classes": {"example/Type": {"fields": {
+            "count": {"descriptors": {"fabric": "not-a-descriptor"}},
+        }}}}
+        problems = generate.descriptor_problems("1.20.1", table)
+        self.assertEqual(1, len(problems))
+        self.assertIn("fabric", problems[0])
 
 
 if __name__ == "__main__":

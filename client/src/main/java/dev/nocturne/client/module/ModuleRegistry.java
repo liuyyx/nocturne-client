@@ -139,7 +139,7 @@ public final class ModuleRegistry {
             this.active = value;
             if (value) {
                 toResume = new ArrayList<Module>(suspended);
-                suspended.clear();
+                // 先保留 suspended：某个 onResume 失败时不能把它从待恢复状态抹去。
             } else {
                 toSuspend = new ArrayList<Module>();
                 for (Module module : modules.values()) {
@@ -170,6 +170,9 @@ public final class ModuleRegistry {
                 }
                 try {
                     module.onResume();
+                    synchronized (this) {
+                        suspended.remove(module);
+                    }
                 } catch (Throwable error) {
                     logModuleFailure("resume", module, error);
                 }
@@ -177,9 +180,33 @@ public final class ModuleRegistry {
         }
     }
 
+    /** 模块在非活动期被启用时登记待恢复，并立即撤销刚安装的运行副作用。 */
+    void onModuleEnabled(Module module) {
+        boolean suspendNow = false;
+        synchronized (this) {
+            if (!active && modules.get(module.name()) == module && !module.runsWhileInactive()) {
+                suspended.add(module);
+                suspendNow = true;
+            }
+        }
+        if (suspendNow) {
+            try {
+                module.onSuspend();
+            } catch (Throwable error) {
+                logModuleFailure("suspend", module, error);
+            }
+        }
+    }
+
     /** 当前是否允许已启用模块运行；无锁读取，可从任意线程调用。 */
     public boolean isActive() {
         return active;
+    }
+
+    private boolean isSuspended(Module module) {
+        synchronized (this) {
+            return suspended.contains(module);
+        }
     }
 
     /**
@@ -200,6 +227,9 @@ public final class ModuleRegistry {
                 continue;
             }
             if (!gateOpen && !module.runsWhileInactive()) {
+                continue;
+            }
+            if (gateOpen && isSuspended(module)) {
                 continue;
             }
             try {

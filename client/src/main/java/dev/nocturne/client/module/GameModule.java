@@ -111,8 +111,13 @@ public abstract class GameModule extends Module {
         }
         EventBus.Subscription subscription = client.events().subscribe(type, listener);
         synchronized (this) {
-            subscriptions.add(subscription);
+            if (running) {
+                subscriptions.add(subscription);
+                return;
+            }
         }
+        // subscribe 与登记之间可能已被停用；立即退订，不能把新句柄留在已清空的列表之外。
+        client.events().unsubscribe(subscription);
     }
 
     protected final <T> void listen(Class<T> type, EventBus.Priority priority, Consumer<T> listener) {
@@ -122,8 +127,12 @@ public abstract class GameModule extends Module {
         }
         EventBus.Subscription subscription = client.events().subscribe(type, priority, listener);
         synchronized (this) {
-            subscriptions.add(subscription);
+            if (running) {
+                subscriptions.add(subscription);
+                return;
+            }
         }
+        client.events().unsubscribe(subscription);
     }
 
     protected final NocturneClient client() {

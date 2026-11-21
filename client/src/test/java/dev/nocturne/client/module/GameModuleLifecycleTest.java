@@ -100,4 +100,73 @@ class GameModuleLifecycleTest {
         client.events().post(new PacketEvent(PacketEvent.Direction.SEND, new Object()));
         assertEquals(1, module.deliveries.get(), "重复恢复不得留下双份订阅");
     }
+
+    @Test
+    void enablingWhileInactiveInstallsThenSuspendsUntilResume() {
+        NocturneClient client = NocturneClient.boot(null);
+        ModuleRegistry registry = client.modules();
+        Counting module = new Counting();
+        registry.register(module);
+        registry.setActive(false);
+
+        module.setEnabled(true);
+
+        assertEquals(1, module.starts.get());
+        assertEquals(1, module.stops.get(), "非活动期启用不得让副作用持续运行");
+        registry.tick();
+        assertEquals(0, module.deliveries.get());
+        registry.setActive(true);
+        assertEquals(2, module.starts.get(), "恢复时重新安装一次订阅");
+        client.events().post(new PacketEvent(PacketEvent.Direction.SEND, new Object()));
+        assertEquals(1, module.deliveries.get());
+    }
+
+    @Test
+    void failedResumeStaysPendingAndDoesNotTick() {
+        NocturneClient client = NocturneClient.boot(null);
+        ModuleRegistry registry = client.modules();
+        FailingResume module = new FailingResume();
+        registry.register(module);
+        registry.setActive(true);
+        module.setEnabled(true);
+        registry.setActive(false);
+        module.failResume = true;
+
+        registry.setActive(true);
+        int starts = module.starts.get();
+        registry.tick();
+        assertEquals(starts, module.starts.get());
+        assertEquals(0, module.deliveries.get(), "恢复失败的订阅不能残留");
+        assertEquals(0, module.ticks.get(), "待恢复模块不得仅凭 enabled 标志继续 tick");
+
+        module.failResume = false;
+        registry.setActive(false);
+        registry.setActive(true);
+        assertTrue(module.starts.get() > starts, "后续恢复成功必须重新安装副作用");
+    }
+
+    static final class FailingResume extends GameModule {
+        private final AtomicInteger starts = new AtomicInteger();
+        private final AtomicInteger deliveries = new AtomicInteger();
+        private final AtomicInteger ticks = new AtomicInteger();
+        private boolean failResume;
+
+        FailingResume() {
+            super("FailingResume", Category.MISC);
+        }
+
+        @Override
+        protected void onStart() {
+            starts.incrementAndGet();
+            listen(PacketEvent.class, event -> deliveries.incrementAndGet());
+            if (failResume) {
+                throw new IllegalStateException("resume failed");
+            }
+        }
+
+        @Override
+        public void onTick() {
+            ticks.incrementAndGet();
+        }
+    }
 }

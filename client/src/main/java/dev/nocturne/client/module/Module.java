@@ -82,6 +82,9 @@ public abstract class Module {
         NocturneClient client = NocturneClient.get();
         if (client != null) {
             client.markConfigDirty();
+            if (value) {
+                client.modules().onModuleEnabled(this);
+            }
         }
     }
 

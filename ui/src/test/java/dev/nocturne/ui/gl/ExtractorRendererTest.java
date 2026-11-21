@@ -96,6 +96,14 @@ class ExtractorRendererTest {
         }
     }
 
+    public static final class NoSizeExtractor {
+        public void fill(int x1, int y1, int x2, int y2, int argb) {
+        }
+
+        public void text(Object font, String value, int x, int y, int argb) {
+        }
+    }
+
     /**
      * 假的游戏字体：只有宽度与行高（真实 26.x 的 Font 也只有这两样与绘制无关的度量）。
      *
@@ -315,6 +323,12 @@ class ExtractorRendererTest {
     void bindRefusesIncompleteExtractors() {
         assertNull(ExtractorRenderer.bind(IncompleteExtractor.class, () -> new FakeMinecraft()));
         assertNull(ExtractorRenderer.bind(null, () -> new FakeMinecraft()));
+    }
+
+    @Test
+    void bindRefusesMissingSizeWithoutWindowFallback() {
+        assertNull(ExtractorRenderer.bind(NoSizeExtractor.class, null),
+                "fill/text 存在但没有尺寸来源时不得产出半后端");
     }
 
     /** 26.x 的矩阵栈替身；记录纹理四边形应使用的浮点变换。 */

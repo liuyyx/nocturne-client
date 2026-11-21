@@ -1039,8 +1039,11 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         // guiScaledWidth/Height（见 beginFrame）。
         Method guiWidth = method(extractorType, "guiWidth");
         Method guiHeight = method(extractorType, "guiHeight");
-        if (fill == null || text == null) {
-            return null;
+        if (fill == null || text == null || guiWidth == null || guiHeight == null) {
+            if (fill == null || text == null || minecraft == null) {
+                return null;
+            }
+            // 1.20–1.21 没有 guiWidth/guiHeight，必须存在窗口回退来源；否则不能产出半后端。
         }
         // 可选项：缺了也能画，只是退化（描边自拼、不裁剪）。
         Method outline = method(extractorType, "outline", int.class, int.class, int.class, int.class, int.class);

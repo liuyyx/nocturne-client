@@ -93,6 +93,13 @@
 - 新增仅 GUI `enableScissor` 的绑定回归，确认两个句柄均来自 RenderSystem 且保留宽高口径。
   `ExtractorRendererLegacyTest` 15 项与裁剪平衡测试通过，正式 jar 和字节码门禁通过。
 
+## 审计 P2-65 复核（2026-11-21）
+
+- 通用 `bind()` 要求 `guiWidth/guiHeight` 或窗口回退来源；fill/text 存在但无任何尺寸来源时
+  返回 null，不再产出按 0 尺寸布局的半后端。已有 1.20–1.21 窗口回退保持可用。
+- 新增无尺寸/无窗口来源回归，`ExtractorRendererTest` 13 项与 GuiGraphics 形态测试通过；
+  正式 jar 与字节码门禁通过。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

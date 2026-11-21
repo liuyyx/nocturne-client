@@ -496,6 +496,10 @@ class GameBridgeTest {
             assertTrue(bridge.resolve(), "同名主类被替换后必须重新解析");
             assertSame(secondLoader, bridge.minecraftClass().getClassLoader());
             assertNotSame(first, bridge.minecraftClass());
+            Field types = GameBridge.class.getDeclaredField("typeCache");
+            types.setAccessible(true);
+            assertTrue(((java.util.Map<?, ?>) types.get(bridge)).isEmpty(),
+                    "失效必须清除旧 ClassLoader 的类型缓存");
         } finally {
             Thread.currentThread().setContextClassLoader(saved);
         }

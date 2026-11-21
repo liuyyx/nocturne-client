@@ -3307,6 +3307,15 @@ public final class GameBridge {
         methodListCache.clear();
         callPlanCache.clear();
         parameterTypeCache.clear();
+        typeCache.clear();
+        constructorCache.clear();
+        blockPosConstructor = null;
+        scoreboardObjectiveCache = null;
+        scoreboardScoreCache = null;
+        scoreboardTeamCache = null;
+        teamFormatCache = null;
+        teamColorCache = null;
+        scoreboardDisplayCache = null;
     }
 
     /** 记录一次「现在已尝试过解析」，供 {@link #resolve()} 的 250ms 退避判定使用。 */

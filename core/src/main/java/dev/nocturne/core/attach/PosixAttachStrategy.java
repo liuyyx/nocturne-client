@@ -90,8 +90,15 @@ public final class PosixAttachStrategy implements AttachStrategy {
             throws Exception {
         int fd = PosixAttachNative.connect(socketPath);
         try {
-            PosixAttachNative.write(fd, AttachProtocol.encodeLoad(agentJar.getAbsolutePath(),
-                    options, false));
+            try {
+                PosixAttachNative.write(fd, AttachProtocol.encodeLoad(agentJar.getAbsolutePath(),
+                        options, false));
+            } catch (IOException transport) {
+                // write 可能已部分送达；与读回复失败一样，不得换 /tmp 重放同一请求。
+                throw new DeliveryUnknownException("attach request write to " + socketPath
+                        + " failed after an unknown number of bytes; retrying could inject twice",
+                        transport);
+            }
             String reply;
             try {
                 reply = readReply(fd);

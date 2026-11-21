@@ -231,6 +231,13 @@
   经历首次加载失败。原报告“关闭抛异常覆盖成功结果”的触发前提在当前实现中不成立。
 - 未添加无必要的 `closeProcessQuietly` 包装；`WindowsAttachStrategyTest` 与正式 jar/字节码门禁通过。
 
+## 审计 P2-70 复核（2026-11-21）
+
+- `PosixAttachNative.write()` 的 IOException 包装为 `DeliveryUnknownException`，
+  部分写入后不再被当作普通连接错误换 `/tmp` 重放。
+- 新增隔离 native 替身回归，验证真实策略仅连接主路径一次；Posix/Windows 测试和正式门禁通过。
+  未在 Linux/macOS 真机执行原生 socket。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

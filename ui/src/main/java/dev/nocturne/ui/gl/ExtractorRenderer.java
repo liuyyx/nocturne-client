@@ -2009,9 +2009,6 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
     @Override
     public void popClip() {
         Object graphics = frame;
-        if (graphics == null || disableScissor == null) {
-            return;
-        }
         if (clipStack.isEmpty()) {
             // 没有配对的 push：什么都不做。多余地 disable 会把**外层**（可能是游戏自己的）
             // 裁剪区域一起关掉。
@@ -2019,16 +2016,21 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         }
         int[] popped = clipStack.pop();
         boolean nativePushed = popped != null && popped.length > 4 && popped[4] == 1;
+        if (graphics == null) {
+            // 逻辑层仍必须配对；没有当帧上下文时不能安全地下发任何原生恢复调用。
+            if (nativePushed && !scissorWh && scissorDepth > 0) {
+                scissorDepth--;
+            }
+            return;
+        }
         if (scissorWh) {
             // RenderSystem/GL 的 enableScissor 不是栈：内层 pop 后必须重新下发父矩形；
-            // 最外层 pop 直接关掉。这条路径没有"配对 pop"的硬约束，失败不会抛异常。
+            // 最外层 pop 直接关掉。没有 disableScissor 时用整个绘制区复位。
             if (!clipStack.isEmpty()) {
                 applyScissor(graphics, clipStack.peek());
             } else if (disableScissor != null) {
                 call(disableScissor, null);
             } else if (enableScissor != null && width > 0 && height > 0) {
-                // 1.20–1.21 只有 enableScissor：用整个绘制区复位裁剪，
-                // 否则裁剪状态会残留到游戏自己的绘制上（表现为整片黑）。
                 call(enableScissor, graphics, 0, 0, width, height);
             }
             return;
@@ -2040,7 +2042,12 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         scissorDepth--;
         // 栈式 API：一次 pop 正好抵消一次 enableScissor，父矩形由游戏自动恢复，
         // **不要**再 enableScissor 一遍（那会让深度只增不减，最终 pop 到空栈抛异常）。
-        call(disableScissor, scissorWh ? null : graphics);
+        if (disableScissor != null) {
+            call(disableScissor, graphics);
+        } else if (clipStack.isEmpty() && enableScissor != null && width > 0 && height > 0) {
+            // 只有 enableScissor 的旧版映射没有可配对的 pop 句柄；最外层至少恢复全屏。
+            call(enableScissor, graphics, 0, 0, width, height);
+        }
     }
 
     /**

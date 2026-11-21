@@ -74,6 +74,46 @@ class ExtractorRendererGuiGraphicsTest {
         assertEquals(0, renderer.height());
     }
 
+    public static final class EnableOnlyGuiGraphics {
+        final List<String> calls = new ArrayList<>();
+
+        public void fill(int x1, int y1, int x2, int y2, int color) {
+        }
+
+        public void drawString(Object font, String text, int x, int y, int color) {
+        }
+
+        public void enableScissor(int x1, int y1, int x2, int y2) {
+            calls.add(x1 + "," + y1 + "," + x2 + "," + y2);
+        }
+    }
+
+    @Test
+    void popClipStillPopsWhenDisableScissorIsAbsent() throws Exception {
+        ExtractorRenderer renderer = ExtractorRenderer.bind(EnableOnlyGuiGraphics.class, () -> null);
+        assertNotNull(renderer);
+        EnableOnlyGuiGraphics graphics = new EnableOnlyGuiGraphics();
+        renderer.setFrame(graphics);
+        renderer.beginFrame();
+        java.lang.reflect.Field width = ExtractorRenderer.class.getDeclaredField("width");
+        java.lang.reflect.Field height = ExtractorRenderer.class.getDeclaredField("height");
+        width.setAccessible(true);
+        height.setAccessible(true);
+        width.setInt(renderer, 320);
+        height.setInt(renderer, 240);
+
+        renderer.pushClip(10f, 10f, 100f, 80f);
+        renderer.popClip();
+        renderer.popClip();
+
+        java.lang.reflect.Field stack = ExtractorRenderer.class.getDeclaredField("clipStack");
+        stack.setAccessible(true);
+        assertTrue(((java.util.Deque<?>) stack.get(renderer)).isEmpty(),
+                "没有 disableScissor 时逻辑栈仍必须弹出");
+        assertEquals(java.util.Arrays.asList("10,10,110,90", "0,0,320,240"), graphics.calls,
+                "最外层应用完整绘制区复位，而不是留下旧裁剪");
+    }
+
     public static final class FakeWindow {
         public int a() { return 854; }
         public int b() { return 480; }

@@ -73,6 +73,13 @@
   也会重新绑定，不再把旧上下文纹理句柄当作有效缓存。
 - `RasterTexturesTest` 验证失效删除旧纹理、相同形状重新上传且句柄不同；正式 jar 与字节码门禁通过。
 
+## 审计 P2-24 复核（2026-11-21）
+
+- `popClip` 先弹出逻辑层，再按原生句柄是否存在恢复；缺少 `disableScissor` 不再早退，
+  最外层用完整绘制区复位。空矩形仍不减少原生深度，多余 pop 不操作空栈。
+- `ExtractorScissorBalanceTest`、`ExtractorRendererGuiGraphicsTest`、`ExtractorRendererTest` 通过；
+  新增无 `disableScissor` 回归。正式 jar 与字节码门禁通过，未宣称所有版本真机验证。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

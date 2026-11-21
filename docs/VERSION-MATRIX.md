@@ -80,6 +80,12 @@
 - `ExtractorScissorBalanceTest`、`ExtractorRendererGuiGraphicsTest`、`ExtractorRendererTest` 通过；
   新增无 `disableScissor` 回归。正式 jar 与字节码门禁通过，未宣称所有版本真机验证。
 
+## 审计 P2-25 复核（2026-11-21）
+
+- 新纹理先完成像素写入，再注册并加入句柄表；写入失败立即 `close()`，不返回新建有效 id。
+- 回归验证失败对象已关闭、TextureManager 未注册、句柄表无新增；正常注册上传和区域更新仍通过。
+  两个正式 jar 与字节码门禁通过。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

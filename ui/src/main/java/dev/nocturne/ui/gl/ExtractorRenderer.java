@@ -1575,18 +1575,25 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
             Object identifier = createIdentifier("ui/atlas_" + index);
             Object texture = createTexture("nocturne/ui/atlas_" + index, width, height);
             if (identifier == null || texture == null) {
+                if (texture != null) {
+                    Reflect.call(closeTexture, texture);
+                }
                 diag("identifier=" + identifier + " texture=" + texture);
                 return id;
             }
-            target = new RegisteredTexture(identifier, texture, width, height);
-            textures.add(target);
-            id = index;
-            if (!writePixels(target, argb)) {
+            RegisteredTexture created = new RegisteredTexture(identifier, texture, width, height);
+            if (!writePixels(created, argb)) {
+                // 尚未注册进 TextureManager：只需关闭 DynamicTexture，不能发布伪有效 id。
+                Reflect.call(closeTexture, texture);
                 diag("writePixels failed (pointer=" + (getPointer != null || pointerField != null)
                         + " apply=" + (applyPixels != null) + " setPixels=" + (setPixels != null)
                         + " setPixel=" + (setPixel != null) + ")");
                 return id;
             }
+            // 只有像素写入成功后才占用句柄；失败路径不会留下需要后续清理的半注册项。
+            textures.add(created);
+            target = created;
+            id = index;
             // 旧路径：注册必须在写入像素之前（blit 通过注册名解析纹理）。
             // 新路径（registerUploads）：注册动作自己取当前像素上传，因此必须排在写像素之后。
             Reflect.call(registerTexture, manager, identifier, texture);

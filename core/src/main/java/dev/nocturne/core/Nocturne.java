@@ -40,8 +40,9 @@ public final class Nocturne {
     /**
      * 命令行主入口：完成工具 jar 自举、目标进程选择与 agent 注入。
      *
-     * @param args 命令行参数，支持 {@code --list-json}（输出进程列表后退出）与
-     *             {@code --pid=<n>}（显式指定目标进程）
+     * @param args 命令行参数，支持 {@code --list-json}（输出进程列表后退出）、
+     *             {@code --pid=<n>}（显式指定目标进程）与 {@code --mcVersion=<版本>}
+     *             （提供版本时跳过 attach 前的 WMI 全命令行查询）
      * @throws Exception 扫描进程或读取自身 jar 路径失败时抛出；attach 失败则直接以退出码 1 结束
      */
     public static void main(String[] args) throws Exception {
@@ -101,11 +102,14 @@ public final class Nocturne {
         System.out.println("[nocturne] attaching to pid " + pid + " with " + self.getName());
         // 版本由注入侧判定并随选项传给 agent（运行时零探测）：命令行里既有 --version 也有
         // versions/<实例>/ 路径。拿不到命令行（非 Windows / WMI 被禁用）时传空串，agent 侧按未知处理。
-        String commandLine = ProcessScanner.javaProcessCommandLines().get(Integer.valueOf(pid));
-        String options = AgentOptions.composeVersion(AgentOptions.familyFromCommandLine(commandLine));
-        // CLI 路径不传 guiKey，agent 侧用默认键；已知目标客户端占用同一个键时提前说明，
-        // 否则玩家按下去看到的是对方的面板，会以为我们的注入没生效。
-        String keyHint = TargetHints.rightShiftConflict(commandLine, TargetHints.DEFAULT_GUI_KEY_VK);
+        String requestedVersion = optionValue(args, "--mcVersion=");
+        String commandLine = requestedVersion == null
+                ? ProcessScanner.javaProcessCommandLines().get(Integer.valueOf(pid)) : "";
+        String options = requestedVersion != null
+                ? AgentOptions.composeVersion(requestedVersion)
+                : AgentOptions.composeVersion(AgentOptions.familyFromCommandLine(commandLine));
+        String keyHint = requestedVersion == null
+                ? TargetHints.rightShiftConflict(commandLine, TargetHints.DEFAULT_GUI_KEY_VK) : null;
         if (keyHint != null) {
             System.out.println("[nocturne] note: " + keyHint);
         }
@@ -233,6 +237,19 @@ public final class Nocturne {
             }
         }
         return out.toString();
+    }
+
+    private static String optionValue(String[] args, String prefix) {
+        if (args == null) {
+            return null;
+        }
+        for (String arg : args) {
+            if (arg != null && arg.startsWith(prefix)) {
+                String value = arg.substring(prefix.length()).trim();
+                return value.isEmpty() ? null : value;
+            }
+        }
+        return null;
     }
 
     /**

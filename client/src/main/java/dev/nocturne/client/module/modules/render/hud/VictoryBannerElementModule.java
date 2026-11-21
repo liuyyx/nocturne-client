@@ -84,7 +84,10 @@ public final class VictoryBannerElementModule extends HudElementModule implement
         if (targetId < 0 || b.entities() == null) return;
         found = false; scanBridge = b;
         try { RenderSupport.forEachEntity(b, this); } finally { scanBridge = null; }
-        if (!found) { started = System.currentTimeMillis(); target = null; targetId = -1; }
+        if (!found) { started = System.currentTimeMillis(); }
+        // 无论目标是否仍在列表，本次攻击的观察都已结束；否则 targetId 会让每 tick 永久扫描。
+        target = null;
+        targetId = -1;
     }
     @Override public void visit(Object entity) { if (entity == target && scanBridge.entityId(entity) == targetId) found = true; }
     private final class Panel implements HudElement {

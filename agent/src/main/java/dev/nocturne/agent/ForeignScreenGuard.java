@@ -281,6 +281,10 @@ final class ForeignScreenGuard implements FrameListener {
         // 只在"确实由我们压过"时才恢复，而且恢复到**改前的原值**：
         // 主菜单（原本就是 false）绝不能因此被置成 true。
         if (savedFocus != null) {
+            if (hasNativeScreen()) {
+                // 原生暂停/背包界面仍需要可见光标；保留原值，待它关闭后再恢复。
+                return;
+            }
             bridge.writeField(minecraft, ClassType.MINECRAFT, "inGameHasFocus",
                     savedFocus.booleanValue());
             savedFocus = null;

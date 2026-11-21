@@ -119,6 +119,72 @@ class ForeignScreenGuardTest {
     }
 
     @Test
+    void legacyFocusRestoresOnlyAfterNativeScreenCloses() throws Exception {
+        FocusHost host = new FocusHost();
+        FocusHost.instance = host;
+        try {
+            ForeignScreenGuard guard = new ForeignScreenGuard(
+                    new GameBridge(null, new FocusMapping()), () -> false);
+            java.lang.reflect.Field saved = ForeignScreenGuard.class.getDeclaredField("savedFocus");
+            saved.setAccessible(true);
+            saved.set(guard, Boolean.TRUE);
+            host.inGameHasFocus = false;
+            host.currentScreen = new Object();
+            java.lang.reflect.Method apply = ForeignScreenGuard.class.getDeclaredMethod(
+                    "applyLegacyFocusFlag", boolean.class);
+            apply.setAccessible(true);
+
+            apply.invoke(guard, false);
+            assertEquals(false, host.inGameHasFocus, "原生界面期间不得恢复游戏焦点");
+            assertEquals(Boolean.TRUE, saved.get(guard), "原生界面期间必须保留待恢复值");
+
+            host.currentScreen = null;
+            apply.invoke(guard, false);
+            assertEquals(true, host.inGameHasFocus, "原生界面关闭后恢复原始焦点");
+            assertEquals(null, saved.get(guard));
+        } finally {
+            FocusHost.instance = null;
+        }
+    }
+
+    public static final class FocusHost {
+        private static FocusHost instance;
+        public boolean inGameHasFocus;
+        public Object currentScreen;
+
+        public static FocusHost getInstance() {
+            return instance;
+        }
+    }
+
+    private static final class FocusMapping implements Mapping {
+        @Override
+        public String describe() {
+            return "legacy-focus-test";
+        }
+
+        @Override
+        public String className(ClassType type) {
+            return type == ClassType.MINECRAFT ? FocusHost.class.getName() : type.canonicalName();
+        }
+
+        @Override
+        public String methodName(ClassType owner, String canonicalName, String descriptor) {
+            return canonicalName;
+        }
+
+        @Override
+        public String fieldName(ClassType owner, String canonicalName) {
+            return canonicalName;
+        }
+
+        @Override
+        public boolean isIdentity() {
+            return false;
+        }
+    }
+
+    @Test
     void unreadableGrabStateReleasesAgainOnFollowingFrames() throws Exception {
         MouseHost host = new MouseHost();
         MouseHost.instance = host;

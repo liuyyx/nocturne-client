@@ -475,6 +475,8 @@ def main() -> int:
         if resolver is None:
             report["unsupported"].append(version)
             print(f"{version:8} skipped  (no mapping source for this version)")
+            if args.check and (args.only or os.path.exists(table_path(version))):
+                failures.append(f"{version}: no mapping source; cannot verify required table")
             continue
         table = build_table(version, resolver, requirements, report, shape_hints,
                             member_aliases, lint)
@@ -533,7 +535,7 @@ def main() -> int:
         print(f"\n{len(set(lint))} requirements entries登记成了错误种类", file=sys.stderr)
         return 1
     if failures:
-        print(f"\n{len(failures)} javap problems", file=sys.stderr)
+        print(f"\n{len(failures)} mapping verification problems", file=sys.stderr)
         return 1
     if args.check and stale:
         print("tables are stale — re-run without --check", file=sys.stderr)

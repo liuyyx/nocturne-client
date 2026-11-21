@@ -46,6 +46,26 @@ class GenerateCheckTest(unittest.TestCase):
             verify.assert_called_once()
         finally:
             os.unlink(path)
+    def test_check_fails_when_selected_version_has_no_resolver(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = os.path.join(directory, "mappings-26.3.json")
+            argv = ["generate.py", "--check", "--only", "26.3"]
+            with mock.patch.object(generate.sys, "argv", argv), \
+                    mock.patch.object(generate.scan, "collect", return_value=object()), \
+                    mock.patch.object(generate, "load_member_aliases", return_value={}), \
+                    mock.patch.object(generate.sources, "Manifest", return_value=object()), \
+                    mock.patch.object(generate, "load_shape_hints", return_value={}), \
+                    mock.patch.object(generate.namespaces, "Fetch", return_value=object()), \
+                    mock.patch.object(generate, "build_anchor_table", return_value=object()), \
+                    mock.patch.object(generate, "release_versions", return_value=["26.3"]), \
+                    mock.patch.object(generate.namespaces, "build_resolver", return_value=None), \
+                    mock.patch.object(generate, "table_path", return_value=missing), \
+                    mock.patch.object(generate, "build_table") as build:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    result = generate.main()
+
+            self.assertEqual(1, result, "显式覆盖的版本缺 resolver/表时不得通过门禁")
+            build.assert_not_called()
 
 
 if __name__ == "__main__":

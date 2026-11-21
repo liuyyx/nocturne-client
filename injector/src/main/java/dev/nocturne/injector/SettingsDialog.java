@@ -160,12 +160,6 @@ public final class SettingsDialog extends JDialog {
                 if (!recording) {
                     return;
                 }
-                if (isModifierOnly(e.getKeyCode())) {
-                    // 单独按下的修饰键不是绑定目标：用户往往只是想按组合键，静默把它绑上去
-                    // 等于白吃掉一个按键。等真正的键。
-                    e.consume();
-                    return;
-                }
                 e.consume();
                 if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
                     // Esc 取消录制而不是绑定「Esc」本身。
@@ -173,7 +167,7 @@ public final class SettingsDialog extends JDialog {
                     bindField.setText(config.guiBind);
                     return;
                 }
-                // 记录一次即退出录制：快捷键是单键/单组合，不支持后续修饰。
+                // 游戏只轮询单键，录下首个键即可；左右修饰键也可以独立绑定。
                 String recorded = describe(e);
                 if (!recorded.equals(config.guiBind)) {
                     config.guiBind = recorded;
@@ -222,30 +216,6 @@ public final class SettingsDialog extends JDialog {
             combo.append("ALT+");
         }
         return combo.append(key).toString();
-    }
-
-    /**
-     * 该按键是否只是一个修饰键（单独按下时不该当作绑定目标）。
-     *
-     * <p>用户按 Ctrl/Shift 往往是想接一个组合键，把第一个按下的修饰键直接绑上去等于白吃掉一个键。
-     * 这里只排除"纯修饰键"本身；{@code SHIFT+A} 这类组合仍然可以被录下来（keyPressed 收到的
-     * 事件里 keyCode 是 A、修饰位为真）。
-     *
-     * @param keyCode AWT 键码
-     * @return 是纯修饰键时返回 {@code true}
-     */
-    static boolean isModifierOnly(int keyCode) {
-        switch (keyCode) {
-            case KeyEvent.VK_SHIFT:
-            case KeyEvent.VK_CONTROL:
-            case KeyEvent.VK_ALT:
-            case KeyEvent.VK_ALT_GRAPH:
-            case KeyEvent.VK_META:
-            case KeyEvent.VK_WINDOWS:
-                return true;
-            default:
-                return false;
-        }
     }
 
     /**

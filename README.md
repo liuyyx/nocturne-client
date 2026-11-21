@@ -139,6 +139,7 @@ java -jar dist/build/libs/nocturne-<version>.jar --pid=<pid>   # 注入指定进
 ```
 
 游戏里按**右 Shift** 唤出界面（`guiKey` 由注入器传入，AWT VK 码）。
+注入器设置中点击快捷键字段后按下要绑定的单键，可分别录制左右 Shift、Ctrl 和 Alt；改键后需重新注入才生效。
 
 ### 真机调试开关
 

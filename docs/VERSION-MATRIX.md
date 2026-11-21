@@ -131,6 +131,12 @@
   pitch 仍按原范围夹取。
 - `FreeCameraRotationTest` 验证 ±358° 折为 ±2°、普通差值不变；正式 jar 与字节码门禁通过。
 
+## 审计 P2-30 复核（2026-11-21）
+
+- FreeCamera 覆写 `runsWhileInactive()`，死亡界面关闭激活闸门后仍接收 tick，
+  使 `Toggle On Death` 能实际调用 `setEnabled(false)`，而非只挂起并在复活时恢复。
+- 新增真实 ModuleRegistry 死亡 tick 回归，验证模块最终禁用；旋转回归与正式 jar/字节码门禁通过。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

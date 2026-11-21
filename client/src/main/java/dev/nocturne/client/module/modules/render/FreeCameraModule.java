@@ -39,6 +39,11 @@ public final class FreeCameraModule extends GameModule implements CameraOverride
 
     public FreeCameraModule() { super("Free Camera", Category.RENDER); }
 
+    @Override public boolean runsWhileInactive() {
+        // Toggle On Death 的触发条件本身就是激活闸门关闭；豁免后才能在死亡 tick 自行关闭。
+        return true;
+    }
+
     @Override protected void onStart() {
         initialized = false; forward = 0; strafe = 0; jump = false; sneak = false; lastHurt = 0; warned = false;
         listen(MovementInputEvent.class, this::input);

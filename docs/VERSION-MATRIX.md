@@ -86,6 +86,13 @@
 - 回归验证失败对象已关闭、TextureManager 未注册、句柄表无新增；正常注册上传和区域更新仍通过。
   两个正式 jar 与字节码门禁通过。
 
+## 审计 P2-64 复核（2026-11-21）
+
+- `bindLegacy` 在 GUI 裁剪 enable/disable 任一缺失时尝试完整 RenderSystem 配对；
+  若仍不完整则禁用裁剪，不混用两个来源的半套句柄。
+- 新增仅 GUI `enableScissor` 的绑定回归，确认两个句柄均来自 RenderSystem 且保留宽高口径。
+  `ExtractorRendererLegacyTest` 15 项与裁剪平衡测试通过，正式 jar 和字节码门禁通过。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

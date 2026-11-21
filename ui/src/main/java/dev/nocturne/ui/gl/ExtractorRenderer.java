@@ -617,15 +617,20 @@ public final class ExtractorRenderer implements UiBackend, PlayerModelPreview {
         // 就有 enableScissor/disableScissor。缺了它 pushClip/popClip 全是空操作，滚动列表和
         // 下拉内容会画到面板外（真机可见）。注意它收的是 (x, y, w, h)，且是静态方法。
         boolean scissorWh = false;
-        if (enableScissor == null) {
+        if (enableScissor == null || disableScissor == null) {
             Class<?> renderSystem = loadAny(guiType.getClassLoader(),
                     "com.mojang.blaze3d.systems.RenderSystem");
             Method rsEnable = method(renderSystem, "enableScissor",
                     int.class, int.class, int.class, int.class);
-            if (rsEnable != null) {
+            Method rsDisable = method(renderSystem, "disableScissor");
+            if (rsEnable != null && rsDisable != null) {
                 enableScissor = rsEnable;
-                disableScissor = method(renderSystem, "disableScissor");
+                disableScissor = rsDisable;
                 scissorWh = true;
+            } else {
+                // 不混用半个 GUI 句柄与半个 RenderSystem 句柄；无完整对时禁用裁剪。
+                enableScissor = null;
+                disableScissor = null;
             }
         }
         Method[] window = windowHandles(mapping, minecraft);

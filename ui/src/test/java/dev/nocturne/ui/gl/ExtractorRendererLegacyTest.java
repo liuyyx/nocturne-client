@@ -61,6 +61,18 @@ class ExtractorRendererLegacyTest {
         }
     }
 
+    public static final class FakeLegacyGuiEnableOnly {
+        public static void fill(FakePoseStack pose, int x1, int y1, int x2, int y2, int argb) {
+        }
+
+        public static void drawString(FakePoseStack pose, FakeFont font, String text,
+                                      int x, int y, int argb) {
+        }
+
+        public static void enableScissor(int x1, int y1, int x2, int y2) {
+        }
+    }
+
     /** 1.16.5：没有 enableScissor/disableScissor。 */
     public static final class FakeLegacyGuiNoScissor {
         static final List<Object[]> CALLS = new ArrayList<>();
@@ -274,6 +286,23 @@ class ExtractorRendererLegacyTest {
         assertEquals(6, enable[4]);
         Object[] disable = FakeLegacyGui.CALLS.get(1);
         assertEquals("disableScissor", disable[0]);
+    }
+
+    @Test
+    void incompleteGuiScissorPairUsesRenderSystemPair() throws Exception {
+        ExtractorRenderer renderer = bind(FakeLegacyGuiEnableOnly.class);
+        assertNotNull(renderer);
+        java.lang.reflect.Field enable = ExtractorRenderer.class.getDeclaredField("enableScissor");
+        java.lang.reflect.Field disable = ExtractorRenderer.class.getDeclaredField("disableScissor");
+        java.lang.reflect.Field wh = ExtractorRenderer.class.getDeclaredField("scissorWh");
+        enable.setAccessible(true);
+        disable.setAccessible(true);
+        wh.setAccessible(true);
+        assertEquals(com.mojang.blaze3d.systems.RenderSystem.class,
+                ((java.lang.reflect.Method) enable.get(renderer)).getDeclaringClass());
+        assertEquals(com.mojang.blaze3d.systems.RenderSystem.class,
+                ((java.lang.reflect.Method) disable.get(renderer)).getDeclaringClass());
+        assertEquals(true, wh.get(renderer), "RenderSystem 使用宽高参数口径");
     }
 
     /**

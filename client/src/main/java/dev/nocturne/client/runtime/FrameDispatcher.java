@@ -406,7 +406,6 @@ public final class FrameDispatcher {
     public static void dispatch() {
         // 文件诊断（diag3）已删除：生产环境每会话前 3 帧写 nocturne-diag.txt 是残留 IO；
         // 首帧状态由 TRACE 日志与叠加层的 overlay first frame 行覆盖。
-        frameThread = Thread.currentThread();
         // 先把投递到游戏线程的一次性任务跑掉（panic 还原）；即使已 KILLED 也要跑，
         // 否则超时兜底之外的还原任务会永远留在队列里。
         drainFrameTasks();
@@ -420,6 +419,10 @@ public final class FrameDispatcher {
         }
         if (!FRAME_LOCK.tryLock()) {
             return;
+        }
+        if (frameThread == null) {
+            // 只有真正进入分发循环的线程才可登记；竞争失败的来源不得改写线程归属。
+            frameThread = Thread.currentThread();
         }
         IN_FRAME.set(Boolean.TRUE);
         try {

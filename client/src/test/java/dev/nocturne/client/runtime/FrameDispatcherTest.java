@@ -48,6 +48,25 @@ class FrameDispatcherTest {
         assertTrue(readFirstFrame(), "the first frame after trace(true) must be logged");
     }
 
+    @Test
+    void frameThreadIsBoundOnceByTheActualDispatchThread() throws Exception {
+        Thread first = Thread.currentThread();
+        FrameDispatcher.dispatch();
+        assertTrue(FrameDispatcher.isFrameThread());
+
+        final boolean[] secondWasFrame = {true};
+        Thread second = new Thread(() -> {
+            FrameDispatcher.dispatch();
+            secondWasFrame[0] = FrameDispatcher.isFrameThread();
+        }, "secondary-frame-source");
+        second.start();
+        second.join(1000L);
+        assertFalse(second.isAlive(), "secondary dispatch must finish");
+        assertFalse(secondWasFrame[0], "另一分发来源不得覆盖首次游戏线程归属");
+        assertTrue(FrameDispatcher.isFrameThread(), "首次线程仍应保持游戏线程身份");
+        assertTrue(first == Thread.currentThread());
+    }
+
     /** M-83：重复注册同一动作只算一次，避免每帧被驱动多次。 */
     @Test
     void listenersAreRegisteredIdempotently() {

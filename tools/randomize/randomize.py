@@ -240,6 +240,28 @@ def dangling_refs(blobs, prefix):
     return sorted(referenced - own), own, referenced
 
 
+def check_salted_mapping(source, destination, salt, prefix, keep):
+    """按原 jar + salt 重算映射，检查目标 jar 的旧名消失、新名存在。"""
+    names = set()
+    for name, blob in source.items():
+        if name.endswith(".class"):
+            parse_pool(blob)  # 仍校验类文件结构可读；引用但未打包的类型不构成目标条目。
+            names.add(name[:-len(".class")])
+    expected = build_mapping(names, salt, prefix, keep)
+    actual = set(destination)
+    for old, new in expected.items():
+        target = new + ".class"
+        if target not in actual:
+            print("check failed: expected randomized entry missing: %s" % target,
+                  file=sys.stderr)
+            return 1
+        if old != new and old + ".class" in actual:
+            print("check failed: old entry still present: %s.class" % old,
+                  file=sys.stderr)
+            return 1
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="构建期类名随机化（保持全链路引用一致）")
     ap.add_argument("--in", dest="src", required=True, help="输入 jar")
@@ -262,6 +284,18 @@ def main(argv=None):
         blobs = {e.filename: zin.read(e.filename) for e in entries}
 
     if args.check:
+        if args.salt:
+            if not args.dst or not os.path.isfile(args.dst):
+                print("--check with --salt requires --out pointing to the randomized jar",
+                      file=sys.stderr)
+                return 2
+            with zipfile.ZipFile(args.dst) as checked:
+                destination = {e.filename: checked.read(e.filename) for e in checked.infolist()}
+            salted = check_salted_mapping(blobs, destination, args.salt, args.prefix, keep)
+            if salted != 0:
+                return salted
+            print("check ok: salted class-name mapping verified")
+            return 0
         dangling, own, referenced = dangling_refs(blobs, args.prefix)
         if dangling:
             print("check failed: %d dangling references under %s/:" % (len(dangling), args.prefix))

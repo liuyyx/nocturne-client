@@ -218,6 +218,13 @@
 - Windows `attach.c` 已由 MSVC 编译，attach 协议/策略测试和正式 jar/字节码门禁通过。
   当前 Windows 主机未编译运行 Unix 分支，未宣称 Linux/macOS 真机验证。
 
+## 审计 P2-42 复核（2026-11-21）
+
+- `randomizedJar` 将 `classSalt` 声明为输入；无盐时 `upToDateWhen=false`，固定盐才允许复用。
+- `--check --in 原 jar --out 随机化 jar --salt ...` 按实际打包类条目重算并校验映射；
+  仅被引用未打包的类型不再误报缺条目。
+- Python 正误盐/缺输出测试通过；固定盐正式构建、真实交付 jar 盐校验与字节码门禁通过。
+
 ## Epsilon 视觉移植：阶段 0 公共通道（2026-11-12）
 
 - 新增共享颜色/实体分类、剪影/竖向盒/世界标签、九锚点 HUD 元素汇与生命周期迁移；

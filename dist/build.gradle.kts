@@ -363,6 +363,9 @@ val randomizedJar = tasks.register<Exec>("randomizedJar") {
     inputs.file(script)
     inputs.files(srcJar)
     inputs.property("randomizedBridgeKeeps", randomizedBridgeKeeps)
+    val classSalt = (findProperty("classSalt") as? String).orEmpty()
+    inputs.property("classSalt", classSalt)
+    outputs.upToDateWhen { classSalt.isNotBlank() }
     outputs.file(outJar)
 
     doFirst {
@@ -374,7 +377,7 @@ val randomizedJar = tasks.register<Exec>("randomizedJar") {
             "--keep", randomizedBridgeKeeps.joinToString(","))
         // 不给 --salt 时工具自行取随机种子（每次官方构建都不同）；
         // CI 传 -PclassSalt=<固定值> 即可得到可复现产物。
-        (findProperty("classSalt") as? String)?.takeIf { it.isNotBlank() }?.let {
+        classSalt.takeIf { it.isNotBlank() }?.let {
             args += listOf("--salt", it)
         }
         commandLine(args)

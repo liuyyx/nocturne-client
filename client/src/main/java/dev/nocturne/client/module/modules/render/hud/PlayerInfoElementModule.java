@@ -69,14 +69,21 @@ public final class PlayerInfoElementModule extends HudElementModule implements R
     };
     public PlayerInfoElementModule() { super("PlayerInfo"); }
     @Override protected HudElement element() { return element; }
+    private void clearPendingState() {
+        pendingId = -1;
+        pending.clear();
+    }
+
     @Override protected void onHudStart() {
+        pendingId = -1;
+        pending.clear();
         NocturneClient client = NocturneClient.get();
         if (client != null) packetSubscription = client.events().subscribe(PacketEvent.class, this::packet);
     }
     @Override protected void onHudStop() {
         NocturneClient client = NocturneClient.get();
         if (client != null && packetSubscription != null) client.events().unsubscribe(packetSubscription);
-        packetSubscription = null; available = false; world = null; pending.clear(); pops.clear();
+        packetSubscription = null; available = false; world = null; clearPendingState(); pops.clear();
     }
     private void packet(PacketEvent event) {
         if (event.direction != PacketEvent.Direction.RECEIVE) return;
@@ -89,15 +96,20 @@ public final class PlayerInfoElementModule extends HudElementModule implements R
     @Override public void onTick() {
         NocturneClient client = NocturneClient.get();
         bridge = client == null ? null : client.gameBridge();
-        if (bridge == null || bridge.world() == null || bridge.player() == null) { available = false; world = null; pending.clear(); pops.clear(); return; }
-        if (world != bridge.world()) { world = bridge.world(); pending.clear(); pops.clear(); }
+        if (bridge == null || bridge.world() == null || bridge.player() == null) {
+            available = false; world = null; clearPendingState(); pops.clear(); return;
+        }
+        if (world != bridge.world()) { world = bridge.world(); clearPendingState(); pops.clear(); }
         self = bridge.player();
-        if (!bridge.entityPosition(self, localPos)) { available = false; return; }
+        if (!bridge.entityPosition(self, localPos)) { available = false; clearPendingState(); return; }
         Integer id;
         while ((id = pending.poll()) != null) {
             pendingId = id.intValue();
-            RenderSupport.forEachEntity(bridge, this);
-            pendingId = -1;
+            try {
+                RenderSupport.forEachEntity(bridge, this);
+            } finally {
+                pendingId = -1;
+            }
         }
         count = 0;
         RenderSupport.forEachEntity(bridge, this);

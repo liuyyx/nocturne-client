@@ -6,39 +6,25 @@ rem  Double-click this instead of the .jar: it does not depend on the Windows
 rem  .jar file association (frequently unset or pointing at a JRE), and it
 rem  prefers a JDK whose bin\javaw.exe exists.
 rem
-rem  Resolution order for the jar: newest nocturne-*.jar under
-rem  dist\build\libs\, else newest nocturne*.jar next to this script.
+rem Resolution order: newest nocturne-launcher-*.jar under dist\build\libs\,
+rem then newest nocturne-launcher-*.jar next to this script.
 rem  Resolution order for java: %JAVA_HOME% -> any JDK under the usual vendor
 rem  roots (highest version wins) -> javaw on PATH.
 rem ---------------------------------------------------------------------------
 setlocal enabledelayedexpansion
 set "ROOT=%~dp0"
 
-rem Pick the NEWEST jar: dir /o-d lists by last-write time, newest first, so the
-rem first match wins. This stops an older client from shadowing a fresh one.
-rem dist ships nocturne-<version>.jar, hence the wildcard instead of a fixed name.
+rem Prefer the newest GUI launcher, never the Java 8 agent payload.
 set "JAR="
 for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%dist\build\libs\nocturne-launcher-*.jar" 2^>nul') do (
     if not defined JAR set "JAR=%ROOT%dist\build\libs\%%F"
 )
-rem Fall back to the plain agent jar. It carries no MigLayout (that stays out of the
-rem agent jar so Java 8 targets never see major-55 classes), so the injector GUI
-rem needs the launcher jar; the agent jar is only useful for direct -javaagent use.
-if not defined JAR (
-    for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%dist\build\libs\nocturne-*.jar" 2^>nul') do (
-        if not defined JAR set "JAR=%ROOT%dist\build\libs\%%F"
-    )
-)
-rem Fall back to a jar beside this script; likewise newest first.
 for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%nocturne-launcher-*.jar" 2^>nul') do (
     if not defined JAR set "JAR=%ROOT%%%F"
 )
-for /f "delims=" %%F in ('dir /b /a-d /o-d "%ROOT%nocturne*.jar" 2^>nul') do (
-    if not defined JAR set "JAR=%ROOT%%%F"
-)
 if not defined JAR (
-    echo [nocturne] no jar found under "%ROOT%dist\build\libs\"
-    echo [nocturne] build it first:  gradle :dist:distJar
+    echo [nocturne] GUI launcher not found: nocturne-launcher-*.jar
+    echo [nocturne] Build it with: gradle :dist:launcherJar
     pause
     exit /b 1
 )

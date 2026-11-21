@@ -2,6 +2,8 @@ package dev.nocturne.injector;
 
 import dev.nocturne.core.attach.ToolsJarBootstrap;
 
+import java.awt.GraphicsEnvironment;
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
 /**
@@ -19,8 +21,8 @@ public final class InjectorApp {
     /**
      * 程序入口。
      *
-     * <p>发布 jar 的 {@code Main-Class} 是本类（双击必须出 GUI）；但 C# 启动器会用
-     * {@code --list-json} / {@code --pid=<n>} 调用同一个 jar 并期望拿到命令行行为。
+     * <p>GUI launcher 的 {@code Main-Class} 是本类；agent jar 也保留此入口，仅供
+     * C# 启动器等调用方用 {@code --list-json} / {@code --pid=<n>} 走命令行。
      * 为此，这里在触发任何 Swing/relaunch 之前先做 CLI 分流：命中则直接转发给
      * {@link dev.nocturne.core.Nocturne#main(String[])} 并返回，绝不初始化 GUI
      * （否则 GUI 进程常驻不退出，启动器必然超时）。
@@ -42,6 +44,19 @@ public final class InjectorApp {
                 System.err.println("[nocturne] injector CLI failed: " + t);
                 t.printStackTrace();
                 System.exit(1);
+            }
+            return;
+        }
+        if (InjectorApp.class.getResource("/net/miginfocom/swing/MigLayout.class") == null) {
+            String message = "This jar does not contain the GUI runtime. Open nocturne-launcher-*.jar instead.";
+            System.err.println("[nocturne] " + message);
+            if (GraphicsEnvironment.isHeadless()) {
+                System.exit(1);
+            } else {
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(null, message, "Nocturne", JOptionPane.ERROR_MESSAGE);
+                    System.exit(1);
+                });
             }
             return;
         }

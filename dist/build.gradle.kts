@@ -54,13 +54,6 @@ val packAsmPayload = tasks.register<JavaExec>("packAsmPayload") {
 }
 
 /**
- * 最终交付物：一个同时具备两种身份的 jar：
- *   - 注入器 GUI（双击启动：清单中的 Main-Class）
- *   - agent      （Premain-Class / Agent-Class，被注入到运行中的 JVM）
- *
- * <p>只有注入这一条路径：不再产出加载器元数据，也不再有模组形态。
- */
-/**
  * 预编译的 bootstrap 持有类：作为**资源**（而不是编译产物）进交付 jar，路径
  * {@code nocturne-bootstrap/<类名>.class}。
  *
@@ -97,10 +90,10 @@ val distJar = tasks.register<Jar>("distJar") {
     // 各模块资源可能重名（如同一 mixin 配置），保留先遇到的一份即可，避免打包失败。
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-    // 清单同时声明三种入口，使一个 jar 能走 GUI、attach 与模组加载三条路径。
+    // agent jar 保留 java -jar 的 CLI 入口；GUI 运行依赖只在 launcherJar。
     manifest {
         attributes(
-            // Main-Class：双击启动的 GUI 入口。
+            // Main-Class：CLI 分流；无 GUI 依赖时 InjectorApp 提示改用 launcher jar。
             // Premain-Class / Agent-Class：agent 注入入口。
             "Main-Class" to "dev.nocturne.injector.InjectorApp",
             "Premain-Class" to "dev.nocturne.agent.NocturneAgent",
